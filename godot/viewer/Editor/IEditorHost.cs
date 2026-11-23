@@ -33,6 +33,7 @@ public interface IEditorHost
     SphereMesh HandleMesh { get; }
     StandardMaterial3D HandleHot { get; }
     Viewport GetViewport();
+    void AddChild(Node node, bool forceReadableName = false, Node.InternalMode @internal = Node.InternalMode.Disabled);
 
     /// <summary>One line in the status bar (and the log); errors stay longer and are red.</summary>
     void Say(string message, bool error = false);
@@ -56,6 +57,18 @@ public interface IEditorHost
     List<(Vector2, Vector2)> RingSegs(IReadOnlyList<(double x, double y)> pts, bool closed);
 
     void SelectTool(EditorTool tool, bool save = true);
+
+    /// <summary>Parcel under a screen position of the main viewport (null: none); point is the ground point found.</summary>
+    ParcelInfo? PickScreen(Vector2 screen, out Vector3 point);
+
+    /// <summary>Click semantics of the Select tool: plain click replaces the selection, shift toggles one parcel.</summary>
+    void Click(string? parcelId, bool shift);
+
+    // the fence gate and the pole tool, until they are parts of their own
+    bool GateArmed { get; }
+    void CancelGate();
+    void StopConnecting(bool say = true);
+    void StopPlanning(bool say = true);
 
     /// <summary>Read the groups again from the file on disk (after every save, and when another writer changed it).</summary>
     void ReloadGroups();

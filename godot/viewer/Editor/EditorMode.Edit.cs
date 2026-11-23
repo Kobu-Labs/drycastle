@@ -214,7 +214,7 @@ public partial class EditorMode
     /// <summary>[Add gate]: the next click picks the fence point.</summary>
     public bool ArmGate()
     {
-        if (PlacementAsset != null) DisarmPlacement(false);
+        if (Objects.PlacementAsset != null) Objects.DisarmPlacement(false);
         if (!CanGate) { Say("gates: select one parcel or one property group", true); return false; }
         if (CurrentFence.EffectiveMode != "custom") { Say("gates need fence mode custom", true); return false; }
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514 (export it again, map 0.4.0+)", true); return false; }

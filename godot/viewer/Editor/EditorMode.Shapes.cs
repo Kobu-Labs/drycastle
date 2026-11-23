@@ -1,4 +1,5 @@
 using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.Editor.Tools;
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -526,7 +527,7 @@ public partial class EditorMode
         if (dir.LengthSquared() < 1e-6f) return false;
         var step = Mathf.Abs(dir.X) >= Mathf.Abs(dir.Y) ? new Vector2(Mathf.Sign(dir.X), 0) : new Vector2(0, Mathf.Sign(dir.Y));
         var p = r.Points[_activeCorner];
-        return MoveShapeCorner(CurrentKind, r.Id, _activeCorner, p.x + step.X * NudgeStep, p.y + step.Y * NudgeStep);
+        return MoveShapeCorner(CurrentKind, r.Id, _activeCorner, p.x + step.X * ObjectsTool.NudgeStep, p.y + step.Y * ObjectsTool.NudgeStep);
     }
 
     // ---- keys and mouse ----

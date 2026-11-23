@@ -61,18 +61,7 @@ public partial class EditorMode
 
     // ---- rail ----
 
-    Button IconBtn(string icon, string tip, Action onPress, bool toggle = false, int size = EditorTheme.RailButton)
-    {
-        var b = new Button
-        {
-            CustomMinimumSize = new Vector2(size, size), ToggleMode = toggle, TooltipText = tip,
-            ThemeTypeVariation = "RailButton", FocusMode = Control.FocusModeEnum.All,
-        };
-        b.AddChild(new IconGlyph { Kind = icon, Owner = b });
-        // Space and Enter fly and apply in the viewport; a clicked button must not keep them
-        b.Pressed += () => { onPress(); b.ReleaseFocus(); };
-        return b;
-    }
+    Button IconBtn(string icon, string tip, Action onPress, bool toggle = false, int size = EditorTheme.RailButton) => Ui.IconBtn(icon, tip, onPress, toggle, size);
 
     void BuildRail(Control root)
     {
@@ -188,7 +177,10 @@ public partial class EditorMode
         grp.AddChild(new Label { Text = "Clear the marks with Esc.", ThemeTypeVariation = "Dim" });
 
         BuildFenceSection(Page(EditorTool.Fence));
-        BuildObjectsSection(Page(EditorTool.Objects));
+        var objects = Page(EditorTool.Objects);
+        _undoInfo = Ui.Note();
+        objects.AddChild(_undoInfo);
+        Objects.BuildPage(objects);
         BuildGroundPage(Page(EditorTool.Ground));
         BuildZonesPage(Page(EditorTool.Zones));
         BuildPolesPage(Page(EditorTool.Poles));
@@ -299,8 +291,8 @@ public partial class EditorMode
     {
         if (ShapeTool && (tool != Tool)) CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
-        if (Dragging && tool != Tool) CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
-        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { DisarmPlacement(false); if (GateArmed) CancelGate(); }
+        if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
+        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (GateArmed) CancelGate(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { StopConnecting(false); StopPlanning(false); SelectCable(null); }
         if (tool == EditorTool.Poles && GateArmed) CancelGate();
         Tool = tool;

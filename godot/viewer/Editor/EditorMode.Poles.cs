@@ -1,5 +1,6 @@
 using Drycastle.MapLoader;
 using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.Editor.Tools;
 using Godot;
 using System;
 using System.Collections.Generic;
@@ -35,17 +36,17 @@ public partial class EditorMode
 
     // ---- data ----
 
-    public bool IsPole(string objectId) => ObjectData(objectId) is { } o && EditsFile.IsPoleAsset(o.Asset);
+    public bool IsPole(string objectId) => Objects.ObjectData(objectId) is { } o && EditsFile.IsPoleAsset(o.Asset);
     /// <summary>A house connector: where a cable ends on a wall or a roof.</summary>
-    public bool IsConnector(string objectId) => ObjectData(objectId) is { } o && EditsFile.IsConnectorAsset(o.Asset);
+    public bool IsConnector(string objectId) => Objects.ObjectData(objectId) is { } o && EditsFile.IsConnectorAsset(o.Asset);
 
-    public IReadOnlyList<ObjectInfo> AllPoles()
-        => AllObjects().Where(o => o.Asset.StartsWith(EditsFile.PoleAssetPrefix, StringComparison.Ordinal)).ToList();
+    public IReadOnlyList<ObjectsTool.ObjectInfo> AllPoles()
+        => Objects.AllObjects().Where(o => o.Asset.StartsWith(EditsFile.PoleAssetPrefix, StringComparison.Ordinal)).ToList();
 
     /// <summary>Cables of the file with their plan length; a cable with a missing pole has length -1.</summary>
     public IReadOnlyList<CableInfo> AllCables()
     {
-        var pos = AllObjects().ToDictionary(o => o.Id, o => (o.X, o.Y));
+        var pos = Objects.AllObjects().ToDictionary(o => o.Id, o => (o.X, o.Y));
         return EditsFile.Cables(Edits.Disk()).Select(c =>
         {
             var len = pos.TryGetValue(c.from, out var a) && pos.TryGetValue(c.to, out var b) ? Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y)) : -1;
@@ -61,12 +62,12 @@ public partial class EditorMode
     public void StartConnecting()
     {
         if (AllPoles().Count == 0) { Say("place a pole first: cables run from pole to pole, or from a pole to a house", true); return; }
-        DisarmPlacement(false);
+        Objects.DisarmPlacement(false);
         StopPlanning(false);
         if (GateArmed) CancelGate();
         SelectCable(null);
         Connecting = true;
-        ConnectFrom = SelectedObjectId != null && IsPole(SelectedObjectId) ? SelectedObjectId : null;
+        ConnectFrom = Objects.SelectedObjectId != null && IsPole(Objects.SelectedObjectId) ? Objects.SelectedObjectId : null;
         Say(ConnectFrom != null ? $"connecting from {ConnectFrom}: click the next pole, or a house (Esc stops)" : "connecting: click the pole to start from (Esc stops)");
         _panelDirty = true;
     }
@@ -93,11 +94,11 @@ public partial class EditorMode
         if (objectId == null) { Say("click a pole or a house (Esc stops connecting)", true); return false; }
         var connector = IsConnector(objectId);
         if (!connector && !IsPole(objectId)) { Say($"{objectId} is not a utility pole or a house connector", true); return false; }
-        if (ConnectFrom == null || ObjectData(ConnectFrom) == null)
+        if (ConnectFrom == null || Objects.ObjectData(ConnectFrom) == null)
         {
             if (connector) { Say("start from a pole, then click the house connector", true); return false; }
             ConnectFrom = objectId;
-            SelectObject(objectId);
+            Objects.SelectObject(objectId);
             Say($"from {objectId}: click the next pole");
             _panelDirty = true;
             return false;
@@ -109,7 +110,7 @@ public partial class EditorMode
         if (joined) Say(connector ? $"{from} and {objectId} are already joined" : $"{from} and {objectId} are already joined; carrying on from {objectId}");
         // the line carries on from the pole just clicked, also along a stretch that is strung already;
         // after a house connector it stays on the pole, which may feed more houses
-        if ((ok || joined) && !connector) { ConnectFrom = objectId; SelectObject(objectId); }
+        if ((ok || joined) && !connector) { ConnectFrom = objectId; Objects.SelectObject(objectId); }
         _panelDirty = true;
         return ok;
     }
@@ -168,7 +169,7 @@ public partial class EditorMode
             rot = Math.Atan2(-(pole.Z - hit.Point.Z), pole.X - hit.Point.X) * 180.0 / Math.PI;
         }
         rot = Math.Round(MapFrame.Mod360(rot), 1);
-        var name = AssetName(asset);
+        var name = Objects.AssetName(asset);
         string? newId = null;
         var ok = Edits.Mutate(root =>
         {
@@ -189,7 +190,7 @@ public partial class EditorMode
     /// <summary>Swap the selected house connector for the next kind made for the same surface (wall or roof).</summary>
     public bool CycleConnector()
     {
-        if (SelectedObject is not { } o || !EditsFile.IsConnectorAsset(o.Asset)) { Say("select a house connector first", true); return false; }
+        if (Objects.SelectedObject is not { } o || !EditsFile.IsConnectorAsset(o.Asset)) { Say("select a house connector first", true); return false; }
         var mount = o.Asset.StartsWith(EditsFile.ConnectorAssetPrefix + "roof_", StringComparison.Ordinal) ? "roof" : "wall";
         var all = ConnectorAssets(mount);
         if (all.Count < 2) { Say($"there is no other {mount} connector", true); return false; }
@@ -198,7 +199,7 @@ public partial class EditorMode
         {
             if (ObjectEdits.Find(root, o.Id) is not { } f) return (false, $"object {o.Id} no longer exists");
             f.obj["asset"] = next;
-            return (true, $"{o.Id} is now {AssetName(next)}");
+            return (true, $"{o.Id} is now {Objects.AssetName(next)}");
         }, $"change the connector {o.Id}");
     }
 
@@ -222,7 +223,7 @@ public partial class EditorMode
         if (id != null && AllCables().All(c => c.Id != id)) return false;
         if (id == SelectedCableId) return true;
         SelectedCableId = id;
-        if (id != null) SelectObject(null);
+        if (id != null) Objects.SelectObject(null);
         _panelDirty = true;
         return true;
     }
@@ -274,15 +275,15 @@ public partial class EditorMode
         if (Connecting)
         {
             // an object under the cursor first (a pole, a connector), then a house, then nothing
-            if (PickObject(o, d) is { } under) ConnectClick(under);
+            if (Objects.PickObject(o, d) is { } under) ConnectClick(under);
             else if (ConnectFrom != null && BuildingUnder(o, d) is { } hit) ConnectHouse(hit);
             else ConnectClick(null);
             return;
         }
-        var onRing = SelectedObjectId != null && RayToGround(o, d, out var gp) && OnRotationRing(gp);
-        if (!onRing && PickObject(o, d) == null && PickCable(screen) is { } cable) { SelectCable(cable); return; }
+        var onRing = Objects.SelectedObjectId != null && RayToGround(o, d, out var gp) && Objects.Gizmo.OnRing(gp);
+        if (!onRing && Objects.PickObject(o, d) == null && PickCable(screen) is { } cable) { SelectCable(cable); return; }
         SelectCable(null);
-        LeftPress(screen, shift);
+        Objects.LeftPress(screen, shift);
     }
 
     /// <summary>Keys of the Poles tool; true when the key was used.</summary>
@@ -343,12 +344,12 @@ public partial class EditorMode
     {
         UpdatePlanWorld();
         // cables follow a pole while it is dragged, and go back when the drag is cancelled or refused
-        if (Dragging && _dragId != null && Map.Cables.Any(c => c.From == _dragId || c.To == _dragId))
+        if (Objects.Dragging && Objects.DraggedId != null && Map.Cables.Any(c => c.From == Objects.DraggedId || c.To == Objects.DraggedId))
         {
-            _cableDragId = _dragId;
-            Map.RebuildCables(_dragId);
+            _cableDragId = Objects.DraggedId;
+            Map.RebuildCables(Objects.DraggedId);
         }
-        else if (!Dragging && _cableDragId != null)
+        else if (!Objects.Dragging && _cableDragId != null)
         {
             Map.RebuildCables(_cableDragId);
             _cableDragId = null;
@@ -372,7 +373,7 @@ public partial class EditorMode
             if (!_looking && !OverUi(mouse) && !Modal)
             {
                 var o = FlyCam.ProjectRayOrigin(mouse); var d = FlyCam.ProjectRayNormal(mouse);
-                var under = PickObject(o, d);
+                var under = Objects.PickObject(o, d);
                 var valid = under != null && under != ConnectFrom && (IsPole(under) || IsConnector(under));
                 var house = under == null ? BuildingUnder(o, d) : null;
                 var mount = house is { } hh ? MountOf(hh.Normal) : null;
@@ -453,10 +454,11 @@ public partial class EditorMode
                 AutowrapMode = TextServer.AutowrapMode.WordSmart, TooltipText = $"{a.Name}\n{a.Id}\nClick, then click on the ground to place it", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
                 ThemeTypeVariation = "PaletteButton", CustomMinimumSize = new Vector2(0, 128), IconAlignment = HorizontalAlignment.Center,
             };
-            b.Pressed += () => { if (PlacementAsset == info.Id) DisarmPlacement(); else ArmPlacement(info.Id); b.ReleaseFocus(); };
+            b.Pressed += () => { if (Objects.PlacementAsset == info.Id) Objects.DisarmPlacement(); else Objects.ArmPlacement(info.Id); b.ReleaseFocus(); };
             _plGrid.AddChild(b);
             _poleButtons.Add((a, b));
         }
+        Objects.Panel.ThumbnailReady += (id, tex) => { foreach (var (a, b) in _poleButtons) if (a.Id == id) { b.Icon = tex; b.Text = ""; } };
         if (_poleButtons.Count == 0) page.AddChild(Ui.Note("No pole assets in the asset manifest. Run make poles-manifest.", "Danger"));
 
         _plSelBox = new VBoxContainer { Visible = false };
@@ -468,7 +470,7 @@ public partial class EditorMode
         _plCycle = Ui.FocusBtn("Another kind of connector", () => CycleConnector());
         _plCycle.TooltipText = "Swap this house connector for the next kind made for the same surface";
         _plSelBox.AddChild(_plCycle);
-        _plDeletePole = Ui.FocusBtn("Delete  (Del)", () => DeleteSelected(), "DangerButton");
+        _plDeletePole = Ui.FocusBtn("Delete  (Del)", () => Objects.DeleteSelected(), "DangerButton");
         _plDeletePole.TooltipText = "Delete it and its cables (Ctrl+Z brings them back)";
         _plSelBox.AddChild(_plDeletePole);
         page.AddChild(_plSelBox);
@@ -488,15 +490,15 @@ public partial class EditorMode
     {
         // what the file no longer has cannot stay selected or be the start of a cable
         if (SelectedCableId != null && AllCables().All(c => c.Id != SelectedCableId)) SelectedCableId = null;
-        if (ConnectFrom != null && ObjectData(ConnectFrom) == null) ConnectFrom = null;
+        if (ConnectFrom != null && Objects.ObjectData(ConnectFrom) == null) ConnectFrom = null;
 
         var hasOrigin = Map.OriginEpsg5514 != null;
         _plNoOrigin.Visible = !hasOrigin;
-        foreach (var (a, b) in _poleButtons) { b.SetPressedNoSignal(a.Id == PlacementAsset); b.Disabled = !hasOrigin; }
+        foreach (var (a, b) in _poleButtons) { b.SetPressedNoSignal(a.Id == Objects.PlacementAsset); b.Disabled = !hasOrigin; }
 
         var poles = AllPoles();
         var cables = AllCables();
-        var houses = AllObjects().Count(o => EditsFile.IsConnectorAsset(o.Asset));
+        var houses = Objects.AllObjects().Count(o => EditsFile.IsConnectorAsset(o.Asset));
         _plCount.Text = $"{poles.Count} poles, {cables.Count} cables, {houses} house connectors"
             + (cables.Count(c => c.LengthM < 0) is var stale and > 0 ? $" ({stale} with a missing end)" : "");
         _plPlan.Text = Planning ? "Stop planning  (Esc)" : "Plan  (P)";
@@ -514,7 +516,7 @@ public partial class EditorMode
             _plClear.Disabled = _plan.Count == 0;
         }
 
-        var pole = !Planning && SelectedObject is { } so && EditsFile.IsWireAsset(so.Asset) ? so : null;
+        var pole = !Planning && Objects.SelectedObject is { } so && EditsFile.IsWireAsset(so.Asset) ? so : null;
         var cable = Planning || SelectedCableId == null ? null : cables.FirstOrDefault(c => c.Id == SelectedCableId);
         _plSelBox.Visible = pole != null;
         _plCableBox.Visible = cable != null;
@@ -522,7 +524,7 @@ public partial class EditorMode
         if (cable != null)
             _plCableInfo.Text = $"{cable.Id}: {cable.From} to {cable.To}" + (cable.LengthM >= 0 ? $", {cable.LengthM:0.0} m" : " (an end is missing)");
         var key = pole == null ? "" : pole.Id + "|" + string.Join(",", cables.Where(c => c.From == pole.Id || c.To == pole.Id).Select(c => $"{c.Id}:{c.From}:{c.To}:{c.LengthM:0.0}"));
-        if (pole != null) _plSelInfo.Text = $"{pole.Id}  {AssetName(pole.Asset)}";
+        if (pole != null) _plSelInfo.Text = $"{pole.Id}  {Objects.AssetName(pole.Asset)}";
         if (key == _plRowsKey) return;
         _plRowsKey = key;
         foreach (var c in _plSelCables.GetChildren()) { _plSelCables.RemoveChild(c); c.QueueFree(); }
@@ -549,8 +551,8 @@ public partial class EditorMode
             ? (ConnectFrom == null ? "connecting: LMB on the pole to start from, Esc or RMB stops"
                 : $"connecting from {ConnectFrom}: LMB on the next pole strings a cable and carries on from it, LMB on a house wall or roof connects the house, Esc or RMB stops, Ctrl+Z undo")
             : SelectedCableId != null ? $"{SelectedCableId}: Del removes the cable, Esc deselects, C connects poles"
-            : SelectedObjectId != null && IsConnector(SelectedObjectId) ? "house connector: drag moves, the ring or R / Shift+R turns, Del deletes it and its cable, Esc deselects"
-            : SelectedObjectId != null ? "pole: drag moves, drag the ring or R / Shift+R turns, C strings a cable from it, Del deletes it and its cables, Esc deselects"
+            : Objects.SelectedObjectId != null && IsConnector(Objects.SelectedObjectId) ? "house connector: drag moves, the ring or R / Shift+R turns, Del deletes it and its cable, Esc deselects"
+            : Objects.SelectedObjectId != null ? "pole: drag moves, drag the ring or R / Shift+R turns, C strings a cable from it, Del deletes it and its cables, Esc deselects"
             : "poles: P plans a line, C connects by hand, choose a pole to place it, LMB selects a pole or a cable, Esc leaves the tool";
 
     // for the smoke tests

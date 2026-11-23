@@ -1,5 +1,6 @@
 using Drycastle.MapLoader;
 using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.Editor.Tools;
 using Drycastle.Viewer.Poles;
 using Godot;
 using System;
@@ -32,11 +33,11 @@ public partial class EditorMode
     public void StartPlanning()
     {
         if (Map.OriginEpsg5514 == null) { Say("this map has no origin_epsg5514", true); return; }
-        DisarmPlacement(false);
+        Objects.DisarmPlacement(false);
         StopConnecting(false);
         if (GateArmed) CancelGate();
         SelectCable(null);
-        SelectObject(null);
+        Objects.SelectObject(null);
         Planning = true;
         Say("planning: left click where poles go, right click a house to connect it, Enter builds");
         _panelDirty = true;

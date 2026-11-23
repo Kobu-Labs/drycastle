@@ -29,6 +29,7 @@ public partial class EditorMode : Node, IEditorHost
     public FloorPlanLayer FloorPlan { get; }
     public SketchTool Sketches { get; }
     public YouDot You { get; }
+    public ObjectsTool Objects { get; }
     readonly List<EditorPart> _parts;
 
     public EditorMode()
@@ -37,10 +38,11 @@ public partial class EditorMode : Node, IEditorHost
         FloorPlan = new FloorPlanLayer(this);
         Sketches = new SketchTool(this);
         You = new YouDot(this);
+        Objects = new ObjectsTool(this);
         Camera = new EditorCamera(this);
         Edits = new EditStore(this, SyncCatalogs, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Ortho, FloorPlan, Sketches, You };
+        _parts = new() { Ortho, FloorPlan, Sketches, You, Objects };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -135,9 +137,7 @@ public partial class EditorMode : Node, IEditorHost
         {
             Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
-            CancelDrag();
             CancelShapeGesture();
-            DisarmPlacement(false);
             StopConnecting(false);
             StopPlanning(false);
             if (GateArmed) CancelGate();
@@ -427,10 +427,8 @@ public partial class EditorMode : Node, IEditorHost
                 if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var gp)) GateBegin(gp);
                 else Say("click on the ground near the fence", true);
                 break;
-            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && PlacementAsset != null:
-                GetViewport().GuiReleaseFocus();
-                if (RayToGround(FlyCam.ProjectRayOrigin(mb.Position), FlyCam.ProjectRayNormal(mb.Position), out var pp)) PlaceAt(pp, mb.CtrlPressed);
-                else Say("click on the ground", true);
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Objects.PlacementAsset != null:
+                Objects.PlaceClick(mb.Position, mb.CtrlPressed);
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Poles:
                 GetViewport().GuiReleaseFocus();
@@ -438,7 +436,7 @@ public partial class EditorMode : Node, IEditorHost
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking:
                 GetViewport().GuiReleaseFocus();
-                LeftPress(mb.Position, mb.ShiftPressed);
+                Objects.LeftPress(mb.Position, mb.ShiftPressed);
                 break;
             case InputEventKey { Pressed: true, Echo: false } k:
                 if (HandleModalKey(k)) { GetViewport().SetInputAsHandled(); break; }
@@ -448,7 +446,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (HandleZoneKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandlePolesKey(k)) { GetViewport().SetInputAsHandled(); break; }
-                if (HandleObjectKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (HandleUndoKey(k) || Objects.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
                 switch (k.Keycode)
                 {
@@ -465,12 +463,12 @@ public partial class EditorMode : Node, IEditorHost
                         break;
                     case Key.Escape:
                         if (_cheat.Visible) _cheat.Visible = false;
-                        else if (PlacementAsset != null) DisarmPlacement();
+                        else if (Objects.PlacementAsset != null) Objects.DisarmPlacement();
                         else if (Planning) StopPlanning();
                         else if (Connecting) StopConnecting();
                         else if (GateArmed) CancelGate();
                         else if (SelectedCableId != null) SelectCable(null);
-                        else if (SelectedObjectId != null) SelectObject(null);
+                        else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
                         else if (Tool == EditorTool.Ground && GroundEscape()) { }
                         else if (Tool == EditorTool.Zones && ZoneEscape()) { }
                         else if (Selection.Count > 0) GuardUnsaved(() => Click(null, false));
@@ -489,11 +487,11 @@ public partial class EditorMode : Node, IEditorHost
             _looking = false;
             Input.MouseMode = Input.MouseModeEnum.Visible;
             if (!_rmbMoved && Planning && Tool == EditorTool.Poles) PlanRightClick(_rmbPressPos); // plan mode: a right click marks a house
-            else if (!_rmbMoved && PlacementAsset != null) DisarmPlacement(); // a right click (no look drag) leaves placement mode
+            else if (!_rmbMoved && Objects.PlacementAsset != null) Objects.DisarmPlacement(); // a right click (no look drag) leaves placement mode
             else if (!_rmbMoved && Connecting) StopConnecting(); // and connect mode
         }
-        if (Active && Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
-            EndDrag();
+        if (Active && Objects.Dragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
+            Objects.EndDrag();
         if (Active && ShapeDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
             EndCornerDrag();
         if (Active && GateDragging && e is InputEventMouseButton { Pressed: false, ButtonIndex: MouseButton.Left })
@@ -509,7 +507,6 @@ public partial class EditorMode : Node, IEditorHost
         UpdateHover();
         UpdateGateDrag();
         foreach (var part in _parts) part.Update(delta);
-        UpdateObjectTools();
         UpdatePolesTool();
         UpdateShapeTool();
         UpdateGroundMap();
@@ -747,7 +744,8 @@ public partial class EditorMode : Node, IEditorHost
         _btnRemove.Disabled = gids.Count == 0;
         _btnDissolve.Disabled = gids.Count != 1;
         RefreshEditPanel();
-        RefreshObjectsPanel();
+        Objects.RefreshPanel();
+        RefreshUndoAndHint();
         RefreshPolesPanel();
         RefreshGroundPanel();
         RefreshZonesPanel();
@@ -757,31 +755,35 @@ public partial class EditorMode : Node, IEditorHost
 
 public partial class EditorMode
 {
-    /// <summary>Editor shortcuts for objects and undo; true when the key was used. Not reached while a text field has the focus.</summary>
-    bool HandleObjectKey(InputEventKey k)
+    Button _btnUndo = null!, _btnRedo = null!; // the rail buttons (EditorUi.cs)
+    Label _undoInfo = null!;                   // top of the Objects page
+
+    /// <summary>Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z; true when the key was used. Not reached while a text field has the focus.</summary>
+    bool HandleUndoKey(InputEventKey k)
     {
-        var mouse = GetViewport().GetMousePosition();
-        var overViewport = !OverUi(mouse);
-        if (k.CtrlPressed)
-        {
-            switch (k.Keycode)
-            {
-                case Key.Z: if (k.ShiftPressed) Edits.Redo(); else Edits.Undo(); return true;
-                case Key.Y: Edits.Redo(); return true;
-                case Key.D: DuplicateSelected(); return true;
-            }
-            return false;
-        }
+        if (!k.CtrlPressed) return false;
         switch (k.Keycode)
         {
-            case Key.R when PlacementAsset != null: RotateGhost(k.ShiftPressed ? -RotateSnap : RotateSnap); return true;
-            case Key.R when SelectedObjectId != null: RotateSelected(k.ShiftPressed ? -RotateSnap : RotateSnap); return true;
-            case Key.Delete when SelectedObjectId != null: DeleteSelected(); return true;
-            case Key.Left when SelectedObjectId != null && overViewport: NudgeScreen(-1, 0); return true;
-            case Key.Right when SelectedObjectId != null && overViewport: NudgeScreen(1, 0); return true;
-            case Key.Up when SelectedObjectId != null && overViewport: NudgeScreen(0, 1); return true;
-            case Key.Down when SelectedObjectId != null && overViewport: NudgeScreen(0, -1); return true;
+            case Key.Z: if (k.ShiftPressed) Edits.Redo(); else Edits.Undo(); return true;
+            case Key.Y: Edits.Redo(); return true;
         }
         return false;
+    }
+
+    /// <summary>The undo and redo buttons, the undo line of the Objects page and the hint bar (it names what the tool in use does).</summary>
+    void RefreshUndoAndHint()
+    {
+        var h = Edits.History;
+        _btnUndo.Disabled = h.UndoDepth == 0;
+        _btnRedo.Disabled = h.RedoDepth == 0;
+        _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
+        var placing = Objects.PlacementAsset != null;
+        _hintLabel.Text = Tool == EditorTool.Ground ? GroundHintText() : Tool == EditorTool.Zones ? ZonesHintText() : Tool == EditorTool.Sketch ? Sketches.HintText() : Tool == EditorTool.Poles && !placing ? PolesHintText() : Tool == EditorTool.Group && !placing
+            ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
+            : placing
+            ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
+            : Objects.SelectedObjectId != null
+                ? "object: drag moves, drag the ring rotates, arrows nudge, Del delete, Ctrl+D duplicate, R rotate, Ctrl+Z undo, Esc deselect"
+                : "WASD fly, RMB look, LMB select, Shift+LMB add, G group, T top-down, Enter apply, Ctrl+Z undo, Esc back, F1 controls, F2 walk";
     }
 }

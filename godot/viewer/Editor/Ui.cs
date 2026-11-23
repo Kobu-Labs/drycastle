@@ -22,6 +22,27 @@ public static class Ui
         return b;
     }
 
+    /// <summary>A square rail-style button with a drawn icon; it gives the focus back when pressed (Space and Enter fly and apply in the viewport).</summary>
+    public static Button IconBtn(string icon, string tip, Action onPress, bool toggle = false, int size = EditorTheme.RailButton)
+    {
+        var b = new Button
+        {
+            CustomMinimumSize = new Vector2(size, size), ToggleMode = toggle, TooltipText = tip,
+            ThemeTypeVariation = "RailButton", FocusMode = Control.FocusModeEnum.All,
+        };
+        b.AddChild(new IconGlyph { Kind = icon, Owner = b });
+        b.Pressed += () => { onPress(); b.ReleaseFocus(); };
+        return b;
+    }
+
+    /// <summary>The small "back to default" button next to a field; shown only while the field is overridden.</summary>
+    public static Button ResetBtn(Action reset)
+    {
+        var b = IconBtn("reset", "Back to the default", reset, size: EditorTheme.Space * 4);
+        b.Visible = false;
+        return b;
+    }
+
     /// <summary>A dim, word-wrapped line of help text.</summary>
     public static Label Note(string text = "", string variation = "Dim")
         => new() { Text = text, ThemeTypeVariation = variation, AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };

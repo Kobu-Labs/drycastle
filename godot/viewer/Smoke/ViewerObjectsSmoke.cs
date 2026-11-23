@@ -1,4 +1,5 @@
 using Drycastle.Viewer.Editor;
+using Drycastle.Viewer.Editor.Tools;
 using Drycastle.Viewer.Edits;
 using Godot;
 using System;
@@ -52,7 +53,7 @@ public partial class Viewer
         Vector3 Gl(double lx, double ly) => new((float)lx, _map.GroundHeightOrMean((float)lx, (float)-ly), (float)-ly);
         Vector3 Gp(string k, double dx = 0, double dy = 0) { var p = D(k); return Gl(p[0] + dx, p[1] + dy); }
         Vector3 GAbs(double ax, double ay) => Gl(ax - ox, ay - oy);
-        Vector3 GOf(string id) { var o = ed.ObjectData(id)!; return GAbs(o.X, o.Y); }
+        Vector3 GOf(string id) { var o = ed.Objects.ObjectData(id)!; return GAbs(o.X, o.Y); }
 
         async Task Frame(int n = 2) { for (var i = 0; i < n; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
         void Key_(Key k, bool ctrl = false, bool shift = false)
@@ -139,165 +140,165 @@ public partial class Viewer
 
         // ---- 1. the palette lists every manifest asset in its category ----
         var manifest = plan.GetProperty("manifest").EnumerateArray().Select(a => (id: a[0].GetString()!, cat: a[1].GetString()!, name: a[2].GetString()!)).ToList();
-        var pal = ed.Palette;
+        var pal = ed.Objects.Panel.Palette;
         Check(pal.Count == manifest.Count && manifest.All(m => pal.Any(p => p.Id == m.id && p.Category == m.cat && p.Name == m.name && p.Visible)),
             $"palette lists all {manifest.Count} manifest assets with their category and name");
         var cats = manifest.Select(m => m.cat).Distinct().ToList();
-        Check(cats.All(c => ed.PaletteGroupShown(c) && ed.PaletteGroupTitle(c).Contains($"({manifest.Count(m => m.cat == c)})")),
-            $"one group per category with its count: {string.Join(", ", cats.Select(c => ed.PaletteGroupTitle(c)))}");
-        Check(EditorMode.Categories.Where(c => cats.Contains(c)).SequenceEqual(cats.Where(EditorMode.Categories.Contains).OrderBy(c => Array.IndexOf(EditorMode.Categories, c))),
+        Check(cats.All(c => ed.Objects.Panel.PaletteGroupShown(c) && ed.Objects.Panel.PaletteGroupTitle(c).Contains($"({manifest.Count(m => m.cat == c)})")),
+            $"one group per category with its count: {string.Join(", ", cats.Select(c => ed.Objects.Panel.PaletteGroupTitle(c)))}");
+        Check(ObjectsTool.Categories.Where(c => cats.Contains(c)).SequenceEqual(cats.Where(ObjectsTool.Categories.Contains).OrderBy(c => Array.IndexOf(ObjectsTool.Categories, c))),
             "categories are in the planned order (car, slab, pot, flower, bush, tree, wall, fence, other)");
-        Check(!ed.PaletteGroupBodyShown("car"), "groups start collapsed");
-        ed.SetPaletteGroupOpen("car", true);
-        Check(ed.PaletteGroupBodyShown("car") && ed.PaletteGroupTitle("car").StartsWith("v "), "a group opens");
-        ed.SetPaletteFilter("flo");
-        var vis = ed.Palette.Where(p => p.Visible).Select(p => p.Id).OrderBy(x => x).ToList();
+        Check(!ed.Objects.Panel.PaletteGroupBodyShown("car"), "groups start collapsed");
+        ed.Objects.Panel.SetPaletteGroupOpen("car", true);
+        Check(ed.Objects.Panel.PaletteGroupBodyShown("car") && ed.Objects.Panel.PaletteGroupTitle("car").StartsWith("v "), "a group opens");
+        ed.Objects.Panel.SetPaletteFilter("flo");
+        var vis = ed.Objects.Panel.Palette.Where(p => p.Visible).Select(p => p.Id).OrderBy(x => x).ToList();
         var wantVis = manifest.Where(m => m.id.Contains("flo", StringComparison.OrdinalIgnoreCase) || m.name.Contains("flo", StringComparison.OrdinalIgnoreCase) || m.cat.Contains("flo")).Select(m => m.id).OrderBy(x => x).ToList();
-        Check(vis.Count > 0 && vis.SequenceEqual(wantVis) && !ed.PaletteGroupShown("car") && ed.PaletteGroupBodyShown("flower"),
+        Check(vis.Count > 0 && vis.SequenceEqual(wantVis) && !ed.Objects.Panel.PaletteGroupShown("car") && ed.Objects.Panel.PaletteGroupBodyShown("flower"),
             $"filter 'flo' leaves {vis.Count} assets, hides empty groups and opens the matching ones");
-        ed.SetPaletteFilter("");
-        Check(ed.Palette.All(p => p.Visible) && ed.PaletteGroupShown("car") && ed.PaletteGroupBodyShown("car"), "clearing the filter restores the palette and the open state");
-        ed.SetPaletteGroupOpen("car", false);
+        ed.Objects.Panel.SetPaletteFilter("");
+        Check(ed.Objects.Panel.Palette.All(p => p.Visible) && ed.Objects.Panel.PaletteGroupShown("car") && ed.Objects.Panel.PaletteGroupBodyShown("car"), "clearing the filter restores the palette and the open state");
+        ed.Objects.Panel.SetPaletteGroupOpen("car", false);
 
         // ---- 2. placement: ghost, rotation keys, placing, staying armed ----
-        Check(!ed.ArmPlacement("pack:nope/nothing") && ed.PlacementAsset == null && ed.Ghost == null, "an unknown asset cannot be armed");
-        Check(ed.ArmPlacement(CAR) && ed.PlacementAsset == CAR && ed.Ghost != null && ed.Ghost.GetChildCount() > 0, "choosing an asset arms placement and creates the ghost");
+        Check(!ed.Objects.ArmPlacement("pack:nope/nothing") && ed.Objects.PlacementAsset == null && ed.Objects.Ghost == null, "an unknown asset cannot be armed");
+        Check(ed.Objects.ArmPlacement(CAR) && ed.Objects.PlacementAsset == CAR && ed.Objects.Ghost != null && ed.Objects.Ghost.GetChildCount() > 0, "choosing an asset arms placement and creates the ghost");
         await Frame(3);
-        ed.GhostPinned = true;
+        ed.Objects.GhostPinned = true;
         var pick = Gp("a_base", 0.1, -0.2);
-        ed.UpdateGhost(pick, false);
+        ed.Objects.UpdateGhost(pick, false);
         var gabs = plan.GetProperty("a_base_abs").EnumerateArray().Select(x => x.GetDouble()).ToArray();
-        Check(ed.GhostAbsolute is { } ga && Math.Abs(ga.x - gabs[0]) < 1e-9 && Math.Abs(ga.y - gabs[1]) < 1e-9
-              && Math.Abs(ed.Ghost!.Position.X - (gabs[0] - ox)) < 1e-3 && Math.Abs(ed.Ghost.Position.Z + (gabs[1] - oy)) < 1e-3 && ed.Ghost.Visible,
-            $"the ghost follows the pick point, snapped to 0.5 m ({ed.GhostAbsolute})");
+        Check(ed.Objects.GhostAbsolute is { } ga && Math.Abs(ga.x - gabs[0]) < 1e-9 && Math.Abs(ga.y - gabs[1]) < 1e-9
+              && Math.Abs(ed.Objects.Ghost!.Position.X - (gabs[0] - ox)) < 1e-3 && Math.Abs(ed.Objects.Ghost.Position.Z + (gabs[1] - oy)) < 1e-3 && ed.Objects.Ghost.Visible,
+            $"the ghost follows the pick point, snapped to 0.5 m ({ed.Objects.GhostAbsolute})");
         var freePick = Gp("a_base", 0.13, -0.2);
-        ed.UpdateGhost(freePick, true);
-        Check(ed.GhostAbsolute is { } gf && Math.Abs(gf.x - Math.Round(ox + freePick.X, 3)) < 1e-9 && Math.Abs(gf.x - gabs[0]) > 0.05,
-            $"Ctrl (free) skips the snapping: {ed.GhostAbsolute}");
-        ed.UpdateGhost(Gp("outside"), false);
-        Check(ed.Ghost!.Visible, "the ghost follows the cursor outside every parcel too (an object belongs to no parcel)");
-        ed.UpdateGhost(pick, false);
+        ed.Objects.UpdateGhost(freePick, true);
+        Check(ed.Objects.GhostAbsolute is { } gf && Math.Abs(gf.x - Math.Round(ox + freePick.X, 3)) < 1e-9 && Math.Abs(gf.x - gabs[0]) > 0.05,
+            $"Ctrl (free) skips the snapping: {ed.Objects.GhostAbsolute}");
+        ed.Objects.UpdateGhost(Gp("outside"), false);
+        Check(ed.Objects.Ghost!.Visible, "the ghost follows the cursor outside every parcel too (an object belongs to no parcel)");
+        ed.Objects.UpdateGhost(pick, false);
         Key_(Key.R); await Frame();
-        Check(Math.Abs(ed.GhostRotation - 15) < 1e-9 && Math.Abs(ed.Ghost!.RotationDegrees.Y - 15) < 1e-3, "R rotates the ghost +15");
+        Check(Math.Abs(ed.Objects.GhostRotation - 15) < 1e-9 && Math.Abs(ed.Objects.Ghost!.RotationDegrees.Y - 15) < 1e-3, "R rotates the ghost +15");
         Key_(Key.R); await Frame();
         Key_(Key.R, shift: true); await Frame();
         Key_(Key.R, shift: true); await Frame();
         Key_(Key.R, shift: true); await Frame();
-        Check(Math.Abs(ed.GhostRotation - 345) < 1e-9, $"Shift+R rotates -15 (R, R, 3x Shift+R = 345): {ed.GhostRotation}");
+        Check(Math.Abs(ed.Objects.GhostRotation - 345) < 1e-9, $"Shift+R rotates -15 (R, R, 3x Shift+R = 345): {ed.Objects.GhostRotation}");
         Key_(Key.R); await Frame();
-        Check(Math.Abs(ed.GhostRotation) < 1e-9, "back at 0");
+        Check(Math.Abs(ed.Objects.GhostRotation) < 1e-9, "back at 0");
 
-        await Op("t1", () => ed.PlaceAt(pick));
-        Check(ed.PlacementAsset == CAR && ed.Ghost != null, "placement stays armed after placing");
+        await Op("t1", () => ed.Objects.PlaceAt(pick));
+        Check(ed.Objects.PlacementAsset == CAR && ed.Objects.Ghost != null, "placement stays armed after placing");
         Check(_map.ObjectNodes.ContainsKey("o-0001") && _map.ObjectNodes["o-0001"].GetChild(0).GetChildCount() > 0, "o-0001 (a pack model) is instanced with the model's meshes");
         SceneMatches("after placing the car");
-        ed.ArmPlacement(SLAB);
-        ed.RotateGhost(15); Key_(Key.R); await Frame();
-        Check(Math.Abs(ed.GhostRotation - 30) < 1e-9 && ed.PlacementAsset == SLAB, "choosing another asset keeps the armed state; ghost rotation 30");
-        await Op("t2", () => ed.PlaceAt(Gp("a_base", 2.1, 1.45)));
-        await Op("t3", () => ed.PlaceAt(Gp("b_base", 0.1, 0.1)));
+        ed.Objects.ArmPlacement(SLAB);
+        ed.Objects.RotateGhost(15); Key_(Key.R); await Frame();
+        Check(Math.Abs(ed.Objects.GhostRotation - 30) < 1e-9 && ed.Objects.PlacementAsset == SLAB, "choosing another asset keeps the armed state; ghost rotation 30");
+        await Op("t2", () => ed.Objects.PlaceAt(Gp("a_base", 2.1, 1.45)));
+        await Op("t3", () => ed.Objects.PlaceAt(Gp("b_base", 0.1, 0.1)));
         Check(_map.ObjectNodes["o-0002"].GetParent().Name == $"objects_{A}" && _map.ObjectNodes["o-0003"].GetParent().Name == $"objects_{B}",
             "objects sit under the container of the parcel they were placed on (primitive slab too)");
         SceneMatches("after three placements");
         // Esc leaves placement mode
         Key_(Key.Escape); await Frame(3);
-        Check(ed.PlacementAsset == null && ed.Ghost == null, "Esc disarms and frees the ghost");
-        ed.ArmPlacement(CAR);
-        ed.DisarmPlacement();
-        Check(ed.PlacementAsset == null, "DisarmPlacement (right click) also leaves the mode");
+        Check(ed.Objects.PlacementAsset == null && ed.Objects.Ghost == null, "Esc disarms and frees the ghost");
+        ed.Objects.ArmPlacement(CAR);
+        ed.Objects.DisarmPlacement();
+        Check(ed.Objects.PlacementAsset == null, "DisarmPlacement (right click) also leaves the mode");
 
         // ---- 3. selecting: a ray against the object's box takes priority over the parcel ----
         var car = GOf("o-0001");
         ed.Click(null, false);
-        var pickId = ed.PickObject(car + new Vector3(0, 30, 0), Vector3.Down);
-        var pickMiss = ed.PickObject(car + new Vector3(30, 30, 0), Vector3.Down);
+        var pickId = ed.Objects.PickObject(car + new Vector3(0, 30, 0), Vector3.Down);
+        var pickMiss = ed.Objects.PickObject(car + new Vector3(30, 30, 0), Vector3.Down);
         Check(pickId == "o-0001" && pickMiss == null, $"ray down onto the car hits o-0001 (got {pickId}), a ray 30 m aside nothing ({pickMiss})");
-        Check(ed.SelectObject("o-0001") && ed.SelectedObjectId == "o-0001", "selecting an object");
+        Check(ed.Objects.SelectObject("o-0001") && ed.Objects.SelectedObjectId == "o-0001", "selecting an object");
         await Frame(3);
         ed.RefreshNow();
-        Check(ed.GizmoVisible && ed.GizmoRadius > 1.0f && ed.ObjectFieldsShown, $"the gizmo (box, ring, arrow) is visible, ring radius {ed.GizmoRadius:F2} m, the panel shows the fields");
+        Check(ed.Objects.Gizmo.Visible && ed.Objects.Gizmo.Radius > 1.0f && ed.Objects.Panel.FieldsShown, $"the gizmo (box, ring, arrow) is visible, ring radius {ed.Objects.Gizmo.Radius:F2} m, the panel shows the fields");
         var gc = _map.ObjectNodes["o-0001"].GlobalPosition;
-        Check(ed.OnRotationRing(gc + new Vector3(ed.GizmoRadius, 0, 0)) && !ed.OnRotationRing(gc) && !ed.OnRotationRing(gc + new Vector3(ed.GizmoRadius + 3, 0, 0)),
+        Check(ed.Objects.Gizmo.OnRing(gc + new Vector3(ed.Objects.Gizmo.Radius, 0, 0)) && !ed.Objects.Gizmo.OnRing(gc) && !ed.Objects.Gizmo.OnRing(gc + new Vector3(ed.Objects.Gizmo.Radius + 3, 0, 0)),
             "a point on the ring is a rotation handle; the object's centre and far points are not");
-        Check(Math.Abs(ed.ObjectXSpin.Value - ed.ObjectData("o-0001")!.X) < 1e-3 && Math.Abs(ed.ObjectScaleSpin.Value - 1) < 1e-9 && !ed.ObjectColourSet, $"the fields show the object's values (x {ed.ObjectXSpin.Value} vs {ed.ObjectData("o-0001")!.X}, scale {ed.ObjectScaleSpin.Value})");
+        Check(Math.Abs(ed.Objects.Panel.XSpin.Value - ed.Objects.ObjectData("o-0001")!.X) < 1e-3 && Math.Abs(ed.Objects.Panel.ScaleSpin.Value - 1) < 1e-9 && !ed.Objects.Panel.ColourSet, $"the fields show the object's values (x {ed.Objects.Panel.XSpin.Value} vs {ed.Objects.ObjectData("o-0001")!.X}, scale {ed.Objects.Panel.ScaleSpin.Value})");
 
         // ---- 4. drag to move (0.5 m grid, Ctrl = free), one save per gesture ----
         var before = Disk();
-        Check(ed.StartMove("o-0001", car) && ed.Dragging, "press on the object starts a move");
-        ed.DragTo(Gp("a_base", 2.3, 1.2), false);
+        Check(ed.Objects.StartMove("o-0001", car) && ed.Objects.Dragging, "press on the object starts a move");
+        ed.Objects.DragTo(Gp("a_base", 2.3, 1.2), false);
         var preview = _map.ObjectNodes["o-0001"].GlobalPosition;
         Check(Disk() == before && Math.Abs(preview.X - (gabs[0] - ox + 2.5)) < 0.01 && Math.Abs(preview.Z + (gabs[1] - oy + 1.0)) < 0.01 && ed.Edits.SaveCount == 3,
             "while dragging only the view moves (snapped), the file is untouched");
-        await Op("t4", () => ed.EndDrag());
+        await Op("t4", () => ed.Objects.EndDrag());
         SceneMatches("after the drag");
         var grab = GOf("o-0001") + new Vector3(0.4f, 0, -0.3f);
-        ed.StartMove("o-0001", grab);
-        ed.DragTo(grab + new Vector3(1.0f, 0, 0), false);
-        await Op("t5", () => ed.EndDrag());
-        ed.StartMove("o-0001", GOf("o-0001"));
-        ed.DragTo(GOf("o-0001") + new Vector3(0.125f, 0, 0.25f), true);
-        await Op("t6", () => ed.EndDrag());
+        ed.Objects.StartMove("o-0001", grab);
+        ed.Objects.DragTo(grab + new Vector3(1.0f, 0, 0), false);
+        await Op("t5", () => ed.Objects.EndDrag());
+        ed.Objects.StartMove("o-0001", GOf("o-0001"));
+        ed.Objects.DragTo(GOf("o-0001") + new Vector3(0.125f, 0, 0.25f), true);
+        await Op("t6", () => ed.Objects.EndDrag());
         var s1 = ed.Edits.SaveCount;
-        ed.StartMove("o-0001", GOf("o-0001"));
-        Check(!ed.EndDrag() && ed.Edits.SaveCount == s1, "a click without dragging saves nothing");
+        ed.Objects.StartMove("o-0001", GOf("o-0001"));
+        Check(!ed.Objects.EndDrag() && ed.Edits.SaveCount == s1, "a click without dragging saves nothing");
 
         // ---- 5. rotate with the ring (15 degrees, Ctrl = free) ----
-        ed.StartRotate("o-0001");
-        Check(ed.DragIsRotation, "press on the ring starts a rotation");
-        ed.DragTo(Gp("rot1_pt"), false);
+        ed.Objects.StartRotate("o-0001");
+        Check(ed.Objects.DragIsRotation, "press on the ring starts a rotation");
+        ed.Objects.DragTo(Gp("rot1_pt"), false);
         Check(Math.Abs(Mathf.Wrap((float)(Yaw(_map.ObjectNodes["o-0001"]) - 30), -180, 180)) < 0.01, "the preview turns to the snapped angle");
-        await Op("t7", () => ed.EndDrag());
-        ed.StartRotate("o-0001");
-        ed.DragTo(Gp("rot2_pt"), true);
-        await Op("t8", () => ed.EndDrag());
+        await Op("t7", () => ed.Objects.EndDrag());
+        ed.Objects.StartRotate("o-0001");
+        ed.Objects.DragTo(Gp("rot2_pt"), true);
+        await Op("t8", () => ed.Objects.EndDrag());
         SceneMatches("after rotating");
 
         // ---- 6. cross-parcel move re-homes; outside every parcel is refused ----
-        ed.StartMove("o-0001", GOf("o-0001"));
-        ed.DragTo(Gp("b_base", 1.1, 0.9), false);
-        await Op("t9", () => ed.EndDrag());
+        ed.Objects.StartMove("o-0001", GOf("o-0001"));
+        ed.Objects.DragTo(Gp("b_base", 1.1, 0.9), false);
+        await Op("t9", () => ed.Objects.EndDrag());
         Check(_map.ObjectNodes["o-0001"].GetParent().Name == $"objects_{B}", "after the move the node sits under the container of the parcel it now stands in (moved, not duplicated)");
         SceneMatches("after the cross-parcel move");
 
         // ---- 7. field edits (one save each), through the real controls where it counts ----
-        var cur = ed.ObjectData("o-0001")!;
-        await Op("t10", () => ed.SetObjectPosition(cur.X + 2.0, cur.Y));
+        var cur = ed.Objects.ObjectData("o-0001")!;
+        await Op("t10", () => ed.Objects.SetObjectPosition(cur.X + 2.0, cur.Y));
         ed.RefreshNow();
-        Check(Math.Abs(ed.ObjectXSpin.Value - (cur.X + 2.0)) < 1e-3, "the position field follows");
-        await Op("t11", () => { ed.ObjectRotationSpin.Value = 100; return true; }); // the real SpinBox signal path
-        await Op("t12", () => ed.SetObjectScale(1.5));
+        Check(Math.Abs(ed.Objects.Panel.XSpin.Value - (cur.X + 2.0)) < 1e-3, "the position field follows");
+        await Op("t11", () => { ed.Objects.Panel.RotationSpin.Value = 100; return true; }); // the real SpinBox signal path
+        await Op("t12", () => ed.Objects.SetObjectScale(1.5));
         Check(Math.Abs(_map.ObjectNodes["o-0001"].Scale.X - 1.5) < 1e-4, "scale 1.5 shows at once");
         var sf0 = ed.Edits.SaveCount;
-        Check(!ed.SetObjectScale(0) && !ed.SetObjectScale(-1) && !ed.SetObjectColour("red") && !ed.SetObjectColour("#12345") && ed.Edits.SaveCount == sf0, "scale <= 0 and bad colours are refused, nothing saved");
-        await Op("t13", () => ed.SetObjectColour("#AABBCC"));
+        Check(!ed.Objects.SetObjectScale(0) && !ed.Objects.SetObjectScale(-1) && !ed.Objects.SetObjectColour("red") && !ed.Objects.SetObjectColour("#12345") && ed.Edits.SaveCount == sf0, "scale <= 0 and bad colours are refused, nothing saved");
+        await Op("t13", () => ed.Objects.SetObjectColour("#AABBCC"));
         ed.RefreshNow();
         var tinted = _map.ObjectNodes["o-0001"].FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().Any(m => m.MaterialOverride is StandardMaterial3D { AlbedoColor: var c } && c.ToHtml(false) == "aabbcc");
-        Check(tinted && ed.ObjectColourSet, "the colour override shows at once and the 'set' box is on");
-        await Op("t14", () => ed.SetObjectColour(null));
-        await Op("t15", () => ed.SetObjectScale(1.0));
+        Check(tinted && ed.Objects.Panel.ColourSet, "the colour override shows at once and the 'set' box is on");
+        await Op("t14", () => ed.Objects.SetObjectColour(null));
+        await Op("t15", () => ed.Objects.SetObjectScale(1.0));
 
         // ---- 8. keys: nudge, duplicate, delete ----
-        var n0 = ed.ObjectData("o-0001")!;
+        var n0 = ed.Objects.ObjectData("o-0001")!;
         await Op("t16", () => { Key_(Key.Right); return true; }, frames: 2);
         await Frame(2);
-        Check(Math.Abs(ed.ObjectData("o-0001")!.X - (n0.X + 0.5)) < 1e-9, "Right nudges 0.5 m east");
+        Check(Math.Abs(ed.Objects.ObjectData("o-0001")!.X - (n0.X + 0.5)) < 1e-9, "Right nudges 0.5 m east");
         await Op("t17", () => { Key_(Key.Up); return true; }, frames: 2);
         await Frame(2);
-        Check(Math.Abs(ed.ObjectData("o-0001")!.Y - (n0.Y + 0.5)) < 1e-9, "Up nudges 0.5 m north (camera looks north)");
+        Check(Math.Abs(ed.Objects.ObjectData("o-0001")!.Y - (n0.Y + 0.5)) < 1e-9, "Up nudges 0.5 m north (camera looks north)");
         await Op("t18", () => { Key_(Key.Left); return true; }, frames: 2);
         await Op("t19", () => { Key_(Key.Down); return true; }, frames: 2);
         await Frame(2);
-        Check(Math.Abs(ed.ObjectData("o-0001")!.X - n0.X) < 1e-9 && Math.Abs(ed.ObjectData("o-0001")!.Y - n0.Y) < 1e-9, "Left and Down nudge back");
+        Check(Math.Abs(ed.Objects.ObjectData("o-0001")!.X - n0.X) < 1e-9 && Math.Abs(ed.Objects.ObjectData("o-0001")!.Y - n0.Y) < 1e-9, "Left and Down nudge back");
         await Op("t20", () => { Key_(Key.D, ctrl: true); return true; }, frames: 2);
         await Frame(2);
-        Check(ed.SelectedObjectId == "o-0004" && ed.ObjectData("o-0004") is { } dup && Math.Abs(dup.X - (n0.X + 1.0)) < 1e-9 && Math.Abs(dup.Y - n0.Y) < 1e-9 && dup.Asset == CAR,
-            $"Ctrl+D duplicates 1 m east and selects the copy ({ed.SelectedObjectId})");
+        Check(ed.Objects.SelectedObjectId == "o-0004" && ed.Objects.ObjectData("o-0004") is { } dup && Math.Abs(dup.X - (n0.X + 1.0)) < 1e-9 && Math.Abs(dup.Y - n0.Y) < 1e-9 && dup.Asset == CAR,
+            $"Ctrl+D duplicates 1 m east and selects the copy ({ed.Objects.SelectedObjectId})");
         SceneMatches("after duplicating");
         await Op("t21", () => { Key_(Key.Delete); return true; }, frames: 2);
         await Frame(2);
-        Check(ed.SelectedObjectId == null && ed.ObjectData("o-0004") == null && !_map.ObjectNodes.ContainsKey("o-0004") && !ed.GizmoVisible, "Delete removes the object, the node and the gizmo go");
+        Check(ed.Objects.SelectedObjectId == null && ed.Objects.ObjectData("o-0004") == null && !_map.ObjectNodes.ContainsKey("o-0004") && !ed.Objects.Gizmo.Visible, "Delete removes the object, the node and the gizmo go");
         SceneMatches("after deleting");
-        Check(!ed.DeleteSelected() && !ed.DuplicateSelected() && !ed.NudgeObject(1, 0), "with nothing selected delete, duplicate and nudge do nothing");
+        Check(!ed.Objects.DeleteSelected() && !ed.Objects.DuplicateSelected() && !ed.Objects.NudgeObject(1, 0), "with nothing selected delete, duplicate and nudge do nothing");
 
         // ---- 9. mixed changes still go through parcel-run; objects stay correct after the fragment swap ----
         ed.Click(null, false); ed.Click(A, false); ed.Click(B, true);
@@ -305,8 +306,8 @@ public partial class Viewer
         var runsG = _watcher!.RunCount;
         await Op("t22", () => { ed.GroupSelected(); return ed.StatusMessage.StartsWith("saved"); }, run: true);
         SceneMatches("after the group's parcel-run swapped the fragment in");
-        ed.SelectObject("o-0002");
-        await Op("t23", () => ed.NudgeObject(0.5, 0));
+        ed.Objects.SelectObject("o-0002");
+        await Op("t23", () => ed.Objects.NudgeObject(0.5, 0));
         Check(_watcher.RunCount == runsG + 1, "with the group in place an objects-only edit still needs no parcel-run");
         ed.Click(A, false); ed.Click(B, true);
         await Frame();
@@ -315,8 +316,8 @@ public partial class Viewer
         ed.SetFenceMode("none");
         await Op("t24", () => ed.Apply(), run: true);
         SceneMatches("after a fence Apply (fragment swap)");
-        await Op("t25", () => ed.PlacementAsset == null && ed.ArmPlacement(CAR) && ed.PlaceAt(Gp("a_base", -1.1, -1.4)));
-        ed.DisarmPlacement();
+        await Op("t25", () => ed.Objects.PlacementAsset == null && ed.Objects.ArmPlacement(CAR) && ed.Objects.PlaceAt(Gp("a_base", -1.1, -1.4)));
+        ed.Objects.DisarmPlacement();
         SceneMatches("after placing on a parcel that has a swapped fragment");
 
         // ---- 10. session undo / redo across the whole sequence ----
@@ -365,9 +366,9 @@ public partial class Viewer
         // a new edit clears the redo stack
         Key_(Key.Z, ctrl: true); await Frame(3);
         Check(ed.Edits.History.RedoDepth == 1, "one redo step available");
-        ed.ArmPlacement(SLAB);
-        await Op("t26", () => ed.PlaceAt(Gp("a_base", 2.1, -1.55)));
-        ed.DisarmPlacement();
+        ed.Objects.ArmPlacement(SLAB);
+        await Op("t26", () => ed.Objects.PlaceAt(Gp("a_base", 2.1, -1.55)));
+        ed.Objects.DisarmPlacement();
         Check(ed.Edits.History.RedoDepth == 0 && !ed.Edits.Redo() && ed.StatusMessage.StartsWith("nothing to redo"), "a new edit clears the redo stack");
 
         // ---- 11. undo only touches the entries its operation touched ----
@@ -390,9 +391,9 @@ public partial class Viewer
         }
 
         // ---- 12. the undo stack is capped at 200 ----
-        ed.SelectObject("o-0001");
+        ed.Objects.SelectObject("o-0001");
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        for (var i = 0; i < 205; i++) ed.NudgeObject(i % 2 == 0 ? 0.5 : -0.5, 0);
+        for (var i = 0; i < 205; i++) ed.Objects.NudgeObject(i % 2 == 0 ? 0.5 : -0.5, 0);
         GD.Print($"205 nudges in {sw.ElapsedMilliseconds} ms");
         Check(ed.Edits.History.UndoDepth == UndoHistory.Cap && ed.Edits.History.RedoDepth == 0, $"the undo stack holds at most {UndoHistory.Cap} ({ed.Edits.History.UndoDepth})");
 
@@ -418,22 +419,22 @@ public partial class Viewer
             const string NoGroup = Drycastle.MapLoader.PlacedObject.NoParcelGroup;
             var idsBefore = ObjectEdits.All(EditsFile.Load(editsPath)).Select(t => (string)t.obj["id"]!).ToHashSet();
             var runsOut = _watcher.RunCount;
-            ed.ArmPlacement(SLAB);
-            Check(ed.PlaceAt(Gp("outside")), $"placing outside every parcel works ('{ed.StatusMessage}')");
-            ed.DisarmPlacement();
+            ed.Objects.ArmPlacement(SLAB);
+            Check(ed.Objects.PlaceAt(Gp("outside")), $"placing outside every parcel works ('{ed.StatusMessage}')");
+            ed.Objects.DisarmPlacement();
             var after = EditsFile.Load(editsPath);
             var outId = ObjectEdits.All(after).Select(t => (string)t.obj["id"]!).FirstOrDefault(id => !idsBefore.Contains(id)) ?? "";
-            Check(outId != "" && ed.ObjectData(outId) is { Parcel: "" }, $"the new object {outId} is in the top-level list and stands in no parcel");
+            Check(outId != "" && ed.Objects.ObjectData(outId) is { Parcel: "" }, $"the new object {outId} is in the top-level list and stands in no parcel");
             Check(!ObjectEdits.Parcels(after).Values.OfType<SortedDictionary<string, object?>>().Any(e => e.ContainsKey("objects")), "and nothing is listed under a parcel entry");
             await WaitIdle(10);
             Check(_map.ObjectNodes.TryGetValue(outId, out var outNode) && outNode.GetParent().Name == $"objects_{NoGroup}",
                 "it is instanced at once, under the container for objects on no parcel");
             Check(_watcher.RunCount == runsOut, "and that needed no parcel-run");
-            ed.SelectObject(outId);
-            ed.StartMove(outId, GOf(outId));
-            ed.DragTo(Gp("outside", 3.0, 0.0), false);
-            Check(ed.EndDrag() && ed.ObjectData(outId) is { Parcel: "" }, "dragging it to another spot that is no parcel works too");
-            Check(ed.DeleteSelected() && ObjectEdits.Find(EditsFile.Load(editsPath), outId) == null, "and so does deleting it");
+            ed.Objects.SelectObject(outId);
+            ed.Objects.StartMove(outId, GOf(outId));
+            ed.Objects.DragTo(Gp("outside", 3.0, 0.0), false);
+            Check(ed.Objects.EndDrag() && ed.Objects.ObjectData(outId) is { Parcel: "" }, "dragging it to another spot that is no parcel works too");
+            Check(ed.Objects.DeleteSelected() && ObjectEdits.Find(EditsFile.Load(editsPath), outId) == null, "and so does deleting it");
         }
 
         Check(await WaitIdle(60) && _watcher.FailedCount == 0, $"watcher settled, no failed parcel-run ({_watcher.FailedCount}); parcel-runs started in total: {_watcher.RunCount}, instant object updates: {_watcher.InstantCount}");
