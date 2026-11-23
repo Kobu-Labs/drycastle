@@ -89,7 +89,7 @@ public partial class NetClient
         var recon = _recon - _tlRecon0; _tlRecon0 = _recon;
         var inv = CultureInfo.InvariantCulture;
         _tlFile!.StoreLine(string.Format(inv, "{0:F0},{1:F0},{2:F1},{3},{4},{5},{6:F0},{7},{8:F0},{9:F0},{10:F2},{11},{12:F3},{13},{14:F2},{15}",
-            now - _tlStart, Engine.GetFramesPerSecond(), _tlFrameMax, _tlSlow50, _tlSlow100, _tlSnaps, _tlGapMax, _tlTickSkips, rtt, rttVar, loss, recon, _tlErrMax, _tlFlightCorr, _tlFlightMax, _driving ? 1 : 0));
+            now - _tlStart, Engine.GetFramesPerSecond(), _tlFrameMax, _tlSlow50, _tlSlow100, _tlSnaps, _tlGapMax, _tlTickSkips, rtt, rttVar, loss, recon, _tlErrMax, _tlFlightCorr, _tlFlightMax, Ctx.Driving ? 1 : 0));
         _tlFile.Flush();
         _tlFrames = _tlSlow50 = _tlSlow100 = _tlSnaps = _tlTickSkips = _tlFlightCorr = 0;
         _tlFrameMax = _tlGapMax = 0; _tlErrMax = _tlFlightMax = 0;

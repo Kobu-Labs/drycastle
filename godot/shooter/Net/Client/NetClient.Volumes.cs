@@ -91,7 +91,7 @@ public partial class NetClient
             if (Near(at, cam)) VolumePerson(o, at, r.Stance, r.Node.GlobalRotation.Y, 1f, _names.TryGetValue(id, out var n) ? n : $"player {id}");
         }
         foreach (var c in _citizens.Views) VolumeNpc(o, c, cam, "citizen");
-        foreach (var g in _gang.Values) VolumeNpc(o, g.View, cam, "gang");
+        foreach (var g in _thieves.GangViews) VolumeNpc(o, g, cam, "gang");
         foreach (var d in _demons.Values) VolumeNpc(o, d.View, cam, "demon");
     }
 

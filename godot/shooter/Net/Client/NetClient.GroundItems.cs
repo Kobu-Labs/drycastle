@@ -120,7 +120,7 @@ public partial class NetClient
     {
         _groundNear = null;
         _groundNearest = false;
-        if (_me == null || Dead || _driving || _groundItems.Count == 0) return;
+        if (_me == null || Dead || Ctx.Driving || _groundItems.Count == 0) return;
         var at = _me.GlobalPosition;
         var best = GroundItemRules.ReachMetres;
         foreach (var (id, node) in _groundItems)

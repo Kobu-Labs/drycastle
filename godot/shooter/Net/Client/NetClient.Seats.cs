@@ -53,7 +53,7 @@ public partial class NetClient
     /// </summary>
     bool HeadLookWanted()
     {
-        if (!_driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() == null) return false;
+        if (!Ctx.Driving || Dead || _me == null || _gunship != null || _controlling || !Mode.ViewIsBody || MySeat() == null) return false;
         return _view.FirstPerson;
     }
 
@@ -63,7 +63,7 @@ public partial class NetClient
     /// <summary>The seat the local player sits in, with its vehicle, once the server has said who sits where; null on foot or before that.</summary>
     (CarView Car, VehicleDef Def, VehicleSeatDef Seat, int Index)? MySeat()
     {
-        if (!_driving || Dead || _seats is not { Mine: >= 0 } s || Vehicles == null || !_cars.TryGetValue(s.CarId, out var v) || v.Kind >= Vehicles.Vehicles.Count) return null;
+        if (!Ctx.Driving || Dead || _seats is not { Mine: >= 0 } s || Vehicles == null || !_cars.TryGetValue(s.CarId, out var v) || v.Kind >= Vehicles.Vehicles.Count) return null;
         var def = Vehicles.Vehicles[v.Kind];
         return s.Mine < def.Seats.Count ? (v, def, def.Seats[s.Mine], s.Mine) : null;
     }
@@ -126,7 +126,7 @@ public partial class NetClient
     /// <summary>The vehicle and occupants the schematic shows, or nothing when the local player is not seated (or the vehicle is not known yet).</summary>
     (VehicleDef Def, ushort[] Occupants, int Mine)? SeatPanel()
     {
-        if (!_driving || _seats is not { } s || Vehicles == null || !_cars.TryGetValue(s.CarId, out var v) || v.Kind >= Vehicles.Vehicles.Count) return null;
+        if (!Ctx.Driving || _seats is not { } s || Vehicles == null || !_cars.TryGetValue(s.CarId, out var v) || v.Kind >= Vehicles.Vehicles.Count) return null;
         return (Vehicles.Vehicles[v.Kind], s.Occupants, s.Mine);
     }
 }

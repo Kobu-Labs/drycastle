@@ -48,8 +48,12 @@ public sealed class ClientContext
     public Player? Me;
     public ushort MyId;
     public bool Dead;
+    /// <summary>The local player drives a vehicle (set by the reconcile: a seat or a driver's place).</summary>
+    public bool Driving;
     public string PlayerName = "player";
     public bool Bot;
+    /// <summary>vehicles.json (set by the host): the type per snapshot record, visuals and the smoke's expected run-over damage.</summary>
+    public VehiclesFile? Vehicles;
     /// <summary>weapons.json (set by the host): hotbar order, per-weapon values.</summary>
     public WeaponsFile? Weapons;
     /// <summary>killstreaks.json (set by the host): streak names, thresholds and the aircraft's defs.</summary>

@@ -110,7 +110,7 @@ public partial class NetClient
     void RenderMinerals()
     {
         _mineralNear = null;
-        if (_mineralNodes.Count == 0 || _me == null || Dead || _driving) return;
+        if (_mineralNodes.Count == 0 || _me == null || Dead || Ctx.Driving) return;
         var at = _me.GlobalPosition;
         var best = MineralRules.ReachMetres;
         foreach (var (id, v) in _mineralNodes)

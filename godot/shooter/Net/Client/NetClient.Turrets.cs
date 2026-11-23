@@ -153,7 +153,7 @@ public partial class NetClient
     /// <summary>The placement prompt while our ghost is up (null otherwise): the validity in words, the keys to confirm or cancel.</summary>
     string? TurretPrompt()
     {
-        if (_ghostValid is not { } valid || Dead || _driving) return null;
+        if (_ghostValid is not { } valid || Dead || Ctx.Driving) return null;
         var confirm = InputBindings.Name("interact");
         var cancel = InputBindings.Name("killstreak");
         return valid ? Strings.F("hud.turret.valid", confirm, cancel) : Strings.F("hud.turret.invalid", confirm, cancel);

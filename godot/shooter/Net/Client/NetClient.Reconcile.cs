@@ -52,10 +52,10 @@ public partial class NetClient
         _me!.Health = rec.Health;
         _myState = rec.State;
         var inCar = rec.State == EntityState.InVehicle;
-        if (inCar != _driving)
+        if (inCar != Ctx.Driving)
         {
             // entering or leaving a car: no prediction while driving; on exit take the server's position (the free side) as is
-            _driving = inCar; _pending.Clear(); _reconcile = null; _me.InVehicle = inCar;
+            Ctx.Driving = inCar; _pending.Clear(); _reconcile = null; _me.InVehicle = inCar;
             if (!inCar) { _reconcile = null; _viewFix = Vector3.Zero; _me.SetState(new MoveState { Position = sp, OnFloor = false, FallPeakY = sp.Y }); _me.EndChase(_carYaw); ClearSeats(); }
             return;
         }

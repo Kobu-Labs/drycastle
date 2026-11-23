@@ -214,7 +214,7 @@ public partial class NetClient
 
     ushort? NearestCorpseInReach()
     {
-        if (_me == null || Dead || _driving) return null;
+        if (_me == null || Dead || Ctx.Driving) return null;
         ushort? best = null;
         var bd = CorpseRules.ReachMetres;
         var at = _me.GlobalPosition;
@@ -254,7 +254,7 @@ public partial class NetClient
     void TickCorpses(double dt)
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (ChooserOpen && (Dead || _driving || _near != _chooser.Corpse)) _chooser.Close();
+        if (ChooserOpen && (Dead || Ctx.Driving || _near != _chooser.Corpse)) _chooser.Close();
         var (_, released) = _useKey.Step(use);
         var near = KeyOwner == InteractOwner.Corpse ? _near : null; // a care package in reach owns the key (ticket #143), and so does a ground item nearer than the corpse (#267)
         var holdWeapon = !ChooserOpen && near is { } hid && CorpseWeapon(hid) is { } hw && CorpseRules.CanReplace(hw, CorpseRules.PrimaryPos);

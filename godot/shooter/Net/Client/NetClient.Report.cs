@@ -137,7 +137,7 @@ public partial class NetClient
         Set("out_kb_s", _conn.PopStatistic(ENetConnection.HostStatistic.SentData) / secs / 1000);
         Set("remotes", _remotes.Count); Set("world_entities", WorldEntities.Entities.Count);
         var size = GetViewport().GetVisibleRect().Size; // what is drawn (the window's size unless the picture is scaled)
-        Set("res_w", size.X); Set("res_h", size.Y); Set("driving", _driving ? 1 : 0);
+        Set("res_w", size.X); Set("res_h", size.Y); Set("driving", Ctx.Driving ? 1 : 0);
         ClientProf.Take(secs, _rpScopes);
         GD.Print("client: perf " + ClientReport.Line(v));
         GD.Print("client: perf scopes ms_per_s " + ClientReport.ScopeLine(_rpScopes));

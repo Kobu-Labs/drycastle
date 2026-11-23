@@ -112,7 +112,7 @@ public partial class NetClient
         var f = v.Flak!;
         var def = Vehicles!.Vehicles[v.Kind].Flak!;
         _turretAims.TryGetValue(v.Id, out var aim);
-        var mine = aim != null && aim.Gunner == _myId && _driving && !Dead && _me != null;
+        var mine = aim != null && aim.Gunner == _myId && Ctx.Driving && !Dead && _me != null;
         float yaw, pitch;
         if (mine)
         {

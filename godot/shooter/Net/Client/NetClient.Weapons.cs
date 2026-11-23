@@ -76,7 +76,7 @@ public partial class NetClient
         // iron sights: any non-scoped, non-melee weapon while zoom is held
         var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
         if (_viewmodel != null)
-            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!_driving && _myState != EntityState.InVehicle || InArmedSeat)
+            _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && _myState != EntityState.InVehicle || InArmedSeat)
                 && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
         _me.IronSightZoom = _viewmodel is { Aiming: true };
     }

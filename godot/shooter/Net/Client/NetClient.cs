@@ -29,6 +29,7 @@ using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.RozhlasFeed;
 using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 using Drycastle.ShooterCore.Wildlife;
@@ -79,9 +80,11 @@ public partial class NetClient : Node
     /// The mode flags (dead, in a vehicle, at a turret, steering the missile, held by the Mass, the demon or the Bigfoot) as one value to ask named questions of
     /// (<see cref="ClientModeInputs"/>); build it where it is used, it is a few bools. <c>InArmedSeat</c> is only ever true while driving (<see cref="MySeat"/> needs it).
     /// </summary>
-    ClientModeInputs Mode => new(Dead, _driving, _gunship != null || ScudScreenOn, _controlling, _mass.Seated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, _driving && InArmedSeat);
+    ClientModeInputs Mode => new(Dead, Ctx.Driving, _gunship != null || ScudScreenOn, _controlling, _mass.Seated, _pinned, _heldByBigfoot, _pRising, _myState == EntityState.InVehicle, Ctx.Driving && InArmedSeat);
     /// <summary>holy_mass.json (set by the host): the bodies of the citizens and the Mass's chant.</summary>
     public HolyMassFile HolyMassData = new();
+    /// <summary>thieves.json (set by the host): the looks and clips of the Gang members, the vans and the Loot.</summary>
+    public ThievesFile ThievesData = new();
     /// <summary>weapons.json: hotbar order and the per-weapon movement speed multiplier used by prediction.</summary>
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
@@ -133,6 +136,7 @@ public partial class NetClient : Node
     MassClient _mass = null!;
     CitizensClient _citizens = null!;
     StatusClient _status = null!;
+    ThievesClient _thieves = null!;
     /// <summary>The chat box, the Squads screen's and the Teams screen's requests (the menus reach them here).</summary>
     public ChatClient Chat { get; private set; } = null!;
     public SquadsClient Squads { get; private set; } = null!;
@@ -140,7 +144,7 @@ public partial class NetClient : Node
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, InVehicle = () => _driving || _myState == EntityState.InVehicle };
+        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, InVehicle = () => Ctx.Driving || _myState == EntityState.InVehicle };
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
@@ -171,7 +175,7 @@ public partial class NetClient : Node
         InitCompanions();
         InitFlocks();
         InitBigfoot();
-        InitThieves();
+        _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         InitDemon();
         InitAircraft();
         InitLockOn();
@@ -335,7 +339,7 @@ public partial class NetClient : Node
         RenderFlocks(delta);
         RenderBigfoot();
         _citizens.Render();
-        RenderGang(delta);
+        _thieves.Render(delta);
         RenderDemon();
     }
 
@@ -472,10 +476,10 @@ public partial class NetClient : Node
         OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
         OnCompanionEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
-        OnThiefAudioEvent(kind, payload); // a Gang member says a line (ticket 09)
+        _thieves.OnVoiceEvent(kind, payload); // a Gang member says a line (ticket 09)
         OnBigfootEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
         OnHarvesterEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
-        OnThievesEvent(kind, payload); // the Raid vans' honk
+        _thieves.OnEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
@@ -593,7 +597,7 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = _me!.Yaw } : PerfPlay ? PerfPlayStep() : _me!.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); TickLootReturn(dt); TickMinerals(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); TickMinerals(dt); }
         FxDemoInput(ref mi);
         ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)

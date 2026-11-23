@@ -105,7 +105,7 @@ public partial class NetClient
         _cars.TryGetValue(tractorId, out var tractor);
         var at = (tractor ?? trailer).Node.GlobalPosition;
         PlayCarSound("tow.clunk", at, tractor);
-        if (tractor != null && tractor.Driver == _myId && _driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
+        if (tractor != null && tractor.Driver == _myId && Ctx.Driving && !Dead) UiShell.Instance?.Toast(Strings.T(now != 0 ? "toast.tow.hitched" : "toast.tow.unhitched"), ToastKind.Info);
     }
 
     /// <summary>The trailer hitched to <paramref name="tractor"/> as the records say, or null (a tractor pulls at most one).</summary>

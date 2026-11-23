@@ -45,10 +45,10 @@ public partial class NetClient
         {
             var feet = _me.GlobalPosition;
             var depth = Water.DepthAt(new NVec3(feet.X, feet.Y, feet.Z));
-            var inWater = !_driving && depth > 0f; // a rider is in the vehicle, not in the water: its own splash is the vehicle's
+            var inWater = !Ctx.Driving && depth > 0f; // a rider is in the vehicle, not in the water: its own splash is the vehicle's
             if (UnderwaterFx.WaterCrossing(_meInWater, inWater) != UnderwaterFx.Crossing.None) SplashAt(feet);
             _meInWater = inWater;
-            if (!_driving && !Dead)
+            if (!Ctx.Driving && !Dead)
             {
                 var vel = _me.State.Velocity;
                 WaterWalk(feet, depth, MathF.Sqrt(vel.X * vel.X + vel.Z * vel.Z), _me.State.OnFloor, ref _meRippleDue, ref _meWadeAcc, dt);

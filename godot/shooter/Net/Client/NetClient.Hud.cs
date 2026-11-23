@@ -120,8 +120,8 @@ public partial class NetClient
         if (h.Victim != _myId || _me == null) return;
         // the chevron follows its source while it shows (#424); a source that is gone leaves it at its last angle
         if (h.Attacker != _myId && _remotes.TryGetValue(h.Attacker, out var r)) DamageFrom(h.Attacker, () => NodePos(r.Node));
-        else if (GangRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => NearestGangMember(_me.GlobalPosition)); // a blow of a Gang member: the marker points at the nearest one
-        else if (RaidVanRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => NearestVan(_me.GlobalPosition)); // a Raid van ran into the player: the marker points at the nearest van
+        else if (GangRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => _thieves.NearestGangMember(_me.GlobalPosition)); // a blow of a Gang member: the marker points at the nearest one
+        else if (RaidVanRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => _thieves.NearestVan(_me.GlobalPosition)); // a Raid van ran into the player: the marker points at the nearest van
         else if (h.Attacker == BigfootRules.TargetId) DamageFrom(h.Attacker, () => _bigfoots.Values.FirstOrDefault() is { } giant ? NodePos(giant.Node) : null); // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
     }
 
@@ -162,7 +162,7 @@ public partial class NetClient
         if (_me != null && _hud != null)
         {
             var g = _me.GlobalPosition;
-            var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: _driving);
+            var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: Ctx.Driving);
             _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, _me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
             _carDots.Clear();
             foreach (var c in _cars.Values)

@@ -65,7 +65,7 @@ public partial class NetClient
     void UpdatePiloting(ushort ack)
     {
         CarView? mine = null;
-        if (_driving && !Dead)
+        if (Ctx.Driving && !Dead)
             foreach (var v in _cars.Values)
                 if (v.Driver == _myId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
         if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }

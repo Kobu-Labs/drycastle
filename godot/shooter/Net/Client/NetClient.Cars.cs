@@ -73,10 +73,8 @@ public partial class NetClient
     static bool GenericWheels(VehicleDef d) => d.Drive == null && d.Flight == null && d.Trailer == null && d.Launcher == null;
 
     readonly Dictionary<ushort, CarView> _cars = new();
-    bool _driving;
     float _carYaw;
-    /// <summary>vehicles.json (type per snapshot record, visuals and the smoke's expected run-over damage).</summary>
-    public VehiclesFile? Vehicles;
+    public VehiclesFile? Vehicles { get => Ctx.Vehicles; set => Ctx.Vehicles = value; }
 
     void OnVehicleState(ushort id, EntityRecord rec, uint tick)
     {
@@ -236,7 +234,7 @@ public partial class NetClient
             else SfxCar(v, p, dt);
             if (drive != null) StepDriveFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
             else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
-            var seat = _driving && _me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
+            var seat = Ctx.Driving && _me != null ? OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
             if (seat >= 0) TrackView(v, seat);
             if (seat == 0 || seat > 0 && !flakMine)
             {
@@ -261,21 +259,21 @@ public partial class NetClient
         }
         RenderTrailers(rt, dt); // every trailer, from its tractor as drawn just now (the hitch, the articulation, the ground fit, the wheels)
         SeatRiders(); // the riders of every vehicle, on their seats as the vehicles are drawn this frame (ADR 0026)
-        if (!_driving) { HideSelfInCar(); LeaveView(); }
+        if (!Ctx.Driving) { HideSelfInCar(); LeaveView(); }
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
-        if (!_driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
+        if (!Ctx.Driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
         _hud?.SetSeats(SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
-        else _hud?.SetVehicleSpeed(_driving ? kmh ?? 0f : null);
+        else _hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (_driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
-        if (_driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
+        if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
         else if (_me != null && !Dead && NearestFreeCar(_me.GlobalPosition) is { } free) prompt = Strings.F(FlightDef(free) != null ? "hud.flight.enter" : "hud.vehicle.enter", InputBindings.Name("interact"));
-        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? LootPrompt() ?? _doors.GarageDoorPrompt(_driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? MineralPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
+        _hud?.SetPrompt(LadderPrompt() ?? TurretPrompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? ScudLoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? MineralPrompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
 
     /// <summary>On a ladder: the keys that work there. The prompt that owns the line (nothing else is in reach on a rung).</summary>
@@ -284,7 +282,7 @@ public partial class NetClient
         : null;
 
     /// <summary>A ladder in reach (the same test as getting on): the key that gets on. Last in the chain, as the interact key's lowest-priority target after the loot.</summary>
-    string? LadderReachPrompt() => _me != null && !Dead && !_driving && _me.Ladders.Count > 0 && _me.Ladders.Reach(_me.State.Position, _me.Yaw) >= 0
+    string? LadderReachPrompt() => _me != null && !Dead && !Ctx.Driving && _me.Ladders.Count > 0 && _me.Ladders.Reach(_me.State.Position, _me.Yaw) >= 0
         ? Strings.F("hud.ladder.climb", InputBindings.Name("interact"))
         : null;
 
@@ -402,5 +400,26 @@ public partial class NetClient
             if (d <= bd) { best = v; bd = d; }
         }
         return best;
+    }
+
+    // ---- the wheels the Thieves took ----
+
+    static readonly string[] WheelNodeNames = { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" };
+
+    /// <summary>The wheel nodes of a vehicle model by wheel index (front left, front right, back left, back right; null where the model has none).</summary>
+    static Node3D?[] FindWheels(Node3D car)
+    {
+        var wheels = new Node3D?[WheelNodeNames.Length];
+        for (var i = 0; i < wheels.Length; i++) wheels[i] = car.FindChild(WheelNodeNames[i], true, false) as Node3D;
+        return wheels;
+    }
+
+    /// <summary>Hides the wheels the record says are taken and shows the ones that are back (a change of the mask only).</summary>
+    static void ApplyWheels(CarView v, byte mask)
+    {
+        if (v.Wheels == null || v.WheelsOff == mask) return;
+        v.WheelsOff = mask;
+        for (var i = 0; i < v.Wheels.Length; i++)
+            if (v.Wheels[i] is { } w && GodotObject.IsInstanceValid(w)) w.Visible = (mask & (1 << i)) == 0;
     }
 }

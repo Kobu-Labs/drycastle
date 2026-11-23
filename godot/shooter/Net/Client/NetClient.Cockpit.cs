@@ -57,7 +57,7 @@ public partial class NetClient
     bool HandleViewInput(InputEvent e)
     {
         if (!e.IsActionPressed("vehicle_view") || !Mode.CanToggleCockpitView || Input.MouseMode != Input.MouseModeEnum.Captured) return false;
-        return _driving && !Dead && _viewSeat >= 0 && _view.Toggle();
+        return Ctx.Driving && !Dead && _viewSeat >= 0 && _view.Toggle();
     }
 
     /// <summary>

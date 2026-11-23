@@ -84,7 +84,7 @@ public partial class NetClient
     /// <summary>Own footsteps from horizontal speed and distance, and a thud on landing from a fall. One surface in v1 (ground kind is not cheap to query).</summary>
     void SfxOwnMovement(float dt)
     {
-        if (!Sfx.Enabled || _me == null || _driving || Dead) return;
+        if (!Sfx.Enabled || _me == null || Ctx.Driving || Dead) return;
         var s = _me.State;
         var speed = MathF.Sqrt(s.Velocity.X * s.Velocity.X + s.Velocity.Z * s.Velocity.Z);
         if (SoundRules.FootstepDue(ref _sfxStepAcc, speed, dt, s.OnFloor)) Sfx.Play2D("footstep");
@@ -112,7 +112,7 @@ public partial class NetClient
     }
 
     /// <summary>True while the local player rides this vehicle in any seat. The listener is the camera (there is no AudioListener3D), and the chase camera sits metres behind and above, so a sound at a point of this vehicle changes with the camera's distance and orbit: its sounds go through <see cref="PlayCarSound"/>, never to a point on it (docs/standards/car-design.md section 9).</summary>
-    bool RidesCar(CarView v) => _driving && (v.Driver == _myId || (_seats is { Mine: >= 0 } st && st.CarId == v.Id));
+    bool RidesCar(CarView v) => Ctx.Driving && (v.Driver == _myId || (_seats is { Mine: >= 0 } st && st.CarId == v.Id));
 
     /// <summary>A one-shot of a vehicle (<paramref name="car"/>; null when it is not known) heard at <paramref name="at"/>: when the local player rides it, at the listener with an exact level and no range cull (like its engine), else a plain positional sound.</summary>
     void PlayCarSound(string id, Vector3 at, CarView? car, float dbOffset = 0f)

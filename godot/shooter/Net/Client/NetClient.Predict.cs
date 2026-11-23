@@ -294,15 +294,15 @@ public partial class NetClient
             Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_myId, at))), (int)ENetPacketPeer.FlagReliable);
             _conn.Flush();
         }
-        if (!_driving) mi.Yaw = _ddYaw;
-        if (!_driving) _me.Pitch = -0.1f;
+        if (!Ctx.Driving) mi.Yaw = _ddYaw;
+        if (!Ctx.Driving) _me.Pitch = -0.1f;
         if (_ddShot < DriveShots.Length && t >= DriveShots[_ddShot]) _ = DemoShot(dir, DriveShots[_ddShot++]);
         var pos = _cars.TryGetValue(_ddCar, out var cv) ? cv.Pos : _ddStart;
-        if (t is > 4.5 and < 4.6) { mi.Buttons |= MoveButtons.Use; GD.Print($"drive-demo: E pressed, hint='{Strings.F("hud.vehicle.enter", InputBindings.Name("interact"))}' driving={_driving}"); }
+        if (t is > 4.5 and < 4.6) { mi.Buttons |= MoveButtons.Use; GD.Print($"drive-demo: E pressed, hint='{Strings.F("hud.vehicle.enter", InputBindings.Name("interact"))}' driving={Ctx.Driving}"); }
         if (t > 5 && t < 12) { mi.MoveY = 1; mi.MoveX = t > 8 && t < 10 ? 0.6f : 0f; }
         if (t is > 12 and < 13.4) mi.Buttons |= MoveButtons.Jump; // handbrake
         if (t is > 14 and < 14.1) mi.Buttons |= MoveButtons.Use;  // exit
-        if (t > 6 && (int)(t * 2) != _ddLog) { _ddLog = (int)(t * 2); GD.Print($"drive-demo: t={t:F1} driving={_driving} car {pos} moved {NVec3.Distance(pos, _ddStart):F1} m kmh {(_cars.TryGetValue(_ddCar, out var c2) ? c2.Kmh : 0):F0}"); }
+        if (t > 6 && (int)(t * 2) != _ddLog) { _ddLog = (int)(t * 2); GD.Print($"drive-demo: t={t:F1} driving={Ctx.Driving} car {pos} moved {NVec3.Distance(pos, _ddStart):F1} m kmh {(_cars.TryGetValue(_ddCar, out var c2) ? c2.Kmh : 0):F0}"); }
         if (t > 16.5) GetTree().Quit();
     }
     float _ddYaw; int _ddLog;

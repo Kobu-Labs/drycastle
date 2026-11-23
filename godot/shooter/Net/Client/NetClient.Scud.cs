@@ -585,7 +585,7 @@ public partial class NetClient
     /// <summary>The prompt of a player on foot beside a truck with an empty rack and a loaded cart: the hold that loads it, then whatever the key does anyway (getting in). Null when there is no such offer or the player rides.</summary>
     string? ScudLoadPrompt(string? basePrompt)
     {
-        if (_driving || !ScudLoadOffer()) return null;
+        if (Ctx.Driving || !ScudLoadOffer()) return null;
         var hint = Strings.F("scud.hint.load", InputBindings.Name("interact"));
         return basePrompt is { Length: > 0 } ? hint + "     " + basePrompt : hint;
     }

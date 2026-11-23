@@ -141,7 +141,7 @@ public partial class NetClient
 
     ushort? NearestCrateInReach()
     {
-        if (_me == null || Dead || _driving) return null;
+        if (_me == null || Dead || Ctx.Driving) return null;
         ushort? best = null;
         var bd = CarePackageRules.ReachMetres;
         var at = _me.GlobalPosition;
@@ -185,7 +185,7 @@ public partial class NetClient
     void ShowHoldRing(double dt)
     {
         var target = _crateHold.Held > 0 && _crateNear != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
-        target = Math.Max(target, Math.Max(_rozhlas.HoldFraction, Math.Max(LootHoldFraction, MineralHoldFraction)));
+        target = Math.Max(target, Math.Max(_rozhlas.HoldFraction, Math.Max(_thieves.Loot.HoldFraction, MineralHoldFraction)));
         if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
         else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
         _hud?.SetRadial(_ringShown > 0 ? _ringShown : null);

@@ -81,7 +81,7 @@ public partial class NetClient
     void UpdateDriving(ushort ack)
     {
         CarView? mine = null;
-        if (_driving && !Dead)
+        if (Ctx.Driving && !Dead)
             foreach (var v in _cars.Values)
                 if (v.Driver == _myId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
         if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
