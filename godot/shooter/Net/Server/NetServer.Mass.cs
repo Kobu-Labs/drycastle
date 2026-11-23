@@ -31,6 +31,12 @@ public partial class NetServer
     readonly Dictionary<ushort, Sitter> _sitters = new();
     readonly Dictionary<ushort, StateMachine<MassSeatState>> _seatHint = new(); // what each player was last told (a player never told is None)
 
+    /// <summary>What the rozhlas set takes from the Mass: the holder sits at the dictation table as a churchgoer sits in a pew.</summary>
+    TableSeating TableSeating() => new(
+        id => _sitters.ContainsKey(id),
+        holder => { foreach (var (id, s) in _sitters.ToList()) if (s.Seat == null && id != holder) MassStandUp(id); },
+        (c, yaw) => { _sitters[c.Id] = new Sitter(); if (c.Peer != null) SendSeat(c, MassSeatState.Seated, yaw); });
+
     MassSeatState SeatTold(ushort id) => _seatHint.TryGetValue(id, out var m) ? m.Current : MassSeatState.None;
 
     /// <summary>The Holy Mass event; null until the first <c>/event mass</c>.</summary>
@@ -165,7 +171,7 @@ public partial class NetServer
     void MassStandUp(ushort id)
     {
         if (!_sitters.Remove(id, out var was)) return;
-        if (was.Seat == null) RozhlasSetStood(id); // standing up from the dictation table lets go of the set
+        if (was.Seat == null) _rozhlas.TableStood(id); // standing up from the dictation table lets go of the set
         _mass?.Stand(id);
         if (_byId.TryGetValue(id, out var c) && c.Peer != null) SendSeat(c, MassSeatState.None, 0);
     }

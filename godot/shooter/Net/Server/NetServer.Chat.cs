@@ -30,11 +30,9 @@ public partial class NetServer
         if (ctx.IsAdmin) GD.Print($"server: {c.Name} #{c.Id} is an admin");
     }
 
-    void ChatTo(ServerClient c, ChatLineKind kind, string text) =>
-        Send(c, new EventMsg((byte)EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, "", text))));
+    void ChatTo(ServerClient c, ChatLineKind kind, string text) => _ctx.ChatTo(c, kind, text);
 
-    void ChatToAll(ChatLineKind kind, string sender, string text) =>
-        BroadcastEvent(EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, sender, text)));
+    void ChatToAll(ChatLineKind kind, string sender, string text) => _ctx.ChatToAll(kind, sender, text);
 
     void OnChatSend(ServerClient c, byte[] payload)
     {
@@ -72,7 +70,7 @@ public partial class NetServer
             case "event": ChatEvent(c, args); break;
             case "citizens": ChatCitizens(c, args); break;
             case "church": ChatChurch(c, args); break;
-            case "rozhlas": ChatRozhlas(c, args); break;
+            case "rozhlas": _rozhlas.ChatCommand(c, args); break;
             case "status": ChatStatus(c, args); break;
             case "scud": ChatScud(c, args); break;
             case "squad": ChatSquad(c, args); break;
@@ -264,7 +262,7 @@ public partial class NetServer
     }
 
     /// <summary>
-    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="ChatEventRozhlas"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
+    /// "/event rozhlas": starts a detour broadcast of the village loudspeaker now (<see cref="RozhlasServer.ChatEvent"/>). "/event intel [clear]": the test announcement (<see cref="ChatIntel"/>).
     /// "/event bigfoot", "mass" and "thieves" start that kind through the handler table (<see cref="InitEvents"/>); "/event current end" concludes the running
     /// event as a win (for testing) and "/event current cancel" removes it with no reward, by its kind (<see cref="ChatCurrentEvent"/>). Everyone is told who did.
     /// </summary>
@@ -281,7 +279,7 @@ public partial class NetServer
         switch (args[0])
         {
             case "rozhlas":
-                ChatEventRozhlas(c);
+                _rozhlas.ChatEvent(c);
                 break;
             case "intel": ChatIntel(c, action == "clear"); break;
             case "demon": ChatDemon(c); break;

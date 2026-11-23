@@ -206,4 +206,5 @@ public partial class ServerCar
 static class NumericsExtensions
 {
     public static NVec3 ToNumerics(this Vector3 v) => new(v.X, v.Y, v.Z);
+    public static Vector3 ToGodot(this NVec3 v) => new(v.X, v.Y, v.Z);
 }

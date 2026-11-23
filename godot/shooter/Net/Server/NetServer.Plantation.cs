@@ -35,7 +35,7 @@ public partial class NetServer
     public bool InPlantation(Vector3 at) => MapZonePolygons.Contains(PlantationRules.Kind, at.X, at.Z);
 
     /// <summary>
-    /// Every input of a player, with the interact key's state (next to <see cref="RozhlasSetUse"/>): held for <see cref="PlantationFile.HoldSeconds"/> inside a plantation, on foot and alive,
+    /// Every input of a player, with the interact key's state (next to <see cref="RozhlasServer.OnInput"/>): held for <see cref="PlantationFile.HoldSeconds"/> inside a plantation, on foot and alive,
     /// with nothing else in reach of the key, makes the player high (once per hold). Silent otherwise.
     /// </summary>
     void PlantationUse(ServerClient c, bool useDown)
@@ -69,7 +69,7 @@ public partial class NetServer
         if (EnterableCar(p) != null) k |= KeyCompetitor.Vehicle;
         if (EnsureGarage() is { } garage && GarageDoorNode.Current != null && garage.InReach(at)) k |= KeyCompetitor.Doors;
         if (_mass is { Running: true } mass && mass.SeatNear(at) != null) k |= KeyCompetitor.MassSeat;
-        if (_rozhlasSet is { } set && RozhlasSet.CanTakeHere(_rozhlasBroadcast.Value is { Hijacked: true }, set.IsHeld, set.Table, at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
+        if (_rozhlas.CanTakeSetAt(at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
         if (LootInReach(c) != null) k |= KeyCompetitor.Loot;
         if (ScudReloadOffer(c) != null) k |= KeyCompetitor.ScudCart;
         return k;

@@ -56,6 +56,7 @@ public partial class NetServer : Node
     ServerContext _ctx = null!;
     SceneryServer _scenery = null!;
     MineralsServer _minerals = null!;
+    RozhlasServer _rozhlas = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -109,8 +110,9 @@ public partial class NetServer : Node
         _xp = new MatchXp(Levels.Awards);
         _match = new MatchSim(MatchConfig, () => _elapsed, Spawns);
         _match.Event += OnMatchEvent;
-        _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send);
+        _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send, (c, chan, packet) => { if (c.Peer is { } peer) Tx(peer, chan, packet, 0); });
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
+        _rozhlas = new RozhlasServer(_ctx, ArenaMode, MapDir, HolyMass, Weapons, CitizenHits, TableSeating());
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
         DemonInit();
@@ -140,12 +142,12 @@ public partial class NetServer : Node
         GD.Print($"SHOOTER_NET_LISTENING port={Port} tick={Wire.TickRate}Hz");
     }
 
-    public override void _ExitTree() { _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
+    public override void _ExitTree() { _rozhlas?.Dispose(); _perf?.Flush(); _host.Destroy(); _nav?.Free(); }
 
     public override void _Process(double delta)
     {
         if (Sim != null && Sim.Pump()) _host.Flush(); // delayed packets go out at frame rate, not only on physics ticks
-        RozhlasFeedPump(); // the live rozhlas feed's due frames (a thread feeds ffmpeg; the sending is here, on the game thread)
+        _rozhlas?.Pump(); // the live rozhlas feed's due frames (a thread feeds ffmpeg; the sending is here, on the game thread)
     }
 
     public override void _PhysicsProcess(double delta)
@@ -202,7 +204,7 @@ public partial class NetServer : Node
         _audit?.Lap(6);
         ThievesTick((float)delta); // the Thieves event: its phase clock
         _audit?.Lap(7);
-        RozhlasTick((float)delta); // the village loudspeaker: the schedule and the hijack clock
+        _rozhlas.Tick((float)delta); // the village loudspeaker: the schedule and the hijack clock
         _audit?.Lap(8);
         Prof.End(Prof.S.Events, pt);
         PerfLap(ServerPerf.Ph.Match);
@@ -414,7 +416,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) OnClientReport(c, cr.Payload); }
             else if (c.Joined) OnProfileMessage(c, m);
         }
-        else if (c.Joined && d[0] == Wire.TRozhlasMic) OnRozhlasMic(c, d); // the set holder's voice (NetServer.RozhlasSet.cs)
+        else if (c.Joined && d[0] == Wire.TRozhlasMic) _rozhlas.OnMic(c, d); // the set holder's voice
         else if (c.Joined && d[0] == Wire.TInput)
         {
             _scratch.Clear();
@@ -493,8 +495,7 @@ public partial class NetServer : Node
         SendMassOnJoin(c); // the Holy Mass, when one runs
         SendThievesOnJoin(c); // the Thieves event, when one runs
         _minerals.SendOnJoin(c); // the mineral nodes
-        SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
-        SendUradDoorOnJoin(c); // and the Urad door, when it is open
+        _rozhlas.SendOnJoin(c); // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open
         SendHarvesterOnJoin(c); // the harvester's job and the bales that burn
         SendScudOnJoin(c); // the Scud trucks' racks and proposals
@@ -526,7 +527,7 @@ public partial class NetServer : Node
         StreakLeave(c.Id);
         CompanionLeave(c.Id);
         StatusLeave(c.Id);
-        RozhlasSetLeave(c.Id);
+        _rozhlas.OnPlayerLeft(c.Id);
         MassStandUp(c.Id); _seatHint.Remove(c.Id);
         DetachFromCar(c);
         c.Body.QueueFree();
@@ -580,7 +581,7 @@ public partial class NetServer : Node
         var profT = Prof.Begin(Prof.S.BroadcastEvent);
         ReliableMsg m = new EventMsg((byte)kind, payload);
         PerfEventSent(kind, payload);
-        RozhlasCombatEvent(kind, payload); // shots, launches and blasts inside the Urad go to the rozhlas live feed while the mic is live
+        _rozhlas.OnEvent(kind, payload); // shots, launches and blasts inside the Urad go to the rozhlas live feed while the mic is live
         var bytes = Wire.Encode(m); // encoded once: every recipient gets the same bytes (Tx copies them into the packet)
         // effects that may be lost go unreliable on their own channel, so they never hold back the reliable events (A-03)
         var effect = Wire.IsEffect(kind);
@@ -625,7 +626,7 @@ public partial class NetServer : Node
         PetsRoundStart();
         CompanionsRoundStart();
         WildlifeRoundStart(); // the match cleared the pets' entities too; a new round moves new ones into the property groups
-        WorkersAfterRoundReset(); // the Urad workers of a detour still open sit down again
+        _rozhlas.RoundReset(); // the Urad workers of a detour still open sit down again
         ResetCars();
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
         ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
@@ -689,7 +690,7 @@ public partial class NetServer : Node
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); RozhlasSetDeath(d.Victim); RozhlasCombatDeath(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) SetHeadLamp(dead, false); OnStatusDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
         }
     }
 
@@ -732,7 +733,7 @@ public partial class NetServer : Node
             if (c.Car == null && _elapsed < c.LaunchGraceUntil && (_elapsed < c.LaunchedAt + 0.3 || !c.Body.State.OnFloor)) i.Buttons &= (ushort)(ushort.MaxValue ^ (ushort)MoveButtons.Fire); // thrown by the Bigfoot and in the air: no shooting (#360)
             var useDown = (i.Buttons & (ushort)MoveButtons.Use) != 0;
             var useEdge = c.UseKey.Pressed(useDown);
-            RozhlasSetUse(c, useDown);
+            _rozhlas.OnInput(c, useDown);
             LootUse(c, useDown);
             PlantationUse(c, useDown);
             var lightsEdge = Headlights.Edge((i.Buttons & (ushort)MoveButtons.Headlights) != 0, ref c.LightsHeld);
@@ -883,7 +884,7 @@ public partial class NetServer : Node
         AddPetTargets(list);
         AddWildlifeTargets(list);
         Prof.End(Prof.S.TargetsAnimals, partT);
-        _workers?.AddTargets(list); // the workers of the Urad
+        _rozhlas.AddTargets(list); // the workers of the Urad
         AddDemonTarget(list);
         PerfCounters.LiveTargetsCalls++; PerfCounters.LiveTargetsElems += list.Count;
         Prof.End(Prof.S.LiveTargets, profT);

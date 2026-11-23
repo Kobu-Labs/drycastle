@@ -114,7 +114,7 @@ public partial class NetServer
     ushort? LootInReach(ServerClient c) => _loot is { LyingCount: > 0 } l ? l.NearestLying(N(c.Body.GlobalPosition), ThievesData.Loot.ReachM) : null;
 
     /// <summary>
-    /// Every input of a player, with the use key's state (next to <see cref="RozhlasSetUse"/>): held for <see cref="LootConfig.ReturnSeconds"/> within reach of lying Loot, on foot and alive, it
+    /// Every input of a player, with the use key's state (next to <see cref="RozhlasServer.OnInput"/>): held for <see cref="LootConfig.ReturnSeconds"/> within reach of lying Loot, on foot and alive, it
     /// goes back to its place (once per hold). A hit taken (the player's health fell) or moving off starts the hold over. The client runs the same hold for its ring.
     /// </summary>
     void LootUse(ServerClient c, bool useDown)
