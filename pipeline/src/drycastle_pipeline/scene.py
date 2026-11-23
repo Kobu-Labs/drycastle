@@ -286,6 +286,8 @@ def build_scene(
                                 "floors": [_raised(r, dz) for r in rooms["floors"]],
                                 "ladders": [_raised(r, dz) for r in rooms["ladders"]],
                                 "hatch": rooms["hatch"],
+                                "atlas": rooms["atlas"],
+                                "props": [{**q, "pos": [q["pos"][0], q["pos"][1], round(q["pos"][2] + dz, 3)]} for q in rooms["props"]],
                                 **({"intel": _raised(rooms["intel"], dz)} if "intel" in rooms else {}),
                             })
                 else:

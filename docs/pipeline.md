@@ -770,9 +770,9 @@ byte-identical for identical input.
 same footprint. A 1 m square hatch in each floor, in a different place on each, leads down; a ladder hangs on one edge of
 it. The ground floor has no collision (a player stands on the flattened terrain, so the terrain collision round a bunker is
 built at the full grid), and its hatch is cut out of the terrain and `terrain_collision` (`terrain.cut_holes`). The floors,
-ceilings, walls and furniture underneath are the collision of the shell. `bunkers.json` (listed under `files.bunkers`, only
+ceilings and walls underneath are the collision of the shell; the furniture is `props` (below). `bunkers.json` (listed under `files.bunkers`, only
 when the map has a bunker) holds per bunker `{"id", "parcel", "floors": [{"level", "polygon", "z0", "z1"}], "ladders":
-[{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring, "intel": {"x", "y", "dx", "dy", "z0", "z1", "width"}}` (`intel` is the wall
+[{"x", "y", "dx", "dy", "z0", "z1"}], "hatch": ring, "atlas", "props": [{"model", "pos": [x, y, z], "yaw", "scale", "boxes"}], "intel": {"x", "y", "dx", "dy", "z0", "z1", "width"}}` (`intel` is the wall
 of the lowest floor, the command post, that the intel screen hangs on: the middle of the screen on the wall, the way it
 faces, its lower and upper edge and its width, 1.6 to 3.0 m; the pipeline keeps furniture off the strip in front of it and
 leaves the key out when no wall takes a screen; ADR 0017; since the amendment it is only the game's fallback, used when the map has no hangar object): `level` 0 is the ground floor and -1 to -3 the floors under it; the

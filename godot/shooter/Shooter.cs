@@ -395,6 +395,7 @@ public partial class Shooter : Node3D
         if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
         if (!_map.CollisionOnly && ChurchPaintings.Create(Path.GetFullPath(dir)) is { } churchPaintings) AddChild(churchPaintings); // the wall paintings, hellish once the demon is in (client only)
         if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
+        if (BunkerProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } bunkerProps) AddChild(bunkerProps); // beds, crates, the command post table: Synty models, boxes on the server too (ADR 0009)
         if (UradProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradProps) AddChild(uradProps); // desks, chairs: Synty models, boxes on the server too
         if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too

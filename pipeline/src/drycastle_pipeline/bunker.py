@@ -1,4 +1,4 @@
-"""WW2 bunker model: the footprint extruded with a rounded concrete dome and pale weathering streaks.
+"""Bunker model: the footprint extruded with a rounded concrete dome and pale weathering streaks.
 
 ``bunker_mesh(ring, door_dir)`` takes a footprint ring in any plane-metre frame and the direction the
 door faces (a unit vector in that frame); it returns a :class:`Mesh` standing on z = 0 in the same frame.
@@ -17,19 +17,22 @@ Output is deterministic and flat-coloured like every other mesh.
 """
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import pairwise
 
 import numpy as np
-from shapely.geometry import Point, Polygon
+from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.polygon import orient
+from shapely.ops import unary_union
 
 from drycastle_pipeline.buildings import hex_to_rgb
 from drycastle_pipeline.meshes import Mesh, triangulate
 
 CONCRETE, DOME, STREAK = "#a9a698", "#8d8e76", "#d8d5ca"
 DOOR_FRAME, DOOR_LEAF, SLIT = "#6e4a35", "#2a2420", "#1b1b1b"
-INNER, PAINT, CEILING, FLOOR = "#b4b1a4", "#5a6150", "#9d9a8e", "#6a6860"
+INNER, PAINT, CEILING, FLOOR = "#b4b1a4", "#5f4a33", "#9d9a8e", "#6a6860"
+BOARD, TIMBER, BEAM, GAP = "#4d3a27", "#6e5236", "#54402b", "#2e2419"  # panelling boards, pillars, beams, the dark between planks
+PLANKS = ("#7a6044", "#6e5539", "#836a4c", "#74593e")  # floor planks, in turn
 
 WALL_H = 1.8  # vertical wall of the closed form, metres
 RISE = 1.0  # dome height above the wall
@@ -40,13 +43,18 @@ WALL_T = 0.5  # wall thickness of the enterable form
 FLOOR_Z = 0.04  # the drawn floor, just above the flattened ground
 CLEAR_H = 2.1  # floor to ceiling; the player stands 1.8 m
 ENTER_WALL_H = 2.3  # vertical wall of the enterable form: the room plus the roof slab
-PAINT_H = 0.9  # top of the dark band painted round the room
+PAINT_H = 1.0  # top of the timber panelling round the room
 DOOR_W, DOOR_H = 1.0, 2.0  # the doorway, always open; the player is 0.7 m wide
 SLIT_W, SLIT_Z0, SLIT_Z1 = 0.5, 1.0, 1.25  # a firing slit, at the eye height of a crouched player
 MIN_ROOM_M2 = 6.0  # a smaller room is not worth entering: the bunker stays closed
 EDGE_MARGIN = 0.1  # an opening keeps this far from the ends of its inner wall
 SHELTER_GROW = 0.15  # how far a room's shelter volume reaches into its walls, floor and roof
 EPS = 1e-6
+PILLAR = 0.16  # a timber pillar standing against the wall: its side
+BEAM_W, BEAM_H = 0.18, 0.16  # ceiling beam (across the room) and wall plate (along the wall)
+BEAM_STEP = 1.7  # a beam about every this far along the room
+PLANK_W = 0.2  # floor planks
+BOARD_W = 0.2  # wall panelling boards: every other one is darker
 
 UNDER = 3  # floors below the ground floor, one room each under the same footprint
 STOREY = 2.4  # floor to floor: CLEAR_H of room and a slab
@@ -69,23 +77,106 @@ SCREEN_W_MIN, SCREEN_W_MAX = 1.6, 3.0  # the widest it hangs, the narrowest wort
 SCREEN_MARGIN = 0.25  # it keeps this far from the ends of its wall
 SCREEN_ZONE = 0.9  # no furniture stands this deep in front of it (the deepest piece is 0.9)
 SCREEN_STEP, SCREEN_SLIDE = 0.2, 0.1  # widths and positions tried
-# furnishing per level (0 ground, 1..3 down): (name, width along the wall, depth, height, colour)
+# POLYGON War props (private pack, glb/war/<model>.glb, recentred: origin in the middle of the footprint on the floor, front +Z),
+# measured size (x, y, z) in metres at scale 1; the pack is not in the repo, so the sizes live here
+PACK = {
+    "prop_crate_01": (1.31, 0.33, 0.58), "prop_crate_02": (1.01, 0.90, 1.60), "prop_crate_03": (1.02, 1.02, 1.02),
+    "prop_crate_04": (1.01, 1.01, 1.02), "prop_crate_pile_01": (2.40, 2.03, 2.45), "prop_camp_bed_01": (0.93, 0.55, 2.55),
+    "prop_camp_bed_02": (0.93, 0.64, 2.55), "prop_dresser_01": (2.09, 1.27, 1.09), "prop_chair_01": (0.59, 1.02, 0.67),
+    "prop_chair_02": (0.47, 1.26, 0.68), "prop_gramophone_01": (0.89, 1.29, 0.94), "prop_barrel_01": (0.76, 1.05, 0.76),
+    "prop_barrel_02": (0.76, 1.05, 0.76), "prop_barrel_pile_01": (3.45, 1.26, 2.66), "prop_barrel_pile_02": (3.00, 1.05, 0.95),
+    "prop_shelves_01": (1.50, 1.06, 0.25), "prop_shell_01": (0.16, 0.48, 0.17), "prop_shell_02": (0.94, 0.27, 1.09),
+    "prop_table_01": (2.41, 0.82, 1.08), "prop_coffee_table_01": (0.80, 0.77, 0.80), "prop_table_small_01": (1.05, 0.79, 1.05),
+    "prop_typewriter_01": (0.38, 0.33, 0.44), "prop_radio_box_01": (0.52, 0.30, 0.34), "prop_radio_box_02": (0.52, 0.30, 0.34),
+    "prop_gas_can_01": (0.53, 0.67, 0.18), "prop_stretcher_01": (0.93, 0.12, 3.10), "prop_wire_03": (1.03, 1.12, 1.03),
+    "prop_wire_01": (3.23, 1.11, 0.87), "prop_landmine_01": (0.47, 0.13, 0.53), "prop_searchlight_base_01": (1.08, 1.46, 0.96),
+    "prop_cup_01": (0.17, 0.17, 0.20), "char_attach_german_helmet_01": (0.36, 0.30, 0.37),
+    "char_attach_british_helmet_01": (0.44, 0.20, 0.44), "char_attach_german_canteen_01": (0.14, 0.20, 0.10),
+    "char_attach_german_pack_01": (0.24, 0.20, 0.12), "char_attach_german_bedroll_01": (0.45, 0.19, 0.12),
+    "char_attach_field_glasses_01": (0.25, 0.09, 0.08), "wep_german_grenade_01": (0.09, 0.42, 0.09),
+    "wep_german_rifle_01": (0.06, 0.19, 1.10), "wep_british_rifle_01": (0.07, 0.20, 1.13),
+    "wep_german_heavy_machine_gun_01": (0.41, 0.37, 1.19),
+    **{f"env_poster_0{k}": (0.52, 0.84, 0.02) for k in range(1, 7)},
+}
+PROP_ATLAS = "glb/atlas/war_01_A.png"
+POSTER_ATLAS = "glb/atlas/war_posters_signs_flags_01.png"
+FREE_GAP = 0.45  # a free-standing piece keeps this far from the walls and from other pieces, so a player gets round it
+
+
+@dataclass(frozen=True)
+class _Item:
+    """A piece of furniture: pack ``model`` scaled ``scale`` (x, y, z of the model), stood against a wall with its back to
+    it (``turn`` 90: its long side along the wall), or ``free`` in the open floor, or (``hung`` = height above the floor)
+    hung flat on a wall with no collision. ``top`` pieces ride on it: (model, scale, along, depth, yaw offset[, up]),
+    ``along`` and ``depth`` from the middle of the item (depth positive towards the room), ``up`` above its top; they have
+    no collision. ``atlas`` is the texture when it is not the bunker's own."""
+
+    model: str
+    scale: tuple[float, float, float]
+    turn: int = 0
+    top: tuple = ()
+    free: bool = False
+    hung: float | None = None
+    atlas: str = ""
+
+    @property
+    def size(self) -> tuple[float, float, float]:
+        x, y, z = (a * b for a, b in zip(PACK[self.model], self.scale))
+        return (z, y, x) if self.turn else (x, y, z)  # along the wall, up, deep
+
+
+def _i(model, sx, sy=None, sz=None, **kw):
+    return _Item(model, (sx, sx if sy is None else sy, sx if sz is None else sz), **kw)
+
+
+def _poster(k: int, sx: float = 1.0, z: float = 1.1):
+    return _i(f"env_poster_0{k}", sx, hung=z, atlas=POSTER_ATLAS)
+
+
+_HELMET = ("char_attach_german_helmet_01", (1.0, 1.0, 1.0))
+_CUP = ("prop_cup_01", (1.0, 1.0, 1.0))
+# furnishing per level (0 ground, 1..3 down), in the order they are placed (walls first, then the open floor, then the posters)
 FURNITURE = {
-    0: [],  # the ground floor: ammunition boxes under the firing slits (see _furnish)
+    0: [  # the ground floor: ammunition crates under the firing slits (see _furnish), and what a firing post keeps about
+        _i("prop_stretcher_01", 0.65, turn=90), _i("prop_crate_pile_01", 0.5), _i("prop_barrel_pile_02", 0.55, turn=90),
+        _i("prop_crate_03", 0.6, top=((*_HELMET, 0.0, 0.0, 30), ("wep_german_rifle_01", (1.0, 1.0, 1.0), 0.0, 0.15, 90, 0.0))),
+        _i("prop_gas_can_01", 1.0), _poster(1), _poster(2),
+    ],
     1: [  # crew quarters
-        ("bunk", 1.9, 0.8, 1.6, "#4d5241"), ("bunk", 1.9, 0.8, 1.6, "#4d5241"), ("locker", 0.5, 0.5, 1.9, "#6d7466"),
-        ("locker", 0.5, 0.5, 1.9, "#6d7466"), ("locker", 0.5, 0.5, 1.9, "#6d7466"),
+        _i("prop_camp_bed_01", 0.75, turn=90, top=((*_HELMET, 0.7, 0.0, 20), ("char_attach_german_bedroll_01", (1.6, 1.6, 1.6), -0.55, 0.0, 0))),
+        _i("prop_camp_bed_02", 0.75, turn=90, top=(("char_attach_british_helmet_01", (0.9, 0.9, 0.9), 0.7, 0.0, -15),)),
+        _i("prop_camp_bed_01", 0.75, turn=90, top=(("char_attach_german_bedroll_01", (1.6, 1.6, 1.6), -0.55, 0.0, 0),)),
+        _i("prop_camp_bed_02", 0.75, turn=90),
+        _i("prop_dresser_01", 0.5, 0.8, 0.6, top=(("prop_gramophone_01", (0.5, 0.5, 0.5), 0.0, 0.0, 0),)),
+        _i("prop_shelves_01", 0.6, 1.7, 1.0), _i("prop_shelves_01", 0.6, 1.7, 1.0),
+        _i("prop_chair_01", 0.9), _i("prop_barrel_02", 0.55), _i("char_attach_german_pack_01", 1.7), _i("char_attach_german_pack_01", 1.7),
+        _i("prop_coffee_table_01", 0.9, free=True, top=(_CUP[0:2] + (-0.15, 0.1, 0), ("char_attach_field_glasses_01", (1.2, 1.2, 1.2), 0.15, -0.1, 40))),
+        _i("prop_chair_01", 0.9, free=True),
+        _poster(2), _poster(3), _poster(4), _poster(5),
     ],
     2: [  # ammunition store
-        ("shelf", 1.4, 0.4, 1.9, "#5a4a35"), ("crate", 0.8, 0.6, 0.8, "#6b5a3c"), ("crate", 0.8, 0.6, 0.8, "#6b5a3c"),
-        ("rack", 1.2, 0.25, 1.2, "#3c3f36"), ("crate", 0.8, 0.6, 0.55, "#6b5a3c"),
+        _i("prop_shelves_01", 1.0, 1.6, 1.4), _i("prop_shelves_01", 1.0, 1.6, 1.4),
+        _i("prop_crate_03", 0.7, top=(("wep_german_grenade_01", (1.3, 1.3, 1.3), -0.15, 0.0, 0), ("wep_german_grenade_01", (1.3, 1.3, 1.3), 0.1, 0.05, 0))),
+        _i("prop_crate_02", 0.55, turn=90, top=(("wep_german_rifle_01", (1.0, 1.0, 1.0), 0.0, 0.0, 90),)),
+        _i("prop_crate_04", 0.6), _i("prop_crate_03", 0.7), _i("prop_crate_pile_01", 0.5), _i("prop_barrel_pile_01", 0.45, turn=90),
+        _i("prop_shell_01", 1.6), _i("prop_shell_01", 1.6), _i("prop_shell_01", 1.6), _i("prop_shell_01", 1.6),
+        _i("prop_barrel_01", 0.6), _i("prop_barrel_01", 0.6), _i("prop_wire_03", 0.7),
+        _i("prop_crate_03", 0.7, free=True, top=(("prop_crate_04", (0.5, 0.5, 0.5), 0.0, 0.0, 25, 0.0),)),
+        _i("prop_shell_02", 0.8, free=True), _i("prop_landmine_01", 1.0, free=True),
+        _poster(1), _poster(6),
     ],
     3: [  # command post
-        ("table", 1.6, 0.9, 0.85, "#5f5a4a"), ("generator", 1.0, 0.6, 0.8, "#4a5a45"), ("radio", 0.5, 0.4, 1.2, "#3c423c"),
-        ("locker", 0.5, 0.5, 1.9, "#6d7466"),
+        _i("prop_table_01", 0.55, 0.95, 0.7, top=(("prop_typewriter_01", (0.7, 0.7, 0.7), -0.28, 0.0, 20),
+                                                  ("prop_radio_box_02", (0.9, 0.9, 0.9), 0.32, 0.0, -10))),
+        _i("prop_chair_02", 0.9), _i("prop_shelves_01", 0.6, 1.7, 1.0), _i("prop_shelves_01", 0.6, 1.7, 1.0),
+        _i("prop_gas_can_01", 1.0), _i("prop_gas_can_01", 1.0), _i("prop_barrel_02", 0.55),
+        _i("prop_searchlight_base_01", 0.6), _i("prop_radio_box_01", 1.2),
+        _i("prop_table_small_01", 0.8, free=True, top=((*_HELMET, 0.0, 0.0, 10), (_CUP[0], _CUP[1], 0.25, 0.2, 0))),
+        _i("prop_chair_02", 0.9, free=True), _i("prop_chair_01", 0.9, free=True),
+        _poster(1), _poster(3), _poster(4), _poster(6),
     ],
 }
-AMMO = (0.6, 0.35, 0.35, "#5b6240")  # ground floor ammunition box: width, depth, height, colour
+AMMO = _i("prop_crate_01", 0.5, 1.0, 0.6)  # ground floor ammunition crate under a firing slit
 
 
 @dataclass(frozen=True)
@@ -380,40 +471,120 @@ def _ladder(b: _Builder, h: _Hatch, y_bottom: float, y_top: float) -> None:
         z += 0.3
 
 
-def _furnish(
-    b: _Builder, room: Polygon, edges: list[_Edge], level: int, keep: list, z: float,
-    slits: list[tuple[_Edge, float]],
-) -> None:
-    """The furniture of a floor, against its walls and clear of ``keep`` (hatches, landings, the doorway).
-    Level 0 gets ammunition boxes under each firing slit; the others the ``FURNITURE`` of their purpose."""
-    inside = room.buffer(-0.03, join_style="mitre")
-    placed: list[Polygon] = []
+def _bearing(e: float, n: float) -> float:
+    return round(math.degrees(math.atan2(e, n)) % 360, 2)
 
-    def put(e: _Edge, s0: float, w: float, d: float, h: float, colour: str) -> bool:
-        base = e.p + e.t * s0 + (-e.n) * PROP_GAP
+
+def _furnish(
+    room: Polygon, edges: list[_Edge], level: int, keep: list, z: float, slits: list[tuple[_Edge, float]],
+) -> list[dict]:
+    """The furniture of a floor as game-placed props (``bunkers.json`` ``props``; ADR 0009 §7), against its walls and clear of
+    ``keep`` (hatches, landings, the doorway), then free-standing pieces in the open floor, then posters on the bare wall.
+    Level 0 gets ammunition crates under each firing slit first. A prop is ``{"model", "pos": [x, y, z], "yaw", "scale",
+    "boxes"}`` (and ``atlas`` when it is not the bunker's own): ``pos`` the middle of its footprint on the floor (``z``
+    relative to the building base), ``yaw`` the compass bearing its front (+Z) looks along (into the room), ``boxes`` its
+    collision boxes ``[x, y, z, size x, size y, size z]`` in its own frame."""
+    inside = room.buffer(-0.03 + 1e-4, join_style="mitre")  # a prop touches its wall: the 0.1 mm absorbs rounding
+    open_floor = room.buffer(-FREE_GAP)
+    placed: list[tuple[Polygon, float]] = []  # footprint, height
+    out: list[dict] = []
+
+    def emit(item: _Item, mid, yaw: float, h: float, zz: float, box: bool = True) -> None:
+        mx, _, mz = (a * c for a, c in zip(PACK[item.model], item.scale))  # the box is in the model's own frame, turned or not
+        prop = {
+            "model": f"war/{item.model}", "pos": [round(float(mid[0]), 3), round(float(mid[1]), 3), round(zz, 3)],
+            "yaw": round(yaw % 360, 2), "scale": [round(v, 3) for v in item.scale],
+            "boxes": [[0.0, round(h / 2, 3), 0.0, round(mx, 3), round(h, 3), round(mz, 3)]] if box else [],
+        }
+        if item.atlas:
+            prop["atlas"] = item.atlas
+        out.append(prop)
+
+    def tops(item: _Item, mid, along, into, h: float) -> None:
+        for model, scale, du, dv, dyaw, *up in item.top:
+            xy = mid + along * du + into * dv
+            out.append({
+                "model": f"war/{model}", "pos": [round(float(xy[0]), 3), round(float(xy[1]), 3), round(z + h + (up[0] if up else 0.0), 3)],
+                "yaw": round((_bearing(*into) + dyaw) % 360, 2), "scale": list(scale), "boxes": [],
+            })
+
+    def put(e: _Edge, s0: float, item: _Item) -> bool:
+        w, h, d = item.size
+        gap = PROP_GAP if item.hung is None else 0.035
+        d = d if item.hung is None else 0.02
+        base = e.p + e.t * s0 + (-e.n) * gap
         fp = Polygon([base, base + e.t * w, base + e.t * w - e.n * d, base - e.n * d])
-        if not inside.contains(fp) or any(fp.intersects(k) for k in keep) or any(fp.intersects(q) for q in placed):
+        if not inside.contains(fp) or any(fp.intersects(k) for k in keep):
             return False
-        placed.append(fp)
-        b.obox(base + e.t * w / 2 - e.n * d / 2, e.t, -e.n, w / 2, d / 2, z, z + h, hex_to_rgb(colour), bottom=False)
+        if item.hung is not None and any(se.k == e.k and abs(sm - (s0 + w / 2)) < w / 2 + 0.4 for se, sm in slits):
+            return False  # not over a firing slit
+        if item.hung is None:
+            if any(fp.intersects(q) for q, _ in placed):
+                return False
+            placed.append((fp, h))
+        elif any(fp.intersects(q) and hq > item.hung - 0.05 for q, hq in placed):
+            return False  # something tall stands under it
+        mid = base + e.t * w / 2 - e.n * d / 2
+        yaw = _bearing(*(-e.n)) + item.turn  # the room side; a turned piece lies along the wall
+        if item.hung is None:
+            emit(item, mid, yaw, h, z)
+            tops(item, mid, e.t, -e.n, h)
+        else:
+            emit(item, mid, yaw, h, z + item.hung, box=False)
         return True
 
-    if level == 0:
-        w, d, h, colour = AMMO
-        for e, mid in slits:
-            put(e, mid - w / 2, w, d, h, colour)
-        return
-    for _name, w, d, h, colour in FURNITURE[level]:
-        done = False
-        for e in sorted(edges, key=lambda e: (-e.ln, e.k)):
-            if e.ln < w + 0.2:
+    def put_free(item: _Item, f: _Edge) -> bool:
+        """In the open floor, aligned with wall ``f`` (the longest), nearest the middle of the room first."""
+        w, h, d = item.size
+        c = room.centroid
+        minx, miny, maxx, maxy = room.bounds
+        cands = sorted(
+            ((x, y) for x in np.arange(minx, maxx, 0.25) for y in np.arange(miny, maxy, 0.25)),
+            key=lambda q: (q[0] - c.x) ** 2 + (q[1] - c.y) ** 2,
+        )
+        for x, y in cands:
+            mid = np.array((x, y))
+            fp = Polygon([mid + f.t * sx * w / 2 + (-f.n) * sy * d / 2 for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+            if not open_floor.contains(fp) or any(fp.intersects(k) for k in keep) or any(fp.intersects(q.buffer(FREE_GAP)) for q, _ in placed):
                 continue
-            for s0 in np.arange(0.1, e.ln - w - 0.1 + EPS, 0.25):
-                if put(e, float(s0), w, d, h, colour):
-                    done = True
+            placed.append((fp, h))
+            emit(item, mid, _bearing(*(-f.n)) + item.turn, h, z)
+            tops(item, mid, f.t, -f.n, h)
+            return True
+        return False
+
+    longest = sorted(edges, key=lambda e: (-e.ln, e.k))
+    if level == 0:
+        for e, mid in slits:
+            put(e, mid - AMMO.size[0] / 2, AMMO)
+    walls = [it for it in FURNITURE[level] if not it.free and it.hung is None]
+    for item in walls:
+        # a long piece (a bed) lies along a wall, or with its head to it when no wall is long enough
+        for variant in (item, replace(item, turn=90 - item.turn) if item.turn else item):
+            done = False
+            for e in longest:
+                if e.ln < variant.size[0] + 0.2:
+                    continue
+                for s0 in np.arange(0.1, e.ln - variant.size[0] - 0.1 + EPS, 0.25):
+                    if put(e, float(s0), variant):
+                        done = True
+                        break
+                if done:
                     break
             if done:
                 break
+    for item in (it for it in FURNITURE[level] if it.free):
+        put_free(item, longest[0])
+    used = {e.k: 0 for e in edges}
+    for item in (it for it in FURNITURE[level] if it.hung is not None):
+        for e in sorted(edges, key=lambda e: (used[e.k], -e.ln, e.k)):
+            if e.ln < item.size[0] + 0.4:
+                continue
+            slides = np.arange(0.2, e.ln - item.size[0] - 0.2 + EPS, 0.2)
+            if any(put(e, float(s0), item) for s0 in slides):
+                used[e.k] += 1
+                break
+    return out
 
 
 def _lamp(b: _Builder, xy, ceiling_z: float) -> None:
@@ -492,11 +663,139 @@ def lamp_xy(grown_ring) -> tuple[float, float]:
     return float(pts[:, 0].mean()), float(pts[:, 1].mean())
 
 
+def _free_spans(length: float, holes: list, z_top: float) -> list[tuple[float, float]]:
+    """The stretches of a wall of ``length`` that have no opening reaching below ``z_top`` (``holes`` are ``(s0, s1, z0, z1)``)."""
+    cuts = sorted(
+        (max(0.0, h[0]), min(length, h[1])) for h in holes if h[2] < z_top  # an opening up to the panelling's top
+    )
+    out, at = [], 0.0
+    for a, c in cuts:
+        if a > at + EPS:
+            out.append((at, a))
+        at = max(at, c)
+    if length > at + EPS:
+        out.append((at, length))
+    return out
+
+
+def _floor(b: _Builder, poly: Polygon, z: float, edges: list[_Edge], detail: bool) -> None:
+    """A floor: flat grey for the collision mesh, laid planks (along the longest wall, in four tones) for the picture."""
+    if not detail or poly.is_empty:
+        b.flat(poly, z, True, hex_to_rgb(FLOOR))
+        return
+    t = max(edges, key=lambda e: (e.ln, -e.k)).t
+    n = np.array((-t[1], t[0]))
+    minx, miny, maxx, maxy = poly.bounds
+    corners = np.array(((minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)))
+    lo, hi = (corners @ n).min(), (corners @ n).max()
+    reach = (corners @ t).min() - 1, (corners @ t).max() + 1
+    b.flat(poly, z, True, hex_to_rgb(GAP))
+    for i, off in enumerate(np.arange(lo, hi, PLANK_W)):
+        w = PLANK_W - 0.012
+        strip = Polygon([t * reach[0] + n * off, t * reach[1] + n * off, t * reach[1] + n * (off + w), t * reach[0] + n * (off + w)])
+        # a plank is cut at staggered joints: its own stretch, 2.4 m long, shifted by plank
+        piece = poly.intersection(strip)
+        for g in getattr(piece, "geoms", [piece]):
+            if isinstance(g, Polygon) and g.area > 1e-4:
+                b.flat(g, z + 0.004, True, hex_to_rgb(PLANKS[(i * 7) % len(PLANKS)]))
+
+
+def _prop_polys(props: list[dict], z0: float, z1: float) -> list[Polygon]:
+    """Footprints of the furniture of the floor ``z0``..``z1`` (what a pillar must not stand in), from the prop list."""
+    out = []
+    for q in props:
+        if not z0 - 0.05 <= q["pos"][2] <= z1:
+            continue
+        name = q["model"].split("/", 1)[1]
+        if name not in PACK:
+            continue
+        hx, hz = (PACK[name][0] * q["scale"][0] / 2, PACK[name][2] * q["scale"][2] / 2)
+        yaw = math.radians(q["yaw"])
+        f, r = np.array((math.sin(yaw), math.cos(yaw))), np.array((math.cos(yaw), -math.sin(yaw)))
+        c = np.array(q["pos"][:2])
+        out.append(Polygon([c + r * sx * hx + f * sz * hz for sx, sz in ((-1, -1), (1, -1), (1, 1), (-1, 1))]).buffer(0.04))
+    return out
+
+
+def _timber(
+    b: _Builder, room: Polygon, inner: list[_Edge], by_inner: dict[int, list], z0: float, z1: float,
+    keep: list, avoid: list, lamp, props: list[dict],
+) -> None:
+    """Timber of a room for the picture: panelling boards up to ``PAINT_H``, a plate along the top of every wall, beams across
+    the ceiling about every ``BEAM_STEP``, and a pillar under the end of each beam where nothing else stands. ``keep`` are
+    zones that stay clear (hatch landings, the doorway, the intel wall), ``avoid`` the ceiling's hatch holes, ``props`` the
+    furniture (``_props``). None of it is collision."""
+    board, tim, beam = hex_to_rgb(BOARD), hex_to_rgb(TIMBER), hex_to_rgb(BEAM)
+    for e in inner:  # panelling: every other board is darker
+        spans = _free_spans(e.ln, by_inner.get(e.k, []), PAINT_H)
+        for a, c in spans:
+            for k in range(int(a // BOARD_W), int(math.ceil(c / BOARD_W))):
+                if k % 2:
+                    continue
+                s0, s1 = max(a, k * BOARD_W), min(c, (k + 1) * BOARD_W - 0.03)
+                if s1 - s0 < 0.04:
+                    continue
+                off = -e.n * 0.012
+                p0, p1 = e.p + e.t * s0 + off, e.p + e.t * s1 + off
+                b.quad((*p0, z0 + 0.04), (*p1, z0 + 0.04), (*p1, z0 + PAINT_H), (*p0, z0 + PAINT_H), (*-e.n, 0.0), board)
+    avoid_g = unary_union([q.buffer(0.12) for q in avoid] + [Point(*lamp).buffer(0.3)]) if lamp is not None else unary_union([q.buffer(0.12) for q in avoid])
+
+    def pieces(a, c, width: float) -> list[tuple[np.ndarray, np.ndarray]]:
+        seg = LineString([a, c]).intersection(room.buffer(-0.01))
+        if not avoid_g.is_empty:
+            seg = seg.difference(avoid_g)
+        out = []
+        for g in getattr(seg, "geoms", [seg]):
+            if isinstance(g, LineString) and g.length > 0.4:
+                out.append((np.array(g.coords[0]), np.array(g.coords[-1])))
+        return out
+
+    def rod(p, q, width: float, h: float, colour) -> None:
+        d = q - p
+        ln = float(np.hypot(*d))
+        t = d / ln
+        b.obox((p + q) / 2, t, np.array((-t[1], t[0])), ln / 2, width / 2, z1 - h, z1, colour)
+
+    for e in inner:  # the plate along the top of each wall, in from the wall by half its width
+        a, c = e.p - e.n * 0.0 + (-e.n) * (BEAM_W / 2 - 0.0), e.p + e.t * e.ln + (-e.n) * (BEAM_W / 2)
+        for p, q in pieces(a + e.t * 0.0, c, BEAM_W):
+            rod(p, q, BEAM_W, BEAM_H * 0.75, beam)
+    longest = max(inner, key=lambda e: (e.ln, -e.k))
+    t = longest.t
+    n = np.array((-t[1], t[0]))
+    minx, miny, maxx, maxy = room.bounds
+    corners = np.array(((minx, miny), (maxx, miny), (maxx, maxy), (minx, maxy)))
+    lo, hi = (corners @ t).min(), (corners @ t).max()
+    cross = (corners @ n).min() - 1, (corners @ n).max() + 1
+    count = max(1, round((hi - lo) / BEAM_STEP))
+    blockers = _prop_polys(props, z0, z1)
+    posts: list[Polygon] = []
+    for i in range(count):
+        at = lo + (hi - lo) * (i + 0.5) / count
+        a, c = t * at + n * cross[0], t * at + n * cross[1]
+        for p, q in pieces(a, c, BEAM_W):
+            rod(p, q, BEAM_W, BEAM_H, beam)
+            for end in (p, q):  # a pillar under each end that meets a wall
+                e = min(inner, key=lambda e: abs(float(np.dot(end - e.p, e.n))) if 0 <= np.dot(end - e.p, e.t) <= e.ln else 1e9)
+                dist = abs(float(np.dot(end - e.p, e.n)))
+                if dist > 0.2:
+                    continue
+                s = float(np.clip(np.dot(end - e.p, e.t), PILLAR / 2, e.ln - PILLAR / 2))
+                if any(h[0] - PILLAR / 2 < s < h[1] + PILLAR / 2 for h in by_inner.get(e.k, [])):
+                    continue
+                ctr = e.p + e.t * s + (-e.n) * (PILLAR / 2 + 0.005)
+                fp = Polygon([ctr + e.t * sx * PILLAR / 2 + (-e.n) * sy * PILLAR / 2 for sx, sy in ((-1, -1), (1, -1), (1, 1), (-1, 1))])
+                if any(fp.intersects(k) for k in keep) or any(fp.intersects(q2) for q2 in blockers + posts):
+                    continue
+                posts.append(fp.buffer(0.05))
+                b.obox(ctr, e.t, -e.n, PILLAR / 2, PILLAR / 2, z0, z1 - BEAM_H * 0.75, tim)
+
+
 def _underground(
-    b: _Builder, room: Polygon, inner: list[_Edge], hatches: list[_Hatch], detail: bool, door_xy, lamp,
+    b: _Builder, room: Polygon, inner: list[_Edge], hatches: list[_Hatch], detail: bool, lamp, door_xy, props: list[dict],
 ) -> None:
     """One room per floor under the ground floor, joined by the hatches. Floors, ceilings and walls are
-    always built: they are the collision of the way down."""
+    always built: they are the collision of the way down. The furniture is not in the mesh (``_props``)."""
     concrete = hex_to_rgb(CONCRETE)
     for k in range(1, UNDER + 1):
         z0, z1 = -STOREY * k, -STOREY * k + CLEAR_H
@@ -504,14 +803,12 @@ def _underground(
         for i in inner:
             b.wall(i, bands if detail else [(z0, z1, concrete)], [], -i.n)
         below = [hatches[k].square] if k < UNDER else []
-        b.flat(_walk_holes(room, *below), z0, True, hex_to_rgb(FLOOR))
+        _floor(b, _walk_holes(room, *below), z0, inner, detail)
         b.flat(_walk_holes(room, hatches[k - 1].square), z1, False, hex_to_rgb(CEILING))
+        if detail:
+            _timber(b, room, inner, {}, z0, z1, _level_keep(k, room, inner, hatches, door_xy), [hatches[k - 1].square], lamp, props)
         top = z1 + SLAB + (FLOOR_Z if k == 1 else 0.0)
         _tube(b, hatches[k - 1].square, z1, top, hex_to_rgb(INNER) if detail else concrete)
-        keep = _keepouts(k, hatches, door_xy)
-        if k == UNDER and (screen := _intel_screen(room, inner, hatches)):
-            keep.append(screen.zone)  # the wall the intel screen hangs on stays free of furniture
-        _furnish(b, room, inner, k, keep, z0, [])
         if detail:
             _ladder(b, hatches[k - 1], z0, -STOREY * (k - 1) + (FLOOR_Z if k == 1 else 0.0))
             _lamp(b, lamp, z1)
@@ -519,7 +816,7 @@ def _underground(
 
 def _enterable(
     b: _Builder, room: Polygon, outer: list[_Edge], inner: list[_Edge], holes: list[_Opening],
-    detail: bool, hatches: list[_Hatch] | None = None, lamp=None,
+    detail: bool, hatches: list[_Hatch] | None = None, lamp=None, props: list[dict] | None = None,
 ) -> None:
     concrete, slit = hex_to_rgb(CONCRETE), hex_to_rgb(SLIT)
     ceil_z = FLOOR_Z + CLEAR_H
@@ -535,15 +832,15 @@ def _enterable(
         b.wall(i, bands if detail else [(FLOOR_Z, ceil_z, concrete)], by_inner.get(i.k, []), -i.n)
     b.flat(room, ceil_z, False, hex_to_rgb(CEILING))
     if detail:
-        b.flat(_walk_holes(room, hatches[0].square) if hatches else room, FLOOR_Z, True, hex_to_rgb(FLOOR))
+        _floor(b, _walk_holes(room, hatches[0].square) if hatches else room, FLOOR_Z, inner, True)
     edge = {e.k: e for e in outer}
     d0 = holes[0]
     door_xy = edge[d0.edge].p + edge[d0.edge].t * (d0.a + d0.b) / 2
-    inner_by_k = {i.k: i for i in inner}
-    slits = [(inner_by_k[o.inner], (o.ia + o.ib) / 2) for o in holes if not o.door]
-    _furnish(b, room, inner, 0, _keepouts(0, hatches, door_xy), FLOOR_Z, slits)
+    props = props or []
+    if detail:
+        _timber(b, room, inner, by_inner, FLOOR_Z, ceil_z, _keepouts(0, hatches, door_xy), [], lamp, props)
     if hatches:
-        _underground(b, room, inner, hatches, detail, door_xy, lamp)
+        _underground(b, room, inner, hatches, detail, lamp, door_xy, props)
     if detail and lamp is not None:
         _lamp(b, lamp, ceil_z)
 
@@ -579,6 +876,27 @@ def _enterable(
     _streaks(b, outer, ENTER_WALL_H, taken, hex_to_rgb(STREAK))
 
 
+def _level_keep(level: int, room: Polygon, inner: list[_Edge], hatches: list[_Hatch] | None, door_xy) -> list:
+    """``_keepouts`` and, in the command post, the strip in front of the intel screen: where nothing stands."""
+    keep = _keepouts(level, hatches, door_xy)
+    if hatches and level == UNDER and (screen := _intel_screen(room, inner, hatches)):
+        keep.append(screen.zone)  # the wall the intel screen hangs on stays free of furniture
+    return keep
+
+
+def _props(room: Polygon, outer: list[_Edge], inner: list[_Edge], holes: list[_Opening], hatches: list[_Hatch] | None) -> list[dict]:
+    """The furniture of every floor of an enterable bunker, ground floor first (see ``_furnish``)."""
+    edge = {e.k: e for e in outer}
+    d0 = holes[0]
+    door_xy = edge[d0.edge].p + edge[d0.edge].t * (d0.a + d0.b) / 2
+    inner_by_k = {i.k: i for i in inner}
+    slits = [(inner_by_k[o.inner], (o.ia + o.ib) / 2) for o in holes if not o.door]
+    out = _furnish(room, inner, 0, _keepouts(0, hatches, door_xy), FLOOR_Z, slits)
+    for k in range(1, UNDER + 1) if hatches else ():
+        out += _furnish(room, inner, k, _level_keep(k, room, inner, hatches, door_xy), -STOREY * k, [])
+    return out
+
+
 def _plan(poly: Polygon, outer: list[_Edge], door_dir):
     """The room, its wall edges, the openings and the hatches (None: no way down) of an enterable
     bunker on ``poly``; None when the footprint leaves no room worth entering or no wall facing
@@ -610,7 +928,7 @@ def bunker_mesh(ring, door_dir, detail: bool = True, enterable: bool = True) -> 
     plan = _plan(poly, outer, door_dir) if enterable else None
     if plan:
         room, inner, holes, hatches = plan
-        _enterable(b, room, outer, inner, holes, detail, hatches, lamp_xy(_shelter_ring(room)))
+        _enterable(b, room, outer, inner, holes, detail, hatches, lamp_xy(_shelter_ring(room)), _props(room, outer, inner, holes, hatches))
     else:
         _closed(b, poly, outer, door_dir, detail)
     _dome(b, pts, np.array(poly.centroid.coords[0]), ENTER_WALL_H if plan else WALL_H, hex_to_rgb(DOME))
@@ -627,16 +945,18 @@ def bunker_rooms(ring, door_dir) -> dict:
       as inside and one on its outer face as outside.
     - ``ladders``: where a climber stands (``x``, ``y``), the way they face (``dx``, ``dy``) and the heights of the
       floor below and the floor above (``z0``, ``z1``).
+    - ``props``: the furniture of every floor, ``atlas`` the texture the models wear (see ``_furnish``).
     - ``hatch``: the hole in the ground floor, which the terrain is cut by.
     - ``intel`` (when a wall of the command post takes one): where the intel screen hangs, on the lowest floor.
       ``x``, ``y`` is the middle of the screen on the wall, ``dx``, ``dy`` the way it faces (into the room),
       ``z0``, ``z1`` its lower and upper edge and ``width`` its width. The game draws the screen there.
     """
     poly = orient(Polygon(ring), 1.0)
-    plan = _plan(poly, _edges(np.array(poly.exterior.coords)[:-1]), door_dir)
+    poly_pts = np.array(poly.exterior.coords)[:-1]
+    plan = _plan(poly, _edges(poly_pts), door_dir)
     if not plan:
         return {}
-    room, _, _, hatches = plan
+    room, inner_e, holes, hatches = plan
     polygon = _shelter_ring(room)
     levels = range(UNDER + 1) if hatches else range(1)
     floors = [
@@ -648,7 +968,8 @@ def bunker_rooms(ring, door_dir) -> dict:
         }
         for k in levels
     ]
-    out: dict = {"floors": floors, "ladders": [], "hatch": []}
+    out: dict = {"floors": floors, "ladders": [], "hatch": [], "atlas": PROP_ATLAS,
+                 "props": _props(room, _edges(poly_pts), inner_e, holes, hatches)}
     for j, h in enumerate(hatches or []):
         out["ladders"].append(
             {
@@ -662,7 +983,6 @@ def bunker_rooms(ring, door_dir) -> dict:
         )
     if hatches:
         out["hatch"] = [[round(x, 3), round(y, 3)] for x, y in list(hatches[0].square.exterior.coords)[:-1]]
-        inner = _edges(np.array(room.exterior.coords)[:-1])
-        if screen := _intel_screen(room, inner, hatches):
+        if screen := _intel_screen(room, inner_e, hatches):
             out["intel"] = _screen_export(screen)
     return out
