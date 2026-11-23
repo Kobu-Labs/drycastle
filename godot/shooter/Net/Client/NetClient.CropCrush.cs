@@ -27,7 +27,7 @@ public partial class NetClient
     void StampCrush()
     {
         if (CrushMask is not { } mask || Vehicles == null || CrushFields.Count == 0) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || !GodotObject.IsInstanceValid(v.Node)) continue;
             var def = Vehicles.Vehicles[v.Kind];

@@ -188,7 +188,7 @@ public partial class NetClient
     {
         _scudFlights[m.Missile] = new ScudFlightInfo { Msg = m, ArriveAt = Now + m.Seconds };
         var at = new Vector3(m.From.X, m.From.Y, m.From.Z);
-        if (_cars.TryGetValue(m.Car, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Launcher is { } l)
+        if (Ctx.Cars.TryGet(m.Car, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Launcher is { } l)
             at = car.Node.GlobalTransform * new Vector3(l.Exhaust[0], l.Exhaust[1], l.Exhaust[2]);
         ScudFx.LaunchBurst(Owned, at);
         if (Sfx.Enabled) Sfx.Play3D("scud.launch", at);
@@ -249,7 +249,7 @@ public partial class NetClient
     void AnimateScudTrucks(float dt)
     {
         if (Vehicles == null) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Launcher is not { } launcher || v.Destroyed) continue;
             var t = TruckOf(v.Id);
@@ -319,7 +319,7 @@ public partial class NetClient
     /// <summary>The truck the local player sits in, with its launcher's state and their seat, or null (on foot, dead, in another vehicle, or the truck is gone).</summary>
     (CarView Car, ScudTruck Truck, VehicleDef Def, int Seat, bool IsOperator)? MyScudSeat()
     {
-        if (Dead || MySeat() is not { } ride || ride.Def.Launcher is not { } launcher || ride.Car.Destroyed) return null;
+        if (Dead || Ctx.Cars.MySeat() is not { } ride || ride.Def.Launcher is not { } launcher || ride.Car.Destroyed) return null;
         return (ride.Car, TruckOf(ride.Car.Id), ride.Def, ride.Index, ride.Index == launcher.OperatorSeat);
     }
 
@@ -499,7 +499,7 @@ public partial class NetClient
             };
         }
         // who must confirm and who has
-        var seats = _seats?.Occupants ?? Array.Empty<ushort>();
+        var seats = Ctx.Cars.Seats?.Occupants ?? Array.Empty<ushort>();
         var crewKey = (msg.Need << 8) | msg.Confirmed | ((int)state << 16) | (s.Seat << 24);
         if (_scudCrewKey.Update(crewKey))
         {
@@ -563,13 +563,13 @@ public partial class NetClient
     {
         if (Dead || _me == null || Vehicles == null) return false;
         var mine = MyScudSeat()?.Car;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Launcher == null || !_scudTrucks.TryGetValue(v.Id, out var truck)) continue;
             var box = ScudBox(v);
             var p = _me.GlobalPosition;
             if (!ScudReloadRules.MayStart(truck.Msg.State, mine == v, box, p.X, p.Z, Scud.Reload)) continue;
-            var carts = _cars.Values.Where(c => c.Trailer != null && !c.Destroyed && c.Kind < Vehicles.Vehicles.Count).Select(c => new ScudCartCandidate(c.Id, ScudBox(c), c.Trailer!.Loaded, true));
+            var carts = Ctx.Cars.All.Where(c => c.Trailer != null && !c.Destroyed && c.Kind < Vehicles.Vehicles.Count).Select(c => new ScudCartCandidate(c.Id, ScudBox(c), c.Trailer!.Loaded, true));
             if (ScudReloadRules.NearestCart(box, carts, (float)Scud.Reload.CartReachM) != null) return true;
         }
         return false;

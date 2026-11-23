@@ -52,7 +52,7 @@ public partial class NetClient
         if (!_flights.TryGetValue(carId, out var f)) _flights[carId] = f = new FlightView();
         f.Rec = rec;
         f.Buf.Push(tick, FlightRecord.Velocity(rec), FlightRecord.Roll(rec), FlightRecord.Pitch(rec));
-        if (_cars.TryGetValue(carId, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Tilts) PlaceCarSolid(car); // the hull's solid box turns with the record
+        if (Ctx.Cars.TryGet(carId, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Tilts) PlaceCarSolid(car); // the hull's solid box turns with the record
     }
 
     VehicleDef? FlightDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Flight != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -66,7 +66,7 @@ public partial class NetClient
     {
         CarView? mine = null;
         if (Ctx.Driving && !Dead)
-            foreach (var v in _cars.Values)
+            foreach (var v in Ctx.Cars.All)
                 if (v.Driver == _myId && !v.Destroyed && FlightDef(v) != null) { mine = v; break; }
         if (mine == null || !_flights.TryGetValue(mine.Id, out var fv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopPiloting(); return; }
         if (CarThrown(mine.Id)) { StopPiloting(); return; } // in the Bigfoot's hands or thrown: the server places it and ignores the pilot, so it is drawn from the snapshots

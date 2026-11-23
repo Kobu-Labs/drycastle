@@ -42,7 +42,7 @@ public partial class NetClient
         if (CurrentWeapon is not { } w) return 0f;
         var own = HitMath.OwnSpread(w, _spread.Degrees(w, Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (InArmedSeat && MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
+        if (InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, RideSpeed(m.Car, DriveOf(m.Car)), m.Seat);
         return _me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
     }
 
@@ -127,10 +127,10 @@ public partial class NetClient
             var src = MinimapView.Select(missilePov: _povCam is { Current: true }, turret: _gunship != null, driving: Ctx.Driving);
             _hud.Minimap.SetPlayer(new Vector2(g.X, g.Z), MinimapView.YawFor(src, _me.Yaw, _carYaw, _turretViewYaw, _missileViewYaw));
             _carDots.Clear();
-            foreach (var c in _cars.Values)
+            foreach (var c in Ctx.Cars.All)
             {
                 if (c.Destroyed) continue;
-                _seatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
+                Ctx.Cars.SeatOccupants.TryGetValue(c.Id, out var others); // an enemy on any seat: not on the map (#313)
                 if (HudLogic.HideEnemyOccupiedVehicle(c.Driver, others, _myId, IsMapEnemy)) continue;
                 if (Vehicles != null && c.Kind < Vehicles.Vehicles.Count && _intel.ScudTruckHidden(Vehicles.Vehicles[c.Kind])) continue; // the Scud event's truck is not on any map until it is found
                 _carDots.Add(new Vector2(c.Node.GlobalPosition.X, c.Node.GlobalPosition.Z));

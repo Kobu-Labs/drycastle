@@ -31,6 +31,8 @@ public sealed class ClientContext
     /// <summary>Match events stored for the HUD to come: phase, countdown, scoreboard rows, kill feed, own spawn/death.</summary>
     public ClientMatchState Match { get; } = new();
     public CameraShake Shake { get; }
+    /// <summary>The vehicles of the world as drawn, and the seat the local player sits in.</summary>
+    internal ClientCars Cars { get; }
     /// <summary>Replicated world entities (turrets, missiles, citizens, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities { get; } = new();
     /// <summary>The render clock of the remote entities (A-06): a filtered estimate of the server's tick, which never runs backwards.</summary>
@@ -79,6 +81,7 @@ public sealed class ClientContext
     {
         Root = root;
         Shake = new CameraShake(this);
+        Cars = new ClientCars(this);
     }
 
     public double Now => Time.GetTicksMsec() / 1000.0;

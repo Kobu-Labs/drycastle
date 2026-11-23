@@ -121,11 +121,11 @@ public partial class NetClient
     /// <summary>Where a lock target is drawn: an Aircraft's model, or a flown helicopter's vehicle node. Null when it is not in view.</summary>
     Vector3? LockTargetPosition(ushort id) =>
         _aircraft.TryGetValue(id, out var view) ? view.Model.GlobalPosition
-        : _cars.TryGetValue(id, out var car) && car.Node != null ? car.Node.GlobalPosition : null;
+        : Ctx.Cars.TryGet(id, out var car) && car.Node != null ? car.Node.GlobalPosition : null;
 
     string AircraftKindId(ushort id)
     {
-        if (_cars.ContainsKey(id)) return "";
+        if (Ctx.Cars.Has(id)) return "";
         if (!WorldEntities.Entities.TryGetValue(id, out var e) || Killstreaks?.AircraftKinds is not { } kinds) return "";
         var index = AircraftState.Unpack(e.State.State).Kind;
         return index < kinds.Count ? kinds[index].Id : "";

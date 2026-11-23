@@ -21,75 +21,26 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient
 {
-    sealed class CarView
-    {
-        public Node3D Node = null!;
-        public ushort Id;
-        /// <summary>A flak truck's moving nodes (null for every other type, or a model without them).</summary>
-        public FlakNodes? Flak;
-        /// <summary>A door gun's moving nodes (the utility helicopter; null for every other type, or a model without them).</summary>
-        public DoorGunNodes? DoorGun;
-        /// <summary>A flying vehicle's rotors, their sound and the downwash (null for everything that drives, or a model without rotors).</summary>
-        public RotorFx? Rotor;
-        /// <summary>A driven vehicle's moving nodes and water effects (the amphibious transport; null for every other type, or a model without them).</summary>
-        public DriveNodes? Drive;
-        /// <summary>The generic wheel animation of a ground vehicle that is neither predicted nor has its own (null otherwise, or a model without wheels).</summary>
-        public VehicleWheels? Roller;
-        public readonly Interpolator Buf = new();
-        /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
-        public Node3D? Visual;
-        /// <summary>Next time (s) a wake ring is due while the vehicle moves on the water.</summary>
-        public double RippleDue;
-        public ushort Driver;
-        public int Kind;
-        public NVec3 Pos;
-        public float Yaw, Kmh;
-        /// <summary>The yaw of the newest interpolated snapshot sample at the render tick, before the drawn pose replaces it: the hull's yaw the riders' snapshot views are taken against (<see cref="RiderPose.Figure"/>).</summary>
-        public float SnapYaw;
-        public uint LastTick;
-        public LoopVoice? Snd;
-        /// <summary>The layered engine sounds of a type with a vehicles.json "sounds" set (null otherwise, and until driven).</summary>
-        public VehicleEngineSound? Engine;
-        /// <summary>The clock of the reversing beep of a type with vehicles.json "reverse_beep".</summary>
-        public ReverseBeep Beep;
-        /// <summary>Damage stage 0..3 from the record, whether the vehicle is destroyed, and whether its blast was already drawn (event or state, whichever came first).</summary>
-        public int Stage;
-        public bool Destroyed, Exploded;
-        public double ExplodedAt;
-        public VehicleFx.Damage? Smoke;
-        /// <summary>Headlights on (the record's bit), braking (speed fell this snapshot) and the lamps (null: the type has none).</summary>
-        public bool Lights, Braking;
-        public CarLights? Lamps;
-        /// <summary>The solid box predicted on-foot movement collides with (#217), at the last snapshot's place: the server's own box is built from the same numbers.</summary>
-        public StaticBody3D? Solid;
-        /// <summary>The model's wheel nodes (front left, front right, back left, back right; null entries where it has none, the array null on a headless client) and the wheels the Thieves took, as last applied (NetClient.Thieves.Loot.cs).</summary>
-        public Node3D?[]? Wheels;
-        public byte WheelsOff;
-        /// <summary>A trailer's tractor, load and moving nodes (null for every type that is not a trailer): it is drawn from its tractor, <see cref="RenderTrailers"/>.</summary>
-        public TrailerView? Trailer;
-    }
-
     /// <summary>A ground vehicle whose wheels the generic animator turns: not predicted (DriveNodes), not flying, and not the Scud or a trailer (their own, see car-design section 3).</summary>
     static bool GenericWheels(VehicleDef d) => d.Drive == null && d.Flight == null && d.Trailer == null && d.Launcher == null;
 
-    readonly Dictionary<ushort, CarView> _cars = new();
     float _carYaw;
     public VehiclesFile? Vehicles { get => Ctx.Vehicles; set => Ctx.Vehicles = value; }
 
     void OnVehicleState(ushort id, EntityRecord rec, uint tick)
     {
         if (Vehicles == null) return; // never let a missing table abort the rest of the snapshot
-        if (!_cars.TryGetValue(id, out var v))
+        if (!Ctx.Cars.TryGet(id, out var v))
         {
             v = new CarView { Id = id, Node = CarFx.Make(Owned, Vehicles!.Vehicles[Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1)], VehicleRecord.Colour(rec)), Kind = Math.Min(VehicleRecord.Kind(rec), Vehicles.Vehicles.Count - 1), Pos = rec.Position, Yaw = rec.YawRad };
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flak != null) v.Flak = FlakNodes.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].DoorGun is { } doorGun) v.DoorGun = DoorGunNodes.Find(v.Node, doorGun);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Flight != null) v.Rotor = RotorFx.Find(v.Node);
             if (ShotFx.Enabled && Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node, Vehicles.Vehicles[v.Kind]);
-            if (ShotFx.Enabled) v.Wheels = FindWheels(v.Node);
+            if (ShotFx.Enabled) v.Wheels = CarView.FindWheels(v.Node);
             if (ShotFx.Enabled && GenericWheels(Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
             if (Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = MakeTrailerView(v);
-            _cars[id] = v;
+            Ctx.Cars.Add(v);
             ShowGlassOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
         }
         v.Solid ??= VehicleCollider.Make(Owned, Vehicles.Vehicles[v.Kind]);
@@ -99,7 +50,7 @@ public partial class NetClient
         v.Lights = VehicleRecord.Lights(rec);
         v.Braking = v.Trailer == null && VehicleRecord.Braking(rec); // the server's brakes bit, not a guess from the speed (#409)
         SetVehicleDamage(v, VehicleRecord.Stage(rec), rec.State == EntityState.Dead);
-        ApplyWheels(v, VehicleRecord.Wheels(rec)); // the wheels the Thieves took
+        v.ApplyWheels(VehicleRecord.Wheels(rec)); // the wheels the Thieves took
         if (tick > v.LastTick && v.LastTick != 0)
         {
             var d = NVec3.Distance(rec.Position, v.Pos) / ((tick - v.LastTick) / (float)Wire.TickRate);
@@ -170,7 +121,7 @@ public partial class NetClient
     void OnVehicleExplosion(VehicleExplosionMsg m)
     {
         if (KeepEventLogs) _logs.VehicleExplosions.Add((Now, m));
-        if (_cars.TryGetValue(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
+        if (Ctx.Cars.TryGet(m.Id, out var v) && !v.Exploded) ExplodeVehicle(v, new Vector3(m.Position.X, m.Position.Y, m.Position.Z), m.Radius);
     }
 
 
@@ -182,7 +133,7 @@ public partial class NetClient
     {
         _beamCands.Clear();
         var i = 0;
-        foreach (var c in _cars.Values)
+        foreach (var c in Ctx.Cars.All)
         {
             if (c.Lights && !c.Destroyed && c.Lamps != null) _beamCands.Add((Sfx.ListenerDistance(new Vector3(c.Pos.X, c.Pos.Y, c.Pos.Z)), i, c));
             i++;
@@ -208,7 +159,7 @@ public partial class NetClient
         var hasCockpit = false;    // the local player's seat has a switchable view: the prompt names the view key
         CarView? driven = null;    // the vehicle the local player drives (for the unhitch hint while it tows)
         var dt = (float)GetProcessDeltaTime();
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Trailer != null) continue; // a trailer is drawn after the tractors, from the tractor as it is drawn (RenderTrailers)
             v.Lamps?.Set(v.Lights && !v.Destroyed, v.Braking, beams.Contains(v), DriveOf(v) is { Speed: < -0.3f }); // reverse lamps: the drawn signed speed
@@ -263,12 +214,12 @@ public partial class NetClient
         if (!cockpit) EndCockpit();
         if (!flakGunner && _flakCamera && _gunship == null) { _flakCamera = false; if (!chased) _me?.EndChase(_me.Yaw); } // the gun camera ends where the look pointed (a switch to the pilot's seat has started the chase camera already)
         if (!Ctx.Driving && _gunship == null) _me?.EndChase(_carYaw); // a turret's camera is ended by EndGunship
-        _hud?.SetSeats(SeatPanel());
+        _hud?.SetSeats(Ctx.Cars.SeatPanel());
         if (flakGunner) _hud?.SetVehicleReadout(doorGunner ? DoorGunReadout() : FlakReadout());
         else if (flown is { } fr) _hud?.SetVehicleReadout(FlightReadout(fr));
         else _hud?.SetVehicleSpeed(Ctx.Driving ? kmh ?? 0f : null);
         string? prompt = null;
-        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
+        if (Ctx.Driving) prompt = doorGunner ? DoorGunPrompt() : flown is { } fp ? FlightPrompt(fp) : InArmedSeat ? ArmedSeatPrompt() : Ctx.Cars.MySeat() is { Def.Drive: not null } ride ? DrivePrompt(ride.Car, ride.Index) : Strings.F("hud.vehicle.exit", InputBindings.Name("interact"));
         if (driven != null && prompt != null && TowHint(driven) is { } towHint) prompt += "     " + towHint; // a trailer on the hook: the key that unhitches it
         if (Ctx.Driving && !Dead) prompt = ScudPrompt(prompt) is { Length: > 0 } scudLine ? scudLine : prompt; // a Scud truck's seat: the launcher's line first
         if (hasCockpit && prompt != null && Mode.ViewIsBody) prompt = WithViewHint(prompt);
@@ -342,7 +293,7 @@ public partial class NetClient
         car = null!; hit = default;
         if (Vehicles == null) return false;
         var best = float.MaxValue;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Destroyed || v == skip || v.Kind >= Vehicles.Vehicles.Count) continue;
             var def = Vehicles.Vehicles[v.Kind];
@@ -389,7 +340,7 @@ public partial class NetClient
     {
         CarView? best = null; var bd = float.MaxValue;
         if (Vehicles == null) return null;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Driver != 0 || v.Destroyed) continue;
             var def = Vehicles.Vehicles[v.Kind];
@@ -400,26 +351,5 @@ public partial class NetClient
             if (d <= bd) { best = v; bd = d; }
         }
         return best;
-    }
-
-    // ---- the wheels the Thieves took ----
-
-    static readonly string[] WheelNodeNames = { "wheel_fl", "wheel_fr", "wheel_rl", "wheel_rr" };
-
-    /// <summary>The wheel nodes of a vehicle model by wheel index (front left, front right, back left, back right; null where the model has none).</summary>
-    static Node3D?[] FindWheels(Node3D car)
-    {
-        var wheels = new Node3D?[WheelNodeNames.Length];
-        for (var i = 0; i < wheels.Length; i++) wheels[i] = car.FindChild(WheelNodeNames[i], true, false) as Node3D;
-        return wheels;
-    }
-
-    /// <summary>Hides the wheels the record says are taken and shows the ones that are back (a change of the mask only).</summary>
-    static void ApplyWheels(CarView v, byte mask)
-    {
-        if (v.Wheels == null || v.WheelsOff == mask) return;
-        v.WheelsOff = mask;
-        for (var i = 0; i < v.Wheels.Length; i++)
-            if (v.Wheels[i] is { } w && GodotObject.IsInstanceValid(w)) w.Visible = (mask & (1 << i)) == 0;
     }
 }

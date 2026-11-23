@@ -198,7 +198,7 @@ public partial class NetClient
         q.Exclude = new Godot.Collections.Array<Rid> { _me.GetRid() };
         var hit = World.GetWorld3D().DirectSpaceState.IntersectRay(q);
         var worldDist = hit.Count == 0 ? 300f : from.DistanceTo(hit["position"].AsVector3());
-        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, MySeat()?.Car))
+        if (VehicleAlong(from, dir, MathF.Min(300f, worldDist), out var car, out var vh, Ctx.Cars.MySeat()?.Car))
         {
             // the predicted shot stops on a car: the tracer ends on its hit box, the hole rides the car's node
             var vat = ToWorld(car, G(vh.Local));
@@ -252,7 +252,7 @@ public partial class NetClient
 
     void FxVehicleDemoInput(ref MoveInput mi)
     {
-        if (_me == null || _peer == null || _cars.Count == 0) return;
+        if (_me == null || _peer == null || Ctx.Cars.Count == 0) return;
         var dir = FxDemo["vehicle:".Length..];
         if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
         var t = Now - _demoStart;
@@ -274,7 +274,7 @@ public partial class NetClient
 
     void FxDriveDemoInput(ref MoveInput mi)
     {
-        if (_me == null || _peer == null || _cars.Count == 0) return;
+        if (_me == null || _peer == null || Ctx.Cars.Count == 0) return;
         var dir = FxDemo["drive:".Length..];
         if (_demoStart == 0) { _demoStart = Now; System.IO.Directory.CreateDirectory(dir); }
         var t = Now - _demoStart;
@@ -283,7 +283,7 @@ public partial class NetClient
             if (t < 1.5) return; // let a few snapshots in
             _demoTp = true;
             var me0 = _me.State.Position;
-            var pick = _cars.OrderBy(c => NVec3.Distance(c.Value.Pos, me0)).First();
+            var pick = Ctx.Cars.ById.OrderBy(c => NVec3.Distance(c.Value.Pos, me0)).First();
             _ddCar = pick.Key; _ddStart = pick.Value.Pos;
             var at = pick.Value.Pos + new NVec3(0, 0.3f, 4.5f); // behind the car's rear is +Z for yaw 0; stand there, look at it
             var yaw = pick.Value.Yaw;
@@ -297,12 +297,12 @@ public partial class NetClient
         if (!Ctx.Driving) mi.Yaw = _ddYaw;
         if (!Ctx.Driving) _me.Pitch = -0.1f;
         if (_ddShot < DriveShots.Length && t >= DriveShots[_ddShot]) _ = DemoShot(dir, DriveShots[_ddShot++]);
-        var pos = _cars.TryGetValue(_ddCar, out var cv) ? cv.Pos : _ddStart;
+        var pos = Ctx.Cars.TryGet(_ddCar, out var cv) ? cv.Pos : _ddStart;
         if (t is > 4.5 and < 4.6) { mi.Buttons |= MoveButtons.Use; GD.Print($"drive-demo: E pressed, hint='{Strings.F("hud.vehicle.enter", InputBindings.Name("interact"))}' driving={Ctx.Driving}"); }
         if (t > 5 && t < 12) { mi.MoveY = 1; mi.MoveX = t > 8 && t < 10 ? 0.6f : 0f; }
         if (t is > 12 and < 13.4) mi.Buttons |= MoveButtons.Jump; // handbrake
         if (t is > 14 and < 14.1) mi.Buttons |= MoveButtons.Use;  // exit
-        if (t > 6 && (int)(t * 2) != _ddLog) { _ddLog = (int)(t * 2); GD.Print($"drive-demo: t={t:F1} driving={Ctx.Driving} car {pos} moved {NVec3.Distance(pos, _ddStart):F1} m kmh {(_cars.TryGetValue(_ddCar, out var c2) ? c2.Kmh : 0):F0}"); }
+        if (t > 6 && (int)(t * 2) != _ddLog) { _ddLog = (int)(t * 2); GD.Print($"drive-demo: t={t:F1} driving={Ctx.Driving} car {pos} moved {NVec3.Distance(pos, _ddStart):F1} m kmh {(Ctx.Cars.TryGet(_ddCar, out var c2) ? c2.Kmh : 0):F0}"); }
         if (t > 16.5) GetTree().Quit();
     }
     float _ddYaw; int _ddLog;

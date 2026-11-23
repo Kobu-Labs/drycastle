@@ -82,8 +82,8 @@ public partial class NetClient : IBotHost
     int IBotHost.WantSlot { set => Ctx.Hotbar.Want = value; }
     IReadOnlyDictionary<ushort, EntityRecord> IBotHost.States => _dec.States;
     EventLogs IBotHost.Logs => _logs;
-    IEnumerable<BotCar> IBotHost.Cars => _cars.Values.Select(AsBotCar);
-    BotCar? IBotHost.Car(ushort id) => _cars.TryGetValue(id, out var v) ? AsBotCar(v) : null;
+    IEnumerable<BotCar> IBotHost.Cars => Ctx.Cars.All.Select(AsBotCar);
+    BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
     IEnumerable<BotRemote> IBotHost.Remotes => _remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
     int IBotHost.RocketCount => _rockets.Count;
     VehiclesFile? IBotHost.Vehicles => Vehicles;

@@ -131,7 +131,7 @@ public partial class NetClient
     void VolumeVehicles(VolumeOverlay o, Vector3 cam)
     {
         if (Vehicles == null) return;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             var feet = new Vector3(v.Pos.X, v.Pos.Y, v.Pos.Z);
             if (!Near(feet, cam)) continue;

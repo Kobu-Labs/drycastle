@@ -84,7 +84,7 @@ public partial class NetClient
 
     void OnHarvesterState(HarvesterCodec.StateMsg m)
     {
-        if (m.Phase == HarvesterPhase.Gone && _cars.TryGetValue(m.Car, out var gone))
+        if (m.Phase == HarvesterPhase.Gone && Ctx.Cars.TryGet(m.Car, out var gone))
         {
             // it drove off the field: the server hides it (a destroyed record), which must not look like a blast
             gone.Destroyed = true; gone.Exploded = true; gone.ExplodedAt = Now;
@@ -116,10 +116,10 @@ public partial class NetClient
     {
         if (!ShotFx.Enabled || Vehicles == null) return;
         FadeDroppedBales();
-        StepCarVoices();
+        Ctx.Cars.Sounds.Step();
         StampCrush(); // after RenderCars: from the drawn poses
         FlushCrush();
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Id != HarvesterRules.VehicleId || v.Destroyed) continue;
             if (!_reels.TryGetValue(v.Id, out var reel) || !GodotObject.IsInstanceValid(reel))
@@ -137,7 +137,7 @@ public partial class NetClient
     {
         CarView? best = null; var bd = 12f;
         if (Vehicles == null) return null;
-        foreach (var v in _cars.Values)
+        foreach (var v in Ctx.Cars.All)
         {
             if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Id != HarvesterRules.VehicleId) continue;
             var d = v.Node.GlobalPosition.DistanceTo(at);
@@ -182,7 +182,7 @@ public partial class NetClient
         }
         foreach (var (carId, until) in _shakeUntil.ToArray())
         {
-            if (Now >= until || !_cars.TryGetValue(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) { if (Now >= until) _shakeUntil.Remove(carId); continue; }
+            if (Now >= until || !Ctx.Cars.TryGet(carId, out var car) || !GodotObject.IsInstanceValid(car.Node)) { if (Now >= until) _shakeUntil.Remove(carId); continue; }
             var env = (float)Math.Min(1.0, (until - Now) / 0.6);
             var tt = (float)Now;
             car.Node.GlobalPosition += new Vector3(MathF.Sin(tt * 47f) * 0.02f, MathF.Sin(tt * 61f) * 0.025f, MathF.Cos(tt * 53f) * 0.02f) * env;
@@ -200,20 +200,20 @@ public partial class NetClient
             case HarvesterCodec.FxKind.BaleAsh: BurnOutBale(m.Id, at); break;
             case HarvesterCodec.FxKind.Drawn: // the reel took somebody: it whirrs up, the engine strains, the body is lifted and tumbled in
                 var catcher = NearestHarvester(at);
-                if (catcher != null) PlayCarVoice("harvester.reel_in", at, catcher); else if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at); // on the machine, heard the same from any camera
+                if (catcher != null) Ctx.Cars.Sounds.PlayLong("harvester.reel_in", at, catcher); else if (Sfx.Enabled) Sfx.Play3D("harvester.reel_in", at); // on the machine, heard the same from any camera
                 _drawIn[m.Id] = new DrawIn { Start = Now, Car = catcher };
                 if (m.Victim != 0) _harvHidden[m.Victim] = Now;
                 if (catcher != null) _shakeUntil[catcher.Id] = Now + HarvesterConfigDraw + HarvesterConfigChew;
                 break;
             case HarvesterCodec.FxKind.Swallowed: // gone into the machine: a muffled chewing while it works
-                if (NearestHarvester(at) is { } chewer) PlayCarVoice("harvester.chew", at, chewer); else if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
+                if (NearestHarvester(at) is { } chewer) Ctx.Cars.Sounds.PlayLong("harvester.chew", at, chewer); else if (Sfx.Enabled) Sfx.Play3D("harvester.chew", at);
                 _drawIn.Remove(m.Id);
                 if (m.Victim != 0) _harvHidden[m.Victim] = Now;
                 break;
             case HarvesterCodec.FxKind.BaleOut: // the chute throws the bale out with the body inside: it flies, lands and rolls (the server moves it)
                 var chute = NearestHarvester(at);
-                PlayCarSound("harvester.eject", at, chute);
-                PlayCarSound("harvester.pop", at, chute);
+                Ctx.Cars.Sounds.PlayOnce("harvester.eject", at, chute);
+                Ctx.Cars.Sounds.PlayOnce("harvester.pop", at, chute);
                 _baleEmerge[m.Id] = Now;
                 if (m.Victim != 0) { _baleBody[m.Id] = m.Victim; _harvHidden[m.Victim] = Now; }
                 break;
@@ -413,7 +413,7 @@ public partial class NetClient
         root.Rotation = new Vector3(0, yaw, 0);
         if (state != BaleState.Ash) { var model = MakeBaleModel(); root.AddChild(model); }
         sw.Bales.Add(root); sw.States.Add(state);
-        if (pop) PlayCarSound("harvester.pop", at, NearestHarvester(at)); // a live message, not the joiner's replay: the machine's unloader (heard from inside when it is the one we ride)
+        if (pop) Ctx.Cars.Sounds.PlayOnce("harvester.pop", at, NearestHarvester(at)); // a live message, not the joiner's replay: the machine's unloader (heard from inside when it is the one we ride)
     }
 
     /// <summary>The server's bale fire or ash at <paramref name="at"/>: the nearest dropped bale there (or a node of its own that the bale adopts when its stretch arrives).</summary>

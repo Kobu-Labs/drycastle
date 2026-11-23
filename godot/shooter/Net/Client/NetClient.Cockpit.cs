@@ -34,7 +34,7 @@ public partial class NetClient
     }
 
     /// <summary>The seat of <paramref name="v"/> the local player sits in (the driver is the vehicle's record, the rest the seat state), or -1.</summary>
-    int OwnSeatIn(CarView v) => v.Driver == _myId ? 0 : _seats is { Mine: > 0 } st && st.CarId == v.Id ? st.Mine : -1;
+    int OwnSeatIn(CarView v) => v.Driver == _myId ? 0 : Ctx.Cars.Seats is { Mine: > 0 } st && st.CarId == v.Id ? st.Mine : -1;
 
     /// <summary>Tells the view machine which seat of which vehicle the rider is in: boarding, or a switch within the vehicle.</summary>
     void TrackView(CarView v, int seat)

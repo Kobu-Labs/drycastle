@@ -19,48 +19,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// </summary>
 public partial class NetClient
 {
-    /// <summary>The nodes of a door gun that move, found by name (the model's own, see assets/drycastle-generated-models), and the barrel's recoil.</summary>
-    sealed class DoorGunNodes
-    {
-        public Node3D Mount = null!, Gun = null!;
-        public Node3D? Barrel, Muzzle, Sight;
-        Vector3 _barrelRest;
-        float _restYaw, _recoil, _kick;
-        MuzzleFlash? _flash;
-
-        /// <summary>How fast the barrel comes home after a round: the whole travel in this many seconds.</summary>
-        const float ReturnSeconds = 0.07f;
-
-        public static DoorGunNodes? Find(Node3D root, VehicleDoorGunDef def)
-        {
-            if (root.FindChild("gun_mount", true, false) is not Node3D mount || mount.FindChild("gun", true, false) is not Node3D gun) return null;
-            var n = new DoorGunNodes
-            {
-                Mount = mount, Gun = gun, _restYaw = def.OutwardYawDeg * FlightMath.Deg2Rad, _recoil = def.RecoilM,
-                Barrel = gun.FindChild("barrel", true, false) as Node3D, Muzzle = gun.FindChild("muzzle", true, false) as Node3D,
-                Sight = gun.FindChild("gunner_sight", true, false) as Node3D,
-            };
-            if (n.Barrel != null) n._barrelRest = n.Barrel.Position;
-            if (n.Muzzle != null) { n._flash = new MuzzleFlash(); n.Muzzle.AddChild(n._flash); }
-            return n;
-        }
-
-        /// <summary>A round left: the barrel kicks back and the muzzle flashes.</summary>
-        public void Kick()
-        {
-            _kick = 1f;
-            _flash?.Flash(1.3f);
-        }
-
-        /// <summary>The mount's yaw from its rest direction and the gun's pitch, as the rules give them; the barrel's recoil runs out.</summary>
-        public void Pose(float yaw, float pitch, float dt)
-        {
-            Mount.Rotation = new Vector3(0, _restYaw + yaw, 0);
-            Gun.Rotation = new Vector3(pitch, 0, 0);
-            _kick = Mathf.MoveToward(_kick, 0, dt / ReturnSeconds);
-            if (Barrel != null) Barrel.Position = _barrelRest + new Vector3(0, 0, _kick * _recoil);
-        }
-    }
 
     /// <summary>How fast a vehicle moves, forward (m/s): what a casing thrown from it keeps.</summary>
     static Vector3 CarVelocity(CarView car) => -car.Node.GlobalTransform.Basis.Z * (car.Kmh / 3.6f);
@@ -73,7 +31,7 @@ public partial class NetClient
     {
         if (player == 0) return null;
         foreach (var (id, aim) in _turretAims)
-            if (aim.Gunner == player && _cars.TryGetValue(id, out var v) && v.DoorGun != null) return v;
+            if (aim.Gunner == player && Ctx.Cars.TryGet(id, out var v) && v.DoorGun != null) return v;
         return null;
     }
 
@@ -86,7 +44,7 @@ public partial class NetClient
         var nodes = v.DoorGun!;
         var vehicle = Vehicles!.Vehicles[v.Kind];
         var def = vehicle.DoorGun!;
-        var mine = Mode.SeatKeysLive && _me != null && _seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
+        var mine = Mode.SeatKeysLive && _me != null && Ctx.Cars.Seats is { } st && st.CarId == v.Id && st.Mine >= 0 && st.Mine == GunnerSeat(vehicle);
         if (mine)
         {
             // the look is the aim, and it is held inside the arc: the view cannot go where the gun cannot

@@ -83,7 +83,7 @@ public partial class NetClient
             parent = Owned; rect = panes[key.Index].Rect;
             return true;
         }
-        if (Vehicles == null || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return false;
+        if (Vehicles == null || !Ctx.Cars.TryGet(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return false;
         var rects = Vehicles.Vehicles[v.Kind].GlassRects;
         if (key.Index >= rects.Count) return false;
         parent = GlassHost(v.Node); rect = rects[key.Index]; hole = VehicleHole;
@@ -113,12 +113,12 @@ public partial class NetClient
     void SetPaneGeometry(GlassPaneKey key, bool visible, bool animate = false)
     {
         if (IsGaragePlate(key)) MechanicGarage.Current?.SetPlate(standing: visible, animate); // the plate's box and mesh go with its pane, and the room's lights start
-        if (key.Owner == GlassPaneKey.Map || !_cars.TryGetValue(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return;
+        if (key.Owner == GlassPaneKey.Map || !Ctx.Cars.TryGet(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return;
         if (v.Node.FindChild(PaneNodeName(key.Index), true, false) is Node3D glass) glass.Visible = visible;
     }
 
     bool HasPaneNode(GlassPaneKey key) =>
-        key.Owner != GlassPaneKey.Map && _cars.TryGetValue(key.Owner, out var v) && GodotObject.IsInstanceValid(v.Node) && v.Node.FindChild(PaneNodeName(key.Index), true, false) != null;
+        key.Owner != GlassPaneKey.Map && Ctx.Cars.TryGet(key.Owner, out var v) && GodotObject.IsInstanceValid(v.Node) && v.Node.FindChild(PaneNodeName(key.Index), true, false) != null;
 
     /// <summary>The pane is the mechanic garage's breakable plate (a map pane of the shared list).</summary>
     bool IsGaragePlate(GlassPaneKey key) => key.Owner == GlassPaneKey.Map && key.Index < MapPanes.Count && MapPanes[key.Index].Node == MechanicGarageSite.PlateNode;

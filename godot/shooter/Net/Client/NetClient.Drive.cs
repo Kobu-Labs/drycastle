@@ -68,7 +68,7 @@ public partial class NetClient
         d.Rec = rec;
         d.Buf.Push(tick, rec.Position, DriveRecord.Roll(rec), DriveRecord.Pitch(rec));
         d.Keys.Push(tick, new NVec3(DriveRecord.Steer(rec), DriveRecord.Throttle(rec), 0), 0, 0);
-        if (_cars.TryGetValue(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
+        if (Ctx.Cars.TryGet(carId, out var car)) PlaceCarSolid(car); // the hull's solid box lies on the slope the record says
     }
 
     VehicleDef? DriveDef(CarView v) => Vehicles != null && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind].Drive != null ? Vehicles.Vehicles[v.Kind] : null;
@@ -82,7 +82,7 @@ public partial class NetClient
     {
         CarView? mine = null;
         if (Ctx.Driving && !Dead)
-            foreach (var v in _cars.Values)
+            foreach (var v in Ctx.Cars.All)
                 if (v.Driver == _myId && !v.Destroyed && DriveDef(v) != null) { mine = v; break; }
         if (mine == null || !_drives.TryGetValue(mine.Id, out var dv) || !_dec.States.TryGetValue(mine.Id, out var vehicle)) { StopDriving(); return; }
         if (CarThrown(mine.Id)) { StopDriving(); return; } // the Bigfoot threw it: the server flies it and ignores the driver's input, so it is drawn from the snapshots until it lands (#264)

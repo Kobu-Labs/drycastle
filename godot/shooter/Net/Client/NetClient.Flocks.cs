@@ -129,7 +129,7 @@ public partial class NetClient
         foreach (var (id, _) in _aircraft)
             if (WorldEntities.Entities.TryGetValue(id, out var e) && e.Buf.At(rt) is { } s) Add(id, new Godot.Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), AircraftAvoidRadiusM);
         if (Vehicles != null)
-            foreach (var (id, v) in _cars)
+            foreach (var (id, v) in Ctx.Cars.ById)
                 if (!v.Destroyed && v.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[v.Kind] is { Medium: VehicleMedium.Air } def && GodotObject.IsInstanceValid(v.Node))
                     Add(ObstacleVehicleKey + id, v.Node.GlobalPosition, def.HalfLength + VehicleRotorReachM);
         if (_obstacleLast.Count > _flockObstacles.Count + 8) _obstacleLast.Clear(); // an aircraft that is gone leaves its last place behind; start over rather than grow

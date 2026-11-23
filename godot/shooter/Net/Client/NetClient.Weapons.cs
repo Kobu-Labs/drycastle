@@ -148,7 +148,7 @@ public partial class NetClient
                 OnPlayerFlung(flung);
                 break;
             case EventKind.VehicleCrash when VehicleCrashCodec.Decode(payload) is { } crash:
-                OnVehicleCrash(crash.Car, crash.Sound);
+                Ctx.Cars.Sounds.OnCrash(crash.Car, crash.Sound);
                 break;
             case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
                 OnGlassPane(gp);
