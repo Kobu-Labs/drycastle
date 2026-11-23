@@ -24,6 +24,7 @@ using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.RozhlasFeed;
 using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;
@@ -134,6 +135,9 @@ public partial class NetClient : Node
     VehicleGunsClient _guns = null!;
     MissileClient _missile = null!;
     TurretsClient _turrets = null!;
+    ScudClient _scud = null!;
+    /// <summary>scud.json, replaced by the host with the file's.</summary>
+    public ScudFile Scud = ScudFile.Default;
     AircraftClient _aircraftClient = null!;
     readonly EnemyMarkers _markers;
     readonly WaterClient _water;
@@ -170,7 +174,7 @@ public partial class NetClient : Node
     {
         Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
         Ctx.View.OnTurret = () => _aircraftClient.AtTurret;
-        Ctx.View.ScudScreen = () => ScudScreenOn;
+        Ctx.View.ScudScreen = () => _scud.ScreenOn;
         Ctx.View.Controlling = () => _missile.Controlling;
         Ctx.View.Pinned = () => _pinned;
         Ctx.View.Rising = () => _pRising;
@@ -215,7 +219,7 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
-        _driveClient = new DriveClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), ScudImmobilises);
+        _driveClient = new DriveClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), _session.FlightCorrection);
@@ -243,7 +247,8 @@ public partial class NetClient : Node
         InitLockOn();
         EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
-        InitScud();
+        _scud = new ScudClient(Ctx, Scud, _blastDust);
+        EventReceived += _scud.OnEvent;
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
@@ -415,7 +420,7 @@ public partial class NetClient : Node
         RenderLauncherLoaded();
         _missile.RenderMissiles();
         _missile.RenderPov();
-        RenderScud(delta);
+        _scud.Render(delta);
     }
 
     /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
@@ -562,7 +567,7 @@ public partial class NetClient : Node
     void OnPhaseChanged(MatchPhase? prev, MatchPhase p)
     {
         if (p is MatchPhase.Running or MatchPhase.Ending) _streaks.Reset(); // a round reset drops earned streaks too, as on the server
-        if (p == MatchPhase.Running) ScudRoundStart(); // the burnt ground and the missiles in the air of the last round
+        if (p == MatchPhase.Running) _scud.RoundStart(); // the burnt ground and the missiles in the air of the last round
         if (prev == null || !Sfx.Enabled) return;
         if (p == MatchPhase.Running) Sfx.Play2D("round.start");
         else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
@@ -668,7 +673,7 @@ public partial class NetClient : Node
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
         if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
-        ScudFilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
+        _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _aimHeld = mi.Has(MoveButtons.Aim);
         if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
@@ -706,7 +711,7 @@ public partial class NetClient : Node
         if (_screens.HandleInput(e)) return; // M: the tactical map, F: the Equipment screen (#268), J: the Hunter's Log (#336), N: the Mineral Log
         if (Sandbox.HandleInput(e)) return; // F4, the sandbox panel (#156)
         if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
-        if (HandleScudInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
+        if (_scud.HandleInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
         if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag

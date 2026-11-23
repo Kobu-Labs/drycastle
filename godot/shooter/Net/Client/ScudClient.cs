@@ -32,10 +32,25 @@ namespace Drycastle.Shooter.Net.Client;
 /// as the camera's far plane. Animals, flocks and droppings are not: they are sent only within 800 m of the player's own body (ADR 0025), which is the truck.
 /// </para>
 /// </summary>
-public partial class NetClient
+internal sealed class ScudClient
 {
-    /// <summary>scud.json, replaced by the host with the file's.</summary>
-    public ScudFile Scud = ScudFile.Default;
+    readonly ClientContext _ctx;
+    readonly ScudFile _data;
+    readonly BlastDustClient _blastDust;
+
+    /// <param name="data">scud.json (set by the host).</param>
+    public ScudClient(ClientContext ctx, ScudFile data, BlastDustClient blastDust)
+    {
+        _ctx = ctx; _data = data; _blastDust = blastDust;
+        ScudMissileRules.Register(WorldEntityRegistry.Shared);
+        ctx.WorldEntities.Spawned += OnSpawned;
+        ctx.WorldEntities.Despawned += OnDespawned;
+        if (!ShotFx.Enabled) return;
+        _scudOverlay = new ScudOverlay();
+        ctx.Root.AddChild(_scudOverlay);
+        _scudWarning = new ScudWarning();
+        ctx.Root.AddChild(_scudWarning);
+    }
 
     sealed class ScudTruck
     {
@@ -79,7 +94,7 @@ public partial class NetClient
     readonly Dictionary<ushort, ScudTruck> _scudTrucks = new();
 
     /// <summary>A Scud truck's rack is moving: its driver's brakes are on, as the server steps it.</summary>
-    bool ScudImmobilises(ushort carId) => _scudTrucks.TryGetValue(carId, out var truck) && ScudRules.Immobilises(truck.Msg.State);
+    public bool Immobilises(ushort carId) => _scudTrucks.TryGetValue(carId, out var truck) && ScudRules.Immobilises(truck.Msg.State);
     readonly Dictionary<ushort, ScudMissileView> _scudMissiles = new();
     readonly Dictionary<ushort, ScudFlightInfo> _scudFlights = new();
     readonly ScudScreen _scudScreen = new();
@@ -102,34 +117,21 @@ public partial class NetClient
     string _scudPrompt = "";
 
     /// <summary>The screen is up (the operator's or the feed): the camera, the keys and the HUD are the screen's, as at a turret.</summary>
-    bool ScudScreenOn => _scudScreen.Mode != ScudScreenMode.Closed;
-
-    void InitScud()
-    {
-        ScudMissileRules.Register(WorldEntityRegistry.Shared);
-        EventReceived += OnScudEvent;
-        WorldEntities.Spawned += OnScudSpawned;
-        WorldEntities.Despawned += OnScudDespawned;
-        if (!ShotFx.Enabled) return;
-        _scudOverlay = new ScudOverlay();
-        AddChild(_scudOverlay);
-        _scudWarning = new ScudWarning();
-        AddChild(_scudWarning);
-    }
+    public bool ScreenOn => _scudScreen.Mode != ScudScreenMode.Closed;
 
     // ---- events ----
 
-    void OnScudEvent(EventKind kind, byte[] payload)
+    public void OnEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
         {
             case EventKind.ScudState when ScudCodec.DecodeState(payload) is { } st:
                 var t = TruckOf(st.Car);
-                t.Msg = st; t.At = Ctx.Now;
+                t.Msg = st; t.At = _ctx.Now;
                 break;
             case EventKind.ScudView when ScudCodec.DecodeView(payload) is { } v:
                 var vt = TruckOf(v.Car);
-                vt.ViewX = v.X; vt.ViewZ = v.Z; vt.ViewZoom = v.Zoom; vt.ViewAt = Ctx.Now;
+                vt.ViewX = v.X; vt.ViewZ = v.Z; vt.ViewZoom = v.Zoom; vt.ViewAt = _ctx.Now;
                 break;
             case EventKind.ScudLaunch when ScudCodec.DecodeLaunch(payload) is { } l:
                 OnScudLaunch(l);
@@ -151,7 +153,7 @@ public partial class NetClient
 
     string NoticeText(ScudNoticeCode n) => n switch
     {
-        ScudNoticeCode.TooClose => Strings.F("scud.notice.too_close", (int)Scud.Launcher.MinRangeM),
+        ScudNoticeCode.TooClose => Strings.F("scud.notice.too_close", (int)_data.Launcher.MinRangeM),
         ScudNoticeCode.OffMap => Strings.T("scud.notice.off_map"),
         ScudNoticeCode.Moving => Strings.T("scud.notice.moving"),
         ScudNoticeCode.NotOperator => Strings.T("scud.notice.not_operator"),
@@ -162,40 +164,39 @@ public partial class NetClient
         ScudNoticeCode.Retarget => Strings.T("scud.notice.retarget"),
         ScudNoticeCode.LoadStarted => Strings.T("scud.notice.load_started"),
         ScudNoticeCode.LoadCancelled => Strings.T("scud.notice.load_cancelled"),
-        ScudNoticeCode.EventFound => Strings.F("scud.notice.event_found", (int)Scud.Event.XpReward),
+        ScudNoticeCode.EventFound => Strings.F("scud.notice.event_found", (int)_data.Event.XpReward),
         _ => Strings.T("scud.notice.wrong_state"),
     };
 
     void SendScud(ScudCmd cmd, float x = 0, float z = 0, float zoom = 1f)
     {
-        if (_peer == null) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.ScudCommand, ScudCodec.Encode(new ScudCommandMsg(cmd, x, z, zoom)))), (int)ENetPacketPeer.FlagReliable);
+        _ctx.Send(EventKind.ScudCommand, ScudCodec.Encode(new ScudCommandMsg(cmd, x, z, zoom)));
     }
 
     // ---- the missile ----
 
-    void OnScudSpawned(WorldReplica.Entity e)
+    void OnSpawned(WorldReplica.Entity e)
     {
         if (e.Type != ScudMissileRules.TypeId || _scudMissiles.ContainsKey(e.Id)) return;
-        _scudMissiles[e.Id] = new ScudMissileView { Node = ScudFx.MakeMissile(Ctx.Owned) };
+        _scudMissiles[e.Id] = new ScudMissileView { Node = ScudFx.MakeMissile(_ctx.Owned) };
     }
 
-    void OnScudDespawned(ushort id)
+    void OnDespawned(ushort id)
     {
         if (!_scudMissiles.Remove(id, out var m)) return;
         m.Snd?.Release();
-        ScudFx.Retire(Ctx.Owned, m.Node);
+        ScudFx.Retire(_ctx.Owned, m.Node);
     }
 
     void OnScudLaunch(ScudLaunchMsg m)
     {
-        _scudFlights[m.Missile] = new ScudFlightInfo { Msg = m, ArriveAt = Ctx.Now + m.Seconds };
+        _scudFlights[m.Missile] = new ScudFlightInfo { Msg = m, ArriveAt = _ctx.Now + m.Seconds };
         var at = new Vector3(m.From.X, m.From.Y, m.From.Z);
-        if (Ctx.Cars.TryGet(m.Car, out var car) && Vehicles != null && car.Kind < Vehicles.Vehicles.Count && Vehicles.Vehicles[car.Kind].Launcher is { } l)
+        if (_ctx.Cars.TryGet(m.Car, out var car) && _ctx.Vehicles != null && car.Kind < _ctx.Vehicles.Vehicles.Count && _ctx.Vehicles.Vehicles[car.Kind].Launcher is { } l)
             at = car.Node.GlobalTransform * new Vector3(l.Exhaust[0], l.Exhaust[1], l.Exhaust[2]);
-        ScudFx.LaunchBurst(Ctx.Owned, at);
+        ScudFx.LaunchBurst(_ctx.Owned, at);
         if (Sfx.Enabled) Sfx.Play3D("scud.launch", at);
-        Ctx.Shake.At(at, 25f);
+        _ctx.Shake.At(at, 25f);
     }
 
     /// <summary>The blast: the biggest the game has (the blast look and its Blast wave at the scud.json size), then, when the wave reaches the player, its sound and a long shake scaled by the distance; the scorch stays.</summary>
@@ -203,28 +204,28 @@ public partial class NetClient
     {
         _scudFlights.Remove(m.Missile);
         var at = new Vector3(m.At.X, m.At.Y, m.At.Z);
-        var b = Scud.Blast;
-        if (_scudMissiles.Remove(m.Missile, out var view)) { view.Snd?.Release(); ScudFx.Retire(Ctx.Owned, view.Node); }
-        RocketFx.Explode(Ctx.Owned, at, (float)b.FxRadiusM, (float)b.WaveSpeedMps);
-        ScudFx.Scorch(Ctx.Owned, at, (float)b.ScorchRadiusM);
-        var from = Ctx.Me?.GlobalPosition ?? at;
+        var b = _data.Blast;
+        if (_scudMissiles.Remove(m.Missile, out var view)) { view.Snd?.Release(); ScudFx.Retire(_ctx.Owned, view.Node); }
+        RocketFx.Explode(_ctx.Owned, at, (float)b.FxRadiusM, (float)b.WaveSpeedMps);
+        ScudFx.Scorch(_ctx.Owned, at, (float)b.ScorchRadiusM);
+        var from = _ctx.Me?.GlobalPosition ?? at;
         var wait = ScudBlastRules.ArrivalSeconds(b, new Vector2(from.X - at.X, from.Z - at.Z).Length());
-        if (_scudFelt.Count < 8) _scudFelt.Add((Ctx.Now + wait, at));
+        if (_scudFelt.Count < 8) _scudFelt.Add((_ctx.Now + wait, at));
     }
 
     /// <summary>A blast's wave has reached the player: the sound and the shake (reduce-motion: the sound only).</summary>
     void FeelScud(Vector3 at)
     {
         if (Sfx.Enabled) Sfx.Play3D("scud.explosion", at);
-        _blastDust.RingFrom(at, (float)Scud.Blast.DamageRadiusM);
-        if (Ctx.Me == null || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) return;
-        var dist = new Vector2(Ctx.Me.GlobalPosition.X - at.X, Ctx.Me.GlobalPosition.Z - at.Z).Length();
-        var amp = ScudBlastRules.Shake(Scud.Blast, dist);
+        _blastDust.RingFrom(at, (float)_data.Blast.DamageRadiusM);
+        if (_ctx.Me == null || !ShotFx.Enabled || GameSettings.Current.ReduceMotion) return;
+        var dist = new Vector2(_ctx.Me.GlobalPosition.X - at.X, _ctx.Me.GlobalPosition.Z - at.Z).Length();
+        var amp = ScudBlastRules.Shake(_data.Blast, dist);
         if (amp <= 0.002f) return;
-        _scudShakeStart = Ctx.Now; _scudShakeSeconds = 2.5; _scudShakeAmp = MathF.Max(_scudShakeAmp * 0.5f, amp);
+        _scudShakeStart = _ctx.Now; _scudShakeSeconds = 2.5; _scudShakeAmp = MathF.Max(_scudShakeAmp * 0.5f, amp);
     }
 
-    void ScudRoundStart()
+    public void RoundStart()
     {
         ScudFx.ClearScorches();
         _scudFlights.Clear();
@@ -233,9 +234,9 @@ public partial class NetClient
     // ---- every frame ----
 
     /// <summary>Once a frame after the vehicles and the entities are placed: the trucks' racks, the missiles, the screen, the warning and the blast's late effects.</summary>
-    void RenderScud(double delta)
+    public void Render(double delta)
     {
-        if (Ctx.LastTick == 0) return;
+        if (_ctx.LastTick == 0) return;
         AnimateScudTrucks((float)delta);
         RenderScudMissiles();
         StepScudScreen((float)delta);
@@ -244,17 +245,17 @@ public partial class NetClient
     }
 
     /// <summary>The current state of a truck's launcher for drawing: the last message, its clock counted on from when it arrived.</summary>
-    (ScudLauncherState State, float Elapsed, float RackFrom) ScudNow(ScudTruck t) => (t.Msg.State, t.Msg.Elapsed + (float)(Ctx.Now - t.At), t.Msg.RackFrom);
+    (ScudLauncherState State, float Elapsed, float RackFrom) ScudNow(ScudTruck t) => (t.Msg.State, t.Msg.Elapsed + (float)(_ctx.Now - t.At), t.Msg.RackFrom);
 
     /// <summary>The seconds left of the state's clock, counted on from the last message (infinity: no clock).</summary>
-    float ScudLeft(ScudTruck t) => float.IsFinite(t.Msg.Left) ? t.Msg.Left - (float)(Ctx.Now - t.At) : float.PositiveInfinity;
+    float ScudLeft(ScudTruck t) => float.IsFinite(t.Msg.Left) ? t.Msg.Left - (float)(_ctx.Now - t.At) : float.PositiveInfinity;
 
     void AnimateScudTrucks(float dt)
     {
-        if (Vehicles == null) return;
-        foreach (var v in Ctx.Cars.All)
+        if (_ctx.Vehicles == null) return;
+        foreach (var v in _ctx.Cars.All)
         {
-            if (v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Launcher is not { } launcher || v.Destroyed) continue;
+            if (v.Kind >= _ctx.Vehicles.Vehicles.Count || _ctx.Vehicles.Vehicles[v.Kind].Launcher is not { } launcher || v.Destroyed) continue;
             var t = TruckOf(v.Id);
             if (!ShotFx.Enabled) continue;
             if (!t.Looked)
@@ -278,10 +279,10 @@ public partial class NetClient
             var (state, elapsed, from) = ScudNow(t);
             if (t.Rack != null)
             {
-                var angle = ScudRules.RackAngle(state, elapsed, from, Scud.Launcher);
+                var angle = ScudRules.RackAngle(state, elapsed, from, _data.Launcher);
                 t.Rack.Basis = new Basis(Vector3.Right, angle) * t.RackRest; // up about the rear hinge: positive about X lifts a rack that lies forward (-Z)
             }
-            if (t.MissileOnRack != null) t.MissileOnRack.Visible = ScudRules.RocketOnRack(state, ScudLeft(t), Scud.Launcher);
+            if (t.MissileOnRack != null) t.MissileOnRack.Visible = ScudRules.RocketOnRack(state, ScudLeft(t), _data.Launcher);
             if (t.Ignition != null) ParticleFx.Run(t.Ignition, state == ScudLauncherState.Launching);
             // all eight wheels roll by the distance driven along the truck's own heading, and the front two axles steer by the path's curvature (the drawn yaw over the drawn distance; the truck is not predicted)
             var pos = v.Node.GlobalPosition;
@@ -304,10 +305,10 @@ public partial class NetClient
     void RenderScudMissiles()
     {
         if (_scudMissiles.Count == 0) return;
-        var rt = RenderTickNow();
+        var rt = _ctx.RenderTick;
         foreach (var (id, view) in _scudMissiles)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e) || !GodotObject.IsInstanceValid(view.Node)) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || !GodotObject.IsInstanceValid(view.Node)) continue;
             var (p, yaw, pitch) = e.Buf.At(rt) is { } s ? (new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z), s.Yaw, s.Pitch) : (new Vector3(e.State.Position.X, e.State.Position.Y, e.State.Position.Z), e.State.YawRad, e.State.PitchRad);
             view.Node.GlobalPosition = p;
             view.Node.Rotation = new Vector3(pitch, yaw, 0); // nose along -Z: the heading HitMath.Forward gives
@@ -322,29 +323,29 @@ public partial class NetClient
     /// <summary>The truck the local player sits in, with its launcher's state and their seat, or null (on foot, dead, in another vehicle, or the truck is gone).</summary>
     (CarView Car, ScudTruck Truck, VehicleDef Def, int Seat, bool IsOperator)? MyScudSeat()
     {
-        if (Dead || Ctx.Cars.MySeat() is not { } ride || ride.Def.Launcher is not { } launcher || ride.Car.Destroyed) return null;
+        if (_ctx.Dead || _ctx.Cars.MySeat() is not { } ride || ride.Def.Launcher is not { } launcher || ride.Car.Destroyed) return null;
         return (ride.Car, TruckOf(ride.Car.Id), ride.Def, ride.Index, ride.Index == launcher.OperatorSeat);
     }
 
     /// <summary>With the screen up the movement keys and buttons are the screen's: the input sent to the server carries none (the truck stays as it is), only Use (leave the truck) and the lights.</summary>
-    void ScudFilterInput(ref MoveInput mi)
+    public void FilterInput(ref MoveInput mi)
     {
-        if (!ScudScreenOn) return;
+        if (!ScreenOn) return;
         mi.MoveX = 0; mi.MoveY = 0;
         mi.Buttons &= MoveButtons.Use | MoveButtons.Headlights;
     }
 
     /// <summary>The screen's keys, in the order the unhandled input handles them. True when the event was the screen's.</summary>
-    bool HandleScudInput(InputEvent e)
+    public bool HandleInput(InputEvent e)
     {
-        if (Bot || Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return false;
+        if (_ctx.Bot || _ctx.Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return false;
         if (e is InputEventMouseButton { Pressed: true } mb)
         {
-            if (!ScudScreenOn) return false;
+            if (!ScreenOn) return false;
             if (mb.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
             {
                 if (_scudScreen.Mode == ScudScreenMode.Operating)
-                    _scudZoom = Mathf.Clamp(mb.ButtonIndex == MouseButton.WheelUp ? _scudZoom * (float)Scud.Targeting.ZoomStep : _scudZoom / (float)Scud.Targeting.ZoomStep, (float)Scud.Targeting.ZoomMin, (float)Scud.Targeting.ZoomMax);
+                    _scudZoom = Mathf.Clamp(mb.ButtonIndex == MouseButton.WheelUp ? _scudZoom * (float)_data.Targeting.ZoomStep : _scudZoom / (float)_data.Targeting.ZoomStep, (float)_data.Targeting.ZoomMin, (float)_data.Targeting.ZoomMax);
                 return true; // the wheel is the zoom here, never the weapon
             }
             if (e.IsActionPressed("fire")) { _scudKeys |= ScudKey.Lock; return true; }
@@ -352,7 +353,7 @@ public partial class NetClient
         }
         if (e is not InputEventKey { Echo: false }) return false;
         if (e.IsActionPressed("scud_screen") && MyScudSeat() != null) { _scudKeys |= ScudKey.Screen; return true; }
-        if (!ScudScreenOn) return false;
+        if (!ScreenOn) return false;
         if (e.IsActionPressed("scud_confirm")) { _scudKeys |= ScudKey.Confirm; return true; }
         if (e.IsActionPressed("scud_abort")) { _scudKeys |= ScudKey.Abort; return true; }
         return false;
@@ -363,7 +364,7 @@ public partial class NetClient
         var keys = _scudKeys; _scudKeys = ScudKey.None;
         var seat = MyScudSeat();
         var state = seat?.Truck.Msg.State ?? ScudLauncherState.Stowed;
-        var action = _scudScreen.Update(Ctx.Now, seat != null, seat?.IsOperator ?? false, state, keys.HasFlag(ScudKey.Screen));
+        var action = _scudScreen.Update(_ctx.Now, seat != null, seat?.IsOperator ?? false, state, keys.HasFlag(ScudKey.Screen));
         if (action == ScudScreenAction.SendOpen) SendScud(ScudCmd.Open);
         else if (action == ScudScreenAction.SendClose) SendScud(ScudCmd.Close);
         var mode = _scudScreen.Mode;
@@ -373,16 +374,16 @@ public partial class NetClient
             _scudModeWas = mode;
             return;
         }
-        if (Ctx.Me == null || seat is not { } s || _scudOverlay == null && ShotFx.Enabled) return;
+        if (_ctx.Me == null || seat is not { } s || _scudOverlay == null && ShotFx.Enabled) return;
         var truckAt = s.Car.Node.GlobalPosition;
-        var tun = Scud.Targeting;
+        var tun = _data.Targeting;
         if (_scudModeWas == ScudScreenMode.Closed)
         {
             // opening: the operator starts where the feed was, else over the truck; the feed starts where the operator is
-            var fresh = Ctx.Now - s.Truck.ViewAt < Scud.Launcher.ViewStaleSeconds * 4;
+            var fresh = _ctx.Now - s.Truck.ViewAt < _data.Launcher.ViewStaleSeconds * 4;
             _scudCentre = fresh ? new Vector2(s.Truck.ViewX, s.Truck.ViewZ) : new Vector2(truckAt.X, truckAt.Z);
             _scudZoom = fresh ? Mathf.Clamp(s.Truck.ViewZoom, (float)tun.ZoomMin, (float)tun.ZoomMax) : 1f;
-            Ctx.Me.TurretLook = true;
+            _ctx.Me.TurretLook = true;
         }
         _scudModeWas = mode;
         var operating = mode == ScudScreenMode.Operating;
@@ -396,13 +397,13 @@ public partial class NetClient
                 ClampToMap(ref _scudCentre);
             }
             if (keys.HasFlag(ScudKey.Lock) && state is ScudLauncherState.Targeting or ScudLauncherState.Proposed) SendScud(ScudCmd.Lock, _scudCentre.X, _scudCentre.Y);
-            if (state is ScudLauncherState.Targeting or ScudLauncherState.Proposed && (_scudCentre != _scudViewSent || MathF.Abs(_scudZoom - _scudZoomSent) > 1e-3f) && Ctx.Now - _scudViewSentAt >= 1.0 / tun.ViewHz)
+            if (state is ScudLauncherState.Targeting or ScudLauncherState.Proposed && (_scudCentre != _scudViewSent || MathF.Abs(_scudZoom - _scudZoomSent) > 1e-3f) && _ctx.Now - _scudViewSentAt >= 1.0 / tun.ViewHz)
             {
-                _scudViewSentAt = Ctx.Now; _scudViewSent = _scudCentre; _scudZoomSent = _scudZoom;
+                _scudViewSentAt = _ctx.Now; _scudViewSent = _scudCentre; _scudZoomSent = _scudZoom;
                 SendScud(ScudCmd.View, _scudCentre.X, _scudCentre.Y, _scudZoom);
             }
         }
-        else if (Ctx.Now - s.Truck.ViewAt < Scud.Launcher.ViewStaleSeconds)
+        else if (_ctx.Now - s.Truck.ViewAt < _data.Launcher.ViewStaleSeconds)
         {
             // the feed: the operator's camera as relayed, eased so the five-a-second updates glide
             var k = 1f - Mathf.Exp(-12f * dt);
@@ -420,15 +421,15 @@ public partial class NetClient
         }
         // the camera: straight down, north up, from a fixed height over the truck
         var camAt = new Vector3(_scudCentre.X, truckAt.Y + (float)tun.AltitudeM, _scudCentre.Y);
-        Ctx.Me.Turret(camAt, 0f, -Mathf.Pi / 2f + 0.0005f);
-        Ctx.Me.ZoomFov = (float)tun.FovDeg / _scudZoom;
-        Ctx.Me.TurretLook = true;
+        _ctx.Me.Turret(camAt, 0f, -Mathf.Pi / 2f + 0.0005f);
+        _ctx.Me.ZoomFov = (float)tun.FovDeg / _scudZoom;
+        _ctx.Me.TurretLook = true;
         FillScudOverlay(s, state, operating, iConfirmed, truckAt);
     }
 
     void ClampToMap(ref Vector2 centre)
     {
-        var b = FlightProbe.MapBounds(Map);
+        var b = FlightProbe.MapBounds(_ctx.Map);
         if (b == FlightBounds.None) return;
         centre.X = Mathf.Clamp(centre.X, b.MinX, b.MaxX);
         centre.Y = Mathf.Clamp(centre.Y, b.MinZ, b.MaxZ);
@@ -438,9 +439,9 @@ public partial class NetClient
     void EndScudScreen()
     {
         _scudOverlay?.SetOn(false);
-        if (Ctx.Me == null) return;
-        Ctx.Me.TurretLook = false;
-        Ctx.Me.ZoomFov = 0f;
+        if (_ctx.Me == null) return;
+        _ctx.Me.TurretLook = false;
+        _ctx.Me.ZoomFov = 0f;
         // no EndChase: the vehicle's own camera (RenderCars, before this) already holds the frame
     }
 
@@ -451,9 +452,9 @@ public partial class NetClient
         o.Operating = operating;
         o.Launcher = state;
         o.Pending = _scudScreen.Pending;
-        o.Camera = Ctx.Me!.Camera;
+        o.Camera = _ctx.Me!.Camera;
         o.Truck = truckAt;
-        o.MinRangeM = (float)Scud.Launcher.MinRangeM;
+        o.MinRangeM = (float)_data.Launcher.MinRangeM;
         o.Zoom = _scudZoom;
         var msg = s.Truck.Msg;
         var (_, elapsed, _) = ScudNow(s.Truck);
@@ -463,7 +464,7 @@ public partial class NetClient
         // the reticle reads where it is: the grid and the range from the truck, and whether that is inside the minimum range
         var range = new Vector2(_scudCentre.X - truckAt.X, _scudCentre.Y - truckAt.Z).Length();
         o.RangeM = (int)MathF.Round(range);
-        o.TooClose = range < Scud.Launcher.MinRangeM;
+        o.TooClose = range < _data.Launcher.MinRangeM;
         var cell = GridKey(_scudCentre.X, _scudCentre.Y);
         if (_scudGridKey.Update(cell)) o.Grid = GridRef(_scudCentre.X, _scudCentre.Y);
         if (msg.Lock is { } lk)
@@ -502,7 +503,7 @@ public partial class NetClient
             };
         }
         // who must confirm and who has
-        var seats = Ctx.Cars.Seats?.Occupants ?? Array.Empty<ushort>();
+        var seats = _ctx.Cars.Seats?.Occupants ?? Array.Empty<ushort>();
         var crewKey = (msg.Need << 8) | msg.Confirmed | ((int)state << 16) | (s.Seat << 24);
         if (_scudCrewKey.Update(crewKey))
         {
@@ -525,16 +526,16 @@ public partial class NetClient
 
     string GridRef(float x, float z)
     {
-        var b = MapBase.For(Map)?.World;
+        var b = MapBase.For(_ctx.Map)?.World;
         return b == null ? $"{x:0},{z:0}" : TacticalMapMath.ReferenceOf(new NVec2(x, z), b.Origin.X, b.SouthZ, b.SideMetres);
     }
 
     // ---- the prompt line while the screen is closed ----
 
     /// <summary>The Scud seat's line for the HUD's prompt: the launcher's state and the key that opens the screen, then the vehicle's own prompt.</summary>
-    string ScudPrompt(string? basePrompt)
+    public string Prompt(string? basePrompt)
     {
-        if (ScudScreenOn || MyScudSeat() is not { } s) return basePrompt ?? "";
+        if (ScreenOn || MyScudSeat() is not { } s) return basePrompt ?? "";
         var (state, elapsed, _) = ScudNow(s.Truck);
         var left = float.IsFinite(s.Truck.Msg.Left) ? Math.Max(0, (int)MathF.Ceiling(s.Truck.Msg.Left - (elapsed - s.Truck.Msg.Elapsed))) : 0;
         if (_scudPromptKey.Update((int)state * 1000 + left + (s.IsOperator ? 100000 : 0) + (s.Truck.Msg.Operator != 0 ? 200000 : 0) + (state == ScudLauncherState.Empty && ScudLoadOffer() ? 400000 : 0)))
@@ -564,31 +565,31 @@ public partial class NetClient
     /// </summary>
     bool ScudLoadOffer()
     {
-        if (Dead || Ctx.Me == null || Vehicles == null) return false;
+        if (_ctx.Dead || _ctx.Me == null || _ctx.Vehicles == null) return false;
         var mine = MyScudSeat()?.Car;
-        foreach (var v in Ctx.Cars.All)
+        foreach (var v in _ctx.Cars.All)
         {
-            if (v.Destroyed || v.Kind >= Vehicles.Vehicles.Count || Vehicles.Vehicles[v.Kind].Launcher == null || !_scudTrucks.TryGetValue(v.Id, out var truck)) continue;
+            if (v.Destroyed || v.Kind >= _ctx.Vehicles.Vehicles.Count || _ctx.Vehicles.Vehicles[v.Kind].Launcher == null || !_scudTrucks.TryGetValue(v.Id, out var truck)) continue;
             var box = ScudBox(v);
-            var p = Ctx.Me.GlobalPosition;
-            if (!ScudReloadRules.MayStart(truck.Msg.State, mine == v, box, p.X, p.Z, Scud.Reload)) continue;
-            var carts = Ctx.Cars.All.Where(c => c.Trailer != null && !c.Destroyed && c.Kind < Vehicles.Vehicles.Count).Select(c => new ScudCartCandidate(c.Id, ScudBox(c), c.Trailer!.Loaded, true));
-            if (ScudReloadRules.NearestCart(box, carts, (float)Scud.Reload.CartReachM) != null) return true;
+            var p = _ctx.Me.GlobalPosition;
+            if (!ScudReloadRules.MayStart(truck.Msg.State, mine == v, box, p.X, p.Z, _data.Reload)) continue;
+            var carts = _ctx.Cars.All.Where(c => c.Trailer != null && !c.Destroyed && c.Kind < _ctx.Vehicles.Vehicles.Count).Select(c => new ScudCartCandidate(c.Id, ScudBox(c), c.Trailer!.Loaded, true));
+            if (ScudReloadRules.NearestCart(box, carts, (float)_data.Reload.CartReachM) != null) return true;
         }
         return false;
     }
 
     BodyBox ScudBox(CarView v)
     {
-        var def = Vehicles!.Vehicles[v.Kind];
+        var def = _ctx.Vehicles!.Vehicles[v.Kind];
         var p = v.Node.GlobalPosition;
         return new BodyBox(p.X, p.Z, def.HalfWidth, def.HalfLength, v.Node.Rotation.Y);
     }
 
     /// <summary>The prompt of a player on foot beside a truck with an empty rack and a loaded cart: the hold that loads it, then whatever the key does anyway (getting in). Null when there is no such offer or the player rides.</summary>
-    string? ScudLoadPrompt(string? basePrompt)
+    public string? LoadPrompt(string? basePrompt)
     {
-        if (Ctx.Driving || !ScudLoadOffer()) return null;
+        if (_ctx.Driving || !ScudLoadOffer()) return null;
         var hint = Strings.F("scud.hint.load", InputBindings.Name("interact"));
         return basePrompt is { Length: > 0 } ? hint + "     " + basePrompt : hint;
     }
@@ -603,27 +604,27 @@ public partial class NetClient
     {
         if (_scudWarning == null) return;
         ScudFlightInfo? soonest = null; var soonLeft = double.MaxValue;
-        if (!Dead && Ctx.Me != null)
+        if (!_ctx.Dead && _ctx.Me != null)
         {
-            var body = Ctx.Me.GlobalPosition;
+            var body = _ctx.Me.GlobalPosition;
             foreach (var f in _scudFlights.Values)
             {
-                var left = f.ArriveAt - Ctx.Now;
-                if (left > Scud.Missile.WarnSeconds || left < 0 || left >= soonLeft) continue;
-                if (new Vector2(body.X - f.Msg.Target.X, body.Z - f.Msg.Target.Z).Length() > Scud.Missile.WarnRadiusM) continue;
+                var left = f.ArriveAt - _ctx.Now;
+                if (left > _data.Missile.WarnSeconds || left < 0 || left >= soonLeft) continue;
+                if (new Vector2(body.X - f.Msg.Target.X, body.Z - f.Msg.Target.Z).Length() > _data.Missile.WarnRadiusM) continue;
                 soonest = f; soonLeft = left;
             }
         }
         if (soonest == null) { _scudWarning.Set(-1, "", 0); return; }
         var t = soonest.Msg.Target;
-        var d = (int)MathF.Round(new Vector2(Ctx.Me!.GlobalPosition.X - t.X, Ctx.Me.GlobalPosition.Z - t.Z).Length());
+        var d = (int)MathF.Round(new Vector2(_ctx.Me!.GlobalPosition.X - t.X, _ctx.Me.GlobalPosition.Z - t.Z).Length());
         _scudWarning.Set((int)Math.Ceiling(soonLeft), GridRef(t.X, t.Z), d);
         if (!soonest.Marked)
         {
             soonest.Marked = true;
-            Ctx.Hud?.Strikes.Add(new NVec2(t.X, t.Z), (float)Scud.Blast.LethalRadiusM, Ctx.Now + soonLeft + 4.0);
+            _ctx.Hud?.Strikes.Add(new NVec2(t.X, t.Z), (float)_data.Blast.LethalRadiusM, _ctx.Now + soonLeft + 4.0);
         }
-        if (Ctx.Now >= _scudSirenAt) { _scudSirenAt = Ctx.Now + 1.0; if (Sfx.Enabled) Sfx.Play2D("scud.siren"); }
+        if (_ctx.Now >= _scudSirenAt) { _scudSirenAt = _ctx.Now + 1.0; if (Sfx.Enabled) Sfx.Play2D("scud.siren"); }
     }
 
     /// <summary>Blasts whose wave has reached the player, and the shake that rumbles on for a couple of seconds, fading.</summary>
@@ -631,12 +632,12 @@ public partial class NetClient
     {
         for (var i = _scudFelt.Count - 1; i >= 0; i--)
         {
-            if (_scudFelt[i].At > Ctx.Now) continue;
+            if (_scudFelt[i].At > _ctx.Now) continue;
             FeelScud(_scudFelt[i].Where);
             _scudFelt.RemoveAt(i);
         }
-        var age = Ctx.Now - _scudShakeStart;
+        var age = _ctx.Now - _scudShakeStart;
         if (age < _scudShakeSeconds && _scudShakeAmp > 0)
-            Ctx.Shake.Raise(_scudShakeAmp * (1.0 - age / _scudShakeSeconds)); // the shake applies it this frame
+            _ctx.Shake.Raise(_scudShakeAmp * (1.0 - age / _scudShakeSeconds)); // the shake applies it this frame
     }
 }
