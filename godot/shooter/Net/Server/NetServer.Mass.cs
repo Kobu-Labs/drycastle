@@ -20,7 +20,7 @@ namespace Drycastle.Shooter.Net.Server;
 /// player character; a citizen has one only because of the Synty clips). The client does not predict its body while seated (<see cref="EventKind.MassSeat"/>).
 /// </para>
 /// <para>
-/// Hooks for other tickets: <see cref="MassPhaseChanged"/> (the doors), <see cref="PastorTurns"/> (the demon), <see cref="GrantBlessing"/> (the status system).
+/// Hooks for other tickets: <see cref="MassPhaseChanged"/> (the doors), <see cref="PastorTurns"/> (the demon), <see cref="StatusServer.GrantBlessing"/> (the status system).
 /// </para>
 /// </summary>
 public partial class NetServer
@@ -155,7 +155,7 @@ public partial class NetServer
         return true;
     }
 
-    /// <summary>The Mass completed: each blessed player is put at the church door, facing it, told, and handed to <see cref="GrantBlessing"/>.</summary>
+    /// <summary>The Mass completed: each blessed player is put at the church door, facing it, told, and handed to <see cref="StatusServer.GrantBlessing"/>.</summary>
     void OnMassCompleted(IReadOnlyList<ushort> blessed)
     {
         GD.Print($"server: holy mass completed, blessed: {(blessed.Count == 0 ? "nobody" : string.Join(", ", blessed.Select(b => "#" + b)))}");
@@ -176,7 +176,7 @@ public partial class NetServer
                 _sitters.Tell(c, MassSeatState.None, 0);
                 Send(c, new EventMsg((byte)EventKind.MassBlessing, MassCodec.EncodeBlessing(exit?.Yaw ?? c.Body.Yaw)));
             }
-            GrantBlessing(id);
+            _status.GrantBlessing(id);
         }
     }
 }

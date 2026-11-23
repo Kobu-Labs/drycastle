@@ -9,6 +9,7 @@ using Drycastle.Shooter.Net.Server.Intel;
 using Drycastle.Shooter.Net.Server.MineralLog;
 using Drycastle.Shooter.Net.Server.Profiles;
 using Drycastle.Shooter.Net.Server.Seating;
+using Drycastle.Shooter.Net.Server.Statuses;
 using Drycastle.Shooter.Net.Server.Scenery;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Chat;
@@ -88,6 +89,7 @@ public partial class NetServer : Node
     IntelServer _intel = null!;
     ChatServer _chat = null!;
     ProfileServer _profiles = null!;
+    StatusServer _status = null!;
     ItemsServer _gear = null!;
     Sitters _sitters = null!;
     AnimalWorld _animals = null!;
@@ -140,7 +142,7 @@ public partial class NetServer : Node
         RegisterChatCommands();
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
         _minerals = new MineralsServer(_ctx, Progression, () => _wildlife.Keeper.Drops);
-        StatusInit();
+        _status = new StatusServer(_ctx, Deal, Weapons, GetHigh);
         DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
         _match.Entities.Spawned += w => BroadcastEvent(EventKind.WorldSpawn, WorldCodec.EncodeSpawn(w.Id, w.Type, w.State));
@@ -304,7 +306,7 @@ public partial class NetServer : Node
     /// <summary>What the tick's shots set off, and the messages that are sent once per tick however many things changed.</summary>
     void ResolveBlastsAndFlush(float dt)
     {
-        StatusTick(dt); // burns tick
+        _status.Tick(dt); // burns tick
         PlantationTick(dt); // highs run out
         DetonateShells();  // shells whose tracer has arrived burst now (#162)
         DetonateFlak();    // flak shells that have arrived burst now
@@ -313,7 +315,7 @@ public partial class NetServer : Node
         FlushGunshipFx(); // the gunship rounds of this tick, coalesced (#159)
         FlushGlass();     // the glass panes that changed this tick (ADR 0007)
         _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
-        FlushStatuses(); // statuses and burning that changed this tick
+        _status.Flush(); // statuses and burning that changed this tick
         FlushScoreboard(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
         PerfLap(ServerPerf.Ph.Detonate);
     }
@@ -509,7 +511,7 @@ public partial class NetServer : Node
         _gear.SendWornOnJoin(c); // what the others wear (#266), to draw on their characters
         _gear.SendBinocularsOnJoin(c); // and who holds the binoculars up
         _gear.SendHeadLampsOnJoin(c); // and whose head lamp is on
-        SendStatusOnJoin(c); // who is blessed, cursed or burning
+        _status.SendOnJoin(c); // who is blessed, cursed or burning
         _match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
         SandboxAnnounce(c); // sandbox name tags both ways, and the held streak (#156)
         _host.Flush();
@@ -530,7 +532,7 @@ public partial class NetServer : Node
     {
         StreakLeave(c.Id);
         _companions.Leave(c.Id);
-        StatusLeave(c.Id);
+        _status.Leave(c.Id);
         _rozhlas.OnPlayerLeft(c.Id);
         _sitters.StandUp(c.Id); _sitters.Forget(c.Id);
         DetachFromCar(c);

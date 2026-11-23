@@ -570,7 +570,7 @@ public partial class NetServer
             if (_match.Get(o.Id)?.Life == PlayerLife.Alive) _baleFolk.Add((o.Id, N(o.Body.GlobalPosition)));
         void Fire(HayBale b, ushort id)
         {
-            foreach (var victim in b.Scorched(_baleFolk)) _burns.Ignite(victim, BurnSet.HazardSource, Harvester.BaleBurn);
+            foreach (var victim in b.Scorched(_baleFolk)) _status.Burns.Ignite(victim, BurnSet.HazardSource, Harvester.BaleBurn);
             if (b.Tick(dt)) HarvesterFx(HarvesterCodec.FxKind.BaleAsh, b.Position, id);
         }
         foreach (var kv in _madeBales) if (kv.Value.Burning) Fire(kv.Value, kv.Key);

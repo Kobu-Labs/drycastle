@@ -27,7 +27,8 @@ public partial class NetServer
         ResetCars();
         HarvesterRoundReset(); // the car reset brought the harvester back to its old field: hidden again
         ScudRoundReset(); // the launchers start over; a Scud truck, which never returns, is retired
-        StatusRoundStart();
+        _status.RoundStart();
+        PlantationRoundStart();
         LockRoundReset();
         RoundStarted();
     }
@@ -87,7 +88,7 @@ public partial class NetServer
                 break;
             case PlayerTeamChanged tc: OnTeamChanged(tc); break;
             case TargetKilled tk: OnTargetKilled(tk); break;
-            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); OnStatusDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
+            case PlayerDied d: if (_byId.TryGetValue(d.Victim, out var dead)) _gear.SetHeadLamp(dead, false); _status.OnDeath(d.Victim); _rozhlas.OnPlayerDied(d.Victim); LossDeath(d.Victim); RecordDeath(d.Victim); StreakDeath(d.Victim); SpawnCorpse(d.Victim); BroadcastEvent(EventKind.Death, MatchCodec.Encode(new DeathMsg(d.Victim, d.Killer, d.RespawnDelay, _deathFlight.Remove(d.Victim, out var flight) ? flight : DeathFlight.None))); break;
         }
     }
 

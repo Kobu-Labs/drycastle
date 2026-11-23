@@ -67,7 +67,7 @@ public partial class NetServer
     void DemonInit()
     {
         DemonRules.Register(WorldEntityRegistry.Shared);
-        if (Demon.Burn.Dps > 0) CurseBurnDef = Demon.Burn;
+        if (Demon.Burn.Dps > 0) _status.CurseBurn = Demon.Burn;
         PastorTurns += DemonBegin;
         _match.Entities.Despawned += d => { if (d.Id == _dEntId && _dEnt != null) _dEnt = null; };
     }
@@ -303,7 +303,7 @@ public partial class NetServer
         c.Inputs.Clear();
         _match.SetPosition(c.Id, p.Feet);
         _match.SetHeld(c.Id, true);
-        _burns.Extinguish(c.Id);
+        _status.Burns.Extinguish(c.Id);
         _pins[c.Id] = p.Yaw;
         BroadcastEvent(EventKind.DemonPounce, DemonCodec.EncodePounce(new DemonPounceMsg(c.Id, PounceStage.Pinned, p.Yaw)));
         GD.Print($"server: demon: #{c.Id} is pinned");
@@ -357,7 +357,7 @@ public partial class NetServer
         var cursed = 0;
         foreach (var id in credited)
         {
-            if (!GrantCurse(id)) continue;
+            if (!_status.GrantCurse(id)) continue;
             cursed++;
             if (_byId.TryGetValue(id, out var c) && c.Peer != null) Send(c, new EventMsg((byte)EventKind.DemonCursed, Array.Empty<byte>()));
         }
@@ -405,12 +405,12 @@ public partial class NetServer
         // an NPC (the same blast, the same shelter rule) takes the damage in the demon's name; it is not set ablaze (the burn set is the players') and not pushed
         foreach (var v in FireballBlast.Detonate(step.Impact, direct, npcs, Demon.Fireball, MapShelters))
             Deal(DemonRules.HitId, SpecialWeapons.Burn, v.Id, MathF.Max(1f, MathF.Round(v.Damage)), false, false);
-        foreach (var v in FireballBlast.Detonate(step.Impact, direct, players, Demon.Fireball, MapShelters, _burns, Demon.Burn))
+        foreach (var v in FireballBlast.Detonate(step.Impact, direct, players, Demon.Fireball, MapShelters, _status.Burns, Demon.Burn))
         {
             if (!_byId.TryGetValue(v.Id, out var victim)) continue;
-            if (PounceImmune(v.Id)) { _burns.Extinguish(v.Id); continue; } // just let go of the pounce: the fire does not touch them yet
+            if (PounceImmune(v.Id)) { _status.Burns.Extinguish(v.Id); continue; } // just let go of the pounce: the fire does not touch them yet
             var res = Deal(v.Id, SpecialWeapons.Burn, v.Id, MathF.Max(1f, MathF.Round(v.Damage)), false, false);
-            if (res == DamageResult.Ignored) { _burns.Extinguish(v.Id); continue; } // spawn protected: no burn either
+            if (res == DamageResult.Ignored) { _status.Burns.Extinguish(v.Id); continue; } // spawn protected: no burn either
             if (res != DamageResult.Killed && v.Knockback != NVec3.Zero) victim.Body.AddImpulse(new Vector3(v.Knockback.X, v.Knockback.Y, v.Knockback.Z));
         }
     }
@@ -419,9 +419,9 @@ public partial class NetServer
     void FlameBurn(ushort id)
     {
         if (!_byId.ContainsKey(id) || PounceImmune(id)) return;
-        _burns.Ignite(id, BurnSet.NoSource, Demon.Burn);
+        _status.Burns.Ignite(id, BurnSet.NoSource, Demon.Burn);
         var res = Deal(id, SpecialWeapons.Burn, id, MathF.Max(1f, MathF.Round(Demon.Flame.DamagePerTick)), false, false);
-        if (res == DamageResult.Ignored) _burns.Extinguish(id); // spawn protected: no burn either
+        if (res == DamageResult.Ignored) _status.Burns.Extinguish(id); // spawn protected: no burn either
     }
 
     // ---- being hit ----
