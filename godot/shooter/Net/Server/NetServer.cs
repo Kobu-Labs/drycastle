@@ -55,6 +55,7 @@ public partial class NetServer : Node
     // The features that are classes of their own (<c>Net/Server/&lt;Feature&gt;/</c>), made in _Ready once the match exists; each takes only the context.
     ServerContext _ctx = null!;
     SceneryServer _scenery = null!;
+    MineralsServer _minerals = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -110,6 +111,7 @@ public partial class NetServer : Node
         _match.Event += OnMatchEvent;
         _ctx = new ServerContext(_match, _byId, _clients.Values, () => _elapsed, () => _tick, BroadcastEvent, Send);
         _scenery = new SceneryServer(_ctx, Map, LampData, SignPlateData);
+        _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
         StatusInit();
         DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -167,7 +169,7 @@ public partial class NetServer : Node
         CompleteProfileLoads();
         CompleteSaves();
         HuntTick();
-        MineralTick();
+        _minerals.Tick(Spawns.Count > 0);
         DropSilentPeers();
         IntelTick(); // a made-up event whose time is up leaves the intel screen
         PerfLap(ServerPerf.Ph.Housekeeping);
@@ -398,7 +400,7 @@ public partial class NetServer : Node
             else if (m is EventMsg { Kind: (byte)EventKind.RaiseBinoculars } rb) { if (c.Joined && Binoculars.TryDecodeRaise(rb.Payload, out var up)) SetBinoculars(c, up && CarriesBinoculars(c)); }
             else if (m is EventMsg { Kind: (byte)EventKind.Redeploy } rd && c.Joined) OnRedeploy(c, rd.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) OnOpenCarePackage(c, oc.Payload);
-            else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) OnMineralPick(c, mp.Payload);
+            else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) OnCompanionPick(c, cp.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) OnSandboxGrant(c, sg.Payload);
             else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) OnSandboxAction(c, sa.Payload);
@@ -490,7 +492,7 @@ public partial class NetServer : Node
         SendIntelOnJoin(c); // the events on the intel screen
         SendMassOnJoin(c); // the Holy Mass, when one runs
         SendThievesOnJoin(c); // the Thieves event, when one runs
-        SendMineralsOnJoin(c); // the mineral nodes
+        _minerals.SendOnJoin(c); // the mineral nodes
         SendRozhlasOnJoin(c); // the village loudspeaker, when a detour broadcast is on
         SendUradDoorOnJoin(c); // and the Urad door, when it is open
         SendGarageDoorOnJoin(c); // and the garage doors, when they are open

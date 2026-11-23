@@ -18,7 +18,7 @@ internal sealed class ServerClient
     /// <summary>This bot carries the RPG as its secondary weapon (#348); decided when it joins.</summary>
     public bool BotLauncher;
     public ushort Id;
-    /// <summary>The finds of the Mineral Log were sent to this client (<see cref="NetServer.MineralTick"/> sends them once the book is loaded).</summary>
+    /// <summary>The finds of the Mineral Log were sent to this client (<see cref="MineralsServer.Tick"/> sends them once the book is loaded).</summary>
     public bool FindsSent;
     public string Name = "";
     /// <summary>When this client's last performance report was taken (<see cref="OnClientReport"/>): one per few seconds, the rest are dropped.</summary>
