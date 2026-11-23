@@ -56,7 +56,7 @@ public partial class NetServer
     /// <summary>The pet target's source (registered by <see cref="InitLoot"/>). The fences load on the first look at the pets (once the map is up), not here.</summary>
     IStealSource MakePetSource()
     {
-        var source = new PetSource(ThievesData.Loot.Pet, _pets!, LoadFences, new PetLootWorld(this));
+        var source = new PetSource(ThievesData.Loot.Pet, _pets.Keeper, LoadFences, new PetLootWorld(this));
         source.CarriedKilled += entity =>
         {
             if (_gangs == null) return;

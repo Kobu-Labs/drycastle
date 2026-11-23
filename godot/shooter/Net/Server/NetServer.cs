@@ -88,6 +88,8 @@ public partial class NetServer : Node
     ProfileServer _profiles = null!;
     AnimalWorld _animals = null!;
     CompanionServer _companions = null!;
+    PetServer _pets = null!;
+    WildlifeServer _wildlife = null!;
 
     readonly ENetConnection _host = new();
     readonly Dictionary<ENetPacketPeer, ServerClient> _clients = new();
@@ -132,7 +134,7 @@ public partial class NetServer : Node
         _profiles = new ProfileServer(_ctx, Progression, UnlockAll, Weapons, Perks, CamoData, Killstreaks, Join, OnProfileAttached, AllowSave);
         RegisterChatCommands();
         _garage = new GarageServer(_ctx, ArenaMode, MapDir, _fleet.Cars, () => Vehicles);
-        _minerals = new MineralsServer(_ctx, Progression, () => _wildlife?.Drops ?? Array.Empty<MineralDrop>());
+        _minerals = new MineralsServer(_ctx, Progression, () => _wildlife.Keeper.Drops);
         StatusInit();
         DemonInit();
         _match.Entities.Log = s => GD.PrintErr($"server: {s}");
@@ -144,8 +146,9 @@ public partial class NetServer : Node
         CitizenRules.Register(WorldEntityRegistry.Shared);
         _corpses = new CorpseBook(_match.Entities);
         InitBigfoot(); // after the corpse book, which follows the same despawns
-        InitPets();
-        InitWildlife();
+        _pets = new PetServer(_ctx, PetsData, AnimalData, _animals, ArenaMode, MapDir, Map);
+        _wildlife = new WildlifeServer(_ctx, WildlifeData, AnimalData, AnimalShapes, _animals, () => MapZonePoints, () => Clock.HourAt(_tick / (double)Wire.TickRate), () => Query,
+            ArenaMode, MapDir, Map, (a, by) => OnWildKilled(a, by), _minerals.OnDropped);
         _companions = new CompanionServer(_ctx, CompanionData, AnimalData, _animals.Companions, Progression, UnlockAll);
         InitThieves();
         InitHarvester();
@@ -253,10 +256,10 @@ public partial class NetServer : Node
         CitizensTick(dt);
         _audit?.Lap(3);
         pt = Prof.Lap(Prof.S.Citizens, pt);
-        PetsTick(dt);
+        _pets.Tick(dt);
         _audit?.Lap(4);
         pt = Prof.Lap(Prof.S.Pets, pt);
-        WildlifeTick(dt);
+        _wildlife.Tick(dt);
         _companions.Tick();
         _animals.Done(); // the animals have ticked: the players move from here on
         _audit?.Lap(5);

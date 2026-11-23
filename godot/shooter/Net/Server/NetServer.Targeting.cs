@@ -56,8 +56,8 @@ public partial class NetServer
     void AddAnimalTargets(List<HitTarget> list)
     {
         var partT = Prof.Begin(Prof.S.TargetsAnimals);
-        AddPetTargets(list);
-        AddWildlifeTargets(list);
+        _pets.AddTargets(list);
+        _wildlife.AddTargets(list);
         Prof.End(Prof.S.TargetsAnimals, partT);
     }
 

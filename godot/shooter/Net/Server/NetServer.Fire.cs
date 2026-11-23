@@ -136,7 +136,7 @@ public partial class NetServer
         if (hit is { } h)
         {
             // a wild animal under any hitscan weapon: where the bullet entered its body, taken before the hit can remove it (the hunter's log keeps it; a sniper's shooter is also shown it)
-            var hunt = WildlifeRules.IsHitId(h.Id) ? HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
+            var hunt = WildlifeRules.IsHitId(h.Id) ? _wildlife.HuntShotOf(targets, h.Id, N(from + along * h.Distance), before + h.Distance, (byte)shot.WeaponIndex, h.ShapeHead) : null;
             var dealT = Prof.Begin(Prof.S.FireDeal);
             var dealt = Deal(c.Id, (byte)shot.WeaponIndex, h.Id, HitMath.HitscanDamage(w, before + h.Distance, h.Head), h.Head, false, shot: hunt, shotDistance: before + h.Distance);
             Prof.End(Prof.S.FireDeal, dealT);

@@ -51,7 +51,7 @@ public partial class NetServer
         foreach (var (id, t) in totals)
         {
             // a wild animal's hit diagram: where the first pellet that hit it entered (taken before the hit can remove it)
-            var shot = WildlifeRules.IsHitId(id) && t.First >= 0 ? HuntShotOf(targets, id, N(eye + dirsG[t.First] * t.FirstDistance), t.FirstDistance, weaponIdx, t.FirstShapeHead) : null;
+            var shot = WildlifeRules.IsHitId(id) && t.First >= 0 ? _wildlife.HuntShotOf(targets, id, N(eye + dirsG[t.First] * t.FirstDistance), t.FirstDistance, weaponIdx, t.FirstShapeHead) : null;
             Deal(c.Id, weaponIdx, id, t.Damage, t.Head, false, shot: shot, shotDistance: t.First >= 0 ? t.FirstDistance : null);
         }
         for (var i = 0; i < dirs.Length; i++) BaleShot(N(eye), dirs[i], Math.Min(walls[i], range)); // any bale a pellet passes catches fire (#331)

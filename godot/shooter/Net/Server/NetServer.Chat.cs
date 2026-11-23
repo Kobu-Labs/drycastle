@@ -28,8 +28,8 @@ public partial class NetServer
     {
         _chat.Register("bots", ChatBots);
         _chat.Register("spawn", (c, args) => ChatSpawn(c, args[0]));
-        _chat.Register("unicorn", (c, _) => ChatUnicorn(c));
-        _chat.Register("phoenix", (c, _) => ChatPhoenix(c));
+        _chat.Register("unicorn", _wildlife.ChatUnicorn);
+        _chat.Register("phoenix", _wildlife.ChatPhoenix);
         _chat.Register("sandbox", ChatSandbox);
         _chat.Register("give", ChatGive);
         _chat.Register("companion", _companions.ChatCommand);
@@ -78,27 +78,6 @@ public partial class NetServer
         if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a vehicle."); return; }
         if (TrySpawnVehicle(c, (byte)kind, AdminVehicleCap) is { } why) { ChatTo(c, ChatLineKind.Error, why); return; }
         ChatTo(c, ChatLineKind.Info, $"Spawned a {id} in front of you.");
-    }
-
-    /// <summary>"/phoenix" (admins, a test): a Phoenix now, whatever the hour (<see cref="WildlifeKeeper.SpawnPhoenix"/>); the night counter is not touched, so the scheduled one still comes.</summary>
-    void ChatPhoenix(ServerClient c)
-    {
-        if (_wildlife == null || !_wildlife.Active) { ChatTo(c, ChatLineKind.Error, "There is no wildlife in this round."); return; }
-        if (_wildlife.SpawnPhoenix(_animals.Wild)) ChatTo(c, ChatLineKind.Info, "A Phoenix flies over the map.");
-        else ChatTo(c, ChatLineKind.Error, "No Phoenix: wildlife.json has none, or the map is full.");
-    }
-
-    /// <summary>"/unicorn" (admins, a test): an extra Unicorn on the ground 50 m in front of the player, past its flee_radius (40 m, animals.json) so it is not startled (see <see cref="WildlifeKeeper.SpawnExtra"/>).</summary>
-    void ChatUnicorn(ServerClient c)
-    {
-        if (_wildlife == null) { ChatTo(c, ChatLineKind.Error, "There is no wildlife on this map."); return; }
-        if (_match.Get(c.Id) is not { Life: PlayerLife.Alive }) { ChatTo(c, ChatLineKind.Error, "You must be alive to spawn a Unicorn."); return; }
-        var yaw = c.Body.Yaw;
-        var at = c.Body.GlobalPosition + new Vector3(-Mathf.Sin(yaw), 0, -Mathf.Cos(yaw)) * 50f;
-        if (Query.Ground(MoverKind.Player, at, 60f, 200f) is { } ground) at = ground.Position;
-        if (_wildlife.SpawnExtra(Mysteries.Unicorn, N(at), _animals.Wild))
-            ChatTo(c, ChatLineKind.Info, "A Unicorn stands in front of you.");
-        else ChatTo(c, ChatLineKind.Error, "No room for a Unicorn here (no ground, or the map is full).");
     }
 
     /// <summary>
