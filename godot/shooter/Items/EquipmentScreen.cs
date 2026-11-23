@@ -103,7 +103,7 @@ public sealed partial class EquipmentScreen : Control
         right.AddChild(_companionGrid);
         RefreshCompanions();
         _client.ItemsChanged += OnItemsChanged;
-        _client.CompanionsChanged += OnCompanionsChanged;
+        _client.Companions.Changed += OnCompanionsChanged;
     }
 
     ItemCell MakeCell(CellRef at, Glyph.Kind? ghost)
@@ -178,8 +178,8 @@ public sealed partial class EquipmentScreen : Control
     /// </summary>
     void RefreshCompanions()
     {
-        var owned = _client.CompanionsOwned;
-        var locked = _client.CompanionsLocked;
+        var owned = _client.Companions.Owned;
+        var locked = _client.Companions.Locked;
         var shown = owned.Count + locked.Count;
         var want = Math.Max(1, shown);
         while (_companions.Count > want)
@@ -204,13 +204,13 @@ public sealed partial class EquipmentScreen : Control
             var def = i < owned.Count ? owned[i] : i < shown ? locked[i - owned.Count] : -1;
             var view = PortraitOf(i, def);
             if (def < 0) { _companions[i].SetPicture(null, Strings.T("companion.none"), false); continue; }
-            var name = _client.CompanionName(def);
+            var name = _client.Companions.NameOf(def);
             if (i >= owned.Count)
             {
-                _companions[i].SetPicture(view?.Picture, Strings.F("companion.locked", name, Strings.T(TierKey(_client.CompanionTier(def)))), false, locked: true);
+                _companions[i].SetPicture(view?.Picture, Strings.F("companion.locked", name, Strings.T(TierKey(_client.Companions.TierOf(def)))), false, locked: true);
                 continue;
             }
-            var isOut = def == _client.CompanionOut;
+            var isOut = def == _client.Companions.Out;
             _companions[i].SetPicture(view?.Picture, isOut ? Strings.F("companion.out", name) : name, isOut);
         }
     }
@@ -224,7 +224,7 @@ public sealed partial class EquipmentScreen : Control
         var (shown, view) = _portraits[cell];
         if (shown == def) return view;
         if (view != null) { _companions[cell].RemoveChild(view); view.QueueFree(); }
-        view = def < 0 ? null : _client.NewCompanionPortrait(def);
+        view = def < 0 ? null : _client.Companions.NewPortrait(def);
         if (view != null) { view.Live = _open; _companions[cell].AddChild(view); }
         _portraits[cell] = (def, view);
         return view;
@@ -346,10 +346,10 @@ public sealed partial class EquipmentScreen : Control
     void PickCompanion(ItemCell cell)
     {
         if (_wait.Active || !_open) return;
-        var owned = _client.CompanionsOwned;
+        var owned = _client.Companions.Owned;
         if (cell.Locked) { cell.Refuse(); return; } // not earned yet: its tooltip says how
-        if (cell.Ref.Index >= owned.Count || owned[cell.Ref.Index] == _client.CompanionOut) return;
-        _client.RequestCompanion(owned[cell.Ref.Index]);
+        if (cell.Ref.Index >= owned.Count || owned[cell.Ref.Index] == _client.Companions.Out) return;
+        _client.Companions.Request(owned[cell.Ref.Index]);
         Sfx.Ui("ui.click");
         _wait.Begin(Time.GetTicksMsec() / 1000.0);
     }
@@ -432,6 +432,6 @@ public sealed partial class EquipmentScreen : Control
     public override void _ExitTree()
     {
         _client.ItemsChanged -= OnItemsChanged;
-        _client.CompanionsChanged -= OnCompanionsChanged;
+        _client.Companions.Changed -= OnCompanionsChanged;
     }
 }

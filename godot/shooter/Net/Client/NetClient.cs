@@ -11,6 +11,7 @@ using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Bunkers;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
@@ -139,6 +140,10 @@ public partial class NetClient : Node
     TurretsClient _turrets = null!;
     ScudClient _scud = null!;
     AnimalsClient _animals = null!;
+    /// <summary>The Companions the player can pick and the one that is out (the Equipment screen's picker).</summary>
+    public CompanionsClient Companions { get; private set; } = null!;
+    /// <summary>companions.json: set by the host (the index of a Companion in it is what the wire carries).</summary>
+    public CompanionsFile CompanionData = new();
     /// <summary>animals.json: set by the host (the species table; the species index of a state is a position in it).</summary>
     public AnimalsFile AnimalData = new();
     /// <summary>The hit shapes of the species: set by the host. The client only draws them (the hit diagram); the server tests bullets against them.</summary>
@@ -248,7 +253,7 @@ public partial class NetClient : Node
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
         _animals = new AnimalsClient(Ctx, AnimalData, AnimalShapes, WildlifeData, _driveClient);
-        InitCompanions();
+        Companions = new CompanionsClient(Ctx, CompanionData, AnimalData);
         InitFlocks();
         InitBigfoot();
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
@@ -409,8 +414,8 @@ public partial class NetClient : Node
     void RenderCreatures(double delta)
     {
         _animals.Render();
-        RenderCompanions();
-        TickCompanionMarks();
+        Companions.Render();
+        Companions.TickMarks();
         RenderFlocks(delta);
         RenderBigfoot();
         _citizens.Render();
@@ -548,7 +553,7 @@ public partial class NetClient : Node
         Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
         OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
-        OnCompanionEvent(kind, payload); // the Companions the player can pick and the one that is out
+        Companions.OnEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
         _thieves.OnVoiceEvent(kind, payload); // a Gang member says a line (ticket 09)
         OnBigfootEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
