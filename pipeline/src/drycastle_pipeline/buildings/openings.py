@@ -49,6 +49,7 @@ draws exactly these numbers. Everything is in the map frame of ``meshes.building
 """
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 
@@ -59,15 +60,11 @@ from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb, roof_frame
-from drycastle_pipeline.config import PIPELINE_DIR
-from drycastle_pipeline.meshes import (
-    Mesh,
-    _polygons,
-    _roof_regions,
-    _split_edge,
-    triangulate,
-)
+from drycastle_pipeline.buildings.footprint import footprint_polygon, roof_frame
+from drycastle_pipeline.buildings.meshes import _roof_regions, _split_edge
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.config import PIPELINE_DIR
+from drycastle_pipeline.core.mesh import Mesh, solid_polygons, triangulate
 
 DETAILS_DIR = PIPELINE_DIR / "config" / "buildings"
 KINDS = ("window", "door", "garage_door", "recess")
@@ -280,66 +277,125 @@ def _on_part(d: Detail, ring: list, part_ring: list, first: bool) -> Detail:
     return out
 
 
-def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
-    """Visual mesh of building ``b`` with the detail ``d`` applied, and its window panes."""
-    if b.get("roof_part"):
-        from drycastle_pipeline.meshes import split_parts
+@dataclass
+class _RoofModel:
+    """The roof plane of a building: ``top(x, y)`` the height the walls rise to there (never below the eave), ``z(x, y)`` the roof
+    height itself (it keeps sloping past the walls, for the overhang). ``regions`` are the roof's planes in the roof's own frame
+    (turned by ``angle``) and ``boundary`` where they meet; all empty for a flat roof."""
 
-        ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
-        parts = split_parts(b)
-        subs = [_on_part(d, ring, list(orient(footprint_polygon(p["footprint"]), 1.0).exterior.coords)[:-1], k == 0) for k, p in enumerate(parts)]
-        placed = {o.id for sub in subs for o in sub.openings}
-        lost = [o.id for o in d.openings if o.id not in placed]
-        if lost:
-            raise DetailError(f"{d.id} opening {lost[0]}: does not fit one wall of a part of the building (it crosses where roof_part cuts the footprint)")
-        if any(sub.dormers for sub in subs[1:]):
-            raise DetailError(f"{d.id}: dormers go on the main part only")
-        # the main part's roof overhangs only where the whole building's would: not over the parts behind it (their flat
-        # roof may be as high as its top) and without the spike a mitred corner makes where the cut meets a wall at a slant
-        whole = orient(footprint_polygon(b["footprint"]), 1.0)
-        outline = whole.buffer(d.overhang_m, join_style=2, mitre_limit=3.0) if d.overhang_m else whole
-        others = unary_union([footprint_polygon(p["footprint"]) for p in parts[1:]]) if len(parts) > 1 else None
-        parts[0] = {**parts[0], "_roof_clip": outline.difference(others) if others is not None else outline}
-        built = [build_detail(p, sub) for p, sub in zip(parts, subs)]
-        return Mesh.concat([m for m, _ in built]), [t for _, tags in built for t in tags]
-    poly = orient(footprint_polygon(b["footprint"]), 1.0)
+    flat: bool
+    eave: float
+    angle: float
+    regions: list
+    boundary: object
+    top: Callable[[float, float], float]
+    z: Callable[[float, float], float]
+
+
+def _roof_model(b: dict, poly: Polygon) -> _RoofModel:
     eave, rise, roof = float(b["eave_height_m"]), float(b["roof_height_m"]), b["roof"]
-    wall_c, roof_c = b["wall_colour"], b["roof_colour"]
-    flat = roof == "flat" or rise <= 0
+    if roof == "flat" or rise <= 0:
+        return _RoofModel(True, eave, 0.0, [], None, lambda x, y: eave, lambda x, y: eave)
+    angle, cu, cv, a, bb = roof_frame(poly, b["ridge_dir"], hipped=roof == "hipped")
+    regions = _roof_regions(roof, cu, cv, a, bb)
+    height = _unclamped_height(roof, rise, cu, cv, a, bb)
+    ca, sa = math.cos(angle), math.sin(angle)
 
-    if flat:
-        angle = 0.0
+    def top(x: float, y: float) -> float:
+        u, v = x * ca + y * sa, -x * sa + y * ca
+        return eave + max(0.0, height(u, v))
 
-        def top(x: float, y: float) -> float:
-            return eave
+    def roof_z(x: float, y: float) -> float:
+        u, v = x * ca + y * sa, -x * sa + y * ca
+        return eave + height(u, v)
 
-        boundary = None
-        regions: list[Polygon] = []
-        height = None
-    else:
-        angle, cu, cv, a, bb = roof_frame(poly, b["ridge_dir"], hipped=roof == "hipped")
-        regions = _roof_regions(roof, cu, cv, a, bb)
-        height = _unclamped_height(roof, rise, cu, cv, a, bb)
-        ca, sa = math.cos(angle), math.sin(angle)
+    boundary = rotate(
+        unary_union([r.exterior for r in regions]), angle, origin=(0, 0), use_radians=True
+    )
+    return _RoofModel(False, eave, angle, regions, boundary, top, roof_z)
 
-        def top(x: float, y: float) -> float:
-            u, v = x * ca + y * sa, -x * sa + y * ca
-            return eave + max(0.0, height(u, v))
 
-        boundary = rotate(
-            unary_union([r.exterior for r in regions]), angle, origin=(0, 0), use_radians=True
+def _build_split_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
+    """``build_detail`` of a building ``roof_part`` cuts in parts: each part with the openings on its walls, then joined."""
+    from drycastle_pipeline.buildings.meshes import split_parts
+
+    ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
+    parts = split_parts(b)
+    subs = [_on_part(d, ring, list(orient(footprint_polygon(p["footprint"]), 1.0).exterior.coords)[:-1], k == 0) for k, p in enumerate(parts)]
+    placed = {o.id for sub in subs for o in sub.openings}
+    lost = [o.id for o in d.openings if o.id not in placed]
+    if lost:
+        raise DetailError(f"{d.id} opening {lost[0]}: does not fit one wall of a part of the building (it crosses where roof_part cuts the footprint)")
+    if any(sub.dormers for sub in subs[1:]):
+        raise DetailError(f"{d.id}: dormers go on the main part only")
+    # the main part's roof overhangs only where the whole building's would: not over the parts behind it (their flat
+    # roof may be as high as its top) and without the spike a mitred corner makes where the cut meets a wall at a slant
+    whole = orient(footprint_polygon(b["footprint"]), 1.0)
+    outline = whole.buffer(d.overhang_m, join_style=2, mitre_limit=3.0) if d.overhang_m else whole
+    others = unary_union([footprint_polygon(p["footprint"]) for p in parts[1:]]) if len(parts) > 1 else None
+    parts[0] = {**parts[0], "_roof_clip": outline.difference(others) if others is not None else outline}
+    built = [build_detail(p, sub) for p, sub in zip(parts, subs)]
+    return Mesh.concat([m for m, _ in built]), [t for _, tags in built for t in tags]
+
+
+def _emit_opening(out: _Tris, windows: list, d: Detail, o: Opening, base: float, edge: int, ops: list, to3, out_n) -> None:
+    """One opening of wall ``edge`` at depth ``base``: its recess frame, then its pane (a window, with a tag) or its back panel; then its children."""
+    x0, x1 = o.at_m, o.at_m + o.width_m
+    z0, z1 = o.sill_m, o.sill_m + o.height_m
+    r = base + o.recess_m
+    mid = to3((x0 + x1) / 2, (z0 + z1) / 2, (base + r) / 2)
+    frame = hex_to_rgb(d.frame_colour)
+    for (sa_, za_), (sb_, zb_) in (
+        ((x0, z0), (x1, z0)), ((x1, z0), (x1, z1)), ((x1, z1), (x0, z1)), ((x0, z1), (x0, z0))
+    ):
+        out.quad(
+            [to3(sa_, za_, base), to3(sb_, zb_, base), to3(sb_, zb_, r), to3(sa_, za_, r)],
+            hex_to_rgb(o.colour or DEFAULT_PANEL["recess"]) if o.kind == "recess" else frame,
+            mid,
         )
+    kids = [k for k in ops if k.parent == o.id]
+    outside = to3((x0 + x1) / 2, (z0 + z1) / 2, -1.0)
+    if o.kind == "window":
+        pane = _Tris()
+        pane.quad([to3(x0, z0, r), to3(x1, z0, r), to3(x1, z1, r), to3(x0, z1, r)], GLASS, outside)
+        centre = to3((x0 + x1) / 2, (z0 + z1) / 2, r)
+        meta = {
+            "building": d.id,
+            "id": o.id,
+            "node": f"window_{d.id}_{o.id}",
+            "kind": "window",
+            "edge": edge,
+            "breakable": o.breakable,
+            "confidence": o.confidence,
+            "width_m": o.width_m,
+            "height_m": o.height_m,
+            "centre": [round(centre[0], 3), round(centre[1], 3), round(centre[2], 3)],
+            "normal": [round(out_n[0], 4), round(out_n[1], 4)],
+        }
+        windows.append(WindowTag(d.id, o.id, pane.mesh(), meta))
+    else:
+        colour = hex_to_rgb(o.colour or DEFAULT_PANEL[o.kind])
+        back = Polygon(
+            [(x0, z0), (x1, z0), (x1, z1), (x0, z1)],
+            [[(k.at_m, k.sill_m), (k.at_m + k.width_m, k.sill_m),
+              (k.at_m + k.width_m, k.sill_m + k.height_m), (k.at_m, k.sill_m + k.height_m)]
+             for k in kids],
+        )
+        for tri in triangulate(orient(back, 1.0)):
+            a0, a1, a2 = tri
+            area = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0])
+            order = (a0, a1, a2) if area > 0 else (a0, a2, a1)
+            out.add([to3(*c, r) for c in order], colour)
+    for k in kids:
+        _emit_opening(out, windows, d, k, r, edge, ops, to3, out_n)
 
-    out = _Tris()
-    windows: list[WindowTag] = []
-    ring = list(poly.exterior.coords)[:-1]
-    by_edge: dict[int, list[Opening]] = {}
+
+def _add_walls(
+    out: _Tris, windows: list, d: Detail, ring: list, by_edge: dict[int, list[Opening]], roof: _RoofModel, wall_c
+) -> None:
+    """The wall of every edge of the footprint, up to the roof, with a hole for each opening; the openings are emitted into the holes."""
     n_edges = len(ring)
-    for o in d.openings:
-        if not 0 <= o.edge < n_edges:
-            raise DetailError(f"{d.id} opening {o.id}: edge {o.edge} not in 0..{n_edges - 1}")
-        by_edge.setdefault(o.edge, []).append(o)
-
+    top = roof.top
     for i, p in enumerate(ring):
         q = ring[(i + 1) % n_edges]
         length = math.dist(p, q)
@@ -347,7 +403,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             continue
         ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
         out_n = (uy, -ux)  # outward normal of a counter-clockwise ring
-        chain = _split_edge(p, q, boundary, top)
+        chain = _split_edge(p, q, roof.boundary, top)
         shell = [(0.0, 0.0), (length, 0.0)]
         shell += [(math.dist(p, c), top(*c)) for c in reversed(chain)]
         holes = []
@@ -374,81 +430,27 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             out.add([to3(*c) for c in order], wall_c)
 
         edge_ops = by_edge.get(i, [])
-
-        def emit(o: Opening, base: float, edge=i, ops=edge_ops, to3=to3, out_n=out_n) -> None:
-            x0, x1 = o.at_m, o.at_m + o.width_m
-            z0, z1 = o.sill_m, o.sill_m + o.height_m
-            r = base + o.recess_m
-            mid = to3((x0 + x1) / 2, (z0 + z1) / 2, (base + r) / 2)
-            frame = hex_to_rgb(d.frame_colour)
-            for (sa_, za_), (sb_, zb_) in (
-                ((x0, z0), (x1, z0)), ((x1, z0), (x1, z1)), ((x1, z1), (x0, z1)), ((x0, z1), (x0, z0))
-            ):
-                out.quad(
-                    [to3(sa_, za_, base), to3(sb_, zb_, base), to3(sb_, zb_, r), to3(sa_, za_, r)],
-                    hex_to_rgb(o.colour or DEFAULT_PANEL["recess"]) if o.kind == "recess" else frame,
-                    mid,
-                )
-            kids = [k for k in ops if k.parent == o.id]
-            outside = to3((x0 + x1) / 2, (z0 + z1) / 2, -1.0)
-            if o.kind == "window":
-                pane = _Tris()
-                pane.quad([to3(x0, z0, r), to3(x1, z0, r), to3(x1, z1, r), to3(x0, z1, r)], GLASS, outside)
-                centre = to3((x0 + x1) / 2, (z0 + z1) / 2, r)
-                meta = {
-                    "building": d.id,
-                    "id": o.id,
-                    "node": f"window_{d.id}_{o.id}",
-                    "kind": "window",
-                    "edge": edge,
-                    "breakable": o.breakable,
-                    "confidence": o.confidence,
-                    "width_m": o.width_m,
-                    "height_m": o.height_m,
-                    "centre": [round(centre[0], 3), round(centre[1], 3), round(centre[2], 3)],
-                    "normal": [round(out_n[0], 4), round(out_n[1], 4)],
-                }
-                windows.append(WindowTag(d.id, o.id, pane.mesh(), meta))
-            else:
-                colour = hex_to_rgb(o.colour or DEFAULT_PANEL[o.kind])
-                back = Polygon(
-                    [(x0, z0), (x1, z0), (x1, z1), (x0, z1)],
-                    [[(k.at_m, k.sill_m), (k.at_m + k.width_m, k.sill_m),
-                      (k.at_m + k.width_m, k.sill_m + k.height_m), (k.at_m, k.sill_m + k.height_m)]
-                     for k in kids],
-                )
-                for tri in triangulate(orient(back, 1.0)):
-                    a0, a1, a2 = tri
-                    area = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0])
-                    order = (a0, a1, a2) if area > 0 else (a0, a2, a1)
-                    out.add([to3(*c, r) for c in order], colour)
-            for k in kids:
-                emit(k, r)
-
         for o in edge_ops:
             if o.parent is None:
-                emit(o, 0.0)
+                _emit_opening(out, windows, d, o, 0.0, i, edge_ops, to3, out_n)
 
-    # roof, with overhang: pieces of the grown footprint, heights continue the roof plane
+
+def _add_roof(out: _Tris, windows: list, d: Detail, b: dict, poly: Polygon, ring: list, roof: _RoofModel, roof_c) -> None:
+    """The roof, with overhang (pieces of the grown footprint, heights continue the roof plane), its underside and its dormers."""
     grown = poly.buffer(d.overhang_m, join_style=2, mitre_limit=3.0) if d.overhang_m else poly
     if b.get("_roof_clip") is not None:
-        grown = max(_polygons(grown.intersection(b["_roof_clip"])), key=lambda g: g.area, default=poly)
-    if flat:
+        grown = max(solid_polygons(grown.intersection(b["_roof_clip"])), key=lambda g: g.area, default=poly)
+    if roof.flat:
         pieces = [grown]
-        roof_z = lambda x, y: eave
     else:
-        local = rotate(grown, -angle, origin=(0, 0), use_radians=True)
+        local = rotate(grown, -roof.angle, origin=(0, 0), use_radians=True)
         pieces = []
-        for r in regions:
+        for r in roof.regions:
             pieces += [
-                rotate(g, angle, origin=(0, 0), use_radians=True)
-                for g in _polygons(local.intersection(r))
+                rotate(g, roof.angle, origin=(0, 0), use_radians=True)
+                for g in solid_polygons(local.intersection(r))
             ]
-
-        def roof_z(x: float, y: float) -> float:
-            u, v = x * ca + y * sa, -x * sa + y * ca
-            return eave + height(u, v)
-
+    roof_z = roof.z
     for piece in pieces:
         for tri in triangulate(piece):
             v3 = [(x, y, roof_z(x, y)) for x, y in tri]
@@ -460,11 +462,33 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                 under = [(x, y, z - ROOF_THICKNESS_M) for x, y, z in reversed(v3)]
                 out.add(under, SOFFIT_COLOUR)
     for dm in d.dormers:
-        if flat:
+        if roof.flat:
             raise DetailError(f"{d.id} dormer {dm.id}: the roof is flat")
-        if not 0 <= dm.edge < n_edges:
-            raise DetailError(f"{d.id} dormer {dm.id}: edge {dm.edge} not in 0..{n_edges - 1}")
+        if not 0 <= dm.edge < len(ring):
+            raise DetailError(f"{d.id} dormer {dm.id}: edge {dm.edge} not in 0..{len(ring) - 1}")
         _add_dormer(out, windows, d, dm, ring, roof_z, roof_c)
+
+
+def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
+    """Visual mesh of building ``b`` with the detail ``d`` applied, and its window panes."""
+    if b.get("roof_part"):
+        return _build_split_detail(b, d)
+    poly = orient(footprint_polygon(b["footprint"]), 1.0)
+    wall_c, roof_c = b["wall_colour"], b["roof_colour"]
+    roof = _roof_model(b, poly)
+
+    out = _Tris()
+    windows: list[WindowTag] = []
+    ring = list(poly.exterior.coords)[:-1]
+    by_edge: dict[int, list[Opening]] = {}
+    n_edges = len(ring)
+    for o in d.openings:
+        if not 0 <= o.edge < n_edges:
+            raise DetailError(f"{d.id} opening {o.id}: edge {o.edge} not in 0..{n_edges - 1}")
+        by_edge.setdefault(o.edge, []).append(o)
+
+    _add_walls(out, windows, d, ring, by_edge, roof, wall_c)
+    _add_roof(out, windows, d, b, poly, ring, roof, roof_c)
     for tri in triangulate(poly):
         a0, a1, a2 = tri
         area = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0])

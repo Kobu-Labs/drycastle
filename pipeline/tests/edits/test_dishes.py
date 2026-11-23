@@ -5,10 +5,10 @@ import math
 
 from shapely.geometry import LineString
 
-from drycastle_pipeline.assets import load_manifest, validate_asset_ref
-from drycastle_pipeline.building_detail import Detail, Opening
-from drycastle_pipeline.dishes import DISH_ASSET, add_dishes, plan_dishes
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.buildings.openings import Detail, Opening
+from drycastle_pipeline.core.assets import load_manifest, validate_asset_ref
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.edits.dishes import DISH_ASSET, add_dishes, plan_dishes
 
 CFG = load_section("dishes")
 ROAD = [LineString([(-50, -8), (50, -8)])]  # south of a house at the origin

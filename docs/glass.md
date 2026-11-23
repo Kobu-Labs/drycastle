@@ -57,7 +57,7 @@ The motorcycle, quad and amphibious transport have no glass. The utility helicop
 | Server | `godot/shooter/Net/NetServer.Glass.cs` |
 | Client state | `godot/shooter/Net/NetClient.Glass.cs` |
 | Client visuals | `godot/shooter/GlassFx.cs` (`WarmUp` draws both shaders once at join so their pipelines compile before the first hit), `shaders/glass_crack.gdshader`, `shaders/glass_shards.gdshader` |
-| Model scripts that write the pane list | `scripts/models/make_bus_model.py`, `make_flak_model.py`, `make_utility_helicopter_model.py`, `make_golf_mk2_model.py` (`GlassSet` in the flak script) |
+| Model scripts that write the pane list | `scripts/models/make_bus_model.py`, `make_flak_model.py`, `make_utility_helicopter_model.py`, `make_golf_mk2_model.py` (`GlassSet` in `scripts/lib/glass.py`) |
 | Pane kind and cover rules | `godot/ShooterCore/Vehicles/PaneRules.cs`, `RiderRules.BulletsReach` |
 | Tests | `godot/ShooterCore.Tests/Glass/GlassTests.cs`, `SeatCoverTests.cs` |
 

@@ -2,6 +2,29 @@
 
 Details for the map pipeline (`pipeline/`). Setup and the make targets are in the [README](../README.md).
 
+## Code layout
+
+`pipeline/src/drycastle_pipeline/` (tests mirror it in `pipeline/tests/<package>/`). The package `__init__.py` files are
+empty on purpose: some modules import each other lazily inside functions, and an eager `__init__` would turn that into cycles.
+`cli.py` lists the stages (`STAGE_MODULES`: name -> module with `run`).
+
+| Package | Holds |
+|---|---|
+| `core/` | config, rules.yaml loader, bounding-box maths (`geo`), local frame, polite HTTP, disk cache, asset manifest, textures, `Mesh`, colour and geometry helpers |
+| `sources/` | the download stages: `fetch`, `ortho`, `ortho_trees` |
+| `photos/` | street-level photos (Street View, Mapillary), the live Street View follower, and the photo-to-building tools |
+| `parcels/` | `normalise`, the parcel registry, the parcels stage (`build`), hand-edited outlines |
+| `ground/` | ground attributes and areas, hand-drawn ground patches and their meshes |
+| `terrain/` | the height grid, natural water beds, water bodies |
+| `roads/` | the roads stage and street lamps |
+| `buildings/` | the rules stage (`derive`), footprints, building meshes, wall openings; `buildings/landmarks/` the hand-modelled landmarks (flats, garage, office, church interior, bunker, ...) |
+| `props/` | fences, trees, ground objects, spawns (the props stage) and their meshes |
+| `detail/` | ground detail: patches, clutter, crops, meadow, dike, the Rust engine bridge |
+| `kits/` | generated structures built from parts: utility poles, connectors, flood wall, graves, `prim:*` primitives |
+| `export/` | scene assembly per chunk and the export stage |
+| `preview/` | pictures of the map, poles, flood wall, graves, fences and ground detail |
+| `edits/` | `edits.json` schema and lock, zones, sketch file, `parcel-run`/`patch-run`, dishes, house connections; `edits/mcp/` the MCP server (see [mcp.md](mcp.md)) |
+
 ## Configuring the map and fetching data
 
 The map is the village inside an outline. Set it in a local, gitignored file:
@@ -102,7 +125,7 @@ any other. Today P-0073 (the dike strip, with a hut) and P-0754 (a 13 ha field w
 ### Ground attributes (ADR 0015, 0022)
 
 A ground type ticks the attributes it carries, under `attributes` of its entry. The attributes are a fixed catalog in
-code (`ground/attributes.py`, mirrored in `godot/viewer/GroundTypeEdits.cs`); the editor groups them by relation:
+code (`ground/attributes.py`, mirrored in `godot/viewer/Edits/GroundTypeEdits.cs`); the editor groups them by relation:
 
 | Group | Attribute | Value |
 |---|---|---|
@@ -450,10 +473,10 @@ chunk and role, not one per tree. The surface of a hit (wood or foliage) comes f
 **Per-tree hiding (map 0.12.0, `"base_uv2": true` in `trees.json`'s `model`).** Every props mesh that has tree triangles carries a
 second UV set (glTF `TEXCOORD_1`, Godot `UV2`, two floats per vertex): for a tree's vertices the tree's base point (`x`, `y` of its
 record, on the ground at the trunk centre) as (POSITION x, POSITION z) of that mesh, i.e. `x` and `-y` of the map frame; for every
-other vertex (fences) `export.NO_TREE_UV2` (1e6, 1e6). So `MODEL_MATRIX * vec4(UV2.x, VERTEX.y, UV2.y, 1.0)` is the world point
+other vertex (fences) `export/gltf.py` `NO_TREE_UV2` (1e6, 1e6). So `MODEL_MATRIX * vec4(UV2.x, VERTEX.y, UV2.y, 1.0)` is the world point
 of the tree base, and a vertex shader can drop a whole tree near the player with the chunk still one draw. Meshes without trees have
 no UV2. It is written by `export.to_trimesh` from `Mesh.bases` (set by `propmeshes.trees_mesh`) and renamed from trimesh's
-`_UV2` by `export.export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
+`_UV2` by `export/gltf.py` `export_glb`, which every GLB that may hold trees (chunks, `parcel-run --glb`) goes through.
 
 **Ground objects (`ground_objects.json`, map 0.13.0, `files.ground_objects`; `props.ground_objects` in `rules.yaml`).** Objects
 on the forest floor (all solid but the fallen logs, #359), placed by the props stage (`props/groundobjects.py`, seeded per 25 m cell of the canopy mask, so reruns are identical;
@@ -554,7 +577,7 @@ objects (a circle of half the footprint diagonal plus 0.3 m), water patches and 
   **Mud and puddles** (`mud` and `puddle` layers and textures, `detail.forest.mud`): a few patches per hectare outside the swamp, in damp spots
   (a noise like moss's, likelier in hollows) and along the edge of the paths and tracks (`track`, `path`, `footway`; one candidate about every
   30 m of the way, from the way's own stream so every tile and parcel it crosses agrees), a small puddle in the middle of a third of them.
-* **swamp ground** (`detail.swamp`; `detail.swamp_zone`; Rust `wet.rs`): ground of the types `swamp.kinds` (`forest`, `meadow`)
+* **swamp ground** (`detail.swamp`; `detail/swamp.py` `swamp_zone`; Rust `wet.rs`): ground of the types `swamp.kinds` (`forest`, `meadow`)
   within the reach of water gets a wet floor in place of the plain one. The zone is `props.wet_zone` (water ground areas and the wet
   areas of water patches) buffered by `props.trees.stands.swamp.reach_m` (25 m), the very zone the swamp stand of trees stands in, so trees and ground
   agree; the Rust engine is handed it as `swamp` in its input. Inside it: a dark wet-earth base (`swamp` layer, flat colours `swamp.colours`,
@@ -662,7 +685,7 @@ one parcel top-down from the real patches, textures and clutter meshes into `out
 ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
 point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one core) and writes the same four files
 (`detail.json`, `detail_patches.npy`, `detail_patches.json`, `detail_meadow.bin`, formats unchanged, so the export and the game read
-them as before). The stage runs on the Rust engine only; the Python build (`detail.run_reference`, `build_village_detail`) stays as the
+them as before). The stage runs on the Rust engine only; the Python build (`detail.run_reference`, `detail/build.py` `build_village_detail`) stays as the
 reference the tests compare it with and is not a stage.
 
 The same module also does three jobs for other stages. Each has its Python reference, gives the reference's output (not merely an
@@ -714,7 +737,7 @@ implemented.
 a density raster, `work/detail_meadow.bin`, copied by the export as `meadow.bin` (`files.meadow`): 2 m cells, one byte per cell per layer (tuft, flower, fern, pebble,
 litter, floor), zlib per chunk, about 0.7 MB for the village. A cell is on it only where its whole jitter window is free ground (no buildings, fences, roads, objects, water patches)
 and the density comes from the recipe's zones (edge band, tone and litter patches, bare soil, near a trunk) times smooth noise; see `detail.meadow` in `rules.yaml` and
-`detail/meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `detail_preview --meadow` draws what the game would generate for a parcel.
+`detail/meadow.py`. The game generates the instances at run time (`docs/viewer-and-editor.md`, "Meadow clutter"). `preview/detail.py --meadow` draws what the game would generate for a parcel.
 
 **Clumps and species zones (map 0.10.0, `meadow.bin` format 3).** Growth is patchy, not even: the meadow density is multiplied by a smoothed noise per layer
 (`detail.meadow.layers.<name>.clump`, patches of `clump_m`), and the stored garden tufts likewise (`detail.clutter.tuft.clump`); where nobody mows (within `unmown_m` of a fence, a wall or a
@@ -724,7 +747,7 @@ nibble the dryness (8 = neutral, 10 tint units a step: drier at a field's edge, 
 `flower` buttercups, `litter` leaves and sticks, `floor` moss mounds and branches (the fern and pebble layers keep their kinds). A puddle patch gets nothing at all. A layer lists per mix which kinds it makes and in what shares (a mix names only the
 layers it changes), so a patch of one mix grows one set of species with strays. `meadow.bin` has a kind table (with the tint flag), the mixes per layer, and the zone plane after the layers (format in `detail/meadow.py`).
 
-**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail/meshes.py`; `detail_preview --kinds` draws a contact sheet to `out/detail/kinds.png`):
+**Kinds (map 0.10.0).** `clutter_meshes.glb` has 28 tiny meshes (3 to 30 triangles, `detail/meshes.py`; `preview/detail.py --kinds` draws a contact sheet to `out/detail/kinds.png`):
 the grasses `tuft`, `tall_grass` (seed heads), `straw` (dry), `clover` (a flat mat), `reed` (by water) and `weed` (broad leaves), `fern`; the wild flowers `dandelion` (with a puffball), `daisy`,
 `red_clover`, `buttercup`, `poppy`, `cornflower`, `yarrow` (umbels); the garden flowers `tulip`, `sunflower`, `spike` (hollyhock or lupin) and `rose` (a bush); and `pebble`, `rock`, `leaf`, `stick`
 (and `flower`, the first mixed-flower mesh, which no recipe uses any more); and the forest floor (`detail_meshes.FOREST_FLOOR`, meadow only): `mushroom` (three caps), `branch` (1.3 m, lying, 30 triangles), `moss_mound` (0.7 m dome), `fern_big` (0.7 m, tintable) and `stump_small` (0.27 m, rotten). Wild and garden flowers are kept apart: a yard (garden and plot recipes) grows garden flowers only, in one-species clusters

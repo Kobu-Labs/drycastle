@@ -14,8 +14,8 @@ from collections.abc import Callable, Sequence
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
 
 Pt = tuple[float, float, float]
 Face = tuple[Sequence[Pt], list[int]]  # convex polygon, colour
@@ -197,7 +197,7 @@ def church_solids(detail: bool = True) -> _Solids:
         S.box(x0 - 0.03, x1 + 0.03, y0 - 0.03, y1 + 0.03, 0.0, 0.6, pl)
 
     # nave (hollow: walls, floor, gallery, pews, see church_interior) and its gabled roof
-    from drycastle_pipeline.church_interior import AISLES, build_shell
+    from drycastle_pipeline.buildings.landmarks.church_interior import AISLES, build_shell
 
     build_shell(S, detail, y, pl)
     S.gable(nx0, nx1, -7.3, 14.0, z_eave, z_ridge, rf, y, oh=0.35)
@@ -268,36 +268,36 @@ MODELS: dict[str, Callable[[bool], _Solids]] = {"church": church_solids}
 
 def _bunker(b: dict, detail: bool) -> Mesh:
     """Pillbox on the real footprint; ``model_axis`` is the bearing the door faces."""
-    from drycastle_pipeline.bunker import bunker_mesh
+    from drycastle_pipeline.buildings.landmarks.bunker import bunker_mesh
 
     a = float(b["model_axis"])
     return bunker_mesh(b["footprint"]["exterior"], (math.cos(a), math.sin(a)), detail)
 
 
 def _office(b: dict, detail: bool) -> Mesh:
-    """Municipal office of P-0288: one hipped roof over three footprints (see ``office.py``)."""
-    from drycastle_pipeline.office import office_mesh
+    """Municipal office of P-0288: one hipped roof over three footprints (see ``buildings/landmarks/office.py``)."""
+    from drycastle_pipeline.buildings.landmarks.office import office_mesh
 
     return office_mesh(b, detail)
 
 
 def _flats(b: dict, detail: bool) -> Mesh:
-    """Block of flats Drycastle 295 (P-0561): loggias, balconies, staircase block (see ``flats.py``)."""
-    from drycastle_pipeline.flats import flats_mesh
+    """Block of flats Drycastle 295 (P-0561): loggias, balconies, staircase block (see ``buildings/landmarks/flats.py``)."""
+    from drycastle_pipeline.buildings.landmarks.flats import flats_mesh
 
     return flats_mesh(b, detail)
 
 
 def _loggia_house(b: dict, detail: bool) -> Mesh:
-    """Flat-roofed house with corner loggias and a recessed staircase bay (see ``loggia_house.py``)."""
-    from drycastle_pipeline.loggia_house import loggia_house_mesh
+    """Flat-roofed house with corner loggias and a recessed staircase bay (see ``buildings/landmarks/loggia_house.py``)."""
+    from drycastle_pipeline.buildings.landmarks.loggia_house import loggia_house_mesh
 
     return loggia_house_mesh(b, detail)
 
 
 def _bus_garage(b: dict, detail: bool) -> Mesh:
-    """Bus garage of P-0666: a hollow bay with a doorway and a solid side part under rusty lean-to roofs (see ``garage.py``)."""
-    from drycastle_pipeline.garage import garage_mesh
+    """Bus garage of P-0666: a hollow bay with a doorway and a solid side part under rusty lean-to roofs (see ``buildings/landmarks/garage.py``)."""
+    from drycastle_pipeline.buildings.landmarks.garage import garage_mesh
 
     return garage_mesh(b, detail)
 

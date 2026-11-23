@@ -1,11 +1,11 @@
 """Measure a building from a photo (``.claude/skills/photo-to-building``): fit a camera to the photo on the building's
 known footprint, then turn pixels on a wall into metres.
 
-    uv run python -m drycastle_pipeline.landmark_photo grid PHOTO --out DIR
-    uv run python -m drycastle_pipeline.landmark_photo fit PHOTO BUILDING --view X,Y --cam CAM.json POINT [POINT ...]
-    uv run python -m drycastle_pipeline.landmark_photo measure CAM.json --edge I X,Y [X,Y ...]
-    uv run python -m drycastle_pipeline.landmark_photo sample PHOTO X,Y [--white X,Y]
-    uv run python -m drycastle_pipeline.landmark_photo overlay PHOTO CAM.json BUILDING [...] --model NAME --out DIR
+    uv run python -m drycastle_pipeline.photos.landmark_photo grid PHOTO --out DIR
+    uv run python -m drycastle_pipeline.photos.landmark_photo fit PHOTO BUILDING --view X,Y --cam CAM.json POINT [POINT ...]
+    uv run python -m drycastle_pipeline.photos.landmark_photo measure CAM.json --edge I X,Y [X,Y ...]
+    uv run python -m drycastle_pipeline.photos.landmark_photo sample PHOTO X,Y [--white X,Y]
+    uv run python -m drycastle_pipeline.photos.landmark_photo overlay PHOTO CAM.json BUILDING [...] --model NAME --out DIR
 
 ``grid`` writes the photo with a labelled 50 px grid, to read pixel coordinates off. ``fit`` takes points of the building
 seen in the photo, each ``WHERE:LEVEL:X,Y``: WHERE is a footprint corner (``c0``, ``c1``, ...) or the ridge end over an
@@ -19,9 +19,9 @@ camera sees it over the photo (``overlay.png``): where the two do not line up, t
 The short way, for ordinary houses (the output is a building detail, ``config/buildings/<id>.yaml``, plus the building's
 entry in ``config/overrides.yaml``; no code):
 
-    uv run python -m drycastle_pipeline.landmark_photo prep w378920410 --out DIR                  (its captures: footprint + grids)
-    uv run python -m drycastle_pipeline.landmark_photo prep G-xxxx --photo PHOTO --view X,Y --out DIR   (a photo of your own)
-    uv run python -m drycastle_pipeline.landmark_photo apply SHEET.json --out DIR [--replace] [--dry]
+    uv run python -m drycastle_pipeline.photos.landmark_photo prep w378920410 --out DIR                  (its captures: footprint + grids)
+    uv run python -m drycastle_pipeline.photos.landmark_photo prep G-xxxx --photo PHOTO --view X,Y --out DIR   (a photo of your own)
+    uv run python -m drycastle_pipeline.photos.landmark_photo apply SHEET.json --out DIR [--replace] [--dry]
 
 ``apply`` does fit, measure, sample, the two files and the overlay from one sheet::
 
@@ -61,12 +61,13 @@ A colour may also be given as ``"#rrggbb"``. ``"white": [x, y]`` is a white surf
 import argparse
 import json
 import math
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-from drycastle_pipeline.landmark_tools import _buildings, _local, _raster
+from drycastle_pipeline.photos.landmark_tools import _buildings, _local, _raster
 
 LEVELS = ("ground", "eave", "top")
 
@@ -314,8 +315,8 @@ def building_box(c: dict, ring, margin: float = 0.12) -> tuple[float, float, flo
 
 
 def overlay(photo: Path, cam_path: Path, ids: list[str], model: str | None, out: Path) -> Path:
-    from drycastle_pipeline.landmarks import build_landmark
-    from drycastle_pipeline.meshes import Mesh
+    from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
+    from drycastle_pipeline.core.mesh import Mesh
 
     bs = _buildings(ids)
     if model:
@@ -337,7 +338,7 @@ def _from_capture(ph: dict, bid: str) -> dict:
     number, or a path to its ``.json``); nothing for an entry that gives ``photo`` and ``view`` itself."""
     if "capture" not in ph:
         return {}
-    from drycastle_pipeline.photo_capture import PHOTOS_DIR
+    from drycastle_pipeline.photos.photo_capture import PHOTOS_DIR
 
     side = Path(str(ph["capture"]))
     if not side.suffix:
@@ -353,8 +354,8 @@ def _derived(bid: str, ov: dict) -> dict:
     """The building as the rules stage would make it with these overrides (no ``make rules`` needed)."""
     from shapely.geometry import shape
 
-    from drycastle_pipeline.buildings import derive_building, load_building_rules
-    from drycastle_pipeline.landmark_tools import WORK
+    from drycastle_pipeline.buildings.derive import derive_building, load_building_rules
+    from drycastle_pipeline.photos.landmark_tools import WORK
 
     b = _buildings([bid])[0]
     feats = json.loads((WORK / "normalised" / "buildings.geojson").read_text())
@@ -400,22 +401,22 @@ def _upsert_locked(path: Path, bid: str, comment: str, fields: dict, replace: bo
     path.write_text("\n".join(lines) + "\n")
 
 
-def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
-    """The whole measuring pass from one sheet (see the module docstring): fit every photo, measure the openings, sample
-    the colours, write ``config/buildings/<id>.yaml`` and the building's entry in ``overrides.yaml``, and draw the
-    result over each photo."""
-    from drycastle_pipeline.building_detail import (
-        DETAILS_DIR,
-        DetailError,
-        build_detail,
-        parse_detail,
-    )
-    from drycastle_pipeline.config import PIPELINE_DIR
-    from drycastle_pipeline.meshes import Mesh
+@dataclass
+class _Measured:
+    """What the fitted photos of a sheet say: ``(photo, cam_path, rms_px, bad)`` per photo, the candidate eaves, tops and ridges
+    (each with its photo's fit error first), the measured openings, the roof profiles and what went wrong on the way."""
 
-    sheet = json.loads(sheet_path.read_text())
-    bid = _buildings([sheet["building"]])[0]["id"]
-    ring = _buildings([bid])[0]["footprint"]["exterior"]
+    cams: list = field(default_factory=list)
+    eaves: list = field(default_factory=list)
+    tops: list = field(default_factory=list)
+    ridges: list = field(default_factory=list)
+    openings: list = field(default_factory=list)
+    problems: list = field(default_factory=list)
+    profiles: list = field(default_factory=list)
+
+
+def _sheet_roof(sheet: dict) -> tuple[str, bool]:
+    """The roof type a sheet asks for, and whether it is ``slope_then_flat``; stops on a roof or a sheet that cannot be built."""
     roof = sheet.get("roof", "gabled")
     if roof not in ("gabled", "flat", "hipped", "slope_then_flat"):
         raise SystemExit(f"roof '{roof}': gabled, flat, hipped or slope_then_flat. Anything else needs a hand-modelled landmark (LANDMARK.md)")
@@ -423,8 +424,30 @@ def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
     stf = roof == "slope_then_flat"
     if stf and not profiled and ("gable_edge" not in sheet or "main_corner" not in sheet):
         raise SystemExit("slope_then_flat needs gable_edge (the side wall on which the roof's profile is seen) and main_corner (the end of that edge at the low, sloped front)")
-    photos = sheet.get("photos") or [sheet]
-    cams, eaves, tops, ridges, openings, problems, profiles = [], [], [], [], [], [], []
+    return roof, stf
+
+
+def _add_opening(m: _Measured, o: dict, cam_path: Path, ring, good: bool) -> None:
+    """Measure one opening of the sheet on the fitted camera and add it to ``m.openings`` (or, when it does not fit the wall, to ``m.problems``)."""
+    (s0, z0), (s1, z1) = measure(cam_path, int(o["edge"]), [tuple(p) for p in o["px"]])
+    length = math.dist(ring[o["edge"]], ring[(o["edge"] + 1) % len(ring)])
+    a, w = min(s0, s1), abs(s1 - s0)
+    sill, h = (0.0, max(z0, z1)) if o["kind"] != "window" and min(z0, z1) < 0.5 else (min(z0, z1), abs(z1 - z0))
+    if a < 0.1 or a + w > length - 0.1 or w < 0.3 or h < 0.3:
+        m.problems.append(f"opening on edge {o['edge']} at px {o['px']} does not fit the wall ({a:.2f} + {w:.2f} of {length:.2f} m): left out")
+        return
+    k = sum(1 for x in m.openings if x["kind"] == o["kind"]) + 1
+    m.openings.append({
+        "id": f"{o['kind'][0]}{k}", "kind": o["kind"], "edge": int(o["edge"]), "at_m": round(a, 2), "width_m": round(w, 2),
+        "height_m": round(h, 2), "sill_m": round(max(0.0, sill), 2), "recess_m": 0.12,
+        **({"colour": o["colour"]} if o.get("colour") else {}),
+        "confidence": "medium" if good else "low",
+    })  # fmt: skip
+
+
+def _measure_photos(sheet: dict, photos: list[dict], bid: str, ring, out: Path) -> _Measured:
+    """Fit the camera of every photo of the sheet (``cam_<n>.json`` in ``out``) and read eave, top, ridge, roof profile and openings off each."""
+    m = _Measured()
     for n, ph in enumerate(photos):
         ph.update(_from_capture(ph, bid))
         photo = Path(ph["photo"])
@@ -432,90 +455,149 @@ def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
         cam_path = out / f"cam_{n}.json"
         fit(photo, [bid], tuple(ph["view"]), cam_path, ph["points"], float(ph.get("cam_height", 2.5)), ph.get("pose"))
         meta = json.loads(cam_path.read_text())
-        cams.append((photo, cam_path, meta["rms_px"], meta["bad"]))
+        m.cams.append((photo, cam_path, meta["rms_px"], meta["bad"]))
         if meta["bad"]:
-            problems.append(f"photo {n}: fit error {meta['rms_px']:.0f} px, its numbers are not used")
+            m.problems.append(f"photo {n}: fit error {meta['rms_px']:.0f} px, its numbers are not used")
             continue
         if not meta.get("grounded", True):
-            problems.append(f"photo {n}: no ground point, heights may be 0.5 m off")
+            m.problems.append(f"photo {n}: no ground point, heights may be 0.5 m off")
         if meta["eave"] is not None:
             # the photo with the most points is trusted first: three points fit any camera, and say little
-            eaves.append((-len(ph["points"]), meta["rms_px"], meta["eave"]))
+            m.eaves.append((-len(ph["points"]), meta["rms_px"], meta["eave"]))
         if meta["top"] is not None:
-            tops.append((meta["rms_px"], meta["top"]))
+            m.tops.append((meta["rms_px"], meta["top"]))
         if meta.get("ridge_at") is not None and any(pt.startswith(f"r{sheet.get('gable_edge')}:") for pt in ph["points"]):
-            ridges.append((meta["rms_px"], meta["ridge_at"]))
+            m.ridges.append((meta["rms_px"], meta["ridge_at"]))
         if ph.get("profile"):  # the roof's outline on a side wall: its peak and, when it can be seen, where it ends
             print(f"  roof profile on edge {ph['profile']['edge']}:")
-            profiles.append((meta["rms_px"], int(ph["profile"]["edge"]), measure(cam_path, int(ph["profile"]["edge"]), [tuple(p) for p in ph["profile"]["px"]], beyond=True), meta["eave"]))
+            m.profiles.append((meta["rms_px"], int(ph["profile"]["edge"]), measure(cam_path, int(ph["profile"]["edge"]), [tuple(p) for p in ph["profile"]["px"]], beyond=True), meta["eave"]))
         for o in ph.get("openings", []):
-            (s0, z0), (s1, z1) = measure(cam_path, int(o["edge"]), [tuple(p) for p in o["px"]])
-            length = math.dist(ring[o["edge"]], ring[(o["edge"] + 1) % len(ring)])
-            a, w = min(s0, s1), abs(s1 - s0)
-            sill, h = (0.0, max(z0, z1)) if o["kind"] != "window" and min(z0, z1) < 0.5 else (min(z0, z1), abs(z1 - z0))
-            if a < 0.1 or a + w > length - 0.1 or w < 0.3 or h < 0.3:
-                problems.append(f"opening on edge {o['edge']} at px {o['px']} does not fit the wall ({a:.2f} + {w:.2f} of {length:.2f} m): left out")
-                continue
-            k = sum(1 for x in openings if x["kind"] == o["kind"]) + 1
-            openings.append({
-                "id": f"{o['kind'][0]}{k}", "kind": o["kind"], "edge": int(o["edge"]), "at_m": round(a, 2), "width_m": round(w, 2),
-                "height_m": round(h, 2), "sill_m": round(max(0.0, sill), 2), "recess_m": 0.12,
-                **({"colour": o["colour"]} if o.get("colour") else {}),
-                "confidence": "medium" if meta["good"] else "low",
-            })  # fmt: skip
+            _add_opening(m, o, cam_path, ring, meta["good"])
+    return m
+
+
+def _chosen_eave(sheet: dict, eaves: list) -> float | None:
+    """The eave height: the sheet's own, else the one of the photo with the most points (or, when the photos disagree, their mean)."""
     eave = float(sheet["eave_m"]) if sheet.get("eave_m") else (min(eaves)[2] if eaves else None)
     if eave is not None and not sheet.get("eave_m") and len(eaves) > 1:
         vals = [e for *_, e in eaves]
         if max(vals) - min(vals) > 0.3:  # no photo is plainly the better one: the middle of what they say
             eave = sum(vals) / len(vals)
-    if profiles and eave is not None and roof in ("gabled", "slope_then_flat"):
-        # The roof is read off its outline on a side wall, not declared: the peak says how high and how far in the ridge
-        # is, the end says whether the roof comes down again (a gable) or stays up (one slope, then flat). A gable is
-        # taken as symmetric about its ridge, so the peak's distance from the house's corner also gives the house's
-        # width: when that is less than the footprint's wall, the roof covers only that part of the footprint.
-        _, pe, pts, own_eave = min(profiles)
-        length = math.dist(ring[pe], ring[(pe + 1) % len(ring)])
-        lift = eave - own_eave if own_eave is not None else 0.0  # heights of this photo, hung on the eave that was chosen
-        pts = [(s_, z_ + lift) for s_, z_ in pts]
-        s_p, z_p = pts[0]
-        first = s_p <= length / 2  # the house's corner is the end of the edge the peak is nearer to
-        d_p = s_p if first else length - s_p
-        end = pts[1] if len(pts) > 1 else None
-        d_e = None if end is None else (end[0] if first else length - end[0])
-        stays_up = end is not None and end[1] > eave + 0.6 * (z_p - eave) and d_e > d_p + 0.5
-        width = 2 * d_p
-        rise = z_p - eave
-        if not stays_up and (width < 4.0 or width > length + 1.0 or rise < 0.6 or rise / max(d_p, 0.1) > 1.8):
-            # no house is 2.7 m wide, and no roof is steeper than 60 degrees: the peak was not the ridge (a half-hip, a
-            # misread pixel). Keep what is likely: the roof spans the whole wall, the ridge over its middle, at a
-            # height a 38 degree roof would reach unless the measured one is believable for that span
-            was = f"ridge {d_p:.1f} m in at {z_p:.2f} m (a {width:.1f} m house, rise {rise:.1f} m)"
-            d_p, width, first = length / 2, length, True
-            s_p = length / 2
-            if not 0.25 * d_p <= rise <= 1.2 * d_p:
-                z_p = eave + 0.78 * d_p
-            problems.append(f"the roof outline read as {was} is not believable: built as a gable over the whole {length:.1f} m wall, ridge at {z_p:.2f} m. Check the roof")
-        if stays_up:
-            roof, stf = "slope_then_flat", True
-            print(f"roof read from the profile: one slope {d_p:.2f} m deep up to {z_p:.2f} m, then flat (its far end is still {end[1]:.2f} m up)")
+    return eave
+
+
+def _roof_from_profile(sheet: dict, ring, m: _Measured, eave: float) -> tuple[str, bool]:
+    """Read the roof off its outline on a side wall, not off what the sheet declares. Returns the roof and whether it is
+    ``slope_then_flat``; sets ``gable_edge``, ``main_corner`` and maybe ``main_only`` in the sheet and the top and ridge in ``m``.
+
+    The peak says how high and how far in the ridge is, the end says whether the roof comes down again (a gable) or stays up
+    (one slope, then flat). A gable is taken as symmetric about its ridge, so the peak's distance from the house's corner also
+    gives the house's width: when that is less than the footprint's wall, the roof covers only that part of the footprint."""
+    problems = m.problems
+    _, pe, pts, own_eave = min(m.profiles)
+    length = math.dist(ring[pe], ring[(pe + 1) % len(ring)])
+    lift = eave - own_eave if own_eave is not None else 0.0  # heights of this photo, hung on the eave that was chosen
+    pts = [(s_, z_ + lift) for s_, z_ in pts]
+    s_p, z_p = pts[0]
+    first = s_p <= length / 2  # the house's corner is the end of the edge the peak is nearer to
+    d_p = s_p if first else length - s_p
+    end = pts[1] if len(pts) > 1 else None
+    d_e = None if end is None else (end[0] if first else length - end[0])
+    stays_up = end is not None and end[1] > eave + 0.6 * (z_p - eave) and d_e > d_p + 0.5
+    width = 2 * d_p
+    rise = z_p - eave
+    if not stays_up and (width < 4.0 or width > length + 1.0 or rise < 0.6 or rise / max(d_p, 0.1) > 1.8):
+        # no house is 2.7 m wide, and no roof is steeper than 60 degrees: the peak was not the ridge (a half-hip, a
+        # misread pixel). Keep what is likely: the roof spans the whole wall, the ridge over its middle, at a
+        # height a 38 degree roof would reach unless the measured one is believable for that span
+        was = f"ridge {d_p:.1f} m in at {z_p:.2f} m (a {width:.1f} m house, rise {rise:.1f} m)"
+        d_p, width, first = length / 2, length, True
+        s_p = length / 2
+        if not 0.25 * d_p <= rise <= 1.2 * d_p:
+            z_p = eave + 0.78 * d_p
+        problems.append(f"the roof outline read as {was} is not believable: built as a gable over the whole {length:.1f} m wall, ridge at {z_p:.2f} m. Check the roof")
+    if stays_up:
+        roof, stf = "slope_then_flat", True
+        print(f"roof read from the profile: one slope {d_p:.2f} m deep up to {z_p:.2f} m, then flat (its far end is still {end[1]:.2f} m up)")
+    else:
+        roof, stf = "gabled", False
+        if d_e is not None and abs(d_e - width) > 0.2 * width + 0.3:
+            problems.append(f"the roof's two slopes differ (peak {d_p:.1f} m in, far end {d_e:.1f} m in): built symmetric about the ridge, {width:.1f} m wide")
+        print(f"roof read from the profile: gable, ridge {d_p:.2f} m in at {z_p:.2f} m, house {width:.2f} m wide on a {length:.2f} m wall")
+    sheet.update({"gable_edge": pe, "main_corner": pe if first else (pe + 1) % len(ring)})
+    if not stays_up and width < length - 0.6:
+        sheet["main_only"] = True
+        print(f"  the footprint's wall is {length - width:.1f} m longer than the house: the pitched roof covers the house only")
+    m.tops, m.ridges = [(0.0, z_p)], [(0.0, s_p / length)]
+    return roof, stf
+
+
+def _slope_then_flat_part(ov: dict, sheet: dict, ring, ridges: list, top: float) -> None:
+    """Add the ``roof_part`` of a ``slope_then_flat`` roof to ``ov``: one slope from the low front wall up to the roof's top,
+    flat from there back. The footprint is cut along the line where the slope ends; the front strip gets the slope,
+    everything behind it is a flat block as high as the top."""
+    from shapely.geometry import Polygon
+
+    n_r, ge, corner = len(ring), sheet["gable_edge"], sheet["main_corner"]
+    if corner not in (ge, (ge + 1) % n_r):
+        raise SystemExit(f"main_corner {corner} is not an end of gable_edge {ge}")
+    p, q = np.array(ring[ge]), np.array(ring[(ge + 1) % n_r])
+    length = float(np.linalg.norm(q - p))
+    if not ridges:
+        raise SystemExit(f"slope_then_flat needs the point where the slope ends on the side wall: r{ge}:top:X,Y in a photo that fits")
+    depth = min(ridges)[1] * length if corner == ge else (1 - min(ridges)[1]) * length  # from the front corner to where the slope ends
+    # the front wall is the other edge at main_corner; inward is on its left (the ring is counter-clockwise)
+    fe = (ge - 1) % n_r if corner == ge else (ge + 1) % n_r
+    a, b2 = np.array(ring[fe]), np.array(ring[(fe + 1) % n_r])
+    u = (b2 - a) / np.linalg.norm(b2 - a)
+    n_in = np.array([-u[1], u[0]])
+    strip = Polygon([a - u * 60 - n_in, b2 + u * 60 - n_in, b2 + u * 60 + n_in * depth, a - u * 60 + n_in * depth])
+    part = Polygon(ring).intersection(strip)
+    part = max(getattr(part, "geoms", [part]), key=lambda g: g.area)
+    ov["roof_part"] = [[round(x, 3), round(y, 3)] for x, y in part.exterior.coords[:-1]]
+    ov["rest_height_m"] = round(float(sheet.get("rest_height_m", top)), 2)
+    ov["ridge_dir"] = round(math.atan2(u[1], u[0]) % (2 * math.pi), 4)  # the high edge on the left: inside
+    print(f"slope: {depth:.2f} m deep from the front wall (edge {fe}), then flat at {ov['rest_height_m']:.2f} m")
+
+
+def _main_only_part(ov: dict, sheet: dict, ring, ridges: list, roof: str, problems: list) -> None:
+    """Add the ``roof_part`` of a house whose pitched roof covers only the house behind the gable wall to ``ov``: the strip of
+    the footprint as wide as that wall."""
+    from shapely.geometry import Polygon
+
+    if roof != "gabled" or "gable_edge" not in sheet:
+        raise SystemExit("main_only needs a gabled roof and gable_edge: the gable wall of the main house")
+    ge = sheet["gable_edge"]
+    p, q = np.array(ring[ge]), np.array(ring[(ge + 1) % len(ring)])
+    length = float(np.linalg.norm(q - p))
+    u = (q - p) / length
+    n_in = np.array([-u[1], u[0]])
+    s0, s1 = 0.0, length  # the house's gable wall along the edge, from its first corner
+    corner = sheet.get("main_corner")
+    if corner is not None and ridges:
+        # the house's own corner on the gable wall is known and the ridge was measured: the ridge of a gable is over
+        # its middle, so the wall reaches as far past the ridge as the corner is before it (also past the edge's end)
+        at = min(ridges)[1] * length
+        if corner == ge:
+            s0, s1 = 0.0, 2 * at
+        elif corner == (ge + 1) % len(ring):
+            s0, s1 = length - 2 * (length - at), length
         else:
-            roof, stf = "gabled", False
-            if d_e is not None and abs(d_e - width) > 0.2 * width + 0.3:
-                problems.append(f"the roof's two slopes differ (peak {d_p:.1f} m in, far end {d_e:.1f} m in): built symmetric about the ridge, {width:.1f} m wide")
-            print(f"roof read from the profile: gable, ridge {d_p:.2f} m in at {z_p:.2f} m, house {width:.2f} m wide on a {length:.2f} m wall")
-        sheet.update({"gable_edge": pe, "main_corner": pe if first else (pe + 1) % len(ring)})
-        if not stays_up and width < length - 0.6:
-            sheet["main_only"] = True
-            print(f"  the footprint's wall is {length - width:.1f} m longer than the house: the pitched roof covers the house only")
-        tops, ridges = [(0.0, z_p)], [(0.0, s_p / length)]
-    top = float(sheet["top_m"]) if sheet.get("top_m") else (min(tops)[1] if tops else None)
-    if eave is None:
-        raise SystemExit("no usable eave height: no photo fitted. Re-read the points on grid.png, or give eave_m (and top_m) in the sheet")
-    if roof != "flat" and top is None:
-        # a guessed ridge has built roofs twice the height of the real one: without a measured ridge the building gets its
-        # walls and openings under a flat roof, and says so
-        problems.append(f"NO RIDGE MEASURED (no r<edge>:top point in a photo that fitted): written with a FLAT roof at the eave instead of a {roof} one. Needs a capture that shows the gable")
-        roof, stf, top = "flat", False, eave
+            raise SystemExit(f"main_corner {corner} is not an end of gable_edge {ge}")
+    elif corner is not None:
+        problems.append("main_corner given but no ridge point (r<edge>:top) fitted: the house is taken as wide as the gable edge")
+    a, b2 = p + u * (s0 - 0.05), p + u * (s1 + 0.05)
+    strip = Polygon([a - n_in, b2 - n_in, b2 + n_in * 300, a + n_in * 300])
+    part = Polygon(ring).intersection(strip)
+    part = max(getattr(part, "geoms", [part]), key=lambda g: g.area)
+    ov["roof_part"] = [[round(x, 3), round(y, 3)] for x, y in part.exterior.coords[:-1]]
+    ov["rest_height_m"] = float(sheet.get("rest_height_m", 2.8))
+    if "rest_height_m" not in sheet:
+        problems.append("height of the lower parts not measured: guessed 2.8 m (give rest_height_m)")
+
+
+def _override_fields(sheet: dict, ring, roof: str, stf: bool, eave: float, top: float, m: _Measured) -> dict:
+    """The building's entry in ``overrides.yaml`` (without the colours): roof type, heights, ridge direction and roof part."""
     ov = {"roof": "lean_to" if stf else roof, "height_m": round(top if roof != "flat" else eave, 2), "levels": 1 if eave < 4.2 else 2}
     if roof != "flat":
         ov["roof_height_m"] = round(top - eave, 2)
@@ -523,67 +605,18 @@ def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
         p, q = ring[sheet["gable_edge"]], ring[(sheet["gable_edge"] + 1) % len(ring)]
         ov["ridge_dir"] = round((math.atan2(q[1] - p[1], q[0] - p[0]) + math.pi / 2) % math.pi, 4)
     if stf:
-        # one slope from the low front wall up to the roof's top, flat from there back: the footprint is cut along the
-        # line where the slope ends; the front strip gets the slope, everything behind it is a flat block as high as the top
-        from shapely.geometry import Polygon
-
-        n_r, ge, corner = len(ring), sheet["gable_edge"], sheet["main_corner"]
-        if corner not in (ge, (ge + 1) % n_r):
-            raise SystemExit(f"main_corner {corner} is not an end of gable_edge {ge}")
-        p, q = np.array(ring[ge]), np.array(ring[(ge + 1) % n_r])
-        length = float(np.linalg.norm(q - p))
-        if not ridges:
-            raise SystemExit(f"slope_then_flat needs the point where the slope ends on the side wall: r{ge}:top:X,Y in a photo that fits")
-        depth = min(ridges)[1] * length if corner == ge else (1 - min(ridges)[1]) * length  # from the front corner to where the slope ends
-        # the front wall is the other edge at main_corner; inward is on its left (the ring is counter-clockwise)
-        fe = (ge - 1) % n_r if corner == ge else (ge + 1) % n_r
-        a, b2 = np.array(ring[fe]), np.array(ring[(fe + 1) % n_r])
-        u = (b2 - a) / np.linalg.norm(b2 - a)
-        n_in = np.array([-u[1], u[0]])
-        strip = Polygon([a - u * 60 - n_in, b2 + u * 60 - n_in, b2 + u * 60 + n_in * depth, a - u * 60 + n_in * depth])
-        part = Polygon(ring).intersection(strip)
-        part = max(getattr(part, "geoms", [part]), key=lambda g: g.area)
-        ov["roof_part"] = [[round(x, 3), round(y, 3)] for x, y in part.exterior.coords[:-1]]
-        ov["rest_height_m"] = round(float(sheet.get("rest_height_m", top)), 2)
-        ov["ridge_dir"] = round(math.atan2(u[1], u[0]) % (2 * math.pi), 4)  # the high edge on the left: inside
-        print(f"slope: {depth:.2f} m deep from the front wall (edge {fe}), then flat at {ov['rest_height_m']:.2f} m")
+        _slope_then_flat_part(ov, sheet, ring, m.ridges, top)
     if sheet.get("main_only") and not stf:
-        # the pitched roof covers only the house behind the gable wall: the strip of the footprint as wide as that wall
-        from shapely.geometry import Polygon
+        _main_only_part(ov, sheet, ring, m.ridges, roof, m.problems)
+    return ov
 
-        if roof != "gabled" or "gable_edge" not in sheet:
-            raise SystemExit("main_only needs a gabled roof and gable_edge: the gable wall of the main house")
-        ge = sheet["gable_edge"]
-        p, q = np.array(ring[ge]), np.array(ring[(ge + 1) % len(ring)])
-        length = float(np.linalg.norm(q - p))
-        u = (q - p) / length
-        n_in = np.array([-u[1], u[0]])
-        s0, s1 = 0.0, length  # the house's gable wall along the edge, from its first corner
-        corner = sheet.get("main_corner")
-        if corner is not None and ridges:
-            # the house's own corner on the gable wall is known and the ridge was measured: the ridge of a gable is over
-            # its middle, so the wall reaches as far past the ridge as the corner is before it (also past the edge's end)
-            at = min(ridges)[1] * length
-            if corner == ge:
-                s0, s1 = 0.0, 2 * at
-            elif corner == (ge + 1) % len(ring):
-                s0, s1 = length - 2 * (length - at), length
-            else:
-                raise SystemExit(f"main_corner {corner} is not an end of gable_edge {ge}")
-        elif corner is not None:
-            problems.append("main_corner given but no ridge point (r<edge>:top) fitted: the house is taken as wide as the gable edge")
-        a, b2 = p + u * (s0 - 0.05), p + u * (s1 + 0.05)
-        strip = Polygon([a - n_in, b2 - n_in, b2 + n_in * 300, a + n_in * 300])
-        part = Polygon(ring).intersection(strip)
-        part = max(getattr(part, "geoms", [part]), key=lambda g: g.area)
-        ov["roof_part"] = [[round(x, 3), round(y, 3)] for x, y in part.exterior.coords[:-1]]
-        ov["rest_height_m"] = float(sheet.get("rest_height_m", 2.8))
-        if "rest_height_m" not in sheet:
-            problems.append("height of the lower parts not measured: guessed 2.8 m (give rest_height_m)")
-    if len(eaves) > 1 and max(e for *_, e in eaves) - min(e for *_, e in eaves) > 0.3:
-        problems.append("the photos disagree on the eave: " + ", ".join(f"{e:.2f} m" for *_, e in eaves) + f"; used their mean, {eave:.2f} m. A ground point is probably off: re-read the wall's foot at the near corner in each")
+
+def _sheet_colours(sheet: dict, photos: list[dict], problems: list) -> dict[str, str | None]:
+    """The wall, roof and frame colours of the sheet (hex; a pixel of a photo is sampled): None where the sheet gives none or the
+    pixel is on the sky, which is reported in ``problems``."""
     col = sheet.get("colours", {})
     first = Path(photos[0]["photo"])
+    skyish: list[str] = []
 
     def colour(key, lift=1.0):
         spec = col.get(key)
@@ -600,43 +633,90 @@ def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
             return None
         return _hex(rgb * lift)
 
-    skyish: list[str] = []
     shade = 1.4 if col.get("wall_in_shade") and not col.get("white") else 1.0
-    if colour("wall", shade):
-        ov["wall_colour"] = colour("wall", shade)
-    if colour("roof"):
-        ov["roof_colour"] = colour("roof")
-    detail = {
-        "id": bid, "source": sheet.get("source", "photo"), "overhang_m": float(sheet.get("overhang_m", 0.3)),
-        **({"frame_colour": colour("frame", shade)} if colour("frame", shade) else {}), "openings": openings,
-    }  # fmt: skip
-    b = _derived(bid, ov)
-    while True:  # an opening the generated shell cannot hold (above its roof line, across a corner) is left out and reported
+    return {"wall": colour("wall", shade), "roof": colour("roof"), "frame": colour("frame", shade)}
+
+
+def _build_shell(b: dict, detail: dict, bid: str, problems: list):
+    """The building's mesh and window tags with its detail; an opening the generated shell cannot hold (above its roof line,
+    across a corner) is left out of ``detail`` and reported."""
+    from drycastle_pipeline.buildings.openings import DetailError, build_detail, parse_detail
+
+    openings = detail["openings"]
+    while True:
         try:
-            mesh, tags = build_detail(b, parse_detail(detail, bid))
-            break
+            return build_detail(b, parse_detail(detail, bid))
         except DetailError as e:
             bad = next((o for o in openings if f"opening {o['id']}:" in str(e)), None)
             if bad is None:
                 raise SystemExit(f"the detail does not build: {e}") from None
             openings.remove(bad)
             problems.append(f"{bad['kind']} on edge {bad['edge']} at {bad['at_m']} m, {bad['sill_m']} m up, left out: {str(e).split(': ', 1)[-1]}")
+
+
+def _write_building_files(bid: str, b: dict, sheet: dict, detail: dict, ov: dict, eave: float, fit_note: str, replace: bool) -> None:
+    """Write ``config/buildings/<id>.yaml`` and the building's entry in ``overrides.yaml``."""
+    import yaml
+
+    from drycastle_pipeline.buildings.openings import DETAILS_DIR
+    from drycastle_pipeline.core.config import PIPELINE_DIR
+
+    openings = detail["openings"]
+    lost = sheet.get("not_modelled", "")
+    head = [f"# {b['parcel']}: {sheet.get('what', 'house')}. Measured by landmark_photo (camera fit: {fit_note}).",
+            f"# Eave {eave:.2f} m, top {b['height_m']:.2f} m. Sides with no photo have no openings." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip
+    body = yaml.safe_dump({k: v for k, v in detail.items() if k != "openings"}, sort_keys=False, default_flow_style=False)
+    rows = "".join("  - {" + ", ".join(f"{k}: " + (f'"{v}"' if isinstance(v, str) and v.startswith("#") else str(v)) for k, v in o.items()) + "}\n" for o in openings)
+    (DETAILS_DIR / f"{bid}.yaml").write_text("\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))
+    _upsert_override(PIPELINE_DIR / "config" / "overrides.yaml", bid, f"{b['parcel']}: {sheet.get('what', 'house')}, from {sheet.get('source', 'a photo')}; openings in config/buildings/.", ov, replace)
+
+
+def apply(sheet_path: Path, out: Path, replace: bool, dry: bool) -> None:
+    """The whole measuring pass from one sheet (see the module docstring): fit every photo, measure the openings, sample
+    the colours, write ``config/buildings/<id>.yaml`` and the building's entry in ``overrides.yaml``, and draw the
+    result over each photo."""
+    from drycastle_pipeline.core.mesh import Mesh
+
+    sheet = json.loads(sheet_path.read_text())
+    bid = _buildings([sheet["building"]])[0]["id"]
+    ring = _buildings([bid])[0]["footprint"]["exterior"]
+    roof, stf = _sheet_roof(sheet)
+    photos = sheet.get("photos") or [sheet]
+    m = _measure_photos(sheet, photos, bid, ring, out)
+    problems = m.problems
+    eave = _chosen_eave(sheet, m.eaves)
+    if m.profiles and eave is not None and roof in ("gabled", "slope_then_flat"):
+        roof, stf = _roof_from_profile(sheet, ring, m, eave)
+    top = float(sheet["top_m"]) if sheet.get("top_m") else (min(m.tops)[1] if m.tops else None)
+    if eave is None:
+        raise SystemExit("no usable eave height: no photo fitted. Re-read the points on grid.png, or give eave_m (and top_m) in the sheet")
+    if roof != "flat" and top is None:
+        # a guessed ridge has built roofs twice the height of the real one: without a measured ridge the building gets its
+        # walls and openings under a flat roof, and says so
+        problems.append(f"NO RIDGE MEASURED (no r<edge>:top point in a photo that fitted): written with a FLAT roof at the eave instead of a {roof} one. Needs a capture that shows the gable")
+        roof, stf, top = "flat", False, eave
+    ov = _override_fields(sheet, ring, roof, stf, eave, top, m)
+    if len(m.eaves) > 1 and max(e for *_, e in m.eaves) - min(e for *_, e in m.eaves) > 0.3:
+        problems.append("the photos disagree on the eave: " + ", ".join(f"{e:.2f} m" for *_, e in m.eaves) + f"; used their mean, {eave:.2f} m. A ground point is probably off: re-read the wall's foot at the near corner in each")
+    colours = _sheet_colours(sheet, photos, problems)
+    if colours["wall"]:
+        ov["wall_colour"] = colours["wall"]
+    if colours["roof"]:
+        ov["roof_colour"] = colours["roof"]
+    detail = {
+        "id": bid, "source": sheet.get("source", "photo"), "overhang_m": float(sheet.get("overhang_m", 0.3)),
+        **({"frame_colour": colours["frame"]} if colours["frame"] else {}), "openings": m.openings,
+    }  # fmt: skip
+    b = _derived(bid, ov)
+    mesh, tags = _build_shell(b, detail, bid, problems)
     full = Mesh.concat([mesh, *(t.mesh for t in tags)])
-    for n, (photo, cam_path, _, bad) in enumerate(cams):
+    for n, (photo, cam_path, _, bad) in enumerate(m.cams):
         if not bad:
             overlay_mesh(photo, cam_path, full, out / f"overlay_{n}.png")
-    fit_note = ", ".join(f"photo {n} {rms:.0f} px" for n, (_, _, rms, _) in enumerate(cams))
-    lost = sheet.get("not_modelled", "")
+    fit_note = ", ".join(f"photo {n} {rms:.0f} px" for n, (_, _, rms, _) in enumerate(m.cams))
     if not dry:
-        import yaml
-
-        head = [f"# {b['parcel']}: {sheet.get('what', 'house')}. Measured by landmark_photo (camera fit: {fit_note}).",
-                f"# Eave {eave:.2f} m, top {b['height_m']:.2f} m. Sides with no photo have no openings." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip
-        body = yaml.safe_dump({k: v for k, v in detail.items() if k != "openings"}, sort_keys=False, default_flow_style=False)
-        rows = "".join("  - {" + ", ".join(f"{k}: " + (f'"{v}"' if isinstance(v, str) and v.startswith("#") else str(v)) for k, v in o.items()) + "}\n" for o in openings)
-        (DETAILS_DIR / f"{bid}.yaml").write_text("\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))
-        _upsert_override(PIPELINE_DIR / "config" / "overrides.yaml", bid, f"{b['parcel']}: {sheet.get('what', 'house')}, from {sheet.get('source', 'a photo')}; openings in config/buildings/.", ov, replace)
-    print(f"\n{bid}: {roof} roof, eave {eave:.2f} m, top {b['height_m']:.2f} m, {len(openings)} opening(s), colours {ov.get('wall_colour')} / {ov.get('roof_colour')}")
+        _write_building_files(bid, b, sheet, detail, ov, eave, fit_note, replace)
+    print(f"\n{bid}: {roof} roof, eave {eave:.2f} m, top {b['height_m']:.2f} m, {len(detail['openings'])} opening(s), colours {ov.get('wall_colour')} / {ov.get('roof_colour')}")
     for line in problems:
         print(f"PROBLEM: {line}")
     print("dry run: nothing written" if dry else f"written: config/buildings/{bid}.yaml and its entry in config/overrides.yaml")
@@ -665,8 +745,8 @@ def prep(ids: list[str], out: Path, photo: Path | None = None, view=None, max_ca
     """The first look in one call: the footprint with what each photo's viewpoint sees, and each photo with a grid.
     Without ``photo`` it takes the building's newest captures (``photo_capture``, the last ``max_captures``):
     ``grid_<n>.png`` for capture n."""
-    from drycastle_pipeline.landmark_tools import _edges, _seen, footprint
-    from drycastle_pipeline.photo_capture import PHOTOS_DIR
+    from drycastle_pipeline.photos.landmark_tools import _edges, _seen, footprint
+    from drycastle_pipeline.photos.photo_capture import PHOTOS_DIR
 
     if photo is not None:
         footprint(ids, view)

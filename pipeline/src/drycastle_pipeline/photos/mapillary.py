@@ -3,9 +3,9 @@
 Not a map stage: the photos are a visual reference for recreating buildings by hand, not an input
 of the generated map. Needs a client access token (``MAPILLARY_TOKEN``, see docs/mapillary.md).
 
-    python -m drycastle_pipeline.mapillary            # index of images in the bbox
-    python -m drycastle_pipeline.mapillary --download # also fetch the photos
-    python -m drycastle_pipeline.mapillary --near 16.8601,48.4044 --radius 40 --download
+    python -m drycastle_pipeline.photos.mapillary            # index of images in the bbox
+    python -m drycastle_pipeline.photos.mapillary --download # also fetch the photos
+    python -m drycastle_pipeline.photos.mapillary --near 16.8601,48.4044 --radius 40 --download
 
 Images are CC BY-SA 4.0; keep the creator in the index when using them.
 """
@@ -17,8 +17,8 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
-from drycastle_pipeline.config import load_dotenv, map_paths
-from drycastle_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline.core.config import load_dotenv, map_paths
+from drycastle_pipeline.core.http import HttpError, PoliteClient
 
 API = "https://graph.mapillary.com/images"
 TOKEN_ENV = "MAPILLARY_TOKEN"
@@ -72,7 +72,7 @@ def download(client: PoliteClient, images: list[dict], folder: Path) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="drycastle_pipeline.mapillary", description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(prog="drycastle_pipeline.photos.mapillary", description=__doc__.split("\n")[0])
     p.add_argument("--near", metavar="LON,LAT", help="only this spot instead of the whole map")
     p.add_argument("--radius", type=float, default=50.0, help="--near radius in metres (default 50)")
     p.add_argument("--download", action="store_true", help="also download the 2048 px photos")

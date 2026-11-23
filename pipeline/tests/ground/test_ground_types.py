@@ -1,21 +1,28 @@
 """Ground types of the user: overrides and additions in edits.json (``ground_types``), the merge with rules.yaml.
 
-A type is a named bundle of terrain attributes (``attributes``, the catalog of ``ground_attributes.py``); ``osm`` and ``rule``
+A type is a named bundle of terrain attributes (``attributes``, the catalog of ``ground/attributes.py``); ``osm`` and ``rule``
 say where it takes land from. It carries nothing a game system reads (ADR 0022)."""
 
 import json
 
 import pytest
 
-from drycastle_pipeline.edits import Edits, EditsError, dump_text, load_edits, parse, validate
-from drycastle_pipeline.ground import (
+from drycastle_pipeline.edits.schema import (
+    Edits,
+    EditsError,
+    dump_text,
+    load_edits,
+    parse,
+    validate,
+)
+from drycastle_pipeline.ground.areas import (
     ground_type_row,
     ground_type_source,
     ground_types,
     merge_ground_types,
     rules_ground_types,
 )
-from drycastle_pipeline.ground_attributes import ATTRIBUTES, GROUPS, TERRAIN_KEYS, carries_terrain
+from drycastle_pipeline.ground.attributes import ATTRIBUTES, GROUPS, TERRAIN_KEYS, carries_terrain
 
 
 def errs(types: dict) -> list[str]:
@@ -190,10 +197,10 @@ def test_the_editor_mirrors_the_attribute_catalog() -> None:
     """GroundTypeEdits.cs repeats the catalog (the editor cannot import Python): the attributes and the recipes."""
     import re
 
-    from drycastle_pipeline.config import REPO_ROOT
-    from drycastle_pipeline.ground_attributes import RECIPES
+    from drycastle_pipeline.core.config import REPO_ROOT
+    from drycastle_pipeline.ground.attributes import RECIPES
 
-    src = (REPO_ROOT / "godot" / "viewer" / "GroundTypeEdits.cs").read_text()
+    src = (REPO_ROOT / "godot" / "viewer" / "Edits" / "GroundTypeEdits.cs").read_text()
     assert all(f'"{k}"' in src for k in ATTRIBUTES)
     assert not any(f'"{k}"' in src for k in ("spawns", "event_spawn", "wildlife"))  # ground types are terrain only
     assert re.search(r"Recipes = \{ ([^}]*) \}", src).group(1).replace('"', "").split(", ") == list(RECIPES)

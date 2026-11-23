@@ -1,7 +1,7 @@
 """Pictures of the utility poles (matplotlib), for looking at the generator's work without the game.
 
-    uv run python -m drycastle_pipeline.poles_preview [--out DIR] [--glb] [--random N]
-    uv run python -m drycastle_pipeline.poles_preview --sync-manifest
+    uv run python -m drycastle_pipeline.preview.poles [--out DIR] [--glb] [--random N]
+    uv run python -m drycastle_pipeline.preview.poles --sync-manifest
 
 writes into ``out/poles`` (by default):
 
@@ -26,12 +26,12 @@ from pathlib import Path
 
 import numpy as np
 
-from drycastle_pipeline import poleparts as pp
-from drycastle_pipeline.assets import DEFAULT_MANIFEST
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.connectors import CONNECTORS, build_connector, mount_of
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poles import (
+from drycastle_pipeline.core.assets import DEFAULT_MANIFEST
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits import poleparts as pp
+from drycastle_pipeline.kits.connectors import CONNECTORS, build_connector, mount_of
+from drycastle_pipeline.kits.poles import (
     ARCHETYPES,
     VARIANTS,
     build_pole,
@@ -44,7 +44,7 @@ DEFAULT_OUT = REPO_ROOT / "out" / "poles"
 SKY, GROUND = "#dfe8f0", "#93a37a"
 _LIGHT = np.array([0.45, -0.5, 0.74]) / np.linalg.norm([0.45, -0.5, 0.74])
 SOURCE = ("https://github.com/Kobu-Labs/drycastle (generated utility pole, "
-          "pipeline/src/drycastle_pipeline/poles.py)")
+          "pipeline/src/drycastle_pipeline/kits/poles.py)")
 
 
 def _project(mesh: Mesh, az_deg: float, el_deg: float):
@@ -186,7 +186,7 @@ def connector_entries() -> list[dict]:
             "size_m": list(connector.size_m),
             "tags": ["house-connector", mount_of(name), "flat-colour", "primitive"],
             "licence": "CC0",
-            "source": SOURCE.replace("generated utility pole", "generated house connector").replace("poles.py", "connectors.py"),
+            "source": SOURCE.replace("generated utility pole", "generated house connector").replace("kits/poles.py", "kits/connectors.py"),
             "pack": None,
             "seats": connector.seats(),
         })
@@ -216,7 +216,7 @@ def sync_manifest(path: Path = DEFAULT_MANIFEST) -> int:
 
 
 def write_glbs(out_dir: Path) -> None:
-    from drycastle_pipeline.export import build_chunk_scene
+    from drycastle_pipeline.export.gltf import build_chunk_scene
 
     meshes = {name: build_variant(name).mesh for name in VARIANTS}
     meshes.update({name: build_connector(name).mesh for name in CONNECTORS})

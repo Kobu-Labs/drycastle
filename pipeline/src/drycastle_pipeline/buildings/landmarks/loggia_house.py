@@ -42,9 +42,17 @@ import numpy as np
 from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
-from drycastle_pipeline.flats import GLASS, _along_x, _along_y, _Build, _Op, _Wall
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.buildings.landmarks.flats import (
+    GLASS,
+    _along_x,
+    _along_y,
+    _Build,
+    _Op,
+    _Wall,
+)
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
 
 # ---- measures ------------------------------------------------------------------------------------
 L, D = 16.8, 11.4  # street front, depth

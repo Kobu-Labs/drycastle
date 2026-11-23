@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from drycastle_pipeline import landmark_photo as lp
+from drycastle_pipeline.photos import landmark_photo as lp
 
 RING = [(0.0, 0.0), (8.0, 0.0), (8.0, 6.0), (0.0, 6.0)]  # counter-clockwise; edge 0 faces south
 TRUE = {"x": -5.0, "y": -9.0, "z": 2.4, "yaw": 38.0, "pitch": 4.0, "f": 620.0, "w": 900, "h": 700}

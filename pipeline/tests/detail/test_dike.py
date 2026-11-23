@@ -5,13 +5,14 @@ import pytest
 from shapely.geometry import LineString, box
 from shapely.ops import unary_union
 
-from drycastle_pipeline.assets import ASSETS_DIR
-from drycastle_pipeline.detail import ParcelContext, area_type, dike_parcels, patch_meshes
-from drycastle_pipeline.dike import PATCH_RGB, dike_detail
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.textures import texture
-
-from .test_detail import flat_terrain
+from drycastle_pipeline.core.assets import ASSETS_DIR
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.core.textures import texture
+from drycastle_pipeline.detail.dike import PATCH_RGB, dike_detail
+from drycastle_pipeline.detail.model import ParcelContext
+from drycastle_pipeline.detail.patches import patch_meshes
+from drycastle_pipeline.detail.recipes import area_type, dike_parcels
+from tests.detail.test_detail import flat_terrain
 
 
 @pytest.fixture(scope="module")
@@ -110,10 +111,10 @@ def test_the_border_is_ragged_the_green_spills_over_it_and_the_grass_thins_out(c
 
 
 def test_a_regular_road_beside_the_dike_gets_no_track(cfg) -> None:
-    from drycastle_pipeline.config import map_paths
-    from drycastle_pipeline.detail import Village
-    from drycastle_pipeline.edits import DEFAULT_EDITS
-    from drycastle_pipeline.rules import DEFAULT_RULES
+    from drycastle_pipeline.core.config import map_paths
+    from drycastle_pipeline.core.rules import DEFAULT_RULES
+    from drycastle_pipeline.detail.village import Village
+    from drycastle_pipeline.edits.schema import DEFAULT_EDITS
 
     work = map_paths().work
     if not (work / "roads.json").exists():

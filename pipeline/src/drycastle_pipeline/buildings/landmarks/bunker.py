@@ -25,8 +25,9 @@ from shapely.geometry import LineString, Point, Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh, triangulate
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.geometry import bearing_deg
+from drycastle_pipeline.core.mesh import Mesh, triangulate
 
 CONCRETE, DOME, STREAK = "#a9a698", "#8d8e76", "#d8d5ca"
 DOOR_FRAME, DOOR_LEAF, SLIT = "#6e4a35", "#2a2420", "#1b1b1b"
@@ -471,10 +472,6 @@ def _ladder(b: _Builder, h: _Hatch, y_bottom: float, y_top: float) -> None:
         z += 0.3
 
 
-def _bearing(e: float, n: float) -> float:
-    return round(math.degrees(math.atan2(e, n)) % 360, 2)
-
-
 def _furnish(
     room: Polygon, edges: list[_Edge], level: int, keep: list, z: float, slits: list[tuple[_Edge, float]],
 ) -> list[dict]:
@@ -505,7 +502,7 @@ def _furnish(
             xy = mid + along * du + into * dv
             out.append({
                 "model": f"war/{model}", "pos": [round(float(xy[0]), 3), round(float(xy[1]), 3), round(z + h + (up[0] if up else 0.0), 3)],
-                "yaw": round((_bearing(*into) + dyaw) % 360, 2), "scale": list(scale), "boxes": [],
+                "yaw": round((bearing_deg(*into) + dyaw) % 360, 2), "scale": list(scale), "boxes": [],
             })
 
     def put(e: _Edge, s0: float, item: _Item) -> bool:
@@ -525,7 +522,7 @@ def _furnish(
         elif any(fp.intersects(q) and hq > item.hung - 0.05 for q, hq in placed):
             return False  # something tall stands under it
         mid = base + e.t * w / 2 - e.n * d / 2
-        yaw = _bearing(*(-e.n)) + item.turn  # the room side; a turned piece lies along the wall
+        yaw = bearing_deg(*(-e.n)) + item.turn  # the room side; a turned piece lies along the wall
         if item.hung is None:
             emit(item, mid, yaw, h, z)
             tops(item, mid, e.t, -e.n, h)
@@ -548,7 +545,7 @@ def _furnish(
             if not open_floor.contains(fp) or any(fp.intersects(k) for k in keep) or any(fp.intersects(q.buffer(FREE_GAP)) for q, _ in placed):
                 continue
             placed.append((fp, h))
-            emit(item, mid, _bearing(*(-f.n)) + item.turn, h, z)
+            emit(item, mid, bearing_deg(*(-f.n)) + item.turn, h, z)
             tops(item, mid, f.t, -f.n, h)
             return True
         return False
@@ -729,7 +726,7 @@ def _timber(
     for e in inner:  # panelling: every other board is darker
         spans = _free_spans(e.ln, by_inner.get(e.k, []), PAINT_H)
         for a, c in spans:
-            for k in range(int(a // BOARD_W), int(math.ceil(c / BOARD_W))):
+            for k in range(int(a // BOARD_W), math.ceil(c / BOARD_W)):
                 if k % 2:
                     continue
                 s0, s1 = max(a, k * BOARD_W), min(c, (k + 1) * BOARD_W - 0.03)

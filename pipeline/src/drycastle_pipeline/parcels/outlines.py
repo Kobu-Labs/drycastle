@@ -12,18 +12,12 @@ from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
+from drycastle_pipeline.core.geometry import polygons
+
 # an outline edit and its neighbours: areas below this (m2) are slivers, not overlaps
 OVERLAP_EPS_M2 = 0.01
 # a building counts as inside the new outline when it pokes out by no more than this (m)
 BUILDING_TOLERANCE_M = 0.1
-
-
-def _polys(geom: BaseGeometry) -> list[Polygon]:
-    if geom.is_empty:
-        return []
-    if isinstance(geom, Polygon):
-        return [geom]
-    return [p for g in getattr(geom, "geoms", []) for p in _polys(g)]
 
 
 def _arc(ring: LineString, a: float, b: float) -> list[tuple[float, float]]:
@@ -105,7 +99,7 @@ def apply_outlines(
         cut = geom.difference(taken)
         if geom.intersection(taken).area <= OVERLAP_EPS_M2:
             continue
-        pieces = sorted(_polys(cut), key=lambda p: -p.area)
+        pieces = sorted(polygons(cut), key=lambda p: -p.area)
         if not pieces:
             warnings.append(f"{pid}: lies wholly inside edited outlines; kept as it is")
             continue

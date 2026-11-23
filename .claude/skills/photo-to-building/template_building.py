@@ -8,7 +8,7 @@ Built with ``landmark_kit`` on the real footprint; ``garage.py`` is the referenc
 
 import math
 
-from drycastle_pipeline.landmark_kit import (
+from drycastle_pipeline.buildings.landmarks.kit import (
     Frame,
     check_footprint,
     door_frame,
@@ -21,8 +21,8 @@ from drycastle_pipeline.landmark_kit import (
     wall,
     window,
 )
-from drycastle_pipeline.landmarks import _Solids
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.buildings.landmarks.catalog import _Solids
+from drycastle_pipeline.core.mesh import Mesh
 
 MODEL = "my_building"  # the name in landmarks.FOOTPRINT_MODELS and in overrides.yaml
 BUILDING = "w000000000"

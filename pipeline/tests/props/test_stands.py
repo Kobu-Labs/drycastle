@@ -1,4 +1,4 @@
-"""Forest stands and the edge mantle (props.Stands, props.ortho_trees): determinism, shares, the edge flag, swamp near water."""
+"""Forest stands and the edge mantle (stands.Stands, canopy.ortho_trees): determinism, shares, the edge flag, swamp near water."""
 
 import json
 import math
@@ -9,8 +9,9 @@ import numpy as np
 from PIL import Image
 from shapely.geometry import box
 
-from drycastle_pipeline.props import Stands, make_trees
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.props.stands import Stands
+from drycastle_pipeline.props.trees import make_trees
 
 TREE = load_section("props")["trees"]
 SIZE = 600  # the synthetic map: 600 x 600 m, 1 m per pixel, canopy from 50 to 550
@@ -120,22 +121,22 @@ def test_swamp_only_near_water(tmp_path) -> None:
 def test_the_edge_field_gives_the_edge_distance_of_every_pixel() -> None:
     import numpy as np
 
-    from drycastle_pipeline import props
+    from drycastle_pipeline.props import stands
 
     rng = np.random.default_rng(5)
     mask = rng.random((70, 90)) < 0.8
     mask[20:45, 30:60] = True  # a closed block, so some pixels are far from open ground
-    field = props.EdgeField(mask, 0.6, 9.0, 3.0)
+    field = stands.EdgeField(mask, 0.6, 9.0, 3.0)
     for row, col in [(0, 0), (69, 89), (32, 45), (21, 31), (5, 80), (44, 59), (0, 45)]:
-        assert field.distance(row, col) == props.edge_distance(mask, row, col, 0.6, 9.0, 3.0)
+        assert field.distance(row, col) == stands.edge_distance(mask, row, col, 0.6, 9.0, 3.0)
 
 
 def test_the_rust_engine_plants_the_trees_of_the_python_reference(tmp_path) -> None:
     import pytest
 
-    from drycastle_pipeline import props
+    from drycastle_pipeline.props import canopy
 
-    if props.planting_engine() is None:
+    if canopy.planting_engine() is None:
         pytest.skip("the Rust engine is not installed (make detail-rust-build)")
     for wet in (None, WET):  # with and without the swamp stand
         ref = forest(tmp_path, wet, engine="python")

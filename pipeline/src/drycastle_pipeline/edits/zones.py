@@ -172,7 +172,7 @@ def kind_rows(section_rules: dict[str, dict]) -> list[dict]:
 
 def drawn_zones(zones: dict[str, dict], origin: list[float] | tuple[float, float]) -> dict[str, tuple[str, Polygon]]:
     """``{id: (kind, polygon)}`` of the ``zones`` of the edits, polygons in local metres (made valid), sorted by id."""
-    from drycastle_pipeline.edits import polygon_ring
+    from drycastle_pipeline.edits.schema import polygon_ring
 
     out: dict[str, tuple[str, Polygon]] = {}
     for zid in sorted(zones):
@@ -184,7 +184,7 @@ def drawn_zones(zones: dict[str, dict], origin: list[float] | tuple[float, float
 def zone_cuts(cuts: dict[str, dict], origin: list[float] | tuple[float, float]) -> dict[str, BaseGeometry]:
     """``{kind: region}`` of the ``zone_cuts`` of the edits: the union of the kind's cut polygons grown by
     :data:`CUT_BUFFER_M`, in local metres."""
-    from drycastle_pipeline.edits import polygon_ring
+    from drycastle_pipeline.edits.schema import polygon_ring
 
     by_kind: dict[str, list[BaseGeometry]] = {}
     for cid in sorted(cuts):
@@ -297,8 +297,8 @@ def build_zone_points(
     ``buildings.json`` records, ``terrain`` a ``Terrain`` (coverage and heights), ``water_doc`` the ``water.json`` document
     ``section_rules`` the ``zones`` rules (:func:`rules`) and ``cuts`` the cut regions (:func:`zone_cuts`). A kind that has zones is always in the document (with no points
     when nothing usable is left, and a warning); one with no zones is not. The kinds of :data:`NO_POINT_KINDS` are never in it."""
-    from drycastle_pipeline.buildings import footprint_polygon
-    from drycastle_pipeline.props import seeded
+    from drycastle_pipeline.buildings.footprint import footprint_polygon
+    from drycastle_pipeline.props.helpers import seeded
 
     footprints = [footprint_polygon(b["footprint"]) for b in buildings]
     water = [shape(b["polygon"]) for b in water_doc.get("bodies", [])]

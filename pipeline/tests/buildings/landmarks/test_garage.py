@@ -8,10 +8,10 @@ import pytest
 from shapely import affinity
 from shapely.geometry import Point, Polygon, box
 
-from drycastle_pipeline import garage as g
-from drycastle_pipeline.landmarks import build_landmark
+from drycastle_pipeline.buildings.landmarks import garage as g
+from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
 
-BUILDINGS = Path(__file__).parents[2] / "data" / "village" / "work" / "buildings.json"
+BUILDINGS = Path(__file__).parents[4] / "data" / "village" / "work" / "buildings.json"
 BUS = (2.56, 12.06, 3.1)  # vehicles.json: width, length, height
 
 

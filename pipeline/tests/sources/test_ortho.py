@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from drycastle_pipeline import ortho
-from drycastle_pipeline.http import HttpError
+from drycastle_pipeline.core.http import HttpError
+from drycastle_pipeline.sources import ortho
 
 
 class FakeResponse:

@@ -29,7 +29,7 @@ from shapely.geometry import Polygon
 from shapely.geometry.polygon import orient
 from shapely.strtree import STRtree
 
-from drycastle_pipeline.terrain import Terrain
+from drycastle_pipeline.terrain.terrain import Terrain
 
 RING_STEP_M = 1.0  # spacing of the outline samples used for the curvature
 CURVE_HALF_M = 8.0  # the curvature of the bank is measured over this half span
@@ -84,7 +84,7 @@ class DepthGrid:
         )
 
     def encode(self) -> str:
-        """The depths in centimetres: little-endian uint16, row by row from the south, base64 (see ``water.py``)."""
+        """The depths in centimetres: little-endian uint16, row by row from the south, base64 (see ``terrain/water.py``)."""
         cm = np.clip(np.round(self.depth * 100), 0, 65535).astype("<u2")
         return base64.b64encode(cm.tobytes()).decode("ascii")
 

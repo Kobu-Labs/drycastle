@@ -1,4 +1,4 @@
-"""Every tree comes from the orthophoto detector (props.ortho_trees); there is no other tree source."""
+"""Every tree comes from the orthophoto detector (canopy.ortho_trees); there is no other tree source."""
 
 import json
 import math
@@ -9,14 +9,15 @@ import numpy as np
 import pytest
 import shapely
 import yaml
-from PIL import Image
 from shapely.geometry import box
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.props import load_tree_overrides, make_trees, road_zone, run_props
-from drycastle_pipeline.rules import load_section
-from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace, write_ortho
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.props.helpers import road_zone
+from drycastle_pipeline.props.props import run_props
+from drycastle_pipeline.props.trees import load_tree_overrides, make_trees
+from tests.synthetic import make_terrain, make_workspace, write_ortho
 
 TREE = load_section("props")["trees"]
 OCFG = TREE["ortho"]

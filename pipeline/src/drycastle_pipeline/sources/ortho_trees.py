@@ -5,7 +5,7 @@ downloaded the photo. The licence of the photo forbids redistributing and alteri
 read from it (tree positions, a canopy mask) are written, into the gitignored ``data/``, never to
 ``out/``. See docs/ortho.md.
 
-    python -m drycastle_pipeline.ortho_trees
+    python -m drycastle_pipeline.sources.ortho_trees
 
 Two detectors, because the two kinds of tree look different from above:
 
@@ -41,7 +41,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from shapely.geometry import Point, Polygon, shape
 
-from drycastle_pipeline.config import map_paths
+from drycastle_pipeline.core.config import map_paths
 
 FORMAT_VERSION = 1
 N_FEATURES = 17  # of ``features``; the model sees them and their squares
@@ -381,7 +381,7 @@ def load_grid(raw_dir: Path, work_dir: Path, ortho_dir: Path) -> tuple[Grid, dic
     return grid, info, outline
 
 
-CODE_FILES = (Path(__file__), Path(__file__).resolve().parents[2] / "rust" / "detail" / "src" / "trees.rs")
+CODE_FILES = (Path(__file__), Path(__file__).resolve().parents[3] / "rust" / "detail" / "src" / "trees.rs")
 
 
 def fingerprint(raw_dir: Path, work_dir: Path, ortho_dir: Path, photo: str, params: Params) -> str:
@@ -470,7 +470,7 @@ def run(force: bool = False, **_options: object) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="drycastle_pipeline.ortho_trees", description=__doc__.split("\n")[0])
+    ap = argparse.ArgumentParser(prog="drycastle_pipeline.sources.ortho_trees", description=__doc__.split("\n")[0])
     ap.add_argument("--retrain", action="store_true", help="fit the canopy model again (else tree_model.npz is reused)")
     ap.add_argument("--tau-open", type=float, default=Params.tau_open, help="blob darkness needed in open ground")
     ap.add_argument("--tau-wooded", type=float, default=Params.tau_wooded, help="... in tree-like surroundings")

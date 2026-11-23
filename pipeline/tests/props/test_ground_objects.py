@@ -14,13 +14,15 @@ import pytest
 from shapely.geometry import Point, box, mapping, shape
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.export import NO_TREE_UV2, ground_model, ground_objects_doc, to_trimesh
-from drycastle_pipeline.propmeshes import ground_object_mesh, ground_objects_mesh
-from drycastle_pipeline.props import make_trees, plan_ground_objects, road_zone
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.terrain import grid_from_samples
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.export.docs import ground_model, ground_objects_doc
+from drycastle_pipeline.export.gltf import NO_TREE_UV2, to_trimesh
+from drycastle_pipeline.props.helpers import road_zone
+from drycastle_pipeline.props.propmeshes import ground_object_mesh, ground_objects_mesh
+from drycastle_pipeline.props.trees import make_trees, plan_ground_objects
+from drycastle_pipeline.terrain.terrain import grid_from_samples
 from tests.synthetic import COVERAGE, make_terrain, make_workspace, write_ortho
 
 PROPS = load_section("props")

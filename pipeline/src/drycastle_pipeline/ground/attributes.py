@@ -4,14 +4,14 @@ A **ground type** is a named bundle of terrain **attributes** (``attributes`` of
 ``ground.types`` or ``edits.json`` ``ground_types``). The attributes are fixed here, in code: each one needs something in
 the pipeline to use it. The editor groups them by relation (:data:`GROUPS`) and a type ticks the ones it carries. Every
 point of the map has exactly one ground type, so there is nothing to stack: a ground type is terrain only (colour, detail,
-water) and carries nothing a game system reads. What an area means in play is a zone (:mod:`drycastle_pipeline.zones`).
+water) and carries nothing a game system reads. What an area means in play is a zone (:mod:`drycastle_pipeline.edits.zones`).
 
 The editor mirrors this table (``godot/viewer/GroundTypeEdits.cs``: ``Attributes``, ``Groups``).
 """
 
 from dataclasses import dataclass
 
-#: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``; ``crop``: the crop fields, ``crop.py``).
+#: The recipes a ground type can name (``detail.RECIPES`` without the parcel recipe ``garden``; ``crop``: the crop fields, ``detail/crop.py``).
 RECIPES = ("field", "forest", "village", "dike", "crop")
 
 COLOURS_MAX = 6

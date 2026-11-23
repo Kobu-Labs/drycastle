@@ -1,7 +1,7 @@
 # Hand-modelled landmark from photos (the long way)
 
 Only for a special building the detail format cannot hold (lean-to or split roofs, two buildings sharing a wall, a
-hollow part): the output is a Python module. For an ordinary house use `SKILL.md`. Reference model: `garage.py`.
+hollow part): the output is a Python module. For an ordinary house use `SKILL.md`. Reference model: `buildings/landmarks/garage.py`.
 
 
 
@@ -23,7 +23,7 @@ Follow the steps in order. Do not skip a gate. All commands run from `pipeline/`
 
 ## Step 1: footprint
 
-    uv run python -m drycastle_pipeline.landmark_tools footprint <P-xxxx | G-xxxx | building ids> [--view=X,Y]
+    uv run python -m drycastle_pipeline.photos.landmark_tools footprint <P-xxxx | G-xxxx | building ids> [--view=X,Y]
 
 `--view`: where a photo was taken, when the user gives it (map metres, or a sketch point of the editor: read
 `~/.local/state/drycastle/sketch.json`, `points[].x, y`, and pass them as they are). Each edge then says whether that
@@ -35,7 +35,7 @@ other than `None` (it is already hand-modelled), or if it says MORE THAN 4 CORNE
 "NOT square" with 4 corners is fine: carry on.
 
 More than one building in the parcel: ask the user which one(s) the photos show unless they said so. Two buildings
-sharing a wall that are one real building: model both in one module as `garage.py` does (`RINGS` with two entries);
+sharing a wall that are one real building: model both in one module as `buildings/landmarks/garage.py` does (`RINGS` with two entries);
 otherwise one building per module.
 
 ## Step 2: match each photo to an edge (GATE)
@@ -62,7 +62,7 @@ draw no openings, and list them as guessed.
 Do not estimate sizes by eye. Fit a camera to the photo on the footprint, then let the tool turn pixels into metres.
 `PHOTO` is the photo's path, `CAM` a file in your scratchpad (one per photo), `<id>` the building.
 
-**3a. Grid.** `uv run python -m drycastle_pipeline.landmark_photo grid PHOTO --out <scratchpad>/fit`
+**3a. Grid.** `uv run python -m drycastle_pipeline.photos.landmark_photo grid PHOTO --out <scratchpad>/fit`
 Read the written `grid.png`. Yellow lines are x, cyan lines are y, every 50 px. Read every pixel position below off
 this picture, to about 5 px.
 
@@ -73,7 +73,7 @@ this picture, to about 5 px.
   `ground` if you can see it); the ridge end `r<edge>:top`. A corner hidden by a fence or a bush: leave it out.
 - At the eave, take the top of the WALL, not the edge of the overhanging roof.
 
-      uv run python -m drycastle_pipeline.landmark_photo fit PHOTO <id> --view=X,Y --cam CAM \
+      uv run python -m drycastle_pipeline.photos.landmark_photo fit PHOTO <id> --view=X,Y --cam CAM \
           c1:ground:443,535 c1:eave:432,318 c0:eave:122,332 c0:ground:125,484 c2:eave:738,352 r1:top:568,120
 
   `--view`: the photo's viewpoint from step 1. None given: use a point 10 m out from the middle of the photographed
@@ -92,11 +92,11 @@ It prints `EAVE`, `TOP`, `RIDGE_AT` and a fit error. Rules:
 
 **3c. Openings.** For each window and ground-level door, two opposite corners of its glass or leaf:
 
-      uv run python -m drycastle_pipeline.landmark_photo measure CAM --edge 0 158,368 208,440
+      uv run python -m drycastle_pipeline.photos.landmark_photo measure CAM --edge 0 158,368 208,440
 
 It prints `s0, width, z0, height` to paste into `OPENINGS`. "not on this wall": wrong edge or a mis-read pixel.
 
-**3d. Colours.** `uv run python -m drycastle_pipeline.landmark_photo sample PHOTO X,Y [--white X,Y]`
+**3d. Colours.** `uv run python -m drycastle_pipeline.photos.landmark_photo sample PHOTO X,Y [--white X,Y]`
 - A sunlit surface: no `--white`.
 - A surface in shade: `--white` on something white IN THE SAME SHADE on the same wall (a window frame). No such
   white: sample without it and multiply by 1.4.
@@ -108,7 +108,7 @@ TOP = EAVE + 0.4 x (length of ROOF_EDGE), low confidence. The generated height p
 
 Write this sheet down before any code (in your reply, not a file):
 
-    roof form:   gable | lean_to | flat | split (two lean-tos, see garage.py) | other -> stop, ask
+    roof form:   gable | lean_to | flat | split (two lean-tos, see buildings/landmarks/garage.py) | other -> stop, ask
     ROOF_EDGE:   index of the edge the roof slopes across (gable: an edge with a triangle on top;
                  lean-to: an edge whose wall top is slanted, starting at its LOW corner)
     EAVE, TOP:   metres above the ground (lean-to: wall top at the first / second corner of ROOF_EDGE)
@@ -131,16 +131,16 @@ Roof form by look:
 
 ## Step 4: write the module
 
-1. Copy `.claude/skills/photo-to-building/template_building.py` to `pipeline/src/drycastle_pipeline/<name>.py`.
+1. Copy `.claude/skills/photo-to-building/template_building.py` to `pipeline/src/drycastle_pipeline/buildings/landmarks/<name>.py`.
 2. Fill ONLY the constants above `_N = len(RING)` and the docstring. Paste `RING` exactly as printed.
-3. Leave `building_mesh` alone unless the sheet needs something it lacks; then copy the pattern from `garage.py`
+3. Leave `building_mesh` alone unless the sheet needs something it lacks; then copy the pattern from `buildings/landmarks/garage.py`
    (`_bay`, `_side`, `_roof`), using kit functions only. Anything you add that is trim (frames, bands, boxes on a
    wall) goes AFTER the `if not detail: return` line, or it ends up in the collision.
-4. Register it. In `landmarks.py` add next to `_bus_garage`, and one entry in `FOOTPRINT_MODELS`:
+4. Register it. In `landmarks/catalog.py` add next to `_bus_garage`, and one entry in `FOOTPRINT_MODELS`:
 
        def _<name>(b: dict, detail: bool) -> Mesh:
            """<what and where> (see ``<name>.py``)."""
-           from drycastle_pipeline.<name> import building_mesh
+           from drycastle_pipeline.buildings.landmarks.<name> import building_mesh
 
            return building_mesh(b, detail)
 
@@ -153,7 +153,7 @@ Roof form by look:
 
 With a fitted camera (step 3b), draw the model over the photo:
 
-    uv run python -m drycastle_pipeline.landmark_photo overlay PHOTO CAM <ids> --model <name> --out <scratchpad>/fit
+    uv run python -m drycastle_pipeline.photos.landmark_photo overlay PHOTO CAM <ids> --model <name> --out <scratchpad>/fit
 
 Read `overlay.png`: the model is half see-through over the photo, its outline is magenta. Roof edges, eave line,
 wall corners and windows of the model must sit on those of the photo. Where they do not, the model is wrong THERE:
@@ -161,7 +161,7 @@ fix that constant (do not re-fit the camera to hide it).
 
 Also, always:
 
-    uv run python -m drycastle_pipeline.landmark_tools render <ids> --model <name> --out <scratchpad>/render
+    uv run python -m drycastle_pipeline.photos.landmark_tools render <ids> --model <name> --out <scratchpad>/render
 
 It writes `edge_<building>_<i>.png` (each side seen square-on), `roof_a.png`, `roof_b.png`; look at the sides with no
 photo too. The renderer has no sun shadows and no surroundings; judge shape and colour only. Answer each line yes/no:
@@ -179,13 +179,13 @@ Any "no": fix the constant and render again. After 3 rounds stop and report what
 
 ## Step 6: test, export
 
-1. Copy `template_test.py` to `pipeline/tests/test_<name>.py`. Replace the word `MODULE` (twice: the docstring and
-   the import line, which becomes `from drycastle_pipeline import <name> as m`) and `NAME`.
-2. `uv run pytest tests/test_<name>.py tests/test_garage.py tests/test_landmarks.py -q` and
-   `uv run ruff check src/drycastle_pipeline/<name>.py tests/test_<name>.py`. Both must pass. (`test_dishes` fails on
+1. Copy `template_test.py` to `pipeline/tests/buildings/landmarks/test_<name>.py`. Replace the word `MODULE` (twice: the docstring and
+   the import line, which becomes `from drycastle_pipeline.buildings.landmarks import <name> as m`) and `NAME`.
+2. `uv run pytest tests/buildings/landmarks/test_<name>.py tests/buildings/landmarks -q` and
+   `uv run ruff check src/drycastle_pipeline/buildings/landmarks/<name>.py tests/buildings/landmarks/test_<name>.py`. Both must pass. (`test_dishes` fails on
    its own in the full suite; that is known and not yours.)
 3. From the repo root: `make rules && make export`. This rebuilds `out/village/map` (the only map to use).
-4. `uv run python -m drycastle_pipeline.landmark_tools near <ids>` lists fences, objects, lamps and trees within 6 m.
+4. `uv run python -m drycastle_pipeline.photos.landmark_tools near <ids>` lists fences, objects, lamps and trees within 6 m.
    Report those that stand off an edge with a door, and any at 0.0 m (inside the walls). Do not remove anything.
 5. Open the final pictures for the user: `xdg-open <file>` for `overlay.png` and `roof_a.png`.
 
@@ -195,7 +195,7 @@ Short bullets: the photo-to-edge table; the fit error; the sheet as built, each 
 why; obstacles from step 6.4; files changed; "not seen in-game". Do not commit unless asked; if asked, work on an issue
 branch and stage only your own files (the working tree is shared and edited live).
 
-## Kit cheat sheet (`landmark_kit.py`)
+## Kit cheat sheet (`buildings/landmarks/kit.py`)
 
 | need | call |
 |---|---|

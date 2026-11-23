@@ -6,7 +6,7 @@ roof over the two bars (the long bar ``w378900312`` + ``w378900355`` and the eas
 whose roof runs into the long bar's slope), eave overhang with fascia and gutter, the brick plinth band,
 window sills and the green blinds behind the glass.
 
-The south-west bar and the entry of the middle bar are hollow (``office_interior.py``, the rozhlas detour): there the
+The south-west bar and the entry of the middle bar are hollow (``buildings/landmarks/office_interior.py``, the rozhlas detour): there the
 walls, floors and furniture come from that module, and the middle bar's detail is built on what stays solid.
 """
 
@@ -17,12 +17,14 @@ from functools import lru_cache
 import numpy as np
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.building_detail import DETAILS_DIR, build_detail, load_details
-from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
-from drycastle_pipeline import office_interior as interior
-from drycastle_pipeline.landmarks import _Solids
-from drycastle_pipeline.meshes import Mesh, building_mesh
-from drycastle_pipeline.office_interior import edge_box as _edge_box
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.buildings.landmarks import office_interior as interior
+from drycastle_pipeline.buildings.landmarks.catalog import _Solids
+from drycastle_pipeline.buildings.landmarks.office_interior import edge_box as _edge_box
+from drycastle_pipeline.buildings.meshes import building_mesh
+from drycastle_pipeline.buildings.openings import DETAILS_DIR, build_detail, load_details
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
 
 EAVE = 3.0
 OVERHANG = 0.5
@@ -32,8 +34,8 @@ FASCIA, GUTTER, BLIND, SILL = "#f2f0ea", "#aeb2b8", "#8fae9a", "#e9e6de"
 # Roof rectangles in map metres: centre, ridge bearing (rad), half length and half width at the walls,
 # (A is cut at v = 12.7: its NW end is skewed). Rise, and whether the (low-v, high-v) end is hipped. The east wing stops at the long bar's centre line.
 ROOFS = {
-    "w378900355": dict(c=(-204.58, 322.89), ang=1.087, a=13.915, w=3.38, rise=1.9, hips=(True, True)),
-    "w378900320": dict(c=(-190.40, 333.53), ang=0.0376, a=8.60, w=2.70, rise=1.52, hips=(False, True)),
+    "w378900355": {"c": (-204.58, 322.89), "ang": 1.087, "a": 13.915, "w": 3.38, "rise": 1.9, "hips": (True, True)},
+    "w378900320": {"c": (-190.40, 333.53), "ang": 0.0376, "a": 8.60, "w": 2.70, "rise": 1.52, "hips": (False, True)},
 }
 DETAIL_IDS = ("w378900312", "w378900355", "w378900320")
 

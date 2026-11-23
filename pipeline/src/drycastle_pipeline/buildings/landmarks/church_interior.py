@@ -11,8 +11,8 @@ import itertools
 import math
 from typing import NamedTuple
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.landmarks import IRON, _arch, _rect
+from drycastle_pipeline.buildings.landmarks.catalog import IRON, _arch, _rect
+from drycastle_pipeline.core.colour import hex_to_rgb
 
 T, F = 0.4, 0.25  # wall thickness, floor height (the porch slab's top)
 CU = 0.985  # centre line: door, aisle, altar
@@ -245,15 +245,30 @@ def _arc(v0, v1, z_off, thick, S, colour) -> None:
         )
 
 
-def build_shell(S, detail: bool, yellow, plinth) -> None:
-    cream, marble, rib, wood, carpet = (hex_to_rgb(c) for c in (CREAM, MARBLE, RIB, WOOD, CARPET))
-    floor, gold, pipe, canvas = (hex_to_rgb(c) for c in (FLOOR, GOLD, PIPE, CANVAS))
-    iron = hex_to_rgb(IRON)
+def _windows_of(name: str) -> list[tuple[float, tuple, bool]]:
+    """The ``WINDOWS`` of the wall called ``name`` as ``wall`` takes them: (centre, outline, framed)."""
+    return [(w.c, w.outline, True) for w in WINDOWS if w.wall == name]
 
-    def wall(axis, a0, a1, t0, t1, z0, z1, room, wins=(), outer=None, base=True) -> None:
+
+def _arcade_of(name: str) -> list[tuple[float, tuple, bool]]:
+    """The arcade openings of the nave's side wall towards aisle ``name`` as ``wall`` takes them (not framed)."""
+    return [(*_arcade_hole(lo, hi), False) for lo, hi in ARCADES[name]]
+
+
+class _Shell:
+    """The walls, floors and furnishing solids of the church into one solid builder ``S`` (``build_shell``); ``detail`` adds the decoration."""
+
+    def __init__(self, S, detail: bool, yellow, plinth) -> None:
+        self.S, self.detail, self.yellow, self.plinth = S, detail, yellow, plinth
+        self.cream, self.marble, self.rib, self.wood, self.carpet = (hex_to_rgb(c) for c in (CREAM, MARBLE, RIB, WOOD, CARPET))
+        self.floor, self.gold, self.pipe, self.canvas = (hex_to_rgb(c) for c in (FLOOR, GOLD, PIPE, CANVAS))
+        self.iron = hex_to_rgb(IRON)
+
+    def wall(self, axis, a0, a1, t0, t1, z0, z1, room, wins=(), outer=None, base=True) -> None:
         """A wall running along ``axis`` from ``a0`` to ``a1``, thick from ``t0`` to ``t1``, ``outer`` outside (yellow) and cream
         inside; ``room`` is the side the room is on (+1 or -1 along the thickness). ``wins``: the ``WINDOWS`` cut into it (framed)."""
-        outer = yellow if outer is None else outer
+        S, cream = self.S, self.cream
+        outer = self.yellow if outer is None else outer
         tm = (t0 + t1) / 2
         halves = ((t0, tm, outer), (tm, t1, cream)) if room > 0 else ((t0, tm, cream), (tm, t1, outer))
 
@@ -278,152 +293,171 @@ def build_shell(S, detail: bool, yellow, plinth) -> None:
                 if min(ha, hb) < z1 - 1e-9:
                     piece([(xa, ha), (xb, hb), (xb, z1), (xa, z1)])
             cur = xs[-1]
-            if detail and w[2]:  # a dark frame round the opening, centred in the wall; the glass pane is in its middle
+            if self.detail and w[2]:  # a dark frame round the opening, centred in the wall; the glass pane is in its middle
                 inner = _inset(poly, FRAME_W)
                 for k in range(len(poly)):
                     j = (k + 1) % len(poly)
-                    _extrude(S, axis, [poly[k], poly[j], inner[j], inner[k]], tm - FRAME_D / 2, tm + FRAME_D / 2, iron)
+                    _extrude(S, axis, [poly[k], poly[j], inner[j], inner[k]], tm - FRAME_D / 2, tm + FRAME_D / 2, self.iron)
         if a1 > cur + 1e-9:
             piece([(cur, z0), (a1, z0), (a1, z1), (cur, z1)])
         if z0 == 0.0 and base:
             tb0, tb1 = (t0 - 0.03, tm) if room > 0 else (tm, t1 + 0.03)
             if axis == "v":
-                S.box(tb0, tb1, a0, a1, 0.0, 0.6, plinth)
+                S.box(tb0, tb1, a0, a1, 0.0, 0.6, self.plinth)
             else:
-                S.box(a0, a1, tb0, tb1, 0.0, 0.6, plinth)
+                S.box(a0, a1, tb0, tb1, 0.0, 0.6, self.plinth)
 
-    def windows_of(name):
-        return [(w.c, w.outline, True) for w in WINDOWS if w.wall == name]
+    def nave_and_chancel_walls(self) -> None:
+        wall, S, cream = self.wall, self.S, self.cream
+        # nave: side walls (below BAND_Z hollowed by the arcade where an aisle stands, and the aisle's own face cream),
+        # front wall round the doorway and the facade window, rear wall round the chancel arch
+        for a in AISLES:
+            t0, t1, room = (NX0, IU0, 1) if a.left else (IU1, NX1, -1)
+            lo, hi = a.iv
+            wall("v", NV0, lo, t0, t1, 0.0, BAND_Z, room)
+            wall("v", lo, hi, t0, t1, 0.0, BAND_Z, room, _arcade_of(a.name), outer=cream, base=False)
+            wall("v", hi, NV1, t0, t1, 0.0, BAND_Z, room)
+            wall("v", NV0, NV1, t0, t1, BAND_Z, ZE, room, _windows_of("nave_left" if a.left else "nave_right"), base=False)
+        wall("u", IU0, CU - DOOR_W / 2, IV1, NV1, 0.0, ZE, -1)
+        wall("u", CU + DOOR_W / 2, IU1, IV1, NV1, 0.0, ZE, -1)
+        wall("u", CU - DOOR_W / 2, CU + DOOR_W / 2, IV1, NV1, DOOR_TOP, ZE, -1, _windows_of("front"), base=False)
+        wall("u", IU0, CU0, NV0, IV0, 0.0, ZE, 1)
+        wall("u", CU1, IU1, NV0, IV0, 0.0, ZE, 1)
+        wall("u", CU0, CU1, NV0, IV0, ZA - 0.4, ZE, 1)
+        # chancel in the apse block
+        wall("v", AV0, NV0, AX0, CU0, 0.0, ZA, 1)
+        wall("v", AV0, NV0, CU1, AX1, 0.0, ZA, -1)
+        wall("u", CU0, CU1, AV0, CV0, 0.0, ZA, 1, _windows_of("chancel"))
+        S.box(CU0, CU1, CV0, NV0, ZA - 0.2, ZA, cream)
 
-    def arcade_of(name):
-        return [(*_arcade_hole(lo, hi), False) for lo, hi in ARCADES[name]]
+    def aisles(self) -> None:
+        """Side aisles: hollow, outer wall with its windows, end walls up to the sloping roof, floor, ceiling."""
+        wall, S, cream, plinth = self.wall, self.S, self.cream, self.plinth
+        for a in AISLES:
+            lo, hi = a.iv
+            t0, t1, room = (a.u0, a.u0 + T, 1) if a.left else (a.u1 - T, a.u1, -1)
+            wall("v", a.v0, a.v1, t0, t1, 0.0, a.wall_top(t0, t1), room, _windows_of("aisle_" + a.name))
+            ua, ub = (a.u0 + T, a.u1) if a.left else (a.u0, a.u1 - T)
+            top = [(ua, 0.0), (ub, 0.0), (ub, a.wall_top(ub)), (ua, a.wall_top(ua))]
+            for v0, v1, rear in ((a.v0, lo, 1), (hi, a.v1, -1)):  # rear (smaller v) and front end wall: yellow outside, cream inside
+                vm = (v0 + v1) / 2
+                _prism(S, top, v0, vm, self.yellow if rear > 0 else cream)
+                _prism(S, top, vm, v1, cream if rear > 0 else self.yellow)
+            S.box(ua, ub, a.v1 - T / 2, a.v1 + 0.03, 0.0, 0.6, plinth)
+            if a.name == "right":  # the left one stands against the sacristy
+                S.box(ua, ub, a.v0 - 0.03, a.v0 + T / 2, 0.0, 0.6, plinth)
+            fu0, fu1 = (a.in_u, IU0) if a.left else (IU1, a.in_u)
+            S.box(fu0, fu1, lo, hi, 0.0, F, self.floor)
+            if self.detail:  # a cream lining under the sloping roof
+                xa, xb = (a.in_u, a.nave_u) if a.left else (a.nave_u, a.in_u)
+                S.shed(xa, xb, lo, hi, a.ceiling(xa) - 0.005, a.ceiling(xb) - 0.005, 0.06, cream)
+            # arcade pillars on the aisle side, a marble square with the pilaster on the nave side
+            for v in BAYS:
+                if any(abs(v - lo_v) < 0.5 or abs(v - hi_v) < 0.5 for lo_v, hi_v in ARCADES[a.name]):
+                    pu0, pu1 = (a.u1 - 0.2, a.u1) if a.left else (a.u0, a.u0 + 0.2)
+                    S.box(pu0, pu1, v - 0.4, v + 0.4, 0.0, ARCADE_Z, self.marble)
 
-    # nave: side walls (below BAND_Z hollowed by the arcade where an aisle stands, and the aisle's own face cream),
-    # front wall round the doorway and the facade window, rear wall round the chancel arch
-    for a in AISLES:
-        t0, t1, room = (NX0, IU0, 1) if a.left else (IU1, NX1, -1)
-        lo, hi = a.iv
-        wall("v", NV0, lo, t0, t1, 0.0, BAND_Z, room)
-        wall("v", lo, hi, t0, t1, 0.0, BAND_Z, room, arcade_of(a.name), outer=cream, base=False)
-        wall("v", hi, NV1, t0, t1, 0.0, BAND_Z, room)
-        wall("v", NV0, NV1, t0, t1, BAND_Z, ZE, room, windows_of("nave_left" if a.left else "nave_right"), base=False)
-    wall("u", IU0, CU - DOOR_W / 2, IV1, NV1, 0.0, ZE, -1)
-    wall("u", CU + DOOR_W / 2, IU1, IV1, NV1, 0.0, ZE, -1)
-    wall("u", CU - DOOR_W / 2, CU + DOOR_W / 2, IV1, NV1, DOOR_TOP, ZE, -1, windows_of("front"), base=False)
-    wall("u", IU0, CU0, NV0, IV0, 0.0, ZE, 1)
-    wall("u", CU1, IU1, NV0, IV0, 0.0, ZE, 1)
-    wall("u", CU0, CU1, NV0, IV0, ZA - 0.4, ZE, 1)
-    # chancel in the apse block
-    wall("v", AV0, NV0, AX0, CU0, 0.0, ZA, 1)
-    wall("v", AV0, NV0, CU1, AX1, 0.0, ZA, -1)
-    wall("u", CU0, CU1, AV0, CV0, 0.0, ZA, 1, windows_of("chancel"))
-    S.box(CU0, CU1, CV0, NV0, ZA - 0.2, ZA, cream)
-    # side aisles: hollow, outer wall with its windows, end walls up to the sloping roof, floor, ceiling
-    for a in AISLES:
-        lo, hi = a.iv
-        t0, t1, room = (a.u0, a.u0 + T, 1) if a.left else (a.u1 - T, a.u1, -1)
-        wall("v", a.v0, a.v1, t0, t1, 0.0, a.wall_top(t0, t1), room, windows_of("aisle_" + a.name))
-        ua, ub = (a.u0 + T, a.u1) if a.left else (a.u0, a.u1 - T)
-        top = [(ua, 0.0), (ub, 0.0), (ub, a.wall_top(ub)), (ua, a.wall_top(ua))]
-        for v0, v1, rear in ((a.v0, lo, 1), (hi, a.v1, -1)):  # rear (smaller v) and front end wall: yellow outside, cream inside
-            vm = (v0 + v1) / 2
-            _prism(S, top, v0, vm, yellow if rear > 0 else cream)
-            _prism(S, top, vm, v1, cream if rear > 0 else yellow)
-        S.box(ua, ub, a.v1 - T / 2, a.v1 + 0.03, 0.0, 0.6, plinth)
-        if a.name == "right":  # the left one stands against the sacristy
-            S.box(ua, ub, a.v0 - 0.03, a.v0 + T / 2, 0.0, 0.6, plinth)
-        fu0, fu1 = (a.in_u, IU0) if a.left else (IU1, a.in_u)
-        S.box(fu0, fu1, lo, hi, 0.0, F, floor)
-        if detail:  # a cream lining under the sloping roof
-            xa, xb = (a.in_u, a.nave_u) if a.left else (a.nave_u, a.in_u)
-            S.shed(xa, xb, lo, hi, a.ceiling(xa) - 0.005, a.ceiling(xb) - 0.005, 0.06, cream)
-        # arcade pillars on the aisle side, a marble square with the pilaster on the nave side
+    def floors_gallery_stairs(self) -> None:
+        S, floor, cream, marble, rib = self.S, self.floor, self.cream, self.marble, self.rib
+        # floors
+        S.box(IU0, IU1, NV0, NV1, 0.0, F, floor)
+        S.box(CU0, CU1, CV0, NV0, 0.0, F, floor)
+        # gallery on two columns, parapet (open at the stair head), organ case
+        S.box(IU0, IU1, GV0, IV1, GZ - 0.2, GZ, cream)
+        S.box(IU0 + STAIR_W, IU1, GV0, GV0 + 0.15, GZ, GZ + 0.8, rib)
+        for dx in (-1.6, 1.6):
+            S.box(CU + dx - 0.2, CU + dx + 0.2, GV0, GV0 + 0.4, F, GZ - 0.2, marble)
+        S.box(CU - 1.9, CU + 1.9, 12.8, IV1, GZ, GZ + 1.3, self.wood)
+        # stairs: steps to look at, a ramp to walk on
+        rise, run = (GZ - F) / STEPS, (GV0 - STAIR_V0) / STEPS
+        u0, u1 = IU0, IU0 + STAIR_W
+        if self.detail:
+            for k in range(STEPS):
+                S.box(u0, u1, STAIR_V0 + k * run, STAIR_V0 + (k + 1) * run, F, F + (k + 1) * rise, floor)
+        else:
+            a, b, c = (STAIR_V0, F), (GV0, F), (GV0, GZ)
+            lo = [(u0, v, z) for v, z in (a, b, c)]
+            hi = [(u1, v, z) for v, z in (a, b, c)]
+            S.solid(
+                [(lo, floor), (hi, floor)]
+                + [([lo[i], lo[j], hi[j], hi[i]], floor) for i, j in ((0, 1), (1, 2), (2, 0))]
+            )
+
+    def altars_and_pilasters(self) -> None:
+        S, marble, rib = self.S, self.marble, self.rib
+        # high altar backdrop (pews, altar table, lectern and stoup are props the game places, see church_info)
+        S.box(CU - 1.3, CU + 1.3, CV0, CV0 + 0.4, F, 3.6, marble)
+        # pilasters on the nave walls over the arcade pillars (and the bays beyond it): solid, so nobody walks through them
         for v in BAYS:
-            if any(abs(v - lo_v) < 0.5 or abs(v - hi_v) < 0.5 for lo_v, hi_v in ARCADES[a.name]):
-                pu0, pu1 = (a.u1 - 0.2, a.u1) if a.left else (a.u0, a.u0 + 0.2)
-                S.box(pu0, pu1, v - 0.4, v + 0.4, 0.0, ARCADE_Z, marble)
-    # floors
-    S.box(IU0, IU1, NV0, NV1, 0.0, F, floor)
-    S.box(CU0, CU1, CV0, NV0, 0.0, F, floor)
-    # gallery on two columns, parapet (open at the stair head), organ case
-    S.box(IU0, IU1, GV0, IV1, GZ - 0.2, GZ, cream)
-    S.box(IU0 + STAIR_W, IU1, GV0, GV0 + 0.15, GZ, GZ + 0.8, rib)
-    for dx in (-1.6, 1.6):
-        S.box(CU + dx - 0.2, CU + dx + 0.2, GV0, GV0 + 0.4, F, GZ - 0.2, marble)
-    S.box(CU - 1.9, CU + 1.9, 12.8, IV1, GZ, GZ + 1.3, wood)
-    # stairs: steps to look at, a ramp to walk on
-    rise, run = (GZ - F) / STEPS, (GV0 - STAIR_V0) / STEPS
-    u0, u1 = IU0, IU0 + STAIR_W
+            for x0, x1 in ((IU0, IU0 + 0.2), (IU1 - 0.2, IU1)):
+                S.box(x0, x1, v - 0.4, v + 0.4, F, Z_SPRING - 0.4, marble)
+        # side altars at the rear wall of each aisle: table and a backdrop
+        for a in AISLES:
+            v = a.iv[0]
+            cu = AISLE_ALTAR_U[a.name]
+            S.box(cu - 1.15, cu + 1.15, v, v + 0.7, F, F + 1.0, rib)
+            S.box(cu - 1.0, cu + 1.0, v, v + 0.4, F + 1.0, 3.2, marble)
+
+    def decoration(self) -> None:
+        """What only the visual mesh has: vault and ribs, the chancel's door and high altar, organ pipes, carpet."""
+        S, cream, rib, gold = self.S, self.cream, self.rib, self.gold
+        # vault, ribs over pilasters, ridge rib
+        _arc(IV0, IV1, 0.0, 0.1, S, cream)
+        c = (IU0 + IU1) / 2
+        S.box(c - 0.1, c + 0.1, IV0, IV1, Z_SPRING + VAULT_RISE - 0.14, Z_SPRING + VAULT_RISE, rib)
+        for v in BAYS:
+            _arc(v - 0.15, v + 0.15, -0.14, 0.14, S, rib)
+            for x0, x1, cap in ((IU0, IU0 + 0.2, IU0 + 0.28), (IU1 - 0.2, IU1, IU1 - 0.28)):
+                S.box(min(x0, cap), max(x1, cap), v - 0.38, v + 0.38, Z_SPRING - 0.4, Z_SPRING, rib)
+        # chancel: sacristy door, high altar (the paintings of the walls are props, see PAINTINGS)
+        S.plate("right", CU0, -9.9, _rect(1.1, F, F + 2.1), 0.05, self.wood)
+        S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
+        S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, self.canvas)
+        S.box(CU - 0.8, CU + 0.8, CV0, CV0 + 0.4, 3.6, 4.3, gold)
+        # organ pipes and gilding, carpet
+        for i in range(-9, 10):
+            x = CU + 0.19 * i
+            S.box(x - 0.07, x + 0.07, 12.9, 13.04, GZ + 1.3, 5.6 + 1.1 * abs(math.cos(i * math.pi / 6)), self.pipe)
+        S.box(CU - 1.95, CU + 1.95, 12.76, 12.8, GZ + 1.15, GZ + 1.3, gold)
+        S.box(CU - 0.6, CU + 0.6, -11.4, IV1, F, F + 0.015, self.carpet)
+
+
+def build_shell(S, detail: bool, yellow, plinth) -> None:
+    shell = _Shell(S, detail, yellow, plinth)
+    shell.nave_and_chancel_walls()
+    shell.aisles()
+    shell.floors_gallery_stairs()
+    shell.altars_and_pilasters()
     if detail:
-        for k in range(STEPS):
-            S.box(u0, u1, STAIR_V0 + k * run, STAIR_V0 + (k + 1) * run, F, F + (k + 1) * rise, floor)
-    else:
-        a, b, c = (STAIR_V0, F), (GV0, F), (GV0, GZ)
-        lo = [(u0, v, z) for v, z in (a, b, c)]
-        hi = [(u1, v, z) for v, z in (a, b, c)]
-        S.solid(
-            [(lo, floor), (hi, floor)]
-            + [([lo[i], lo[j], hi[j], hi[i]], floor) for i, j in ((0, 1), (1, 2), (2, 0))]
-        )
-    # high altar backdrop (pews, altar table, lectern and stoup are props the game places, see church_info)
-    S.box(CU - 1.3, CU + 1.3, CV0, CV0 + 0.4, F, 3.6, marble)
-    # pilasters on the nave walls over the arcade pillars (and the bays beyond it): solid, so nobody walks through them
-    for v in BAYS:
-        for x0, x1 in ((IU0, IU0 + 0.2), (IU1 - 0.2, IU1)):
-            S.box(x0, x1, v - 0.4, v + 0.4, F, Z_SPRING - 0.4, marble)
-    # side altars at the rear wall of each aisle: table and a backdrop
-    for a in AISLES:
-        v = a.iv[0]
-        cu = AISLE_ALTAR_U[a.name]
-        S.box(cu - 1.15, cu + 1.15, v, v + 0.7, F, F + 1.0, rib)
-        S.box(cu - 1.0, cu + 1.0, v, v + 0.4, F + 1.0, 3.2, marble)
-    if not detail:
-        return
-
-    # vault, ribs over pilasters, ridge rib
-    _arc(IV0, IV1, 0.0, 0.1, S, cream)
-    c = (IU0 + IU1) / 2
-    S.box(c - 0.1, c + 0.1, IV0, IV1, Z_SPRING + VAULT_RISE - 0.14, Z_SPRING + VAULT_RISE, rib)
-    for v in BAYS:
-        _arc(v - 0.15, v + 0.15, -0.14, 0.14, S, rib)
-        for x0, x1, cap in ((IU0, IU0 + 0.2, IU0 + 0.28), (IU1 - 0.2, IU1, IU1 - 0.28)):
-            S.box(min(x0, cap), max(x1, cap), v - 0.38, v + 0.38, Z_SPRING - 0.4, Z_SPRING, rib)
-    # chancel: sacristy door, high altar (the paintings of the walls are props, see PAINTINGS)
-    S.plate("right", CU0, -9.9, _rect(1.1, F, F + 2.1), 0.05, wood)
-    S.plate("front", CV0 + 0.4, CU, _arch(1.4, F + 1.1, 3.0, 0.5), 0.05, gold)
-    S.plate("front", CV0 + 0.4, CU, _arch(1.0, F + 1.3, 2.8, 0.4), 0.08, canvas)
-    S.box(CU - 0.8, CU + 0.8, CV0, CV0 + 0.4, 3.6, 4.3, gold)
-    # organ pipes and gilding, carpet
-    for i in range(-9, 10):
-        x = CU + 0.19 * i
-        S.box(x - 0.07, x + 0.07, 12.9, 13.04, GZ + 1.3, 5.6 + 1.1 * abs(math.cos(i * math.pi / 6)), pipe)
-    S.box(CU - 1.95, CU + 1.95, 12.76, 12.8, GZ + 1.15, GZ + 1.3, gold)
-    S.box(CU - 0.6, CU + 0.6, -11.4, IV1, F, F + 0.015, carpet)
+        shell.decoration()
 
 
-def church_info(b: dict, dz: float = 0.0) -> dict:
-    """``church.json``: door, aisle, seats (``stand``: a standing spot, ``pos`` on the floor) with routes, spots, demon anchors and shelter volumes of church ``b``.
+class _Frame:
+    """The church's local frame in map metres: ``u`` across, ``v`` along (front at +v), ``z`` up from the building base lifted by ``dz``;
+    ``into`` and ``out`` are the compass bearings of walking in (-v) and out (+v)."""
 
-    Points are ``[x east, y north, z up]`` in local metres (as ``parcels.json``; z as ``terrain.json``), yaws are
-    compass bearings in degrees (0 north, 90 east), normals are (east, north, up).
-    """
-    ex = b["footprint"]["exterior"]
-    ox, oy = (sum(p[k] for p in ex) / len(ex) for k in (0, 1))
-    a = float(b["model_axis"])
-    vx, vy = math.cos(a), math.sin(a)  # v axis; the u axis is (vy, -vx)
+    def __init__(self, b: dict, dz: float) -> None:
+        ex = b["footprint"]["exterior"]
+        self.ox, self.oy = (sum(p[k] for p in ex) / len(ex) for k in (0, 1))
+        a = float(b["model_axis"])
+        self.vx, self.vy = math.cos(a), math.sin(a)  # v axis; the u axis is (vy, -vx)
+        self.dz = dz
+        self.into, self.out = self.bearing(0, -1), self.bearing(0, 1)
 
-    def pt(u, v, z):
-        return [round(ox + u * vy + v * vx, 3), round(oy - u * vx + v * vy, 3), round(z + dz, 3)]
+    def pt(self, u, v, z):
+        return [round(self.ox + u * self.vy + v * self.vx, 3), round(self.oy - u * self.vx + v * self.vy, 3), round(z + self.dz, 3)]
 
-    def vec(u, v, z):
-        return [round(u * vy + v * vx, 4), round(-u * vx + v * vy, 4), z]
+    def vec(self, u, v, z):
+        return [round(u * self.vy + v * self.vx, 4), round(-u * self.vx + v * self.vy, 4), z]
 
-    def bearing(du, dv):
-        e, n = du * vy + dv * vx, -du * vx + dv * vy
+    def bearing(self, du, dv):
+        e, n = du * self.vy + dv * self.vx, -du * self.vx + dv * self.vy
         return round(math.degrees(math.atan2(e, n)) % 360, 2)
 
-    into, out = bearing(0, -1), bearing(0, 1)
-    aisle = [pt(CU, 15.2, F), pt(CU, 13.0, F)]
+
+def _seats_and_props(f: _Frame, aisle: list) -> tuple[list[dict], list[dict]]:
+    """The seats (``stand``: a standing spot, ``pos`` on the floor) with their routes from the door, and the props: pews, altar, lectern, stoup, paintings."""
+    pt, into, out = f.pt, f.into, f.out
     stair_u = IU0 + STAIR_W / 2
     up = aisle + [
         pt(CU, 3.1, F), pt(stair_u, 3.1, F), pt(stair_u, STAIR_V0, F), pt(stair_u, GV0, GZ),
@@ -451,12 +485,16 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
     ]
     # paintings: the canvas centre on the wall face, facing into the room; w and h are the canvas in metres
     props += [
-        {"kind": "painting", "pos": pt(p.u, p.v, p.z), "yaw": bearing(*p.face), "w": p.w, "h": p.h}
+        {"kind": "painting", "pos": pt(p.u, p.v, p.z), "yaw": f.bearing(*p.face), "w": p.w, "h": p.h}
         for p in PAINTINGS
     ]
+    return seats, props
 
-    # demon anchors: rings across the nave (upper wall, vault, upper wall), the pilaster rings with a second wall height,
-    # and rings across each aisle (outer wall, ceiling, nave wall); linked round a ring and along each role, aisle to nave
+
+def _demon_anchors(f: _Frame) -> list[dict]:
+    """The demon anchors: rings across the nave (upper wall, vault, upper wall), the pilaster rings with a second wall height,
+    and rings across each aisle (outer wall, ceiling, nave wall); linked round a ring and along each role, aisle to nave."""
+    pt, vec = f.pt, f.vec
     anchors: list[dict] = []
     roles: dict[str, list[tuple[float, int]]] = {}
 
@@ -505,15 +543,36 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
             link(i, j)
     for an in anchors:
         an["links"] = sorted(an["links"])
+    return anchors
+
+
+def _shelter_rooms(f: _Frame) -> list[dict]:
+    """The shelter volumes: the nave, the chancel and the two aisles (overlapping the nave's room across the arcade)."""
+    pt, dz = f.pt, f.dz
 
     def room(x0, x1, y0, y1, z1):
         ring = [pt(x, y, 0)[:2] for x, y in ((x0, y0), (x1, y0), (x1, y1), (x0, y1))]
         return {"polygon": ring, "z0": round(dz - 0.2, 3), "z1": round(dz + z1, 3)}
 
     rooms = [room(NX0 + 0.2, NX1 - 0.2, NV0, NV1 - 0.2, ZE), room(AX0 + 0.2, AX1 - 0.2, AV0 + 0.2, NV0, ZA)]
-    for al in AISLES:  # the aisles, overlapping the nave's room across the arcade
+    for al in AISLES:
         x0, x1 = (al.u0 + 0.2, al.u1 + 0.2) if al.left else (al.u0 - 0.2, al.u1 - 0.2)
         rooms.append(room(x0, x1, al.v0 + 0.2, al.v1 - 0.2, 5.2))
+    return rooms
+
+
+def church_info(b: dict, dz: float = 0.0) -> dict:
+    """``church.json``: door, aisle, seats (``stand``: a standing spot, ``pos`` on the floor) with routes, spots, demon anchors and shelter volumes of church ``b``.
+
+    Points are ``[x east, y north, z up]`` in local metres (as ``parcels.json``; z as ``terrain.json``), yaws are
+    compass bearings in degrees (0 north, 90 east), normals are (east, north, up).
+    """
+    f = _Frame(b, dz)
+    pt, into, out = f.pt, f.into, f.out
+    aisle = [pt(CU, 15.2, F), pt(CU, 13.0, F)]
+    seats, props = _seats_and_props(f, aisle)
+    anchors = _demon_anchors(f)
+    rooms = _shelter_rooms(f)
 
     return {
         "door": dict(zip("xyz", pt(CU, 17.2, 0.0)), yaw=into),
@@ -523,7 +582,7 @@ def church_info(b: dict, dz: float = 0.0) -> dict:
         "seats": seats,
         "pastor": {"pos": pt(CU, -9.3, F), "yaw": out},
         "monks": [{"pos": pt(CU + dx, -8.9, F), "yaw": out} for dx in (-1.2, 1.2)],
-        "sacristy_door": {"pos": pt(CU0 + 0.5, -9.9, F), "yaw": bearing(1, 0)},
+        "sacristy_door": {"pos": pt(CU0 + 0.5, -9.9, F), "yaw": f.bearing(1, 0)},
         "props": props,
         "anchors": anchors,
         "rooms": rooms,

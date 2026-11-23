@@ -5,8 +5,8 @@ under the map), not an input of the generated map and never exported or shipped.
 source (GKU Bratislava, NLC) forbids redistributing it and altering it, so nothing here may reach
 ``out/``; the files stay in the gitignored ``data/``. See docs/ortho.md.
 
-    python -m drycastle_pipeline.ortho            # level 11, about 0.6 m per pixel
-    python -m drycastle_pipeline.ortho --level 12 # 0.3 m per pixel, 4x the tiles
+    python -m drycastle_pipeline.sources.ortho            # level 11, about 0.6 m per pixel
+    python -m drycastle_pipeline.sources.ortho --level 12 # 0.3 m per pixel, 4x the tiles
 
 Reads the box (and polygon) ``fetch`` recorded in ``area.json``, downloads the WMTS tiles that cover
 it (EPSG:5514, so no reprojection) into ``tiles/`` and joins them into ``ortho.jpg`` cropped to the
@@ -19,9 +19,9 @@ import math
 from collections.abc import Sequence
 from pathlib import Path
 
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.frame import box_to_sjtsk
-from drycastle_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.frame import box_to_sjtsk
+from drycastle_pipeline.core.http import HttpError, PoliteClient
 
 WMTS = (
     "https://zbgisws.skgeodesy.sk/zbgis_ortofoto_wmts_sjtsk/service.svc/get/tile/1.0.0/"
@@ -196,7 +196,7 @@ def run(force: bool = False, **_options: object) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="drycastle_pipeline.ortho", description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(prog="drycastle_pipeline.sources.ortho", description=__doc__.split("\n")[0])
     p.add_argument("--level", type=int, default=DEFAULT_LEVEL, help=f"zoom 0..{MAX_LEVEL} (default {DEFAULT_LEVEL})")
     p.add_argument("--force", action="store_true", help="download the tiles again")
     args = p.parse_args(argv)

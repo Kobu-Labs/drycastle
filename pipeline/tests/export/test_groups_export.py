@@ -4,8 +4,9 @@ import json
 
 import pytest
 
-from drycastle_pipeline.export import build_groups, run_export
-from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.core.rules import DEFAULT_RULES
+from drycastle_pipeline.export.docs import build_groups
+from drycastle_pipeline.export.export import run_export
 from tests.synthetic import make_workspace
 
 

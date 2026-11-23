@@ -16,11 +16,11 @@ import shapely.prepared
 from shapely.geometry import LineString, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.meshes import Mesh, _polygons, triangulate
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.terrain import Terrain
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.mesh import Mesh, solid_polygons, triangulate
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.terrain.terrain import Terrain
 
 ROADS_FORMAT_VERSION = 1
 _TRUE = {"yes", "true", "1"}
@@ -253,7 +253,7 @@ def drape_mesh(foot, terrain: Terrain, lift: float, colour: list[int]) -> Mesh:
         # plane z = a.z + gx * (x - a.x) + gy * (y - a.y)
         gx = ((b[2] - a[2]) * (c[1] - a[1]) - (c[2] - a[2]) * (b[1] - a[1])) / det
         gy = ((c[2] - a[2]) * (b[0] - a[0]) - (b[2] - a[2]) * (c[0] - a[0])) / det
-        for poly in _polygons(piece):
+        for poly in solid_polygons(piece):
             for t in triangulate(poly):
                 if abs(_area2(t)) < 2e-6:
                     continue  # sliver from clipping along a terrain edge

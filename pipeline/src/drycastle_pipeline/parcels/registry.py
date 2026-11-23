@@ -23,7 +23,7 @@ from pathlib import Path
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from drycastle_pipeline.config import REPO_ROOT
+from drycastle_pipeline.core.config import REPO_ROOT
 
 DEFAULT_REGISTRY = REPO_ROOT / "registry" / "parcels.registry.json"
 FORMAT_VERSION = 1

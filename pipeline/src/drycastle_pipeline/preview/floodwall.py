@@ -1,7 +1,7 @@
 """Pictures of the flood wall kit (matplotlib), for looking at it without the game.
 
-    uv run python -m drycastle_pipeline.floodwall_preview [--out DIR] [--glb]
-    uv run python -m drycastle_pipeline.floodwall_preview --sync-manifest
+    uv run python -m drycastle_pipeline.preview.floodwall [--out DIR] [--glb]
+    uv run python -m drycastle_pipeline.preview.floodwall --sync-manifest
 
 writes into ``out/floodwall`` (by default):
 
@@ -14,7 +14,7 @@ writes into ``out/floodwall`` (by default):
 
 ``--sync-manifest`` instead rewrites the ``prim:floodwall_*`` entries of ``assets/manifest.json``
 from the generator (run it after changing the kit). The drawing is the painter's sort of
-``poles_preview``: good enough to judge shapes and colours, not a render of the game. The part of
+``preview/poles.py``: good enough to judge shapes and colours, not a render of the game. The part of
 a piece that is in the ground is cut away in the pictures.
 """
 
@@ -23,11 +23,17 @@ from pathlib import Path
 
 import numpy as np
 
-from drycastle_pipeline.assets import DEFAULT_MANIFEST
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.floodwall import PIECES, build_piece, lay_run, manifest_entries, run_mesh
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poles_preview import render_sheet, replace_entries
+from drycastle_pipeline.core.assets import DEFAULT_MANIFEST
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits.floodwall import (
+    PIECES,
+    build_piece,
+    lay_run,
+    manifest_entries,
+    run_mesh,
+)
+from drycastle_pipeline.preview.poles import render_sheet, replace_entries
 
 DEFAULT_OUT = REPO_ROOT / "out" / "floodwall"
 VILLAGE, RIVER = (-62.0, 14.0), (118.0, 14.0)  # where the camera stands: compass direction, elevation
@@ -67,7 +73,7 @@ def demo_run() -> Mesh:
 
 
 def write_glbs(out_dir: Path) -> None:
-    from drycastle_pipeline.export import build_chunk_scene
+    from drycastle_pipeline.export.gltf import build_chunk_scene
 
     for name in PIECES:
         scene = build_chunk_scene([], {name: build_piece(name).mesh})

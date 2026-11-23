@@ -9,28 +9,21 @@ import shapely
 from shapely.geometry import LineString, Point, Polygon, box
 from shapely.ops import unary_union
 
-from drycastle_pipeline import detail_meshes
-from drycastle_pipeline.detail import (
-    _hollow,
-    MOSS_SALT,
-    PATCH_PRIORITY,
-    ParcelContext,
-    area_type,
-    cap_clutter,
-    field_detail,
-    forest_detail,
-    free_area,
-    garden_detail,
-    patch_meshes,
-    patch_rows,
-    patches_by_chunk,
-    poisson_disc,
-    thin,
-)
-from drycastle_pipeline.meadow import clump
-from drycastle_pipeline.props import seeded
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.terrain import Terrain
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.detail import meshes as detail_meshes
+from drycastle_pipeline.detail.build import cap_clutter
+from drycastle_pipeline.detail.meadow import clump
+from drycastle_pipeline.detail.model import PATCH_PRIORITY, ParcelContext
+from drycastle_pipeline.detail.parts import free_area
+from drycastle_pipeline.detail.patches import patch_meshes, patch_rows, patches_by_chunk
+from drycastle_pipeline.detail.recipes import area_type
+from drycastle_pipeline.detail.recipes_field import field_detail
+from drycastle_pipeline.detail.recipes_forest import MOSS_SALT, forest_detail
+from drycastle_pipeline.detail.recipes_garden import garden_detail
+from drycastle_pipeline.detail.swamp import _hollow
+from drycastle_pipeline.detail.tools import poisson_disc, thin
+from drycastle_pipeline.props.helpers import seeded
+from drycastle_pipeline.terrain.terrain import Terrain
 
 
 def flat_terrain() -> Terrain:
@@ -285,7 +278,8 @@ def test_a_yard_has_garden_flowers_only_and_tall_grass_by_the_fence(cfg: dict) -
 
 def test_garden_paths_and_beds_never_lead_to_a_neighbours_building() -> None:
     from shapely.geometry import box
-    from drycastle_pipeline.detail import _own_buildings
+
+    from drycastle_pipeline.detail.recipes_garden import _own_buildings
 
     class Ctx:  # only what _own_buildings reads
         polygon = box(0, 0, 20, 6)

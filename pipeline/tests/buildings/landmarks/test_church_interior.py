@@ -12,8 +12,8 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from drycastle_pipeline import church_interior as ci
-from drycastle_pipeline.landmarks import church_solids
+from drycastle_pipeline.buildings.landmarks import church_interior as ci
+from drycastle_pipeline.buildings.landmarks.catalog import church_solids
 
 UNIT = {"id": "church", "footprint": {"exterior": [[-1, -1], [1, -1], [1, 1], [-1, 1]]}, "model_axis": math.pi / 2}
 
@@ -130,8 +130,8 @@ def test_window_panes_one_per_opening_and_see_through(collision) -> None:
 
 
 def test_window_frames_are_thin_dark_and_hold_the_glass(visual) -> None:
-    from drycastle_pipeline.buildings import hex_to_rgb
-    from drycastle_pipeline.landmarks import IRON
+    from drycastle_pipeline.buildings.landmarks.catalog import IRON
+    from drycastle_pipeline.core.colour import hex_to_rgb
 
     iron = np.array(hex_to_rgb(IRON))
     cols = np.array(church_solids(True).cols)

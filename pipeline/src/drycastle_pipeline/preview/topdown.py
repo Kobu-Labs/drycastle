@@ -21,13 +21,13 @@ from matplotlib.patches import Patch, PathPatch
 from matplotlib.path import Path as MplPath
 from shapely.geometry import box, shape
 
-from drycastle_pipeline.config import REPO_ROOT, map_paths
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
-from drycastle_pipeline.rules import DEFAULT_RULES
-from drycastle_pipeline.ground import ground_units
-from drycastle_pipeline.scene import MapScene, build_scene
-from drycastle_pipeline.textures import flat_mesh, split_tex_node
+from drycastle_pipeline.core.config import REPO_ROOT, map_paths
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.core.rules import DEFAULT_RULES
+from drycastle_pipeline.core.textures import flat_mesh, split_tex_node
+from drycastle_pipeline.export.scene import MapScene, build_scene
+from drycastle_pipeline.ground.areas import ground_units
+from drycastle_pipeline.parcels.normalise import DEFAULT_WORK_DIR
 
 DEFAULT_PREVIEW_DIR = REPO_ROOT / "out" / "preview"
 KIND_COLOURS = {

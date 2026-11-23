@@ -3,8 +3,8 @@
 import json
 import math
 
-from drycastle_pipeline import sketchfile
-from drycastle_pipeline import streetview_follow as sf
+from drycastle_pipeline.edits import sketchfile
+from drycastle_pipeline.photos import streetview_follow as sf
 
 PANO = (
     "https://www.google.com/maps/@48.4024653,16.8607311,146a,75y,97.24h,54.44t/data=!3m7!1e1!3m5!1sCNVvw83Yn7gxmoWBmBRK5g"

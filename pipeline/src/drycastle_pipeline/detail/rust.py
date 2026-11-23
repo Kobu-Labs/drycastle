@@ -1,6 +1,6 @@
 """The Rust engine of the ``detail`` stage (``--engine rust``, ``DRYCASTLE_DETAIL_ENGINE=rust``).
 
-Python stays the orchestrator: it reads the work files, the rules and ``edits.json`` exactly like :class:`detail.Village`, resolves
+Python stays the orchestrator: it reads the work files, the rules and ``edits.json`` exactly like :class:`detail.village.Village`, resolves
 what the Python stage resolves (the detail rules of every ground type, the terrain colour of every unit, the recipe of every unit,
 the water patches, the placed objects' clearance discs) and hands it over as one JSON document plus the terrain arrays to the extension
 module ``drycastle_detail`` (``pipeline/rust/detail``, built with ``make detail-rust-build``). The module does the per-unit work on
@@ -18,18 +18,27 @@ from pathlib import Path
 
 import numpy as np
 
-from drycastle_pipeline import detail as D
-from drycastle_pipeline.assets import ASSETS_DIR, load_manifest
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.detail_meshes import KINDS, TINTABLE
-from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
-from drycastle_pipeline.footpaths import path_polygons
-from drycastle_pipeline.ground import ground_kind, ground_types, ground_units, type_colours, water_kinds, with_parcel_types
-from drycastle_pipeline.ground_attributes import attributes_of
-from drycastle_pipeline.patches import plan_patches
-from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
-from drycastle_pipeline.terrain import load_terrain
-from drycastle_pipeline.textures import load_textures
+from drycastle_pipeline.core.assets import ASSETS_DIR, load_manifest
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES, _merge, load_section
+from drycastle_pipeline.core.textures import load_textures
+from drycastle_pipeline.detail.footpaths import path_polygons
+from drycastle_pipeline.detail.meshes import KINDS, TINTABLE
+from drycastle_pipeline.detail.model import _PATCH_ROW, PATCH_TEXTURE
+from drycastle_pipeline.detail.recipes import area_type, dike_parcels
+from drycastle_pipeline.detail.swamp import swamp_zone
+from drycastle_pipeline.edits.schema import DEFAULT_EDITS, EditsError, load_edits
+from drycastle_pipeline.ground.areas import (
+    ground_kind,
+    ground_types,
+    ground_units,
+    type_colours,
+    water_kinds,
+    with_parcel_types,
+)
+from drycastle_pipeline.ground.attributes import attributes_of
+from drycastle_pipeline.ground.patches import plan_patches
+from drycastle_pipeline.terrain.terrain import load_terrain
 
 BUILD_HINT = "build it with `make detail-rust-build` (maturin develop, see docs/pipeline.md \"Rust engine\")"
 
@@ -57,7 +66,7 @@ def _polys(geom) -> list[dict]:
 
 def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dict, np.ndarray, np.ndarray, tuple[int, int, bytes], list[str]]:
     """The input document of the engine, the terrain arrays, the dike texture (width, height, rgb bytes) and the warnings."""
-    from drycastle_pipeline.scene import ParcelColours  # heavy imports, only for the stage
+    from drycastle_pipeline.export.scene import ParcelColours
 
     cfg = load_section("detail", rules_path)
     tree_cfg = load_section("props", rules_path)["trees"]
@@ -77,10 +86,10 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     cfgs: dict[str, dict] = {}
     seq = {p["id"]: i for i, p in enumerate(units)}  # the crop recipe walks the neighbours in the order of the work files
     for p in sorted(units, key=lambda u: u["id"]):
-        recipe = D.area_type(p, types)
+        recipe = area_type(p, types)
         out_units.append({
             "id": p["id"], "seq": seq[p["id"]], "kind": ground_kind(p), "recipe": recipe or "",  # the kind the detail goes by: a parcel's ground type of the edits first
-            "whole_dike": bool(p["id"] in D.dike_parcels() or p["kind"] == "dike"),
+            "whole_dike": bool(p["id"] in dike_parcels() or p["kind"] == "dike"),
             "colour": colours._pick(p), "polygon": p["polygon"],
         })
         if recipe is None:
@@ -110,10 +119,10 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
     plan = plan_patches(load_edits(edits_path), parcels_doc.get("origin_epsg5514"), terrain, types)
     water_patches = [q for p in plan.patches.values() if p.water_y is not None for q in _polys(p.polygon)]
     stands = tree_cfg.get("stands")
-    swamp = D.swamp_zone(units, types, plan, terrain, float(stands["swamp"]["reach_m"])) if stands and "swamp" in stands else None
+    swamp = swamp_zone(units, types, plan, terrain, float(stands["swamp"]["reach_m"])) if stands and "swamp" in stands else None
 
     lib = load_textures()
-    tex_list = sorted(set(D.PATCH_TEXTURE.values()))
+    tex_list = sorted(set(PATCH_TEXTURE.values()))
     image = (1, 1, b"\x00\x00\x00")
     if any(u["recipe"] == "dike" or u["whole_dike"] for u in out_units) or cfg["dike"].get("clips"):
         import matplotlib.image as mpimg
@@ -134,7 +143,7 @@ def build_input(work_dir: Path, rules_path: Path, edits_path: Path) -> tuple[dic
         "roads": [{"id": e["id"], "highway": e["highway"], "width": float(e["width"]), "osm_id": e.get("osm_id") or "", "polyline": e["polyline"]}
                   for e in graph["edges"]],
         "objects": discs,
-        # worn footpaths of the edits (footpaths.py): trodden ground, joined to the dirt of the verges by the engine
+        # worn footpaths of the edits (detail/footpaths.py): trodden ground, joined to the dirt of the verges by the engine
         "paths": [p for g in path_polygons(load_edits(edits_path).paths, tuple(parcels_doc.get("origin_epsg5514") or (0.0, 0.0))) for p in _polys(g)],
         # the two bands of thin grass beside them, inner and outer: the path's edge fades into the ground
         "path_fringe": [[p for g in path_polygons(load_edits(edits_path).paths, tuple(parcels_doc.get("origin_epsg5514") or (0.0, 0.0)), band) for p in _polys(g)]
@@ -159,8 +168,8 @@ def drape_patches(patches: list, terrain, lift_m: float, textures: list[str], th
     import shapely
     from shapely.geometry import MultiPolygon
 
-    from drycastle_pipeline.patches import _polygons
-    from drycastle_pipeline.textures import texture
+    from drycastle_pipeline.core.textures import texture
+    from drycastle_pipeline.ground.patches import _polygons
 
     mod = load_module()
     jobs, blobs, at = [], [], 0
@@ -179,7 +188,7 @@ def drape_patches(patches: list, terrain, lift_m: float, textures: list[str], th
                        "rows": int(terrain.heights.shape[0]), "cols": int(terrain.heights.shape[1])}, "jobs": jobs}
     rows, counts = mod.drape(json.dumps(doc), b"".join(blobs), np.ascontiguousarray(terrain.heights, dtype="<f8").tobytes(),
                              np.ascontiguousarray(terrain.valid, dtype=np.uint8).tobytes(), threads)
-    return np.frombuffer(rows, dtype="<f8").reshape(-1, D._PATCH_ROW), list(counts)
+    return np.frombuffer(rows, dtype="<f8").reshape(-1, _PATCH_ROW), list(counts)
 
 
 def run_engine(

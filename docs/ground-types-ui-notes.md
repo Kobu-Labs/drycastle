@@ -1,7 +1,7 @@
 # Ground types (Ground tool): UI notes
 
-Standard: `docs/standards/ui-ux.md`. Code: `godot/viewer/EditorMode.GroundTypes.cs` (page, edits, keys), `godot/viewer/GroundTypeEdits.cs`
-(model: attribute catalog, merge, validation, the table of detail settings), `godot/viewer/EditorMode.GroundMap.cs` (the ground map),
+Standard: `docs/standards/ui-ux.md`. Code: `godot/viewer/Editor/EditorMode.GroundTypes.cs` (page, edits, keys), `godot/viewer/Edits/GroundTypeEdits.cs`
+(model: attribute catalog, merge, validation, the table of detail settings), `godot/viewer/Editor/EditorMode.GroundMap.cs` (the ground map),
 rail icon `ground` in `IconGlyph.cs`, theme variations `BannerPanel` and `ReadOnlyBox` in `EditorTheme.cs`. The Ground tool's patches are
 in `docs/patches-zones-ui-notes.md`. Storage, merge rule and attribute catalog: `docs/pipeline.md` "Ground types"; decisions: ADR 0015,
 ADR 0022 (a ground type is terrain only; spawning, events and wildlife are zone kinds, the ground stack and the attribute layers are gone).

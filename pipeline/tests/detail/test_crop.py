@@ -3,14 +3,28 @@
 import numpy as np
 import pytest
 import shapely
-from shapely.geometry import Polygon, box
+from shapely.geometry import box
 
-from drycastle_pipeline import detail as D
-from drycastle_pipeline.crop import ARTIFACT_KINDS, CROP_KINDS, PLANT_KINDS, _row_frame, crop_detail, crop_plan, plant_density
-from drycastle_pipeline.ground import ground_types
-from drycastle_pipeline.ground_attributes import attributes_of
-from drycastle_pipeline.rules import _merge, load_section
-from tests.test_detail import flat_terrain
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.geometry import polygons
+from drycastle_pipeline.core.rules import _merge, load_section
+from drycastle_pipeline.detail.build import build_village_detail
+from drycastle_pipeline.detail.crop import (
+    ARTIFACT_KINDS,
+    CROP_KINDS,
+    PLANT_KINDS,
+    _row_frame,
+    crop_detail,
+    crop_plan,
+    plant_density,
+)
+from drycastle_pipeline.detail.documents import crops_document
+from drycastle_pipeline.detail.model import ParcelContext, VillageDetail
+from drycastle_pipeline.detail.recipes import area_type
+from drycastle_pipeline.detail.tools import _union
+from drycastle_pipeline.ground.areas import ground_types
+from drycastle_pipeline.ground.attributes import attributes_of
+from tests.detail.test_detail import flat_terrain
 
 CROPS = ("crop_grain", "crop_corn", "crop_potato", "crop_rapeseed", "crop_bare")
 
@@ -39,8 +53,8 @@ ALWAYS_FALLOW = {"fallow": {"probability": 1.0}}
 ALWAYS_STUBBLE = {"stubble": {"probability": 1.0}, "fallow": {"probability": 0}}
 
 
-def field(kind: str, poly=None, pid="P-7001", neighbours=None) -> D.ParcelContext:
-    return D.ParcelContext(
+def field(kind: str, poly=None, pid="P-7001", neighbours=None) -> ParcelContext:
+    return ParcelContext(
         id=pid, kind=kind, polygon=poly or box(0, 0, 60, 40), buildings=[], fences=[], trees=[], road=None,
         terrain=flat_terrain(), tree_cfg={}, crop_neighbours=neighbours,
     )
@@ -50,7 +64,7 @@ def test_every_crop_is_a_drawn_only_type_of_the_crop_recipe(types) -> None:
     for k in CROPS:
         a = attributes_of(types[k])
         assert a["recipe"] == "crop" and "osm" not in types[k] and "rule" not in types[k]
-        assert D.area_type({"id": "A-1", "kind": k}, types) == "crop"
+        assert area_type({"id": "A-1", "kind": k}, types) == "crop"
 
 
 def test_same_patch_gives_identical_output(rules, types) -> None:
@@ -124,7 +138,7 @@ def test_feathered_edge_is_stepped_bands_into_the_surround(rules, types) -> None
     res = crop_detail(field("crop_grain"), c)
     bands = [p for p in res.patches if p.layer.startswith("crop_edge_")]
     assert len({p.layer for p in bands}) >= 8  # 8 or more bands: a gradient, not stripes
-    sur = np.array(D.hex_to_rgb(rules["crop"]["surround"]))  # nothing beside the patch: the fallback colour
+    sur = np.array(hex_to_rgb(rules["crop"]["surround"]))  # nothing beside the patch: the fallback colour
     core = np.array(next(p for p in res.patches if p.layer == "crop_ground").colour)
     by = {}
     for p in bands:
@@ -139,7 +153,7 @@ def test_feathered_edge_is_stepped_bands_into_the_surround(rules, types) -> None
     depth = max(min(x, 60 - x, y, 40 - y) for p in bands for x, y in shapely.get_coordinates(p.geom))
     assert depth >= 6.0
     # the bands interleave: their edges wander, so the outer band is broken up and reaches deeper than its nominal width
-    assert len(D._polys(next(p for p in bands if p.layer == "crop_edge_5").geom)) >= 1
+    assert len(polygons(next(p for p in bands if p.layer == "crop_edge_5").geom)) >= 1
     # corn keeps its plant wall but the ground blends too
     walled = crop_detail(field("crop_corn"), cfg_for(rules, types, "crop_corn", QUIET))
     assert len({p.layer for p in walled.patches if p.layer.startswith("crop_edge_")}) >= 8
@@ -164,7 +178,7 @@ def test_the_blend_takes_the_colour_of_the_ground_that_really_lies_outside(rules
     near = lambda col, ref: np.linalg.norm(np.array(col) - np.array(ref))  # noqa: E731
     # the first band is nearly the neighbour's colour, each side its own; the surround colour is not used
     assert min(near(p.colour, [30, 60, 160]) for p in left) < 45 and min(near(p.colour, [200, 40, 40]) for p in right) < 45
-    sur = D.hex_to_rgb(rules["crop"]["surround"])
+    sur = hex_to_rgb(rules["crop"]["surround"])
     assert all(near(p.colour, sur) > 60 for p in left + right)
     # and a stretch with another neighbour: the colours differ along the edge
     assert near(left[0].colour, right[0].colour) > 100
@@ -206,7 +220,7 @@ def test_a_road_beside_the_field_gives_the_verge_colour(rules, types) -> None:
     ctx = field("crop_grain", box(0, 0, 60, 40))
     ctx.road = box(-20, -6, 80, -1)
     res = crop_detail(ctx, c)
-    verge = np.array(D.hex_to_rgb(rules["crop"]["edge"]["neighbour"]["road"]))
+    verge = np.array(hex_to_rgb(rules["crop"]["edge"]["neighbour"]["road"]))
     low = [p for p in res.patches if p.layer == "crop_edge_1" and p.geom.centroid.y < 5 and 15 < p.geom.centroid.x < 45]
     assert low and min(np.linalg.norm(np.array(p.colour) - verge) for p in low) < 40
 
@@ -214,7 +228,7 @@ def test_a_road_beside_the_field_gives_the_verge_colour(rules, types) -> None:
 def test_headland_is_broken_not_a_clean_band(rules, types) -> None:
     res = crop_detail(field("crop_grain"), cfg_for(rules, types, "crop_grain", QUIET))
     head = next(p for p in res.patches if p.layer == "crop_headland")
-    assert head.texture == "dirt" and len(D._polys(head.geom)) > 4
+    assert head.texture == "dirt" and len(polygons(head.geom)) > 4
     assert head.geom.area < 0.55 * (box(0, 0, 60, 40).area - box(2, 2, 58, 38).area)
 
 
@@ -256,10 +270,10 @@ def test_patches_are_disjoint(rules, types) -> None:
 
 def test_crops_document_and_chunks(rules, types) -> None:
     res = crop_detail(field("crop_rapeseed"), cfg_for(rules, types, "crop_rapeseed"))
-    det = D.VillageDetail(250.0, {}, np.zeros((0, 19)), [], {}, None, {(0, 0): {}})
+    det = VillageDetail(250.0, {}, np.zeros((0, 19)), [], {}, None, {(0, 0): {}})
     for c in res.crops:
         det.crops[(0, 0)].setdefault(c["kind"], []).append([c["x"], c["y"], c["z"], c["rot"], c["scale"]])
-    doc = D.crops_document(det, rules | {"crop_kinds": rules["crop_kinds"]})
+    doc = crops_document(det, rules | {"crop_kinds": rules["crop_kinds"]})
     assert set(doc["kinds"]) == set(CROP_KINDS) == set(rules["crop_kinds"])
     assert doc["kinds"]["crop_rapeseed"]["asset"] == "pack:drycastle-generated-models/rapeseed_plant"
     assert all(len(r) == 5 for rows in doc["chunks"]["0_0"].values() for r in rows)
@@ -290,7 +304,7 @@ def test_every_patch_has_its_own_tone_plant_height_and_row_angle(rules, types) -
         pid = f"P-{7100 + plans.index(pl)}"
         res = crop_detail(field("crop_corn", pid=pid), c)
         heights.append(np.mean([x["scale"] for x in plants_of(res)]))
-        base = np.array(D.hex_to_rgb(c["crop"]["ground_colours"][0]))
+        base = np.array(hex_to_rgb(c["crop"]["ground_colours"][0]))
         got = np.array(next(q for q in res.patches if q.layer == "crop_ground").colour)
         assert np.all(np.abs(got - np.clip(base * pl.tone[0], 0, 255)) <= 0.02 * 255 + 2)
     assert heights[1] / heights[0] > 1.1 * 0.9 * (hi.plant_mult / lo.plant_mult) / 1.1
@@ -313,7 +327,7 @@ def test_tramlines_are_pairs_of_tracks_18_to_24_m_apart_without_plants(rules, ty
         res = crop_detail(ctx, c)
         tram = next(p for p in res.patches if p.layer == "crop_tramline")
         assert sum(tram.colour) < sum(next(p for p in res.patches if p.layer == "crop_ground").colour)  # darker
-        ys = sorted(round(g.centroid.y, 2) for g in D._polys(tram.geom))  # the rows run along x: a track is a strip of constant y
+        ys = sorted(round(g.centroid.y, 2) for g in polygons(tram.geom))  # the rows run along x: a track is a strip of constant y
         assert len(ys) >= 6  # three pairs in 70 m
         pairs = [(a, b) for a, b in zip(ys[0::2], ys[1::2], strict=True)]
         assert all(abs((b - a) - 1.8) < 0.15 for a, b in pairs)
@@ -321,7 +335,7 @@ def test_tramlines_are_pairs_of_tracks_18_to_24_m_apart_without_plants(rules, ty
         assert all(abs((m2 - m1) - plan.tram_spacing) < 0.3 for m1, m2 in zip(mids, mids[1:], strict=False))
         assert 18.0 <= plan.tram_spacing <= 24.0
         seen.add(round(plan.tram_spacing, 1))
-        assert all(abs(g.bounds[3] - g.bounds[1] - 0.5) < 0.05 for g in D._polys(tram.geom))
+        assert all(abs(g.bounds[3] - g.bounds[1] - 0.5) < 0.05 for g in polygons(tram.geom))
         assert not any(tram.geom.buffer(-0.01).contains(shapely.Point(x["x"], x["y"])) for x in plants_of(res))
         assert tram.geom.bounds[0] > -60 + 0.5 and tram.geom.bounds[2] < 60 - 0.5  # stops short of the headland
     assert len(seen) > 1  # every patch its own spacing
@@ -336,7 +350,7 @@ def test_dirt_strips_along_one_or_two_edges(rules, types) -> None:
     res = crop_detail(field("crop_grain", BIG, "P-7311"), c)
     ds = next(p for p in res.patches if p.layer == "crop_dirtstrip")
     assert ds.texture == "dirt" and ds.geom.area > 60
-    assert len(D._polys(ds.geom)) >= 1 and not any(ds.geom.buffer(-0.01).contains(shapely.Point(x["x"], x["y"])) for x in plants_of(res))
+    assert len(polygons(ds.geom)) >= 1 and not any(ds.geom.buffer(-0.01).contains(shapely.Point(x["x"], x["y"])) for x in plants_of(res))
     none = cfg_for(rules, types, "crop_grain", QUIET, {"tramlines": {"edge_strip": {"probability": 0.0}}})
     assert not [p for p in crop_detail(field("crop_grain", BIG, "P-7311"), none).patches if p.layer == "crop_dirtstrip"]
 
@@ -348,13 +362,13 @@ def test_a_stubble_stripe_has_straw_ground_bales_and_no_plants(rules, types) -> 
         assert crop_plan(ctx, c["crop"]).stubble
         res = crop_detail(ctx, c)
         st = next(p for p in res.patches if p.layer == "crop_stubble")
-        straw = np.array(D.hex_to_rgb(c["crop"]["stubble"]["colours"][0]))
+        straw = np.array(hex_to_rgb(c["crop"]["stubble"]["colours"][0]))
         assert np.linalg.norm(np.array(st.colour) - straw) < 40
         share = sum(p.geom.area for p in res.patches if p.layer in ("crop_stubble", "crop_stubble_rows")) / BIG.area  # without its border zone
         assert 0.1 < share < 0.6
         bales = [x for x in res.crops if x["kind"] in ("art_hay_bale_round", "art_hay_bale_square")]
         assert len(bales) >= 4 and len({b["kind"] for b in bales}) == 1  # one kind per patch, lined
-        whole = D._union([p.geom for p in res.patches if p.layer in ("crop_stubble", "crop_stubble_rows") or p.layer.startswith("crop_edge_")])  # the border zone of a stripe is straw-mixed
+        whole = _union([p.geom for p in res.patches if p.layer in ("crop_stubble", "crop_stubble_rows") or p.layer.startswith("crop_edge_")])  # the border zone of a stripe is straw-mixed
         assert all(whole.buffer(0.05).contains(shapely.Point(b["x"], b["y"])) for b in bales)
         assert not any(st.geom.buffer(-0.05).contains(shapely.Point(x["x"], x["y"])) for x in plants_of(res))
         assert plants_of(res)  # the rest is still planted
@@ -373,8 +387,8 @@ def test_stubble_bands_blend_to_straw_not_to_the_crop_colour(rules, types) -> No
     ctx = field("crop_grain", BIG, "P-7401")
     ctx.ground_around = around(("A", box(-90, -45, 90, 45).difference(BIG), [100, 130, 90], False))
     res = crop_detail(ctx, c)
-    straw = np.array(c["crop"]["stubble"]["colours"][0] and D.hex_to_rgb(c["crop"]["stubble"]["colours"][0]))
-    base = np.array(D.hex_to_rgb(c["crop"]["ground_colours"][0]))
+    straw = np.array(c["crop"]["stubble"]["colours"][0] and hex_to_rgb(c["crop"]["stubble"]["colours"][0]))
+    base = np.array(hex_to_rgb(c["crop"]["ground_colours"][0]))
     deep = [np.array(p.colour) for p in res.patches if p.layer in ("crop_edge_7", "crop_edge_8")]
     to_straw = [x for x in deep if np.linalg.norm(x - straw) < np.linalg.norm(x - base)]
     to_base = [x for x in deep if np.linalg.norm(x - base) < np.linalg.norm(x - straw)]
@@ -393,8 +407,8 @@ def test_fallow_is_weedy_grass_without_crop_plants_and_keeps_its_type(rules, typ
     assert {"crop_tone", "crop_tone_2"} <= layers and any(x.startswith("crop_flower_") for x in layers)
     assert not layers & {"crop_tramline", "crop_stubble"}
     assert len([x for x in res.crops if x["kind"] in ARTIFACT_KINDS]) <= int(c["crop"]["fallow"]["max_artifacts"])
-    flowers = D._union([p.geom for p in res.patches if p.layer.startswith("crop_flower_")])
-    assert 0 < len(D._polys(flowers)) < 400 and flowers.area < 0.02 * 2400
+    flowers = _union([p.geom for p in res.patches if p.layer.startswith("crop_flower_")])
+    assert 0 < len(polygons(flowers)) < 400 and flowers.area < 0.02 * 2400
     # a share of the patches (config), whatever the type
     share = np.mean([crop_plan(field("crop_grain", pid=f"P-{8000 + i}"), cfg_for(rules, types, "crop_grain")["crop"]).fallow for i in range(400)])
     assert 0.09 < share < 0.22 and abs(rules["crop"]["fallow"]["probability"] - 0.15) < 1e-9
@@ -442,7 +456,7 @@ def test_each_patch_picks_one_or_two_artifact_kinds_and_sometimes_a_lone_extra(r
 
 
 def test_triangle_budget_of_the_wide_blend(rules, types) -> None:
-    from drycastle_pipeline.detail import patch_meshes
+    from drycastle_pipeline.detail.patches import patch_meshes
 
     c = cfg_for(rules, types, "crop_grain")
     ctx = field("crop_grain", box(-50, -30, 50, 30))
@@ -468,7 +482,7 @@ def ws(tmp_path_factory):
         parcel("P-0004", "crop_grain", box(40, 115, 120, 190)), parcel("P-0007", "crop_potato", box(120, 115, 200, 190)),
     ]
     (work / "parcels.json").write_text(json.dumps(doc))
-    from drycastle_pipeline.props import run_props
+    from drycastle_pipeline.props.props import run_props
 
     rules = tmp / "rules.yaml"
     import yaml
@@ -480,23 +494,23 @@ def ws(tmp_path_factory):
 
 def test_village_builds_crop_patches_instances_and_a_baulk(ws) -> None:
     work, tmp = ws
-    res = D.build_village_detail(work, edits_path=tmp / "no-edits.json")
+    res = build_village_detail(work, edits_path=tmp / "no-edits.json")
     layers = res.stats["patch_triangles_by_type"]["crop"]
     assert layers.get("crop_baulk", 0) + layers.get("crop_baulk_dirt", 0) > 0 and layers["crop_headland"] > 0
     kinds = {k for rows in res.crops.values() for k in rows}
     assert {"crop_wheat", "crop_potato"} <= kinds and kinds & set(ARTIFACT_KINDS)
-    doc = D.crops_document(res)
+    doc = crops_document(res)
     assert doc["format_version"] == 1 and doc["chunks"] and set(doc["kinds"]) == set(CROP_KINDS)
     assert not any(k in res.clutter.get(key, {}) for key in res.clutter for k in CROP_KINDS)  # not clutter
     # only crop units, the same instances
-    only = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
+    only = build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
     assert only.crops == res.crops
 
 
 def test_crop_units_in_processes_give_the_same_village(ws) -> None:
     work, tmp = ws
-    one = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
-    many = D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop", workers=3)
+    one = build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
+    many = build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop", workers=3)
     assert many.crops == one.crops and many.clutter == one.clutter
     assert many.patches.tobytes() == one.patches.tobytes() and len(one.patches) > 0
     assert many.stats["patch_triangles_by_type"] == one.stats["patch_triangles_by_type"]

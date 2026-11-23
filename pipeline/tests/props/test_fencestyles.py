@@ -4,19 +4,19 @@ import struct
 import numpy as np
 import pytest
 
-from drycastle_pipeline.assets import ASSETS_DIR, DEFAULT_MANIFEST
-from drycastle_pipeline.edits import COLUMN_TYPES, FENCE_TYPES, parse
-from drycastle_pipeline.export import build_chunk_scene, parcel_props_nodes
-from drycastle_pipeline.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
-from drycastle_pipeline.propmeshes import fence_meshes, parcel_props_meshes
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.textures import (
+from drycastle_pipeline.core.assets import ASSETS_DIR, DEFAULT_MANIFEST
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.core.textures import (
     flat_mesh,
     load_textures,
     split_tex_node,
     tex_node_name,
     texture,
 )
+from drycastle_pipeline.edits.schema import COLUMN_TYPES, FENCE_TYPES, parse
+from drycastle_pipeline.export.gltf import build_chunk_scene, parcel_props_nodes
+from drycastle_pipeline.props.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
+from drycastle_pipeline.props.propmeshes import fence_meshes, parcel_props_meshes
 
 PROPS = load_section("props")
 FENCE = PROPS["fences"]

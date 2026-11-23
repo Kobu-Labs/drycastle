@@ -12,11 +12,21 @@ from shapely.geometry import Point, box, mapping
 
 pytest.importorskip("drycastle_detail", reason="build the Rust engine: make detail-rust-build")
 
-from drycastle_pipeline import detail as D
-from drycastle_pipeline import detail_rust as R
-from drycastle_pipeline import meadow as M
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.props import run_props
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.detail import detail as D
+from drycastle_pipeline.detail import meadow as M
+from drycastle_pipeline.detail import rust as R
+from drycastle_pipeline.detail.build import build_village_detail
+from drycastle_pipeline.detail.documents import write_detail
+from drycastle_pipeline.detail.model import PATCH_TEXTURE, DetailResult, Patch
+from drycastle_pipeline.detail.patches import (
+    _draped_rows,
+    load_patches,
+    patch_meshes,
+    patch_rows,
+    patches_by_chunk,
+)
+from drycastle_pipeline.props.props import run_props
 from tests.synthetic import make_workspace
 
 FILES = ("detail.json", "detail_patches.npy", "detail_patches.json", "detail_meadow.bin")
@@ -35,7 +45,7 @@ def ws(tmp_path_factory):
 @pytest.fixture(scope="module")
 def py_result(ws):
     work, tmp = ws
-    return D.build_village_detail(work, edits_path=tmp / "no-edits.json")
+    return build_village_detail(work, edits_path=tmp / "no-edits.json")
 
 
 def run_rust(ws, out, threads):
@@ -56,7 +66,7 @@ def test_engine_is_identical_for_any_thread_count(ws, tmp_path) -> None:
 def test_files_have_the_formats_of_the_python_stage(ws, py_result, tmp_path) -> None:
     py_dir = tmp_path / "py"
     py_dir.mkdir()
-    D.write_detail(py_dir, py_result)
+    write_detail(py_dir, py_result)
     out = tmp_path / "rs"
     run_rust(ws, out, 2)
     assert (py_dir / "detail_patches.json").read_text() == (out / "detail_patches.json").read_text()
@@ -67,9 +77,9 @@ def test_files_have_the_formats_of_the_python_stage(ws, py_result, tmp_path) -> 
     assert da["chunk_size_m"] == db["chunk_size_m"]
     rows = [r for kinds in db["chunks"].values() for rs in kinds.values() for r in rs]
     assert rows and all(len(r) in (5, 6) for r in rows)
-    _, tex = D.load_patches(py_dir)
-    rows_rs, tex_rs = D.load_patches(out)
-    assert tex == tex_rs and len(D.patches_by_chunk(rows_rs, tex_rs, 250.0)) > 0
+    _, tex = load_patches(py_dir)
+    rows_rs, tex_rs = load_patches(out)
+    assert tex == tex_rs and len(patches_by_chunk(rows_rs, tex_rs, 250.0)) > 0
     ma, mb = M.decode((py_dir / "detail_meadow.bin").read_bytes()), M.decode((out / "detail_meadow.bin").read_bytes())
     assert [x.name for x in ma.layers] == [x.name for x in mb.layers] and ma.cell_m == mb.cell_m
     assert all(x.mixes == y.mixes for x, y in zip(ma.layers, mb.layers, strict=True))
@@ -92,11 +102,11 @@ def test_moss_layer_matches_the_python_stage(ws, py_result, tmp_path) -> None:
     # the same recipe with other random draws: the moss triangles agree in order of magnitude
     py_dir, out = tmp_path / "py", tmp_path / "rs"
     py_dir.mkdir()
-    D.write_detail(py_dir, py_result)
+    write_detail(py_dir, py_result)
     run_rust(ws, out, 2)
     counts = []
     for d in (py_dir, out):
-        rows, tex = D.load_patches(d)
+        rows, tex = load_patches(d)
         assert "moss" in tex
         counts.append(int((rows[:, 18] == tex.index("moss")).sum()))
     assert counts[0] > 50 and counts[1] == pytest.approx(counts[0], rel=0.6), counts
@@ -115,14 +125,14 @@ def test_nothing_on_buildings_and_clutter_stands_on_the_ground(ws, tmp_path) -> 
                 assert not building.contains(Point(x, y))
                 assert 99.0 < z < 125.0 and scale > 0
     assert n > 100
-    rows, _ = D.load_patches(tmp_path / "rs")
+    rows, _ = load_patches(tmp_path / "rs")
     tris = rows[:, :9].reshape(-1, 3, 3)
     cx, cy = tris[:, :, 0].mean(axis=1), tris[:, :, 1].mean(axis=1)
     assert not any(building.contains(Point(x, y)) for x, y in zip(cx, cy, strict=True))
 
 
 def test_stage_runs_rust_only(monkeypatch) -> None:
-    from drycastle_pipeline import detail_rust
+    from drycastle_pipeline.detail import rust as detail_rust
 
     called = {}
     monkeypatch.setattr(detail_rust, "run", lambda **kw: called.update(kw, ran=True) or 0)
@@ -150,7 +160,7 @@ def wet_ws(ws, tmp_path_factory):
 def test_swamp_ground_matches_the_python_stage(wet_ws, tmp_path) -> None:
     work, tmp = wet_ws
     edits = tmp / "no-edits.json"
-    py = D.build_village_detail(work, edits_path=edits)
+    py = build_village_detail(work, edits_path=edits)
     stats, _ = R.run_engine(work, edits_path=edits, threads=2, out_dir=tmp_path)
     assert not stats["failed"]
     for recipe in ("forest", "field"):  # the forest and the meadow (a field recipe) both take the wet floor
@@ -163,7 +173,7 @@ def test_swamp_ground_matches_the_python_stage(wet_ws, tmp_path) -> None:
     # the meadow raster: the cells within reach of water have the swamp mix, in the same places
     py_dir = tmp_path / "py"
     py_dir.mkdir()
-    D.write_detail(py_dir, py)
+    write_detail(py_dir, py)
     cells = []
     for d in (py_dir, tmp_path):
         m = M.decode((d / "detail_meadow.bin").read_bytes())
@@ -193,26 +203,26 @@ def _tri_area(rows: np.ndarray) -> np.ndarray:
 def test_drape_patches_matches_the_python_drape(ws) -> None:
     """The engine's drape for patches built in Python (the crop fields): the same area per patch, on the terrain, with the colours,
     texture coordinates and row order of the Python build; the triangles themselves are cut differently."""
-    from drycastle_pipeline.terrain import load_terrain
-    from drycastle_pipeline.textures import texture
+    from drycastle_pipeline.core.textures import texture
+    from drycastle_pipeline.terrain.terrain import load_terrain
 
     work, _ = ws
     terrain, _ = load_terrain(work)
     c = terrain.coverage.centroid
     hole = Point(c.x + 6, c.y + 4).buffer(5)
     patches = [
-        D.Patch("crop_ground", Point(c.x, c.y).buffer(60).difference(hole), colour=[90, 70, 40]),
-        D.Patch("dirt", box(c.x - 80, c.y - 9, c.x - 30, c.y + 31), colour=[200, 180, 160], texture="dirt", angle=0.4, origin=(c.x, c.y)),
-        D.Patch("gravel", hole, texture="gravel", lift=0.2),
-        D.Patch("lawn", box(c.x + 1e6, c.y, c.x + 1e6 + 5, c.y + 5), colour=[1, 2, 3]),  # off the terrain: no rows
+        Patch("crop_ground", Point(c.x, c.y).buffer(60).difference(hole), colour=[90, 70, 40]),
+        Patch("dirt", box(c.x - 80, c.y - 9, c.x - 30, c.y + 31), colour=[200, 180, 160], texture="dirt", angle=0.4, origin=(c.x, c.y)),
+        Patch("gravel", hole, texture="gravel", lift=0.2),
+        Patch("lawn", box(c.x + 1e6, c.y, c.x + 1e6 + 5, c.y + 5), colour=[1, 2, 3]),  # off the terrain: no rows
     ]
-    textures = sorted(set(D.PATCH_TEXTURE.values()))
+    textures = sorted(set(PATCH_TEXTURE.values()))
     lift = 0.03
-    res = D.DetailResult("P-test", patches=patches)
+    res = DetailResult("P-test", patches=patches)
     tally_py: dict = {}
-    py = D.patch_rows(*D.patch_meshes(res, terrain, lift, tally_py), textures)
+    py = patch_rows(*patch_meshes(res, terrain, lift, tally_py), textures)
     by_type: dict = {}
-    rs = D._draped_rows([("crop", patches)], R.drape_patches, terrain, lift, textures, by_type)
+    rs = _draped_rows([("crop", patches)], R.drape_patches, terrain, lift, textures, by_type)
     assert set(by_type["crop"]) == set(tally_py) == {"crop_ground", "dirt", "gravel"}
     assert rs.shape[1] == py.shape[1] == 19 and len(rs) == sum(by_type["crop"].values())
     # the same blocks in the same order: flat first, then the textures by id

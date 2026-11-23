@@ -8,7 +8,7 @@ import pytest
 from PIL import Image, ImageDraw
 from shapely.geometry import box, mapping
 
-from drycastle_pipeline import ortho_trees as ot
+from drycastle_pipeline.sources import ortho_trees as ot
 
 RES = 0.6
 SIZE = 300

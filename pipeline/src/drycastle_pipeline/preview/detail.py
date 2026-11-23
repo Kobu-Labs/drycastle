@@ -1,6 +1,6 @@
 """A top-down picture of the ground detail of one parcel (Pillow), for judging the look without the game.
 
-    uv run python -m drycastle_pipeline.detail_preview [--parcel P-0637] [--out DIR]
+    uv run python -m drycastle_pipeline.preview.detail [--parcel P-0637] [--out DIR]
                                                        [--work DIR] [--px-per-m 28] [--zoom 70]
 
 writes ``<out>/detail_<parcel>.png`` (the parcel, or the busiest 40 m square of a big one) and
@@ -18,13 +18,14 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-from drycastle_pipeline.assets import ASSETS_DIR
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.config import REPO_ROOT, map_paths
-from drycastle_pipeline.detail import CLUTTER_KINDS, DetailResult, ParcelContext, run_parcel
-from drycastle_pipeline.detail_meshes import clutter_meshes, tint_rgb
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.textures import texture
+from drycastle_pipeline.core.assets import ASSETS_DIR
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.config import REPO_ROOT, map_paths
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.core.textures import texture
+from drycastle_pipeline.detail.build import run_parcel
+from drycastle_pipeline.detail.meshes import clutter_meshes, tint_rgb
+from drycastle_pipeline.detail.model import DetailResult, ParcelContext
 
 DEFAULT_OUT = REPO_ROOT / "out" / "detail"
 OUTSIDE = (122, 154, 106)

@@ -1,7 +1,7 @@
 """Tools for modelling a landmark from photos (``.claude/skills/photo-to-building``): read the footprint, look at the mesh.
 
-    uv run python -m drycastle_pipeline.landmark_tools footprint P-0666 [--view X,Y]   (a parcel, a property G-xxxx, or building ids)
-    uv run python -m drycastle_pipeline.landmark_tools render w378900337 w1226408502 --model bus_garage --out DIR
+    uv run python -m drycastle_pipeline.photos.landmark_tools footprint P-0666 [--view X,Y]   (a parcel, a property G-xxxx, or building ids)
+    uv run python -m drycastle_pipeline.photos.landmark_tools render w378900337 w1226408502 --model bus_garage --out DIR
 
 ``footprint`` prints, for each building, its corners (in the order ``landmark_kit.check_footprint`` wants them), every
 edge with its length, the compass side it faces, the building it is shared with and the distance to the nearest road, and
@@ -10,7 +10,7 @@ model name, so ``make rules`` is not needed while iterating; ``--collision`` dra
 picture per outer edge, seen square-on from outside at eye height (``edge_<building>_<i>.png``), two from above
 (``roof_a.png``, ``roof_b.png``) and, with ``--view X,Y`` (where a photo was taken), ``view.png`` as seen from there.
 
-    uv run python -m drycastle_pipeline.landmark_tools near w378900337 [--within 6]
+    uv run python -m drycastle_pipeline.photos.landmark_tools near w378900337 [--within 6]
 
 ``near`` lists the fences, placed objects, lamps and trees of the exported map that stand close to the footprint.
 """
@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-from drycastle_pipeline.config import REPO_ROOT
+from drycastle_pipeline.core.config import REPO_ROOT
 
 WORK = REPO_ROOT / "data" / "village" / "work"
 SIDES = ("N", "NE", "E", "SE", "S", "SW", "W", "NW")
@@ -202,8 +202,8 @@ def _raster(tris: np.ndarray, cols: np.ndarray, eye, target, fov: float, size=(1
 
 
 def render(ids: list[str], out: Path, model: str | None, collision: bool, view: tuple[float, float] | None = None) -> list[Path]:
-    from drycastle_pipeline.landmarks import build_landmark
-    from drycastle_pipeline.meshes import Mesh
+    from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
+    from drycastle_pipeline.core.mesh import Mesh
 
     bs = _buildings(ids)
     if model:

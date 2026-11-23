@@ -6,10 +6,10 @@ from pathlib import Path
 import numpy as np
 from shapely.geometry import Polygon, box, mapping
 
-from drycastle_pipeline.buildings import derive_building, load_building_rules
-from drycastle_pipeline.roads import build_graph
-from drycastle_pipeline.rules import load_section
-from drycastle_pipeline.terrain import flatten_buildings, grid_from_samples, save_terrain
+from drycastle_pipeline.buildings.derive import derive_building, load_building_rules
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.roads.roads import build_graph
+from drycastle_pipeline.terrain.terrain import flatten_buildings, grid_from_samples, save_terrain
 
 COVERAGE = box(10, 10, 210, 200)
 # Absolute S-JTSK position of the local origin (0, 0) of the synthetic map.
@@ -77,7 +77,7 @@ def make_workspace(tmp: Path) -> dict[str, Path]:
     raw.mkdir()
     rules = load_building_rules()
     b1 = derive_building("w1", "P-0001", box(60, 55, 75, 70), {"roof:shape": "gabled"}, rules)
-    # one list of ground units with the kinds of both parcels and ground areas (ground.py): the stages read the kind only
+    # one list of ground units with the kinds of both parcels and ground areas (ground/areas.py): the stages read the kind only
     parcels = [
         parcel("P-0001", "building_plot", box(40, 40, 95, 100), ["w1"]),
         parcel("P-0002", "garden", box(95, 40, 140, 100)),

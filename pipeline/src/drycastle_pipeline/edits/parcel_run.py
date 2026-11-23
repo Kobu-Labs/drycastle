@@ -25,18 +25,14 @@ import shapely
 from shapely.geometry import shape
 from shapely.geometry.base import BaseGeometry
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
-from drycastle_pipeline.props import (
-    EditPlan,
-    make_fences,
-    plan_edits,
-    unknown_asset_warnings,
-)
-from drycastle_pipeline.roads import edge_lines
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.terrain import load_terrain
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits.schema import DEFAULT_EDITS, EditsError, load_edits
+from drycastle_pipeline.props.edit_plan import EditPlan, plan_edits, unknown_asset_warnings
+from drycastle_pipeline.props.fences import make_fences
+from drycastle_pipeline.roads.roads import edge_lines
+from drycastle_pipeline.terrain.terrain import load_terrain
 
 FRAGMENT_FORMAT_VERSION = 1
 # Parcels whose boundaries are closer than this can influence each other's fence de-duplication
@@ -190,8 +186,8 @@ def write_glb(path: Path, fragment: dict, fcfg: dict) -> None:
     Same mesh functions, glTF axes and node naming as the chunk export (z scale 1), and the same
     frame as the chunk files: add it at the map root. Parcels without fences or trees get no nodes.
     """
-    from drycastle_pipeline.export import build_chunk_scene, export_glb, parcel_props_nodes
-    from drycastle_pipeline.propmeshes import parcel_props_meshes
+    from drycastle_pipeline.export.gltf import build_chunk_scene, export_glb, parcel_props_nodes
+    from drycastle_pipeline.props.propmeshes import parcel_props_meshes
 
     by_f: dict[str, list[dict]] = {}
     by_t: dict[str, list[dict]] = {}

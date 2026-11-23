@@ -2,7 +2,7 @@
 import json
 import struct
 
-from drycastle_pipeline.assets import DEFAULT_MANIFEST, load_manifest
+from drycastle_pipeline.core.assets import DEFAULT_MANIFEST, load_manifest
 
 MANIFEST = load_manifest(private=False)
 SIGNS = ["sign_stop", "sign_give_way", "sign_main_road"]

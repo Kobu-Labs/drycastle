@@ -39,8 +39,9 @@ from shapely.geometry import box as _rect
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import footprint_polygon, hex_to_rgb
-from drycastle_pipeline.meshes import Mesh, _polygons, triangulate
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh, solid_polygons, triangulate
 
 # ---- measures ------------------------------------------------------------------------------------
 L, D = 22.4, 9.15  # front length, depth
@@ -140,7 +141,7 @@ class _Build:
 
     def region(self, shape, to3, colour, normal) -> None:
         """Any flat region (may have holes), given in the two coordinates ``to3`` lifts into space."""
-        for poly in _polygons(shape):
+        for poly in solid_polygons(shape):
             for tri in triangulate(orient(poly, 1.0)):
                 self.face([to3(*c) for c in tri], colour, normal)
 

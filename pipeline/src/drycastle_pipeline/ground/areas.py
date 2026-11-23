@@ -6,7 +6,7 @@ gardens) is not kept as parcels; it is cut into **ground areas** by type instead
 
 * a ground patch of ``edits.json`` (``ground_patches``) is a hand-drawn ground area: its polygon outside the parcels is
   ground of its type, whatever the rules say (:func:`drawn_ground`; where two overlap the higher ID wins). A patch of a
-  water type (it has a ``water_y``) is no ground area: it is its own body of water (``water.py``);
+  water type (it has a ``water_y``) is no ground area: it is its own body of water (``terrain/water.py``);
 * then the types of ``ground.types`` are tried in their order and each takes what is left of its source: OSM
   landuse/natural polygons (``osm``), or the flood dike of ``detail.dike`` (``rule: dike``, see :func:`dike_ground`);
 * what no type claims is ``ground.default``.
@@ -16,10 +16,10 @@ A ground area is written to ``parcels.json`` under ``ground`` in the shape of a 
 colour, detail recipes, trees, water) read parcels and ground areas alike through :func:`ground_units`.
 
 **A type is a named bundle of terrain attributes** (ADR 0015, 0022; the catalog is
-:mod:`drycastle_pipeline.ground_attributes`): the entry of ``ground.types`` has ``osm`` or ``rule`` (where it takes land
+:mod:`drycastle_pipeline.ground.attributes`): the entry of ``ground.types`` has ``osm`` or ``rule`` (where it takes land
 from, none: hand-drawn or the default only) and ``attributes``: terrain ``colours``, detail ``recipe`` (one of
 ``detail.RECIPES``) with optional ``detail`` settings laid over that recipe's section of the rules, and ``water``. (Trees
-are not a property of a type: they come from the orthophoto only. What an area means in play is a zone, ``zones.py``.)
+are not a property of a type: they come from the orthophoto only. What an area means in play is a zone, ``edits/zones.py``.)
 Every point has exactly one ground type, so a ground area has one ``kind`` and there is nothing to stack. The user can
 override and extend the types in ``edits.json`` (``ground_types``, see :func:`ground_types`); every stage that reads the
 types passes the edits path. Ground areas have no fence, no edits and no cadastral reference, and their IDs are only
@@ -33,8 +33,8 @@ from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from drycastle_pipeline.ground_attributes import ATTRIBUTES, attributes_of, carries_terrain
-from drycastle_pipeline.rules import DEFAULT_RULES, _merge, load_section
+from drycastle_pipeline.core.rules import DEFAULT_RULES, _merge, load_section
+from drycastle_pipeline.ground.attributes import ATTRIBUTES, attributes_of, carries_terrain
 
 ID_PREFIX = "A-"
 
@@ -93,8 +93,8 @@ def drawn_ground(
     ``areas`` are ``(type, polygon)``, the winner of an overlap first (the higher ID). A patch of a water type (it has a
     ``water_y``) makes no ground area: it is a body of water of its own. ``warnings`` name the patches whose type is not in
     ``types`` (or carries no attribute at all); such a patch is skipped."""
-    from drycastle_pipeline.edits import polygon_ring
-    from drycastle_pipeline.patches import patch_rank
+    from drycastle_pipeline.edits.schema import polygon_ring
+    from drycastle_pipeline.ground.patches import patch_rank
 
     areas: list[tuple[str, Polygon]] = []
     warnings: list[str] = []
@@ -218,7 +218,7 @@ def ground_types(rules_path: Path = DEFAULT_RULES, edits_path: Path | None = Non
     types = rules_ground_types(rules_path)
     if edits_path is None:
         return types
-    from drycastle_pipeline.edits import load_edits
+    from drycastle_pipeline.edits.schema import load_edits
 
     return merge_ground_types(types, load_edits(edits_path).ground_types)
 
@@ -272,7 +272,7 @@ def with_parcel_types(units: list[dict], edits_path: Path | None) -> list[dict]:
     one is the same dict. :func:`ground_kind` reads it."""
     if edits_path is None:
         return units
-    from drycastle_pipeline.edits import load_edits
+    from drycastle_pipeline.edits.schema import load_edits
 
     own = {pid: e["ground_type"] for pid, e in load_edits(edits_path).parcels.items() if e.get("ground_type")}
     return [{**u, "ground_type": own[u["id"]]} if u["id"] in own else u for u in units] if own else units

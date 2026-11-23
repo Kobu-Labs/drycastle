@@ -5,9 +5,9 @@ forbid bulk storage and derived datasets, so they stay local (``data/`` is gitig
 in a release, and nothing (textures, traced models) may be generated from them automatically.
 Needs ``GOOGLE_MAPS_KEY`` (Street View Static API enabled, see docs/streetview.md).
 
-    python -m drycastle_pipeline.streetview                                   # coverage report (free)
-    python -m drycastle_pipeline.streetview --building w378920327 --download
-    python -m drycastle_pipeline.streetview --download --max-images 200
+    python -m drycastle_pipeline.photos.streetview                                   # coverage report (free)
+    python -m drycastle_pipeline.photos.streetview --building w378920327 --download
+    python -m drycastle_pipeline.photos.streetview --download --max-images 200
 
 Metadata requests are free; every downloaded image is billed (~$0.007), so ``--download`` is
 required and ``--max-images`` (default 100) caps one run. Already downloaded images are skipped.
@@ -19,8 +19,8 @@ import math
 import os
 from collections.abc import Sequence
 
-from drycastle_pipeline.config import load_dotenv, map_paths
-from drycastle_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline.core.config import load_dotenv, map_paths
+from drycastle_pipeline.core.http import HttpError, PoliteClient
 
 KEY_ENV = "GOOGLE_MAPS_KEY"
 META_URL = "https://maps.googleapis.com/maps/api/streetview/metadata"
@@ -128,7 +128,7 @@ def fov_for(radius_m: float, dist_m: float) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="drycastle_pipeline.streetview", description=__doc__.split("\n")[0])
+    p = argparse.ArgumentParser(prog="drycastle_pipeline.photos.streetview", description=__doc__.split("\n")[0])
     p.add_argument("--building", action="append", default=[], metavar="ID",
                    help="OSM way id as in buildings.json, e.g. w378920327 (repeatable; none = all)")
     p.add_argument("--views", type=int, default=3, help="views per building (default 3)")

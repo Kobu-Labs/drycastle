@@ -1,6 +1,6 @@
 """Follow a Google Street View tab live: where you stand and look, for the viewer's character.
 
-Reference only, like ``streetview.py``: nothing is read from the imagery, only the address of the tab
+Reference only, like ``photos/streetview.py``: nothing is read from the imagery, only the address of the tab
 (``.../@48.40,16.86,146a,75y,97h,...``), which holds where you stand and where you look. Every time it
 changes the position is written to ``out/streetview-position.json``; the viewer (``--editor``) watches that
 file, puts the character there and, in the top-down view (T), draws a red point under it
@@ -12,7 +12,7 @@ With ``--sketch`` the position is also kept as one moving point and a short view
 Needs a Chrome with its debugging port open (the script can start one with its own throw-away profile):
 
     cd pipeline
-    uv run python -m drycastle_pipeline.streetview_follow --launch
+    uv run python -m drycastle_pipeline.photos.streetview_follow --launch
 
 Then open Street View in the window that appeared and walk. Without ``--launch`` it attaches to a Chrome
 that was started with ``--remote-debugging-port=9222``.
@@ -34,10 +34,10 @@ from pathlib import Path
 
 from pyproj import Transformer
 
-from drycastle_pipeline import sketchfile
+from drycastle_pipeline.edits import sketchfile
 
 SKETCH_NAME = "STREETVIEW"
-OUT_DIR = Path(__file__).resolve().parents[3] / "out"
+OUT_DIR = Path(__file__).resolve().parents[4] / "out"
 DEFAULT_SKETCH_FILE = sketchfile.default_path()
 DEFAULT_POSITION_FILE = OUT_DIR / "streetview-position.json"
 POSITION_FORMAT_VERSION = 1
@@ -175,7 +175,6 @@ def follow(
             continue
         if capturer is not None:  # a press of the capture key in the tab since the last look
             capturer.poll()
-        current = next((p for p in (parse_maps_url(u) for u in urls) if p), None)
         for url in urls:
             parsed = parse_maps_url(url)
             if parsed and parsed != last:
@@ -198,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sketch", nargs="?", type=Path, const=DEFAULT_SKETCH_FILE, default=None,
                     help="also keep the position as a point and a view line in this sketch.json (default ~/.local/state/drycastle/sketch.json)")
     ap.add_argument("--interval", type=float, default=0.5, help="seconds between looks at the tab (default 0.5)")
-    ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photo_capture.py)")
+    ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photos/photo_capture.py)")
     ap.add_argument("--capture-key", default="c", help="the capture key (default c)")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
     ap.add_argument("--start", default="48.4024653,16.8607311", help="lat,lon the launched Chrome opens at")
@@ -211,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
           + (f" and {args.sketch}" if args.sketch else "") + " (Ctrl-C stops)")
     capturer = None
     if args.capture:
-        from drycastle_pipeline.photo_capture import PHOTOS_DIR, Capturer
+        from drycastle_pipeline.photos.photo_capture import PHOTOS_DIR, Capturer
 
         capturer = Capturer(args.port, args.capture_key)
         print(f"capture: aim the middle of the view at a building and press {args.capture_key.upper()} in the Street View tab; pictures go to {PHOTOS_DIR}")

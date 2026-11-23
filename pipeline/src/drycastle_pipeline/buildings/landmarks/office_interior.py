@@ -32,9 +32,10 @@ import math
 
 import numpy as np
 
-from drycastle_pipeline.building_detail import Detail
-from drycastle_pipeline.landmarks import _Solids
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.buildings.landmarks.catalog import _Solids
+from drycastle_pipeline.buildings.openings import Detail
+from drycastle_pipeline.core.geometry import bearing_deg
+from drycastle_pipeline.core.mesh import Mesh
 
 SW_BAR, MIDDLE_BAR = "w378900312", "w378900355"
 
@@ -299,10 +300,6 @@ def office_panes(b: dict, d: Detail | None) -> list[tuple[str, list, dict]]:
     return out
 
 
-def _bearing(e: float, n: float) -> float:
-    return round(math.degrees(math.atan2(e, n)) % 360, 2)
-
-
 def urad_info(elevation: dict[str, float]) -> dict:
     """``urad.json``: the entrance, the rooms, where the workers sit, the dictation desk and the CCTV station.
 
@@ -325,12 +322,12 @@ def urad_info(elevation: dict[str, float]) -> dict:
     def prop(model, frame, a, b, f, up, boxes):
         to, u, n, z = frames[frame]
         e, nn = {"+t": u, "-t": (-u[0], -u[1]), "+w": n, "-w": (-n[0], -n[1])}[f]
-        return {"model": f"office/{model}", "pos": at(to(a, b), z + F + up), "yaw": _bearing(e, nn), "boxes": [list(x) for x in boxes]}
+        return {"model": f"office/{model}", "pos": at(to(a, b), z + F + up), "yaw": bearing_deg(e, nn), "boxes": [list(x) for x in boxes]}
 
     return {
         "doorway": {
             "pos": at(porch((DOOR_G[0] + DOOR_G[1]) / 2, SETBACK + T / 2), zm + F),
-            "yaw": _bearing(-PORCH_N[0], -PORCH_N[1]), "width": round(DOOR_G[1] - DOOR_G[0], 3), "height": DOOR_H,
+            "yaw": bearing_deg(-PORCH_N[0], -PORCH_N[1]), "width": round(DOOR_G[1] - DOOR_G[0], 3), "height": DOOR_H,
         },
         "volume": [
             room("entry", [porch(0.0, SETBACK), ENTRY_Y, ENTRY_X, V4], zm),
@@ -338,12 +335,12 @@ def urad_info(elevation: dict[str, float]) -> dict:
             room("mayor", [bar(0, 0), bar(l3, 0), bar(l3, BAR_W), bar(0, BAR_W)], zb),
         ],
         "workers": [
-            {"role": role, "pos": at(bar(t, w), zb + F + SEAT_H), "yaw": _bearing(*facing[f]), "female": female}
+            {"role": role, "pos": at(bar(t, w), zb + F + SEAT_H), "yaw": bearing_deg(*facing[f]), "female": female}
             for role, t, w, f, female, _ in WORKERS
         ],
         "atlas": "glb/atlas/simple_office.png",
         "props": [prop(*p) for p in PROPS],
         "glass_prefix": f"window_{SW_BAR}_",  # the panes that stand in real openings: the game draws them clear
-        "table": {"pos": at(bar(mt, mw), zb + F), "yaw": _bearing(*BAR_U)},
-        "cctv": {"pos": at(bar(*CCTV), zb + F), "yaw": _bearing(-BAR_N[0], -BAR_N[1])},
+        "table": {"pos": at(bar(mt, mw), zb + F), "yaw": bearing_deg(*BAR_U)},
+        "cctv": {"pos": at(bar(*CCTV), zb + F), "yaw": bearing_deg(-BAR_N[0], -BAR_N[1])},
     }

@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from drycastle_pipeline import sketchfile
+from drycastle_pipeline.edits import sketchfile
 
 
 def test_write_uses_unique_temp_and_leaves_none(tmp_path, monkeypatch):

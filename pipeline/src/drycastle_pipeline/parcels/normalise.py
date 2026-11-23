@@ -13,8 +13,8 @@ from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, polygonize, unary_union
 
-from drycastle_pipeline.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
-from drycastle_pipeline.frame import Frame
+from drycastle_pipeline.core.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
+from drycastle_pipeline.core.frame import Frame
 
 DEFAULT_WORK_DIR = REPO_ROOT / "data" / "village" / "work"
 LANDUSE_CLASSES = ("landuse", "natural")

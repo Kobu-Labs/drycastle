@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-PACKAGE_DIR = Path(__file__).resolve().parent
+PACKAGE_DIR = Path(__file__).resolve().parents[1]
 PIPELINE_DIR = PACKAGE_DIR.parents[1]
 REPO_ROOT = PIPELINE_DIR.parent
 DEFAULT_CONFIG = PIPELINE_DIR / "config" / "map.local.yaml"

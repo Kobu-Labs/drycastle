@@ -8,8 +8,8 @@ import math
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
 
 
 def box_tris(
@@ -402,7 +402,7 @@ def fence_meshes(sections: list[dict], cfg: dict) -> tuple[Mesh, dict]:
 
     Sections without a fence type are plain boxes; typed ones get their style (``fencestyles``).
     """
-    from drycastle_pipeline.fencestyles import styled_fence_meshes  # it imports this module
+    from drycastle_pipeline.props.fencestyles import styled_fence_meshes
 
     styled_flat, textured = styled_fence_meshes(sections, cfg)
     return Mesh.concat([fence_mesh(sections, cfg, untyped_only=True), styled_flat]), textured

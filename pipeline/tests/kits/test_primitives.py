@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from drycastle_pipeline.assets import (
+from drycastle_pipeline.core.assets import (
     CATEGORIES,
     DEFAULT_MANIFEST,
     MANIFEST_FORMAT_VERSION,
@@ -9,8 +9,14 @@ from drycastle_pipeline.assets import (
     load_manifest,
     validate_asset_ref,
 )
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.primitives import PRIMITIVES, build_primitive, mound_entry, mound_solids, mound_tiers
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.kits.primitives import (
+    PRIMITIVES,
+    build_primitive,
+    mound_entry,
+    mound_solids,
+    mound_tiers,
+)
 
 MANIFEST = load_manifest(private=False)  # the public library: the private packs have their own rules
 # Packs whose terms the owner has not confirmed yet: listed and placeable, but flagged UNVERIFIED with a NOTICE.txt instead of CC0 + LICENSE.txt.
@@ -132,7 +138,7 @@ def test_validate_asset_ref() -> None:
 
 
 def test_props_warns_for_unknown_assets_only() -> None:
-    from drycastle_pipeline.props import unknown_asset_warnings
+    from drycastle_pipeline.props.edit_plan import unknown_asset_warnings
 
     objs = [
         {"id": "a", "asset": "prim:slab"},
@@ -220,7 +226,7 @@ def test_mound_manifest_entry_in_sync_and_ref_valid() -> None:
 
 
 def test_graves_are_deterministic_fit_their_rectangle_and_face_outward() -> None:
-    from drycastle_pipeline import graves
+    from drycastle_pipeline.kits import graves
 
     for i in range(40):
         length, width = (2.66, 1.52) if i % 3 else (2.4, 2.2)

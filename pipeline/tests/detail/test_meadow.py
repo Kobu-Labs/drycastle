@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from drycastle_pipeline import meadow
+from drycastle_pipeline.detail import meadow
 
 
 def _raster() -> meadow.Meadow:
@@ -76,7 +76,7 @@ def test_voronoi_patches_are_uniform_and_clumps_keep_the_mean() -> None:
 
 
 def test_forest_floor_kinds_are_small_and_lie_low() -> None:
-    from drycastle_pipeline import detail_meshes as dm
+    from drycastle_pipeline.detail import meshes as dm
 
     meshes = dm.clutter_meshes()
     assert set(dm.FOREST_FLOOR) <= set(meshes)
@@ -89,8 +89,8 @@ def test_forest_floor_kinds_are_small_and_lie_low() -> None:
 
 
 def test_forest_floor_is_a_clumped_layer_and_the_forest_total_stays_in_range() -> None:
-    from drycastle_pipeline import detail_meshes as dm
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
+    from drycastle_pipeline.detail import meshes as dm
 
     cfg = load_section("detail")["meadow"]
     layers = {layer.name: layer for layer in meadow.meadow_layers(cfg)}
@@ -113,7 +113,7 @@ def test_forest_floor_is_a_clumped_layer_and_the_forest_total_stays_in_range() -
 def test_swamp_ground_carries_the_swamp_mix_and_its_clutter_is_reeds() -> None:
     from shapely.geometry import box
 
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     cfg = load_section("detail")["meadow"]
     m = meadow.new_meadow(cfg, 250.0)

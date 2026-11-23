@@ -15,7 +15,8 @@ seen from the yard), ``a`` across the front towards the side part, ``v`` into th
 
 import math
 
-from drycastle_pipeline.landmark_kit import (
+from drycastle_pipeline.buildings.landmarks.catalog import _Solids
+from drycastle_pipeline.buildings.landmarks.kit import (
     Frame,
     boundary,
     check_footprint,
@@ -26,12 +27,12 @@ from drycastle_pipeline.landmark_kit import (
     to_mesh,
     window,
 )
-from drycastle_pipeline.landmark_kit import edge as _edge
-from drycastle_pipeline.landmark_kit import prism as _prism
-from drycastle_pipeline.landmark_kit import unit as _unit
-from drycastle_pipeline.landmark_kit import wall as _kit_wall
-from drycastle_pipeline.landmarks import _Solids
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.buildings.landmarks.kit import edge as _edge
+from drycastle_pipeline.buildings.landmarks.kit import prism as _prism
+from drycastle_pipeline.buildings.landmarks.kit import unit as _unit
+from drycastle_pipeline.buildings.landmarks.kit import wall as _kit_wall
+from drycastle_pipeline.core.geometry import bearing_deg
+from drycastle_pipeline.core.mesh import Mesh
 
 DEEP, SIDE = "w378900337", "w1226408502"
 
@@ -179,10 +180,6 @@ def garage_mesh(b: dict, detail: bool = True) -> Mesh:
     return to_mesh(S)
 
 
-def _bearing(e: float, n: float) -> float:
-    return round(math.degrees(math.atan2(e, n)) % 360, 2)
-
-
 def garage_info(elevation: dict[str, float]) -> dict:
     """``garage.json``: the doorway the game hangs the doors in, the bay, and where the bus stands.
 
@@ -198,11 +195,11 @@ def garage_info(elevation: dict[str, float]) -> dict:
     back = min(av(DB)[1], av(DK)[1]) - T
     inner = [at(T, T), at(_SHARED(T) - T, T), at(_SHARED(av(SH0)[1]) - T, av(SH0)[1]), at(_SHARED(back) - T, back), at(T, back)]
     return {
-        "doorway": {"pos": pt(at(WD / 2, T / 2), z + F), "yaw": _bearing(*out), "width": DOOR_W, "height": DOOR_H},
+        "doorway": {"pos": pt(at(WD / 2, T / 2), z + F), "yaw": bearing_deg(*out), "width": DOOR_W, "height": DOOR_H},
         "bay": {
             "floor_z": round(z + F, 3), "ceiling_z": round(z + DEEP_LOW, 3),
             "footprint": [[round(x, 3), round(y, 3)] for x, y in inner],
         },
         # the vehicle that stands here at the start of a round, nose to the door
-        "parking": {"vehicle": VEHICLE, "pos": pt(at(WD / 2, T + PARK_CLEAR + VEHICLE_HALF_LENGTH), z + F), "yaw": _bearing(*out)},
+        "parking": {"vehicle": VEHICLE, "pos": pt(at(WD / 2, T + PARK_CLEAR + VEHICLE_HALF_LENGTH), z + F), "yaw": bearing_deg(*out)},
     }  # fmt: skip

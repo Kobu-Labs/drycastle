@@ -23,11 +23,11 @@ Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`O
 
 The building has captures (pictures of a Street View tab saved with their camera, `photo_capture list`):
 
-    uv run python -m drycastle_pipeline.landmark_photo prep <building id> --out OUT
+    uv run python -m drycastle_pipeline.photos.landmark_photo prep <building id> --out OUT
 
 A photo the user gave you instead:
 
-    uv run python -m drycastle_pipeline.landmark_photo prep <G-xxxx | P-xxxx | building id> --photo PHOTO --view=X,Y --out OUT
+    uv run python -m drycastle_pipeline.photos.landmark_photo prep <G-xxxx | P-xxxx | building id> --photo PHOTO --view=X,Y --out OUT
 
 `--view`: where that photo was taken. A sketch point named by the user: its `x, y` from
 `~/.local/state/drycastle/sketch.json`, as they are. None given: leave `--view` out, and in the sheet use a point 10 m
@@ -103,7 +103,7 @@ View screenshot); with such a photo give 5 or more points.
 
 Then:
 
-    uv run python -m drycastle_pipeline.landmark_photo apply OUT/sheet.json --out OUT
+    uv run python -m drycastle_pipeline.photos.landmark_photo apply OUT/sheet.json --out OUT
 
 It fits the camera, measures, samples, writes both files and draws `OUT/overlay_0.png`.
 

@@ -8,11 +8,11 @@ import pytest
 from pyproj import Transformer
 from shapely.geometry import Polygon, box
 
-from drycastle_pipeline.config import ConfigError, load_map_config
-from drycastle_pipeline.frame import Frame
-from drycastle_pipeline.geo import METRIC_CRS, bbox_of_polygon
-from drycastle_pipeline.normalise import area_polygon, run_normalise
-from drycastle_pipeline.terrain import clip_to_outline, grid_from_samples
+from drycastle_pipeline.core.config import ConfigError, load_map_config
+from drycastle_pipeline.core.frame import Frame
+from drycastle_pipeline.core.geo import METRIC_CRS, bbox_of_polygon
+from drycastle_pipeline.parcels.normalise import area_polygon, run_normalise
+from drycastle_pipeline.terrain.terrain import clip_to_outline, grid_from_samples
 
 RING = [[-589500, -1250500], [-588000, -1250500], [-588000, -1249000], [-589500, -1249500]]
 

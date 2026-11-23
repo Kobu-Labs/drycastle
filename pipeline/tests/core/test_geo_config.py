@@ -2,8 +2,9 @@ from pathlib import Path
 
 import pytest
 
-from drycastle_pipeline.config import ConfigError, load_map_config, map_paths
-from drycastle_pipeline.geo import centroid_of_geometry
+from drycastle_pipeline.core.config import ConfigError, load_map_config, map_paths
+from drycastle_pipeline.core.geo import centroid_of_geometry
+
 
 def test_centroid_of_closed_way() -> None:
     pts = [(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0), (0.0, 0.0)]

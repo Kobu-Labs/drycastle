@@ -1,4 +1,4 @@
-"""Utility pole parts: the kit that ``poles.py`` assembles poles from.
+"""Utility pole parts: the kit that ``kits/poles.py`` assembles poles from.
 
 Two layers:
 
@@ -8,7 +8,7 @@ Two layers:
 * Part builders (``insulator``, ``crossarm``, ``lamp``, ``megaphone``, ``junction_box``, ...) return a
   :class:`Part`: a kit in the part's own frame plus named points (where a wire sits, where a feed
   cable enters, where the light is). The frame of a part that hangs on a pole has its origin on the
-  pole surface, ``+x`` pointing away from the pole and ``+z`` up; ``poles.py`` turns and moves it into
+  pole surface, ``+x`` pointing away from the pole and ``+z`` up; ``kits/poles.py`` turns and moves it into
   place. ``PARTS`` lists every part with its default look (the parts sheet draws it).
 
 The column itself and what follows its surface (riser pipes, down cables, slack coils) are built by
@@ -24,8 +24,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
 
 UP = np.array([0.0, 0.0, 1.0])
 _X = np.array([1.0, 0.0, 0.0])

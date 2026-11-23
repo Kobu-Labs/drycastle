@@ -5,8 +5,8 @@ with the camera known from ``index.json`` (pano position, heading, fov, pitch), 
 numbers and 1 m ticks along each wall, so window and door positions can be read off the photo in
 facade coordinates (edge number + metres from the edge start).
 
-    python -m drycastle_pipeline.facade_overlay w378920362 0                 # frame 0 -> overlay_0.png
-    python -m drycastle_pipeline.facade_overlay w378920362 0 E N H           # calibrate: shift camera
+    python -m drycastle_pipeline.photos.facade_overlay w378920362 0                 # frame 0 -> overlay_0.png
+    python -m drycastle_pipeline.photos.facade_overlay w378920362 0 E N H           # calibrate: shift camera
                                                                              # E/N metres, heading H degrees
 
 Edge numbers are those of ``orient(footprint, 1.0)`` in buildings.json, the ones used by
@@ -23,9 +23,9 @@ import numpy as np
 from PIL import Image, ImageDraw
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.streetview import M_PER_DEG
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.photos.streetview import M_PER_DEG
 
 CAMERA_H = 2.5
 SIZE = 640

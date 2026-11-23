@@ -1,7 +1,7 @@
 """Ground patches: the preview meshes of hand-drawn ground (``ground_patches`` in ``edits.json``).
 
 A ground patch is a polygon of exactly one ground type (ADR 0022). In the baked map it is ground: the parcels stage turns
-its polygon into a ground area of its type (``ground.py``), so terrain colour, detail and trees follow on the next full
+its polygon into a ground area of its type (``ground/areas.py``), so terrain colour, detail and trees follow on the next full
 run. Between two runs the editor shows it as a **preview**: one flat-coloured mesh in the type's first colour over the
 terrain and the road ribbons (no collision, nothing else is generated or moved). The meshes are built from the work files
 by ``patch-run`` and, for patches of a water type, at export, with the same code, so a hot-reloaded patch equals the baked
@@ -28,7 +28,7 @@ one.
   only show through the shallows. A water patch is the only kind baked into the chunk files as ``patch_<ID>`` nodes;
   the other patches are baked as ground.
 * Entries that fail the drape (no terrain, polygon outside the terrain coverage) are warned about
-  and skipped; a schema error fails the file as for every other edit kind (see ``edits.py``).
+  and skipped; a schema error fails the file as for every other edit kind (see ``edits/schema.py``).
 """
 
 import math
@@ -39,16 +39,17 @@ import shapely
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.geometry.base import BaseGeometry
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.edits import Edits, polygon_ring
-from drycastle_pipeline.ground_attributes import attributes_of
-from drycastle_pipeline.meshes import Mesh, triangulate
-from drycastle_pipeline.roads import road_mesh
-from drycastle_pipeline.terrain import Terrain
-from drycastle_pipeline.water import wet_area
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.geometry import polygons
+from drycastle_pipeline.core.mesh import Mesh, triangulate
+from drycastle_pipeline.edits.schema import Edits, polygon_ring
+from drycastle_pipeline.ground.attributes import attributes_of
+from drycastle_pipeline.roads.roads import road_mesh
+from drycastle_pipeline.terrain.terrain import Terrain
+from drycastle_pipeline.terrain.water import wet_area
 
 _MIN_AREA_M2 = 1e-6
-_RANK_STEP_M = 0.003  # roads.py lifts each higher road class by this much
+_RANK_STEP_M = 0.003  # roads/roads.py lifts each higher road class by this much
 _ROAD_MARGIN_M = 1.0
 
 
@@ -74,12 +75,7 @@ class PatchPlan:
 
 
 def _polygons(geom: BaseGeometry) -> list[Polygon]:
-    if geom.is_empty:
-        return []
-    if isinstance(geom, Polygon):
-        return [geom] if geom.area > _MIN_AREA_M2 else []
-    return [p for g in getattr(geom, "geoms", []) for p in _polygons(g)]
-
+    return polygons(geom, _MIN_AREA_M2)
 
 def type_colour(spec: dict | None) -> str:
     """The first terrain colour of a ground type (``#rrggbb``), grey when it has none."""

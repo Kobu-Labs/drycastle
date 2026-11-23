@@ -8,9 +8,10 @@ import pytest
 import trimesh
 from shapely.geometry import box
 
-from drycastle_pipeline.buildings import derive_building, load_building_rules
-from drycastle_pipeline.export import run_export, to_gltf_axes
-from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.buildings.derive import derive_building, load_building_rules
+from drycastle_pipeline.core.rules import DEFAULT_RULES
+from drycastle_pipeline.export.export import run_export
+from drycastle_pipeline.export.gltf import to_gltf_axes
 
 RULES = load_building_rules()
 
@@ -122,7 +123,7 @@ def test_export_is_byte_deterministic(workspace, tmp_path) -> None:
 
 
 def test_map_manifest_and_lighter_props(tmp_path) -> None:
-    from drycastle_pipeline.props import run_props
+    from drycastle_pipeline.props.props import run_props
     from tests.synthetic import make_workspace
 
     ws = make_workspace(tmp_path)
@@ -140,7 +141,7 @@ def test_map_manifest_and_lighter_props(tmp_path) -> None:
 
 
 def test_export_writes_prim_glbs_and_manifest_entries(workspace) -> None:
-    from drycastle_pipeline.primitives import PRIMITIVES
+    from drycastle_pipeline.kits.primitives import PRIMITIVES
 
     export(workspace)
     out = workspace["out"]
@@ -184,8 +185,8 @@ def test_export_copies_objects_json_when_present(workspace) -> None:
 def test_export_run_honours_out_and_work(workspace, tmp_path, monkeypatch) -> None:
     from dataclasses import replace
 
-    from drycastle_pipeline import export as export_mod
-    from drycastle_pipeline.config import map_paths
+    from drycastle_pipeline.core.config import map_paths
+    from drycastle_pipeline.export import export as export_mod
 
     paths = replace(map_paths(), raw=workspace["raw"])
     monkeypatch.setattr(export_mod, "map_paths", lambda *_a, **_k: paths)

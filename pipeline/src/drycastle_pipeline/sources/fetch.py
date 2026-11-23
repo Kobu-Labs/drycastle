@@ -10,8 +10,8 @@ import rasterio
 from rasterio.io import MemoryFile
 from rasterio.merge import merge
 
-from drycastle_pipeline.cache import Source, fetch_cached, write_manifest
-from drycastle_pipeline.config import (
+from drycastle_pipeline.core.cache import Source, fetch_cached, write_manifest
+from drycastle_pipeline.core.config import (
     DEFAULT_CONFIG,
     DEFAULT_RAW_DIR,
     ConfigError,
@@ -19,13 +19,8 @@ from drycastle_pipeline.config import (
     load_map_config,
     map_paths,
 )
-from drycastle_pipeline.geo import (
-    METRIC_CRS,
-    Bbox,
-    bbox_of_polygon,
-    centroid_of_geometry,
-)
-from drycastle_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline.core.geo import METRIC_CRS, Bbox, bbox_of_polygon, centroid_of_geometry
+from drycastle_pipeline.core.http import HttpError, PoliteClient
 
 OVERPASS_URLS = [
     "https://overpass-api.de/api/interpreter",

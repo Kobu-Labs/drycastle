@@ -2,7 +2,7 @@
 
 import math
 
-from drycastle_pipeline.house_connections import PER_POLE, plan_drops
+from drycastle_pipeline.edits.house_connections import PER_POLE, plan_drops
 
 
 def house(hid: str, x0: float, y0: float, size: float = 10.0, roof: str = "gabled", eave: float = 5.0, cls: str = "area:house") -> dict:

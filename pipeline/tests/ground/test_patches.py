@@ -9,8 +9,10 @@ import shapely
 import trimesh
 from shapely.geometry import Polygon
 
-from drycastle_pipeline import cli, patch_run
-from drycastle_pipeline.edits import (
+from drycastle_pipeline import cli
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits import patch_run
+from drycastle_pipeline.edits.schema import (
     Edits,
     EditsError,
     dump_edits,
@@ -19,9 +21,9 @@ from drycastle_pipeline.edits import (
     parse,
     validate,
 )
-from drycastle_pipeline.export import run_export
-from drycastle_pipeline.ground import ground_types
-from drycastle_pipeline.patches import (
+from drycastle_pipeline.export.export import run_export
+from drycastle_pipeline.ground.areas import ground_types
+from drycastle_pipeline.ground.patches import (
     _terrain_triangles,
     drape,
     overlapping,
@@ -31,7 +33,6 @@ from drycastle_pipeline.patches import (
     road_layers,
     visible_area,
 )
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
 OX, OY = SYNTHETIC_ORIGIN
@@ -336,7 +337,7 @@ def test_mesh_lies_on_the_terrain_and_follows_a_kink() -> None:
 
 
 def test_patch_over_a_road_floats_above_the_ribbon() -> None:
-    from drycastle_pipeline.roads import road_mesh
+    from drycastle_pipeline.roads.roads import road_mesh
 
     ws = make_workspace_graph()
     t = make_terrain()
@@ -570,7 +571,7 @@ def test_water_mesh_lies_on_the_bed_and_follows_the_shore() -> None:
 
 
 def test_water_patch_becomes_water_bodies_and_dry_levels_are_skipped() -> None:
-    from drycastle_pipeline.water import plan_water, water_rules
+    from drycastle_pipeline.terrain.water import plan_water, water_rules
 
     rules = water_rules()
     terrain, plan = _wet_setup(1.0)

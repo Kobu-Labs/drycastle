@@ -6,16 +6,16 @@ import pytest
 from shapely.affinity import rotate
 from shapely.geometry import Polygon, box
 
-from drycastle_pipeline.buildings import (
+from drycastle_pipeline.buildings.derive import (
     BuildingRules,
     RulesError,
     build_buildings,
     derive_building,
     load_building_rules,
     load_overrides,
-    roof_frame,
     seed_for,
 )
+from drycastle_pipeline.buildings.footprint import roof_frame
 
 RULES = load_building_rules()
 

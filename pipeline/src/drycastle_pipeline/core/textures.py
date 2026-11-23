@@ -1,7 +1,7 @@
 """The texture library: named, tileable textures that any map mesh can use.
 
 The images and their facts live in ``assets/manifest.json`` (``textures``); the PNG files are built by
-``scripts/make_textures.py``. Nothing here is specific to fences: a mesh builder asks for a texture by
+``scripts/art/make_textures.py``. Nothing here is specific to fences: a mesh builder asks for a texture by
 id, lays UVs out in metres with :meth:`Texture.uv`, and returns a :class:`TexturedMesh` per texture.
 
 How a textured mesh reaches the game:
@@ -23,8 +23,8 @@ from pathlib import Path
 
 import numpy as np
 
-from drycastle_pipeline.assets import DEFAULT_MANIFEST
-from drycastle_pipeline.buildings import hex_to_rgb
+from drycastle_pipeline.core.assets import DEFAULT_MANIFEST
+from drycastle_pipeline.core.colour import hex_to_rgb
 
 TEX_NODE_SEP = "_tex_"
 # Keeps the edge texels of a stretched (non-repeating) direction from blending with the opposite edge.
@@ -146,7 +146,7 @@ def merge_textured(parts: list[dict[str, TexturedMesh]]) -> dict[str, TexturedMe
 def flat_mesh(textured: dict[str, TexturedMesh]):
     """The textured triangles as one flat-colour ``meshes.Mesh`` (each in its texture's mean colour
     under the tint): what previews draw."""
-    from drycastle_pipeline.meshes import Mesh
+    from drycastle_pipeline.core.mesh import Mesh
 
     parts = []
     for tid, mesh in sorted(textured.items()):

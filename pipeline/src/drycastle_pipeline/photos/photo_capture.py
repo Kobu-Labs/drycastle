@@ -1,9 +1,9 @@
 """Capture what a Street View tab shows, with the camera it was taken with, for ``photo-to-building``.
 
-    uv run python -m drycastle_pipeline.streetview_follow --launch --capture      (walk; press C on a building)
-    uv run python -m drycastle_pipeline.photo_capture list                        (what was captured, per building)
-    uv run python -m drycastle_pipeline.photo_capture set <building>/<n> <building>   (a capture filed under the wrong building)
-    uv run python -m drycastle_pipeline.photo_capture todo                        (buildings with captures and no detail yet)
+    uv run python -m drycastle_pipeline.photos.streetview_follow --launch --capture      (walk; press C on a building)
+    uv run python -m drycastle_pipeline.photos.photo_capture list                        (what was captured, per building)
+    uv run python -m drycastle_pipeline.photos.photo_capture set <building>/<n> <building>   (a capture filed under the wrong building)
+    uv run python -m drycastle_pipeline.photos.photo_capture todo                        (buildings with captures and no detail yet)
 
 While ``streetview_follow --capture`` runs, pressing the capture key (C) in the Street View tab saves the picture of the
 tab and, next to it, where the camera stood and looked: both come from Chrome's debugging port, as the address the
@@ -30,7 +30,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
-from drycastle_pipeline.config import REPO_ROOT
+from drycastle_pipeline.core.config import REPO_ROOT
 
 PHOTOS_DIR = REPO_ROOT / "data" / "village" / "photos"
 _AT = re.compile(r"/@(-?\d+\.\d+),(-?\d+\.\d+)((?:,[^,/]+)*)")
@@ -148,7 +148,7 @@ def guess_building(x: float, y: float, heading: float, reach: float = 60.0) -> t
     are local metres. No footprint within ``reach``: (None, [], inf)."""
     from shapely.geometry import LineString, Point, Polygon
 
-    from drycastle_pipeline.landmark_tools import WORK, _edges
+    from drycastle_pipeline.photos.landmark_tools import WORK, _edges
 
     d = (math.sin(math.radians(heading)), math.cos(math.radians(heading)))
     ray = LineString([(x, y), (x + d[0] * reach, y + d[1] * reach)])
@@ -182,8 +182,8 @@ def save_capture(png: bytes, url: str, photos: Path = PHOTOS_DIR, note=print) ->
 
     from PIL import Image
 
-    from drycastle_pipeline.landmark_tools import WORK
-    from drycastle_pipeline.streetview_follow import _TO_JTSK
+    from drycastle_pipeline.photos.landmark_tools import WORK
+    from drycastle_pipeline.photos.streetview_follow import _TO_JTSK
 
     view = parse_view(url)
     if view is None:
@@ -266,7 +266,7 @@ def captures(photos: Path = PHOTOS_DIR) -> dict[str, list[dict]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from drycastle_pipeline.building_detail import DETAILS_DIR
+    from drycastle_pipeline.buildings.openings import DETAILS_DIR
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)

@@ -22,9 +22,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.propmeshes import _outward, box_tris, frustum_tris, pyramid_tris
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.props.propmeshes import _outward, box_tris, frustum_tris, pyramid_tris
 
 # stone: body, trim (kerbs, panels, plinths), writing
 STONES: dict[str, tuple[str, str, str]] = {
@@ -507,7 +507,7 @@ def manifest_entry() -> dict:
         "size_m": [DEFAULT_SIZE[0], round(float(pts[:, 2].max()), 4), DEFAULT_SIZE[1]],
         "tags": ["grave", "graveyard", "headstone", "flat-colour", "primitive", "generated"],
         "licence": "CC0",
-        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/graves.py)",
         "pack": None,
     }
 
@@ -581,7 +581,7 @@ def crucifix_entry() -> dict:
         "size_m": [2.4, _CRUCIFIX_TOP, 2.4],
         "tags": ["cross", "crucifix", "graveyard", "monument", "flat-colour", "primitive"],
         "licence": "CC0",
-        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/graves.py)",
+        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/graves.py)",
         "pack": None,
         "solids": solids,
     }

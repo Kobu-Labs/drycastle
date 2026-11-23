@@ -12,9 +12,9 @@ import random
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.propmeshes import box_tris
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.props.propmeshes import box_tris
 
 # The grasses (and ferns), the wild flowers of meadows and verges, the garden flowers of yards. "flower" is the first mixed
 # flower mesh, kept for maps and tests that name it; the recipes use the species.
@@ -24,7 +24,7 @@ GARDEN_FLOWERS = ("tulip", "sunflower", "spike", "rose")
 # The forest floor (client-only, from meadow.bin's litter and floor layers): toadstools, fallen branches, moss mounds, big ferns, rotten stumps.
 FOREST_FLOOR = ("mushroom", "branch", "moss_mound", "fern_big", "stump_small")
 KINDS = ("tuft", "flower", "pebble", "rock", "leaf", "stick", "fern", *GRASSES[1:], *WILD_FLOWERS, *GARDEN_FLOWERS, *FOREST_FLOOR)
-# Kinds whose instances carry a tint byte (see meadow.py): the grasses and ferns, whose green is the point. Flowers keep their
+# Kinds whose instances carry a tint byte (see detail/meadow.py): the grasses and ferns, whose green is the point. Flowers keep their
 # own colours; stones and litter are varied by their faces.
 TINTABLE = frozenset({*GRASSES, "fern", "fern_big"})
 # The loader multiplies the vertex colours by these (ClutterData.cs, ClutterTint.Rgb): 0 = fresh, 128 = as drawn, 255 = dry.

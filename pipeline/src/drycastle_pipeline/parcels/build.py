@@ -1,5 +1,5 @@
 """Parcels stage: registry matching, building assignment, the parcels that stay parcels (properties) and the ground
-areas around them (:mod:`drycastle_pipeline.ground`), ``parcels.json``."""
+areas around them (:mod:`drycastle_pipeline.ground.areas`), ``parcels.json``."""
 
 import json
 import math
@@ -14,10 +14,11 @@ from shapely.geometry import Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, load_edits, polygon_ring
-from drycastle_pipeline.ground import ID_PREFIX as GROUND_PREFIX
-from drycastle_pipeline.ground import (
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES, ParcelRules, load_rules, load_section
+from drycastle_pipeline.edits.schema import DEFAULT_EDITS, Edits, load_edits, polygon_ring
+from drycastle_pipeline.ground.areas import ID_PREFIX as GROUND_PREFIX
+from drycastle_pipeline.ground.areas import (
     build_ground,
     carve_parcel,
     dike_ground,
@@ -26,19 +27,18 @@ from drycastle_pipeline.ground import (
     merge_ground_types,
     rules_ground_types,
 )
-from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
-from drycastle_pipeline.parcel_outlines import apply_outlines
-from drycastle_pipeline.registry import (
+from drycastle_pipeline.parcels.normalise import DEFAULT_WORK_DIR
+from drycastle_pipeline.parcels.outlines import apply_outlines
+from drycastle_pipeline.parcels.registry import (
     DEFAULT_REGISTRY,
     MatchResult,
     load_registry,
     match_parcels,
     save_registry,
 )
-from drycastle_pipeline.rules import DEFAULT_RULES, ParcelRules, load_rules, load_section
 
 KINDS = ("building_plot", "garden")  # a parcel holds a building, or is the rest of a property that does
-PARCELS_FORMAT_VERSION = 2  # 2: only properties are parcels; the other land is in "ground" (ground.py)
+PARCELS_FORMAT_VERSION = 2  # 2: only properties are parcels; the other land is in "ground" (ground/areas.py)
 
 
 @dataclass
@@ -129,6 +129,111 @@ def _record(pid: str, geom: BaseGeometry, kind: str, chunk_m: float) -> dict:
     }
 
 
+def _carve_parcels(
+    parcels: list[BaseGeometry],
+    ids: list[str],
+    index: dict[str, int],
+    kept: set[str],
+    buildings: dict[str, BaseGeometry],
+    assignment: Assignment,
+    carve: dict,
+) -> tuple[list[BaseGeometry], dict[str, BaseGeometry]]:
+    """The parcel outlines with the ``ground.carve`` ones cut down to their buildings, and the land each carve gave up (by parcel ID)."""
+    geoms = list(parcels)
+    leftovers: dict[str, BaseGeometry] = {}
+    others = None
+    for pid, spec in sorted(carve.items()):
+        i = index.get(pid)
+        if i is None or pid not in kept:
+            print(f"parcels: warning: ground.carve: {pid} is not a kept parcel; skipped", file=sys.stderr)
+            continue
+        if others is None:
+            others = unary_union([g for j, g in enumerate(parcels) if ids[j] in kept and ids[j] not in carve])
+        new, rest = carve_parcel(
+            parcels[i], [buildings[b] for b in assignment.by_parcel.get(i, [])], float((spec or {}).get("margin_m", 2.0)), others
+        )
+        if new is None:
+            print(f"parcels: warning: ground.carve: {pid} has no building to keep; skipped", file=sys.stderr)
+            continue
+        geoms[i] = new
+        leftovers[pid] = rest
+    return geoms, leftovers
+
+
+def _edit_outlines(
+    geoms: list[BaseGeometry],
+    index: dict[str, int],
+    kept: set[str],
+    edits: Edits,
+    origin: tuple[float, float],
+    buildings: dict[str, BaseGeometry],
+    assignment: Assignment,
+) -> tuple[dict[str, Polygon], BaseGeometry]:
+    """Applies the hand-edited outlines (edits.json parcels.<ID>.outline, absolute metres) to ``geoms`` in place: the one place they take
+    effect, every later stage reads the result. The registry and the building assignment kept the cadastral outlines.
+    Returns the outlines (local metres, by parcel ID) and the land the edited parcels gave up."""
+    ox, oy = origin
+    outlines = {
+        pid: Polygon([(x - ox, y - oy) for x, y in polygon_ring(e["outline"])])
+        for pid, e in edits.parcels.items()
+        if e.get("outline")
+    }
+    freed: BaseGeometry = Polygon()
+    if outlines:
+        edited, freed, warnings = apply_outlines(
+            {pid: geoms[index[pid]] for pid in index if pid in kept},
+            outlines,
+            {pid: {b: buildings[b] for b in assignment.by_parcel.get(index[pid], [])} for pid in outlines if pid in index},
+        )
+        for warning in warnings:
+            print(f"parcels: warning: {warning}", file=sys.stderr)
+        for pid, geom in edited.items():
+            geoms[index[pid]] = geom
+    return outlines, freed
+
+
+def _ground_areas(
+    parcels: list[BaseGeometry],
+    geoms: list[BaseGeometry],
+    ids: list[str],
+    kept: set[str],
+    leftovers: dict[str, BaseGeometry],
+    outlines: dict[str, Polygon],
+    freed: BaseGeometry,
+    index: dict[str, int],
+    edits: Edits,
+    norm: Path,
+    origin: tuple[float, float],
+    rules: ParcelRules,
+    rules_path: Path,
+) -> tuple[list[dict], dict[str, BaseGeometry]]:
+    """The ground areas: the land of all the other cadastral parcels (``dropped``, returned too) by ground type."""
+    ox, oy = origin
+    # the types are those of rules.yaml with the user's overrides and additions of the edits
+    gcfg = {**load_section("ground", rules_path), "types": merge_ground_types(rules_ground_types(rules_path), edits.ground_types)}
+    dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept} | leftovers
+    free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
+    if leftovers:  # a carved parcel may reach over land that was another parcel's
+        free = free.difference(unary_union([geoms[index[pid]] for pid in leftovers]))
+    if outlines:  # an edited outline may reach over ground, and gives back what it no longer holds
+        mine = [geoms[index[pid]] for pid in outlines if pid in index and pid in kept]
+        free = unary_union([free, freed]).difference(unary_union(mine))
+    ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
+    landuse = [
+        (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")
+    ]
+    dike = dike_ground(dropped, ways, load_section("detail", rules_path)["dike"])
+    drawn, warnings = drawn_ground(edits.ground_patches, (ox, oy), gcfg["types"])
+    for warning in warnings:
+        print(f"parcels: warning: {warning}", file=sys.stderr)
+    kept_union = unary_union([g for pid, g in zip(ids, geoms, strict=True) if pid in kept]) if drawn else None
+    ground = [
+        {**_record(f"{GROUND_PREFIX}{n:04d}", geom, kind, rules.chunk_size_m), "buildings": []}
+        for n, (kind, geom) in enumerate(build_ground(free, landuse, dike, gcfg, drawn, kept_union), 1)
+    ]
+    return ground, dropped
+
+
 def build_parcels(
     work_dir: Path = DEFAULT_WORK_DIR,
     registry_path: Path = DEFAULT_REGISTRY,
@@ -167,46 +272,10 @@ def build_parcels(
     kept = kept_parcels(built, groups)
 
     # parcels cut down to their buildings (ground.carve in rules.yaml): the land round them is ground
-    gcfg = load_section("ground", rules_path)
-    geoms = list(parcels)
-    leftovers: dict[str, BaseGeometry] = {}
-    carve = gcfg.get("carve") or {}
+    carve = load_section("ground", rules_path).get("carve") or {}
     index = {pid: i for i, pid in enumerate(ids)}
-    others = None
-    for pid, spec in sorted(carve.items()):
-        i = index.get(pid)
-        if i is None or pid not in kept:
-            print(f"parcels: warning: ground.carve: {pid} is not a kept parcel; skipped", file=sys.stderr)
-            continue
-        if others is None:
-            others = unary_union([g for j, g in enumerate(parcels) if ids[j] in kept and ids[j] not in carve])
-        new, rest = carve_parcel(
-            parcels[i], [buildings[b] for b in assignment.by_parcel.get(i, [])], float((spec or {}).get("margin_m", 2.0)), others
-        )
-        if new is None:
-            print(f"parcels: warning: ground.carve: {pid} has no building to keep; skipped", file=sys.stderr)
-            continue
-        geoms[i] = new
-        leftovers[pid] = rest
-
-    # hand-edited outlines (edits.json parcels.<ID>.outline, absolute metres): the one place they take effect, every later stage
-    # reads the result. The registry above and the building assignment kept the cadastral outlines.
-    outlines = {
-        pid: Polygon([(x - ox, y - oy) for x, y in polygon_ring(e["outline"])])
-        for pid, e in edits.parcels.items()
-        if e.get("outline")
-    }
-    freed: BaseGeometry = Polygon()
-    if outlines:
-        edited, freed, warnings = apply_outlines(
-            {pid: geoms[index[pid]] for pid in index if pid in kept},
-            outlines,
-            {pid: {b: buildings[b] for b in assignment.by_parcel.get(index[pid], [])} for pid in outlines if pid in index},
-        )
-        for warning in warnings:
-            print(f"parcels: warning: {warning}", file=sys.stderr)
-        for pid, geom in edited.items():
-            geoms[index[pid]] = geom
+    geoms, leftovers = _carve_parcels(parcels, ids, index, kept, buildings, assignment, carve)
+    outlines, freed = _edit_outlines(geoms, index, kept, edits, (ox, oy), buildings, assignment)
 
     out = []
     for i, (ref, geom) in enumerate(zip(refs, geoms, strict=True)):
@@ -216,29 +285,7 @@ def build_parcels(
         out.append({**rec, "cadastral_ref": ref, "buildings": assignment.by_parcel.get(i, [])})
     out.sort(key=lambda p: p["id"])
 
-    # the land of all the other cadastral parcels, by ground type
-    # the types are those of rules.yaml with the user's overrides and additions of the edits
-    gcfg = {**load_section("ground", rules_path), "types": merge_ground_types(rules_ground_types(rules_path), edits.ground_types)}
-    dropped = {pid: g for pid, g in zip(ids, parcels, strict=True) if pid not in kept} | leftovers
-    free = unary_union([g if g.is_valid else g.buffer(0) for g in dropped.values()]) if dropped else Polygon()
-    if leftovers:  # a carved parcel may reach over land that was another parcel's
-        free = free.difference(unary_union([geoms[index[pid]] for pid in leftovers]))
-    if outlines:  # an edited outline may reach over ground, and gives back what it no longer holds
-        mine = [geoms[index[pid]] for pid in outlines if pid in index and pid in kept]
-        free = unary_union([free, freed]).difference(unary_union(mine))
-    ways = {f["properties"]["osm_id"]: shape(f["geometry"]) for f in _read(norm / "highways.geojson")}
-    landuse = [
-        (f["properties"]["class"], f["properties"]["value"], shape(f["geometry"])) for f in _read(norm / "landuse.geojson")
-    ]
-    dike = dike_ground(dropped, ways, load_section("detail", rules_path)["dike"])
-    drawn, warnings = drawn_ground(edits.ground_patches, (ox, oy), gcfg["types"])
-    for warning in warnings:
-        print(f"parcels: warning: {warning}", file=sys.stderr)
-    kept_union = unary_union([g for pid, g in zip(ids, geoms, strict=True) if pid in kept]) if drawn else None
-    ground = [
-        {**_record(f"{GROUND_PREFIX}{n:04d}", geom, kind, rules.chunk_size_m), "buildings": []}
-        for n, (kind, geom) in enumerate(build_ground(free, landuse, dike, gcfg, drawn, kept_union), 1)
-    ]
+    ground, dropped = _ground_areas(parcels, geoms, ids, kept, leftovers, outlines, freed, index, edits, norm, (ox, oy), rules, rules_path)
 
     doc = {
         "version": PARCELS_FORMAT_VERSION,

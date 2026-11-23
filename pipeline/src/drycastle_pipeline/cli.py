@@ -1,13 +1,36 @@
 """Command-line interface for the map pipeline."""
 
 import argparse
+import importlib
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
-# Heavy modules (matplotlib, rasterio, trimesh, ...) are imported only by the command that needs
-# them, so that ``parcel-run`` starts fast. ``STAGE_NAMES`` must equal ``list(stages.STAGES)``
-# (checked in tests).
-STAGE_NAMES = ("fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export")
+
+def _stage(module: str) -> Callable[..., int]:
+    """The ``run`` of a stage module, imported when the stage starts: the heavy modules (matplotlib, rasterio,
+    trimesh, ...) stay unloaded for ``parcel-run`` and friends."""
+
+    def run(**options: object) -> int:
+        return importlib.import_module(f"drycastle_pipeline.{module}").run(**options)
+
+    return run
+
+
+# The pipeline stages, in execution order (``run-all`` runs them in this order): name -> module with ``run``.
+STAGE_MODULES = {
+    "fetch": "sources.fetch",
+    "normalise": "parcels.normalise",
+    "ortho": "sources.ortho",
+    "ortho-trees": "sources.ortho_trees",
+    "parcels": "parcels.build",
+    "rules": "buildings.derive",
+    "terrain": "terrain.terrain",
+    "roads": "roads.roads",
+    "props": "props.props",
+    "detail": "detail.detail",
+    "export": "export.export",
+}
+STAGES: dict[str, Callable[..., int]] = {name: _stage(module) for name, module in STAGE_MODULES.items()}
 RUN_ALL = "run-all"
 PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
@@ -28,7 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="drycastle_pipeline",
         description="Generate the Drycastle base map from source data.",
     )
-    choices = [*STAGE_NAMES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN]
+    choices = [*STAGES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN]
     parser.add_argument(
         "stage",
         choices=choices,
@@ -104,7 +127,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.stage == PARCEL_RUN:
-        from drycastle_pipeline import parcel_run
+        from drycastle_pipeline.edits import parcel_run
 
         return parcel_run.run(
             parcels=args.parcel,
@@ -115,7 +138,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             work=args.work,
         )
     if args.stage == PATCH_RUN:
-        from drycastle_pipeline import patch_run
+        from drycastle_pipeline.edits import patch_run
 
         return patch_run.run(
             patches=args.patch,
@@ -124,8 +147,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             glb=args.glb,
             work=args.work,
         )
-    from drycastle_pipeline.stages import STAGES
-
     if args.stage == RUN_ALL:
         timings: list[tuple[str, float]] = []
         for name, run in STAGES.items():
@@ -138,7 +159,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print_timings(timings)
         return 0
     if args.stage == PREVIEW:
-        from drycastle_pipeline import preview
+        from drycastle_pipeline.preview import topdown as preview
 
         return preview.run(exaggeration=args.exaggeration)
     return STAGES[args.stage](

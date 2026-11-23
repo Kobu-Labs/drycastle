@@ -20,22 +20,22 @@ import sys
 import time
 from pathlib import Path
 
-from drycastle_pipeline.bed import carve_terrain
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import DEFAULT_EDITS, EditsError, load_edits
-from drycastle_pipeline.ground import ground_types, ground_units, water_kinds
-from drycastle_pipeline.parcel_run import _EMPTY_GLB
-from drycastle_pipeline.patches import node_name, overlapping, patch_meshes, plan_patches
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.terrain import load_terrain
-from drycastle_pipeline.water import plan_water, water_rules
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits.parcel_run import _EMPTY_GLB
+from drycastle_pipeline.edits.schema import DEFAULT_EDITS, EditsError, load_edits
+from drycastle_pipeline.ground.areas import ground_types, ground_units, water_kinds
+from drycastle_pipeline.ground.patches import node_name, overlapping, patch_meshes, plan_patches
+from drycastle_pipeline.terrain.bed import carve_terrain
+from drycastle_pipeline.terrain.terrain import load_terrain
+from drycastle_pipeline.terrain.water import plan_water, water_rules
 
 PATCH_RUN_FORMAT_VERSION = 1
 
 
 def write_glb(path: Path, meshes: dict) -> None:
     """GLB with one ``patch_<ID>`` node per mesh (same axes and frame as the chunk files)."""
-    from drycastle_pipeline.export import build_chunk_scene
+    from drycastle_pipeline.export.gltf import build_chunk_scene
 
     path.parent.mkdir(parents=True, exist_ok=True)
     nodes = {node_name(pid): mesh for pid, mesh in sorted(meshes.items())}

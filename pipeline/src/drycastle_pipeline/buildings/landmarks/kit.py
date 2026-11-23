@@ -1,6 +1,6 @@
 """Building blocks for hand-modelled landmarks laid out on a real footprint (map metres, z up from the building base).
 
-Lifted from ``garage.py``, the reference model; ``.claude/skills/photo-to-building`` describes how a new building is
+Lifted from ``buildings/landmarks/garage.py``, the reference model; ``.claude/skills/photo-to-building`` describes how a new building is
 modelled with them from photos. Everything adds convex solids to a ``landmarks._Solids``; ``to_mesh`` turns it into the
 ``Mesh`` a model returns. Flat colours only ([r, g, b]); every function is deterministic.
 
@@ -21,8 +21,8 @@ from collections.abc import Callable, Sequence
 
 import numpy as np
 
-from drycastle_pipeline.landmarks import _Solids
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.buildings.landmarks.catalog import _Solids
+from drycastle_pipeline.core.mesh import Mesh
 
 Colour = list[int]
 Pt = tuple[float, float]

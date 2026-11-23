@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from drycastle_pipeline import photo_capture as pc
+from drycastle_pipeline.photos import photo_capture as pc
 
-WORK = Path(__file__).parents[2] / "data" / "village" / "work"
+WORK = Path(__file__).parents[3] / "data" / "village" / "work"
 
 
 def test_the_address_gives_the_camera():

@@ -7,9 +7,9 @@ from pyproj import Transformer
 from rasterio.transform import from_origin
 from shapely.geometry import box
 
-from drycastle_pipeline.buildings import derive_building, load_building_rules
-from drycastle_pipeline.frame import Frame
-from drycastle_pipeline.terrain import (
+from drycastle_pipeline.buildings.derive import derive_building, load_building_rules
+from drycastle_pipeline.core.frame import Frame
+from drycastle_pipeline.terrain.terrain import (
     build_terrain,
     cells_per_chunk,
     flatten_buildings,
@@ -141,8 +141,8 @@ def test_chunk_border_vertices_are_shared() -> None:
 def test_cut_holes_removes_the_hole_and_keeps_the_rest_on_the_same_plane() -> None:
     from shapely.geometry import Polygon
 
-    from drycastle_pipeline.meshes import Mesh
-    from drycastle_pipeline.terrain import cut_holes
+    from drycastle_pipeline.core.mesh import Mesh
+    from drycastle_pipeline.terrain.terrain import cut_holes
 
     # one 4 m cell of two triangles on the plane z = 0.5 x + 1, facing up
     z = lambda x, y: 0.5 * x + 1.0
@@ -167,7 +167,7 @@ def test_surface_of_a_few_points_is_the_surface_of_many() -> None:
     """A handful of points takes the plain-float path: it must give the very floats of the array path."""
     import numpy as np
 
-    from drycastle_pipeline.terrain import Terrain
+    from drycastle_pipeline.terrain.terrain import Terrain
 
     rng = np.random.default_rng(2)
     t = Terrain(64.0, 8, -8, -8, np.round(rng.random((17, 17)) * 30, 3), np.ones((17, 17), bool), None)

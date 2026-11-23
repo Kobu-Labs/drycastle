@@ -24,10 +24,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.propmeshes import box_tris
-from drycastle_pipeline.textures import TexturedBuilder, TexturedMesh, texture
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.core.textures import TexturedBuilder, TexturedMesh, texture
+from drycastle_pipeline.props.propmeshes import box_tris
 
 _SINK_M = 0.1  # parts start this far below the ground so no gap shows on uneven terrain
 _CAP_OVERHANG_M = 0.04

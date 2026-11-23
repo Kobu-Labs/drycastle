@@ -38,9 +38,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poleparts import UP, Kit, rgb, rot_z, shade, vec
-from drycastle_pipeline.poles import size_of
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits.poleparts import UP, Kit, rgb, rot_z, shade, vec
+from drycastle_pipeline.kits.poles import size_of
 
 # The profile, metres. y across the wall (village side negative), z above the ground.
 WALL_HALF_M = 0.15  # half the thickness of the upper wall
@@ -77,7 +77,7 @@ PLAQUE = "#55585a"
 LETTER = "#c9cbc8"
 
 SOURCE = ("https://github.com/Kobu-Labs/drycastle (generated flood wall, "
-          "pipeline/src/drycastle_pipeline/floodwall.py)")
+          "pipeline/src/drycastle_pipeline/kits/floodwall.py)")
 
 _X = vec(1.0, 0.0, 0.0)
 _Y = vec(0.0, 1.0, 0.0)

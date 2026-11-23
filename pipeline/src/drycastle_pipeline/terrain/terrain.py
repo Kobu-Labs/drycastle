@@ -25,11 +25,11 @@ from shapely.geometry import Polygon
 if TYPE_CHECKING:
     import rasterio
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import DEFAULT_RAW_DIR, map_paths
-from drycastle_pipeline.meshes import Mesh, triangulate
-from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.config import DEFAULT_RAW_DIR, map_paths
+from drycastle_pipeline.core.mesh import Mesh, triangulate
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.parcels.normalise import DEFAULT_WORK_DIR
 
 TERRAIN_FORMAT_VERSION = 1
 

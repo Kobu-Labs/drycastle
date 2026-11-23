@@ -1,12 +1,12 @@
 """Satellite dishes: a seeded share of the houses gets one, on a wall under the eave that faces the nearest road, into ``edits.json``.
 
-Same way of working as the house connectors (``house_connections.py``): the result is placed objects of the edits
+Same way of working as the house connectors (``edits/house_connections.py``): the result is placed objects of the edits
 (``objects`` with a ``z``), so a dish is visible and movable in the map editor and ends up in ``objects.json`` with the
 other placed objects, and a rerun only adds::
 
     cd pipeline
-    uv run python -m drycastle_pipeline.dishes --dry-run   # what it would do
-    uv run python -m drycastle_pipeline.dishes
+    uv run python -m drycastle_pipeline.edits.dishes --dry-run   # what it would do
+    uv run python -m drycastle_pipeline.edits.dishes
 
 Which houses: the dwellings (``area:house``, ``area:large``, ``type:commercial``; not the hand-modelled landmarks) that have
 no dish yet. Each has ``dishes.dish_chance`` (rules.yaml, default 0.4) of getting one, rolled from a generator seeded with
@@ -39,12 +39,12 @@ from shapely.geometry import LineString, Point
 from shapely.geometry.polygon import orient
 from shapely.ops import nearest_points
 
-from drycastle_pipeline.building_detail import Detail, load_details
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import load_edits
-from drycastle_pipeline.house_connections import HOUSE_CLASSES
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.buildings.openings import Detail, load_details
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits.house_connections import HOUSE_CLASSES
+from drycastle_pipeline.edits.schema import load_edits
 
 DISH_ASSET = "pack:drycastle-generated-models/satellite_dish"
 CONNECTOR_PREFIX = "prim:connector_"
@@ -191,9 +191,9 @@ def add_dishes(objects: list[dict], dishes: list[Dish], origin: list[float]) -> 
 
 
 def apply(chance: float | None, dry_run: bool) -> int:
-    from drycastle_pipeline.edits import DEFAULT_EDITS, dump_edits, validate
-    from drycastle_pipeline.mcp_server import _edits_doc, edits_lock
-    from drycastle_pipeline.roads import edge_lines
+    from drycastle_pipeline.edits.schema import DEFAULT_EDITS, dump_edits, validate
+    from drycastle_pipeline.edits.store import edits_doc, edits_lock
+    from drycastle_pipeline.roads.roads import edge_lines
 
     paths = map_paths()
     work = paths.work
@@ -217,7 +217,7 @@ def apply(chance: float | None, dry_run: bool) -> int:
         if dry_run or not dishes:
             return 0
         added = add_dishes(edits.objects, dishes, origin)
-        errors = validate(_edits_doc(edits))
+        errors = validate(edits_doc(edits))
         if errors:
             print("refused, the result would be invalid:\n" + "\n".join(errors), file=sys.stderr)
             return 1

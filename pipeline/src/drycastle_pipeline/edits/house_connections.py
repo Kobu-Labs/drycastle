@@ -4,8 +4,8 @@ The map editor connects a house with one click each; this does a whole street at
 (``objects`` and ``cables``), so the result is hand-editable like anything else the editor placed::
 
     cd pipeline
-    uv run python -m drycastle_pipeline.house_connections --dry-run   # what it would do
-    uv run python -m drycastle_pipeline.house_connections
+    uv run python -m drycastle_pipeline.edits.house_connections --dry-run   # what it would do
+    uv run python -m drycastle_pipeline.edits.house_connections
 
 Which houses: the dwellings (``area:house``, ``area:large``, ``type:commercial``; not sheds, garages, the church or the
 hand-made overrides) that stand within ``--service-m`` of a pole and have no connector within a few metres already.
@@ -29,9 +29,9 @@ from dataclasses import dataclass
 from shapely.geometry import LineString, Point
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.config import map_paths
-from drycastle_pipeline.edits import POLE_ASSET_PREFIX, load_edits
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.config import map_paths
+from drycastle_pipeline.edits.schema import POLE_ASSET_PREFIX, load_edits
 
 HOUSE_CLASSES = ("area:house", "area:large", "type:commercial")
 WALL_KINDS = (("prim:connector_wall_hook", 5), ("prim:connector_wall_2", 3), ("prim:connector_wall_4", 2))
@@ -147,8 +147,8 @@ def plan_drops(
 
 
 def apply(service_m: float, per_pole: int, dry_run: bool) -> int:
-    from drycastle_pipeline.edits import DEFAULT_EDITS, dump_edits, validate
-    from drycastle_pipeline.mcp_server import _edits_doc, edits_lock
+    from drycastle_pipeline.edits.schema import DEFAULT_EDITS, dump_edits, validate
+    from drycastle_pipeline.edits.store import edits_doc, edits_lock
 
     paths = map_paths()
     work = paths.work
@@ -187,7 +187,7 @@ def apply(service_m: float, per_pole: int, dry_run: bool) -> int:
                 "z": d.z, "rotation_deg": d.rotation_deg,
             })
             edits.cables[f"C-{cid:04d}"] = {"from": d.pole, "to": f"o-{oid:04d}"}
-        errors = validate(_edits_doc(edits))
+        errors = validate(edits_doc(edits))
         if errors:
             print("refused, the result would be invalid:\n" + "\n".join(errors), file=sys.stderr)
             return 1

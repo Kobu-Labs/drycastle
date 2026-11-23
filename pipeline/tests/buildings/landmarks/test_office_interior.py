@@ -6,9 +6,10 @@ from pathlib import Path
 import pytest
 from shapely.geometry import Point, Polygon
 
-from drycastle_pipeline import office, office_interior as oi
+from drycastle_pipeline.buildings.landmarks import office
+from drycastle_pipeline.buildings.landmarks import office_interior as oi
 
-BUILDINGS = Path(__file__).parents[2] / "data" / "village" / "work" / "buildings.json"
+BUILDINGS = Path(__file__).parents[4] / "data" / "village" / "work" / "buildings.json"
 
 
 def test_urad_info_puts_everyone_in_their_room():

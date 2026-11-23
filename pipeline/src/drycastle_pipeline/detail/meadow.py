@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import shapely
-from shapely.geometry import Point
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
@@ -206,7 +205,7 @@ def meadow_layers(cfg: dict) -> list[MeadowLayer]:
 
 
 def new_meadow(cfg: dict, chunk_m: float) -> Meadow:
-    from drycastle_pipeline.detail_meshes import TINTABLE
+    from drycastle_pipeline.detail.meshes import TINTABLE
 
     cell = float(cfg["cell_m"])
     if abs(chunk_m / cell - round(chunk_m / cell)) > 1e-9:
@@ -238,7 +237,7 @@ def zone_cells(meadow: Meadow, ctx, atype: str, gx: np.ndarray, gy: np.ndarray, 
     ``unmown_m`` of a fence, a wall or the edge of a building) and of those beside water. Mix: a Voronoi patch of
     ``patch_m`` picks it from the type's shares (``zones.<type>.mixes``, ``[[mix id, share], ...]``); the rules'
     ``unmown_mix`` overrides it where nobody mows, ``wet_mix`` beside water (``wet_m``), ``edge_dry_mix`` in half of the
-    edge band (``edge_dry_share``), ``swamp_mix`` on swamp ground (``ctx.swamp``, see detail.py: last, over all of them), when the type
+    edge band (``edge_dry_share``), ``swamp_mix`` on swamp ground (``ctx.swamp``, see detail/detail.py: last, over all of them), when the type
     has them. Dryness: neutral 8, plus ``dry_edge`` in the edge band, minus ``fresh_unmown`` where nobody mows and ``fresh_water``
     beside water and on swamp ground."""
     zc, cell = cfg["zones"][atype], meadow.cell_m

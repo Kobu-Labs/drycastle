@@ -1,6 +1,6 @@
 """House connectors: where the cable from a utility pole ends on a house.
 
-Small fittings of the kind the village has, built from the pole parts kit (``poleparts.py``): J-hooks
+Small fittings of the kind the village has, built from the pole parts kit (``kits/poleparts.py``): J-hooks
 with insulators on a wall, a hook for a bundled cable with a box under it, and roof masts. Each is a
 placeable object (``prim:connector_*``, category ``connector``, no collision) with wire seats like a
 pole, so a cable (``cables`` in edits.json) can run from a pole to it. The editor places one when a
@@ -17,10 +17,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from drycastle_pipeline import poleparts as pp
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poleparts import UP, Kit, vec
-from drycastle_pipeline.poles import Anchor, seats_of, size_of
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits import poleparts as pp
+from drycastle_pipeline.kits.poleparts import UP, Kit, vec
+from drycastle_pipeline.kits.poles import Anchor, seats_of, size_of
 
 GALVANISED = "#8b9096"
 LEAD = "#6f7479"

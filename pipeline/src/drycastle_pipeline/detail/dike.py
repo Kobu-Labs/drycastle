@@ -25,29 +25,17 @@ from shapely.geometry import LineString, Polygon
 from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
-from drycastle_pipeline.assets import ASSETS_DIR
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.detail import (
-    DetailResult,
-    ParcelContext,
-    Patch,
-    _assemble,
-    _clean,
-    _emit,
-    _gen,
-    _polys,
-    _split_kinds,
-    _zones,
-    blob,
-    distance_to,
-    free_area,
-    scatter,
-)
-from drycastle_pipeline.props import seeded
-from drycastle_pipeline.textures import texture
+from drycastle_pipeline.core.assets import ASSETS_DIR
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.geometry import polygons
+from drycastle_pipeline.core.textures import texture
+from drycastle_pipeline.detail.model import DetailResult, ParcelContext, Patch
+from drycastle_pipeline.detail.parts import _assemble, _emit, _split_kinds, _zones, free_area
+from drycastle_pipeline.detail.tools import _clean, _gen, blob, distance_to, scatter
+from drycastle_pipeline.props.helpers import seeded
 
 TEXTURE_ID = "dike_gravel"
-# The grass patches of the texture (fill, rim), as scripts/make_textures.py draws them.
+# The grass patches of the texture (fill, rim), as scripts/art/make_textures.py draws them.
 PATCH_RGB = ((0x6F, 0xA0, 0x4A), (0x4F, 0x7D, 0x3A))
 _IMAGE: list[np.ndarray] = []
 
@@ -104,7 +92,7 @@ def _ragged(poly: Polygon, rng: random.Random, inward: float, outward: float) ->
     off = -inward + (inward + outward) * _closed_wander(rng, ring.length, s) ** 1.3
     hull = Polygon(pts + nor * off[:, None]).buffer(0)
     if hull.is_empty or hull.geom_type != "Polygon":
-        hull = max(_polys(hull), key=lambda g: g.area, default=poly)
+        hull = max(polygons(hull), key=lambda g: g.area, default=poly)
     return hull, pts, nor, off
 
 
@@ -197,7 +185,7 @@ def dike_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
         blobs.append(blob(rng, float(c[0]), float(c[1]), max(r, float(bc["blob_radius_m"][0])), wobble=0.5, stretch=1.0 + rng.random()))
         d += step * (0.4 + 1.2 * rng.random())
     spill = _clean(unary_union(blobs).intersection(reach).difference(hull), 0.1) if blobs else Polygon()
-    for poly in _polys(spill):
+    for poly in polygons(spill):
         res.patches.append(Patch("lawn", poly, colour=cols[rng.randrange(len(cols))], lift=float(bc["lawn_lift_m"])))
     grass = unary_union([covered, spill])
     if not track.is_empty:

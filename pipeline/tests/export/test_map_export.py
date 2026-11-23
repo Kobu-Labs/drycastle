@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import trimesh
 
-from drycastle_pipeline.export import run_export
-from drycastle_pipeline.props import run_props
-from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.core.rules import DEFAULT_RULES
+from drycastle_pipeline.export.export import run_export
+from drycastle_pipeline.props.props import run_props
 from tests.synthetic import make_workspace
 
 
@@ -118,8 +118,8 @@ def test_export_is_byte_deterministic_across_runs(ws, tmp_path) -> None:
 
 
 def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
-    from drycastle_pipeline.propmeshes import fence_meshes, ground_objects_mesh, trees_mesh
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
+    from drycastle_pipeline.props.propmeshes import fence_meshes, ground_objects_mesh, trees_mesh
 
     manifest = export(ws)
     assert manifest["props_layout"] == "per_parcel"
@@ -165,7 +165,7 @@ def test_baked_trees_carry_their_base_as_second_uv_set(ws) -> None:
 
 
 def test_forest_colour_fades_into_its_neighbour_over_the_blend_band() -> None:
-    from drycastle_pipeline.scene import ParcelColours
+    from drycastle_pipeline.export.scene import ParcelColours
 
     sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
     units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 100)}, {"id": "A-2", "kind": "field", "polygon": sq(100, 200)}]
@@ -182,7 +182,7 @@ def test_forest_colour_fades_into_its_neighbour_over_the_blend_band() -> None:
 def test_swamp_ground_is_terrain_colour_and_fades_at_its_outline() -> None:
     from shapely.geometry import box
 
-    from drycastle_pipeline.scene import ParcelColours
+    from drycastle_pipeline.export.scene import ParcelColours
 
     sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
     units = [{"id": "A-1", "kind": "forest", "polygon": sq(0, 200)}, {"id": "A-2", "kind": "road", "polygon": sq(200, 300)}]
@@ -197,8 +197,8 @@ def test_swamp_ground_is_terrain_colour_and_fades_at_its_outline() -> None:
 
 
 def test_parcel_ground_type_gives_the_types_colour_and_recipe() -> None:
-    from drycastle_pipeline.detail import area_type
-    from drycastle_pipeline.scene import ParcelColours
+    from drycastle_pipeline.detail.recipes import area_type
+    from drycastle_pipeline.export.scene import ParcelColours
 
     sq = lambda x0, x1: {"type": "Polygon", "coordinates": [[[x0, 0], [x1, 0], [x1, 100], [x0, 100], [x0, 0]]]}
     units = [{"id": "P-1091", "kind": "building_plot", "ground_type": "graveyard", "polygon": sq(0, 100)},

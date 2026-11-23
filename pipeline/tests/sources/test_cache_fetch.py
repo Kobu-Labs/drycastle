@@ -4,11 +4,11 @@ from pathlib import Path
 import pytest
 import requests
 
-from drycastle_pipeline import fetch
-from drycastle_pipeline.cache import Source, fetch_cached, sidecar_path, write_manifest
-from drycastle_pipeline.config import MapConfig
-from drycastle_pipeline.geo import bbox_of_polygon
-from drycastle_pipeline.http import HttpError, PoliteClient
+from drycastle_pipeline.core.cache import Source, fetch_cached, sidecar_path, write_manifest
+from drycastle_pipeline.core.config import MapConfig
+from drycastle_pipeline.core.geo import bbox_of_polygon
+from drycastle_pipeline.core.http import HttpError, PoliteClient
+from drycastle_pipeline.sources import fetch
 
 SRC = Source("Test source", "CC0", "https://example.invalid/licence", "Test attribution")
 TIFF = b"II*\x00" + b"\x00" * 16

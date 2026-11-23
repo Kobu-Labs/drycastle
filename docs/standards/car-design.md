@@ -29,8 +29,8 @@ The one file for vehicle work. Read it when the task is vehicle design or vehicl
 
 1. Pack not yet under `assets-private/synty/glb/<pack>/`: import it (`scripts/vehicles/build_vehicle_packs.sh`, or a new extract step in its style) and add a README section in `assets-private/synty/README.md`.
 2. Measure, never guess: `scripts/vehicles/vehicle_model_probe.gd`, `vehicle_model_dump.gd` + `vehicle_model_analyze.py`; write the facts into `docs/research/vehicle-models-facts.md`.
-3. Write `scripts/vehicles/<id>.json` (copy the nearest: `car_small` closed car, `truck` six wheels + hitch, `bike` two wheels + raked fork, `quad` handlebars, `harvester` kept nodes).
-4. `python3 scripts/vehicles/standardize_vehicle.py scripts/vehicles/<id>.json --private <main checkout>/assets-private --vehicles-json godot/shooter/data/vehicles.json`. Never hand-edit the keys it writes.
+3. Write `scripts/vehicles/specs/<id>.json` (copy the nearest: `car_small` closed car, `truck` six wheels + hitch, `bike` two wheels + raked fork, `quad` handlebars, `harvester` kept nodes).
+4. `python3 scripts/vehicles/standardize_vehicle.py scripts/vehicles/specs/<id>.json --private <main checkout>/assets-private --vehicles-json godot/shooter/data/vehicles.json`. Never hand-edit the keys it writes.
 5. Add the gameplay keys by hand (speed, hp, mass, `spawn_count`, `hood`, `tow`, chase camera); set seat `cover` and pane `kind` where the default (`glass` / `normal`) is not right.
 6. `python3 scripts/vehicles/make_vehicle_outlines.py --only <id>`.
 7. Tests: `dotnet test godot/ShooterCore.Tests --filter "VehicleContractTests|StandardizedVehicleTests|SeatSwitchTests|SeatViewTests|GlassTests|VehicleTypesTests"`, then `dotnet build godot/shooter`. Headless model check: `scripts/vehicles/vehicle_std_check.gd` (run by `build_vehicle_packs.sh --standardize-only`).
@@ -38,7 +38,7 @@ The one file for vehicle work. Read it when the task is vehicle design or vehicl
 
 **Flow 2: a vehicle from scratch** (detail: part C)
 
-1. Real reference dimensions in the header of `scripts/make_<type>_model.py`.
+1. Real reference dimensions in the header of `scripts/models/make_<type>_model.py`.
 2. The script writes the whole contract (A) and the `glass` list; run it; .glb + `vehicles.json` in one commit.
 3. Steps 5 to 8 of flow 1 (`StandardizedVehicleTests` does not apply; add a per-vehicle model test).
 
@@ -161,12 +161,12 @@ The one file for vehicle work. Read it when the task is vehicle design or vehicl
 
 ## B. Synty import pipeline
 
-One standardization step per pack prefab: **`scripts/vehicles/standardize_vehicle.py`**, driven by a committed facts file `scripts/vehicles/<id>.json`. One command rebuilds it: `scripts/vehicles/build_vehicle_packs.sh` (its last step runs the standardizer for every `scripts/vehicles/*.json` and checks the output with `scripts/vehicles/vehicle_std_check.gd`). The first vehicle through it is the car (`SM_Veh_Car_Small_01`, `scripts/vehicles/specs/car_small.json`). The Humvee (`scripts/military_kit/make_humvee_model.py`, `scripts/military_kit/build_simple_military.sh`) predates it and is built by hand from the kit; the Scud and rocket cart use the same kit.
+One standardization step per pack prefab: **`scripts/vehicles/standardize_vehicle.py`**, driven by a committed facts file `scripts/vehicles/specs/<id>.json`. One command rebuilds it: `scripts/vehicles/build_vehicle_packs.sh` (its last step runs the standardizer for every `scripts/vehicles/specs/*.json` and checks the output with `scripts/vehicles/vehicle_std_check.gd`). The first vehicle through it is the car (`SM_Veh_Car_Small_01`, `scripts/vehicles/specs/car_small.json`). The Humvee (`scripts/military_kit/make_humvee_model.py`, `scripts/military_kit/build_simple_military.sh`) predates it and is built by hand from the kit; the Scud and rocket cart use the same kit.
 
 ### B1. Steps
 
 1. **Import the pack** once: `.unitypackage` / Godot zip > prefab GLBs under `assets-private/synty/glb/<pack>/` (`scripts/packs/private_pack_glb.gd`, `quadbike_export.gd`, `build_vehicle_packs.sh`). Measure the model (`scripts/vehicles/vehicle_model_probe.gd`, `vehicle_model_dump.gd` + `vehicle_model_analyze.py`) and write the facts into `docs/research/vehicle-models-facts.md`. Nothing of the pack is committed.
-2. **Write the facts file** `scripts/vehicles/<id>.json`, positions in the SOURCE frame (as imported): the source node names (body, glass, steering wheel, each wheel and whether it steers), seat feet and eye heights, lamp positions and lens sizes, the skins (atlas names), `two_sided_shell`.
+2. **Write the facts file** `scripts/vehicles/specs/<id>.json`, positions in the SOURCE frame (as imported): the source node names (body, glass, steering wheel, each wheel and whether it steers), seat feet and eye heights, lamp positions and lens sizes, the skins (atlas names), `two_sided_shell`.
 3. **Run the standardizer** (it does all of the following, no per-vehicle code):
    - **Reorient**: `facing` +Z (every Synty prefab) is turned half a circle about Y to forward -Z; **ground origin**: the lowest wheel point is y 0, the footprint centre is x 0 / z 0. `model_scale` 1, `model_offset` 0, `model_yaw_deg` 0 in `vehicles.json`.
    - **Strip** the prefab's collision bodies (`OMI_physics_*`): the vehicle's solid is the server's box.
@@ -184,7 +184,7 @@ One standardization step per pack prefab: **`scripts/vehicles/standardize_vehicl
 
 ### B2. Generic and per vehicle
 
-| Generic (`scripts/vehicles/standardize_vehicle.py`, `scripts/military_kit/simple_military_kit.py`) | Per vehicle (`scripts/vehicles/<id>.json`) |
+| Generic (`scripts/vehicles/standardize_vehicle.py`, `scripts/military_kit/simple_military_kit.py`) | Per vehicle (`scripts/vehicles/specs/<id>.json`) |
 |---|---|
 | prefab reader, collision strip, reorient, ground and footprint centre, `hull` regrouping, wheel naming/centring/`_steer` (also on a tilted axis), `steer_bars`, any wheel count and radii, glass cut into panes with outlines and the `glass` list, steering wheel split, seat and lamp empties and lenses, eye-under-ceiling check, skins as atlas swaps, `materials.json`, manifest, facts file, the `vehicles.json` splice, GLB writer, `outline_of`, `glass_faces` (Humvee) | source node names, which wheels steer, seat feet and eye heights, lamp points and lens sizes, skin atlases, `two_sided_shell`, the interior of a vehicle that has none (not done by the standardizer), a steering assembly (`axis`/`pivot`/`controls`/`parts`/`dx`), exposed seats, the gameplay numbers |
 
@@ -192,7 +192,7 @@ One standardization step per pack prefab: **`scripts/vehicles/standardize_vehicl
 - Texture repeat: a prefab whose UVs leave 0..1 (the truck's bed, u to 2.64) needs the atlas to tile; the game's materials repeat by default (`StandardMaterial3D`), nothing to set.
 - Not done by the standardizer: the interior of a prefab that has none. It writes seat `cover` (`exposed` for an open seat, `glass` otherwise; `armoured` is set by hand) and leaves pane `kind` out (= `normal`; `reinforced` is set by hand). `two_sided_shell: true` writes the `_2s` materials for a one-skin shell.
 
-## C. A vehicle designed from scratch (`scripts/make_<type>_model.py`)
+## C. A vehicle designed from scratch (`scripts/models/make_<type>_model.py`)
 
 1. **Reference first**: real dimensions of the real vehicle (length, width, height, wheelbase, track, wheel radius, seat positions, roof height inside). Put them in the script header with the source. The hit box = the real footprint, not a guess.
 2. **Contract**: all of A. The script writes `hull`, wheels with `_steer` parents (more than four allowed), `glass_N` panes with outlines, `seat_*` empties, the steering control, lamp materials/empties; origin on the ground at the centre, forward -Z, metres, scale 1.
@@ -242,7 +242,7 @@ A vehicle has **three frames**. Pick the right one for every attachment.
 
 ## 1. Model (.glb) contract
 
-Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-generated-models/` and `vehicles.json` ship in **one commit**. Do not hand-edit the generated `glass` list. The rules are part A; this section is the node table and details.
+Generated by `scripts/models/make_<type>_model.py`; the .glb in `assets/drycastle-generated-models/` and `vehicles.json` ship in **one commit**. Do not hand-edit the generated `glass` list. The rules are part A; this section is the node table and details.
 
 - A model that carries geometry of a paid pack (Humvee, Scud, rocket cart: `scripts/military_kit/build_simple_military.sh`) is private: the .glb lives in `assets-private/synty/glb/<pack>/` and `vehicles.json` names it `pack:<pack>/<name>`; only the script and `docs/research/scud-models-facts.md` are committed. Its glass list is written by hand from the facts file (part B).
 - Origin on the ground at the centre, forward -Z, +Y up, metres. `model_scale` 1, `model_yaw_deg` 0, `model_offset` 0 are the contract (A1). No vehicle has a non-default value left: the harvester was the last (its yaw 180 went with the standardization, #325), the allow-list of `VehicleContractTests` is empty.
@@ -385,7 +385,7 @@ Generated by `scripts/make_<type>_model.py`; the .glb in `assets/drycastle-gener
 
 See also the definition of done above and part B/C.
 
-1. `scripts/make_<type>_model.py` produces: `hull`, wheel nodes, `glass_N`, seat nodes, lamp materials. Run it; commit .glb + `vehicles.json` together.
+1. `scripts/models/make_<type>_model.py` produces: `hull`, wheel nodes, `glass_N`, seat nodes, lamp materials. Run it; commit .glb + `vehicles.json` together.
 2. `vehicles.json`: size, hp, mass, glass, lights, seats, paint, sounds, spots. `VehicleTypesTests` stays green.
 3. Every attachment under the right frame (section 0).
 4. Cockpit spec (if any), hide list, eye inside cabin.

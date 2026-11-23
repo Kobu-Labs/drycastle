@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from drycastle_pipeline import fetch
-from drycastle_pipeline.config import MapConfig
-from drycastle_pipeline.geo import bbox_of_polygon
-from drycastle_pipeline.http import HttpError
-from tests.test_cache_fetch import FakeResponse, RouterClient, _geotiff
+from drycastle_pipeline.core.config import MapConfig
+from drycastle_pipeline.core.geo import bbox_of_polygon
+from drycastle_pipeline.core.http import HttpError
+from drycastle_pipeline.sources import fetch
+from tests.sources.test_cache_fetch import FakeResponse, RouterClient, _geotiff
 
 RING = [(-589500.0, -1250500.0), (-586500.0, -1250500.0), (-586500.0, -1247500.0)]  # 3 km
 

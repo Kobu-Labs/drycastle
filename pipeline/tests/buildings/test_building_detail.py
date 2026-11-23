@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 from shapely.geometry import Polygon
 
-from drycastle_pipeline.building_detail import DetailError, build_detail, parse_detail
-from drycastle_pipeline.meshes import building_mesh
+from drycastle_pipeline.buildings.meshes import building_mesh
+from drycastle_pipeline.buildings.openings import DetailError, build_detail, parse_detail
 
 
 def house(roof="gabled"):
@@ -79,8 +79,8 @@ def test_child_must_lie_inside_parent_recess():
 
 
 def test_a_roof_part_splits_the_building_and_keeps_its_openings():
-    from drycastle_pipeline.building_detail import build_detail, parse_detail
-    from drycastle_pipeline.meshes import building_mesh, collision_mesh, split_parts
+    from drycastle_pipeline.buildings.meshes import building_mesh, collision_mesh, split_parts
+    from drycastle_pipeline.buildings.openings import build_detail, parse_detail
 
     # an L: a 6 x 8 house in the east, a 6 x 4 extension in the south-west; the roof belongs to the house
     b = {

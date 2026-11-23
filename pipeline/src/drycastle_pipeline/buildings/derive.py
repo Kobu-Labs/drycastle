@@ -16,13 +16,14 @@ from itertools import pairwise
 from pathlib import Path
 
 import yaml
-from shapely.affinity import rotate
-from shapely.geometry import MultiPolygon, Polygon, shape
+from shapely.geometry import Polygon, shape
 from shapely.geometry.polygon import orient
 
-from drycastle_pipeline.config import PIPELINE_DIR, map_paths
-from drycastle_pipeline.normalise import DEFAULT_WORK_DIR
-from drycastle_pipeline.rules import DEFAULT_RULES
+from drycastle_pipeline.buildings.footprint import largest_polygon, roof_frame
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.config import PIPELINE_DIR, map_paths
+from drycastle_pipeline.core.rules import DEFAULT_RULES
+from drycastle_pipeline.parcels.normalise import DEFAULT_WORK_DIR
 
 DEFAULT_OVERRIDES = PIPELINE_DIR / "config" / "overrides.yaml"
 BUILDINGS_FORMAT_VERSION = 1
@@ -135,7 +136,7 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
             if name == "roof" and value not in ROOFS:
                 raise RulesError(f"overrides: {key}: roof must be one of {ROOFS}")
             if name == "model":
-                from drycastle_pipeline.landmarks import FOOTPRINT_MODELS, MODELS
+                from drycastle_pipeline.buildings.landmarks.catalog import FOOTPRINT_MODELS, MODELS
 
                 known = sorted({*MODELS, *FOOTPRINT_MODELS})
                 if value not in known:
@@ -156,45 +157,6 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
 def seed_for(parcel_id: str, building_id: str) -> int:
     digest = hashlib.sha256(f"{parcel_id}:{building_id}".encode()).digest()
     return int.from_bytes(digest[:8], "big")
-
-
-def hex_to_rgb(colour: str) -> list[int]:
-    c = colour.lstrip("#")
-    return [int(c[i : i + 2], 16) for i in (0, 2, 4)]
-
-
-def largest_polygon(geom) -> Polygon:
-    if isinstance(geom, MultiPolygon):
-        return max(geom.geoms, key=lambda g: g.area)
-    return geom
-
-
-def roof_frame(poly: Polygon, angle: float | None = None, hipped: bool = False):
-    """Frame of the ridge: (angle, cu, cv, a, b).
-
-    Without ``angle`` it is the minimum rotated rectangle with the angle of its longest side.
-    ``a`` and ``b`` are half-extents along and across the ridge; (cu, cv) is the centre in the
-    frame rotated by ``-angle``. Hipped roofs always run the ridge along the longer side.
-    """
-    if angle is None:
-        rect = poly.minimum_rotated_rectangle
-        pts = list(rect.exterior.coords)
-        best, angle = -1.0, 0.0
-        for p, q in pairwise(pts):
-            length = math.hypot(q[0] - p[0], q[1] - p[1])
-            if length > best + 1e-9:
-                best, angle = length, math.atan2(q[1] - p[1], q[0] - p[0])
-        angle %= math.pi
-        angle = round(angle, 4)
-    for _ in range(2):
-        r = rotate(poly, -angle, origin=(0, 0), use_radians=True)
-        x0, y0, x1, y1 = r.bounds
-        a, b = (x1 - x0) / 2, (y1 - y0) / 2
-        if hipped and a < b:
-            angle = (angle + math.pi / 2) % math.pi
-            continue
-        return angle, (x0 + x1) / 2, (y0 + y1) / 2, a, b
-    raise AssertionError("unreachable")
 
 
 def parse_metres(value: object) -> float | None:
@@ -330,10 +292,6 @@ def derive_building(
         "wall_colour": hex_to_rgb(wall),
         "roof_colour": hex_to_rgb(roof_colour),
     }
-
-
-def footprint_polygon(fp: dict) -> Polygon:
-    return Polygon(fp["exterior"], fp["holes"])
 
 
 def height_class(h: float) -> str:

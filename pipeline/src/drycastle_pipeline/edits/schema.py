@@ -23,7 +23,7 @@ formatting is fixed, so git diffs stay small. Version 1::
                       filter (building and road clearances still apply).
     type              picket | wire | brick_red | brick_white | stone_wall | concrete (custom
                       only; brick_wall is the old name of brick_red). Each maps to the defaults in
-                      FENCE_TYPES below and to a style in fencestyles.py (panel texture, column,
+                      FENCE_TYPES below and to a style in props/fencestyles.py (panel texture, column,
                       cap).
     column            one of COLUMN_TYPES below (custom only): the posts or piers at the section
                       joints and run ends, replacing the type's own (e.g. picket between brick_red
@@ -93,13 +93,13 @@ formatting is fixed, so git diffs stay small. Version 1::
     water_y             a number, required when the type carries the ``water`` attribute and refused otherwise: the patch
                         is a body of water whose flat surface is at this height, in metres on the terrain's datum (as
                         terrain.json, e.g. 185.6). The body is also written to water.json (swimming, the shooter's water
-                        surface) with its bed at the natural bed (bed.py: banks shelve, pools and riffles on a river,
+                        surface) with its bed at the natural bed (terrain/bed.py: banks shelve, pools and riffles on a river,
                         the terrain under it carved to that bed).
     max_depth           optional number of metres (0 < x <= 20), only with water_y: the body's deepest
                         point. Its bed is scaled so the deepest point is this deep. Default: the class
                         depth in rules.yaml (water.river.pool_depth_m, water.pond.max_depth_m).
 
-``zones`` (a marked area of exactly one zone kind, ADR 0022; ``Z-`` and 4 or more digits; see zones.py)
+``zones`` (a marked area of exactly one zone kind, ADR 0022; ``Z-`` and 4 or more digits; see edits/zones.py)
     kind                a zone kind of the catalog (``zones.KIND_NAMES``): what the area means in play. A zone never
                         changes the terrain; zones overlap freely and add up. The export turns them into candidate points
                         for the server (``zone_points.json``), for ``player_spawn`` into spawn candidates and for ``plantation`` into polygons
@@ -110,11 +110,11 @@ formatting is fixed, so git diffs stay small. Version 1::
     points              [[x, y], ...], at least 2, absolute EPSG:5514 metres: the line people walk.
     width_m             optional, 0.3 to 4 (default 0.8): how wide the trodden ground is on average.
     closed              optional true: the line returns to its first point (a loop, at least 3 points).
-    The detail stage lays bare trodden earth along it over whatever ground is there (``footpaths.py``); parcels, ground
+    The detail stage lays bare trodden earth along it over whatever ground is there (``detail/footpaths.py``); parcels, ground
     areas and their kinds are unchanged. Needs the next make map-update.
 
 ``zone_cuts`` (internal: the editor's record that a zone that comes from a rule was moved, retyped or deleted; ``ZC-`` and 4
-or more digits; see zones.py). The user never sees these as zones.
+or more digits; see edits/zones.py). The user never sees these as zones.
     kind                a zone kind of the catalog.
     polygon             as of a ground patch: the area that was taken out, in absolute S-JTSK metres. The export subtracts it
                         (grown by zones.CUT_BUFFER_M, so a rebuilt, slightly different area leaves no sliver) from the rule
@@ -131,10 +131,10 @@ drawn by the game, see docs/utility-poles.md)
                         are cables.
 
 ``ground_types`` (overrides and additions to the ground types of ``ground.types`` in rules.yaml, by name; see
-ground.py and ground_attributes.py. The key is only written when there are some.)
+ground/areas.py and ground/attributes.py. The key is only written when there are some.)
     name                lower_snake, ``^[a-z][a-z0-9_]{0,23}$``. A name of rules.yaml overrides that type, a new name
                         is a new type (appended after the rules' types). Names are IDs: there is no rename.
-    attributes          the attributes the type carries (the fixed catalog of ground_attributes.py), each one key:
+    attributes          the attributes the type carries (the fixed catalog of ground/attributes.py), each one key:
                           colours       1-6 terrain shades, each "#rrggbb" (replaces the type's list).
                           recipe        field | forest | village | dike (replaces the type's recipe).
                           detail        object laid over the shipped ``detail.<recipe>`` section of rules.yaml (deep
@@ -166,15 +166,15 @@ from pathlib import Path
 
 from shapely.geometry import LinearRing, Polygon
 
-from drycastle_pipeline.config import PIPELINE_DIR
-from drycastle_pipeline.ground_attributes import (
+from drycastle_pipeline.core.config import PIPELINE_DIR
+from drycastle_pipeline.edits.zones import KIND_NAMES
+from drycastle_pipeline.ground.attributes import (
     ATTRIBUTES,
     COLOURS_MAX,
     FLAG_KEYS,
     RECIPES,
     TERRAIN_KEYS,
 )
-from drycastle_pipeline.zones import KIND_NAMES
 
 EDITS_VERSION = 1
 DEFAULT_EDITS = PIPELINE_DIR / "config" / "edits.json"
@@ -249,7 +249,7 @@ class Edits:
     ground_patches: dict[str, dict] = field(default_factory=dict)
     zones: dict[str, dict] = field(default_factory=dict)
     zone_cuts: dict[str, dict] = field(default_factory=dict)
-    paths: dict[str, dict] = field(default_factory=dict)  # worn footpaths (footpaths.py)
+    paths: dict[str, dict] = field(default_factory=dict)  # worn footpaths (detail/footpaths.py)
     cables: dict[str, dict] = field(default_factory=dict)
     ground_types: dict[str, dict] = field(default_factory=dict)
 
@@ -491,7 +491,7 @@ def _effective_type_names(own: dict, shipped: dict) -> set[str]:
 
 def _check_parcel_ground_type(name: object, path: str, own_types: dict, errors: list[str]) -> None:
     """A parcel's ``ground_type``: a type that exists (rules.yaml or ``ground_types``, not deleted) and is not water."""
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     shipped = load_section("ground")["types"]
     if not isinstance(name, str) or name not in _effective_type_names(own_types, shipped):
@@ -503,7 +503,7 @@ def _check_parcel_ground_type(name: object, path: str, own_types: dict, errors: 
 
 
 def _check_patches(patches: dict, own_types: dict, errors: list[str]) -> None:
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     shipped = load_section("ground")["types"]
     known = _effective_type_names(own_types, shipped)
@@ -613,7 +613,7 @@ def _check_cables(cables: dict, errors: list[str]) -> None:
 def protected_ground_types() -> dict[str, str]:
     """The types of the shipped rules.yaml that cannot be deleted, with the reason: the default type, and the types
     made by a rule (the dike, which ``detail.dike`` needs)."""
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     gcfg = load_section("ground")
     out = {name: "has a rule (detail.dike needs it)" for name, spec in gcfg["types"].items() if (spec or {}).get("rule")}
@@ -634,7 +634,7 @@ def _effective_attributes(name: str, entry: dict, shipped: dict) -> dict:
 
 
 def _check_attributes(name: str, attrs: object, path: str, errors: list[str], shipped: dict) -> None:
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     if not _is_dict(attrs, path, errors):
         return
@@ -676,7 +676,7 @@ def _check_attributes(name: str, attrs: object, path: str, errors: list[str], sh
 
 
 def _check_ground_type(name: str, entry: object, path: str, errors: list[str]) -> None:
-    from drycastle_pipeline.rules import load_section
+    from drycastle_pipeline.core.rules import load_section
 
     if not (_GROUND_NAME.fullmatch(name)):
         errors.append(f"{path}: type names are lower case letters, digits and _, starting with a letter, at most {GROUND_NAME_MAX} long")

@@ -132,7 +132,7 @@ Every prefab also carries collision: a `MeshCollider` StaticBody3D with a Collis
 
 ```
 scripts/vehicles/build_vehicle_packs.sh          # unpack, import, export, variants, check (~12 s)
-scripts/vehicles/build_vehicle_packs.sh --standardize-only   # scripts/vehicles/*.json -> glb/vehicles-std/ + docs/research/vehicle-facts.d/ (car, bike, quad, truck)
+scripts/vehicles/build_vehicle_packs.sh --standardize-only   # scripts/vehicles/specs/*.json -> glb/vehicles-std/ + docs/research/vehicle-facts.d/ (car, bike, quad, truck)
 python3 scripts/vehicles/standardize_vehicle.py scripts/vehicles/specs/car_small.json --vehicles-json godot/shooter/data/vehicles.json   # also splices the model-owned keys of the entry
 godot --headless --script scripts/vehicles/vehicle_model_probe.gd -- [--tris] <glb> ...
 godot --headless --script scripts/vehicles/vehicle_model_dump.gd -- <glb> <out.json>

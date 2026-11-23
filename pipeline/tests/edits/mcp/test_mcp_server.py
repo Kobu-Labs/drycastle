@@ -6,17 +6,14 @@ import threading
 import time
 
 import pytest
-from shapely.geometry import Polygon
 from mcp.server.mcpserver.exceptions import ToolError
+from shapely.geometry import Polygon
 
-from drycastle_pipeline.edits import dump_text, load_edits, validate
-from drycastle_pipeline.mcp_server import (
-    ParcelEditTools,
-    Settings,
-    build_server,
-    object_polygon,
-    parse_args,
-)
+from drycastle_pipeline.edits.mcp.objects import object_polygon
+from drycastle_pipeline.edits.mcp.server import build_server, parse_args
+from drycastle_pipeline.edits.mcp.settings import Settings
+from drycastle_pipeline.edits.mcp.tools import ParcelEditTools
+from drycastle_pipeline.edits.schema import dump_text, load_edits, validate
 from tests.synthetic import SYNTHETIC_ORIGIN, make_workspace
 
 OX, OY = SYNTHETIC_ORIGIN
@@ -610,7 +607,7 @@ def test_zones_by_rule_are_zones_too(env):
 
 
 def test_list_zone_kinds_is_the_catalog_with_its_rules(env):
-    from drycastle_pipeline.zones import KIND_NAMES
+    from drycastle_pipeline.edits.zones import KIND_NAMES
 
     tools, settings, _ = env
     tools.create_zone("bigfoot", polygon=SQUARE)
@@ -706,12 +703,12 @@ def test_through_mcp_session(env):
 
 
 def test_validation_doc_includes_patches_and_zones(env):
-    from drycastle_pipeline.mcp_server import _edits_doc
+    from drycastle_pipeline.edits.store import edits_doc
 
     tools, settings, _ = env
     tools.create_ground_patch("meadow", polygon=SQUARE)
     tools.create_zone("deer", polygon=SQUARE)
-    doc = _edits_doc(load_edits(settings.edits_path))
+    doc = edits_doc(load_edits(settings.edits_path))
     assert "GP-0001" in doc["ground_patches"] and "Z-0001" in doc["zones"]
 
 

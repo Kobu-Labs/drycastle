@@ -6,11 +6,11 @@ in the pipeline. ``PRIMITIVES`` maps the name to its builder, default parameters
 size. ``size_m`` there is ``[x, y, z]`` in glTF axes (y up, the convention of ``assets/manifest.json``):
 a plan footprint of x by z and a height y. Output is deterministic: same parameters, same mesh.
 
-The utility poles (``pole_*``, built by ``poles.py``) are the exception to "centred": their origin is
+The utility poles (``pole_*``, built by ``kits/poles.py``) are the exception to "centred": their origin is
 the foot of the column, wherever the lamp arm or a cabinet reaches, and the column goes half a metre
 into the ground. Their ``size_m`` is the box centred on the origin that holds them (``centred`` is
-False). The same goes for the house connectors (``connector_*``, ``connectors.py``): their origin is
-on the wall or roof they sit on. The flood wall pieces (``floodwall_*``, ``floodwall.py``) have their
+False). The same goes for the house connectors (``connector_*``, ``kits/connectors.py``): their origin is
+on the wall or roof they sit on. The flood wall pieces (``floodwall_*``, ``kits/floodwall.py``) have their
 origin on the ground under the centre line of the upper wall and go a metre into the ground.
 """
 
@@ -20,15 +20,15 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.connectors import CONNECTORS, build_connector
-from drycastle_pipeline.floodwall import PIECES as FLOODWALL_PIECES
-from drycastle_pipeline.floodwall import build_piece
-from drycastle_pipeline import graves
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poles import VARIANTS as POLE_VARIANTS
-from drycastle_pipeline.poles import build_variant
-from drycastle_pipeline.propmeshes import _mesh, box_tris
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits import graves
+from drycastle_pipeline.kits.connectors import CONNECTORS, build_connector
+from drycastle_pipeline.kits.floodwall import PIECES as FLOODWALL_PIECES
+from drycastle_pipeline.kits.floodwall import build_piece
+from drycastle_pipeline.kits.poles import VARIANTS as POLE_VARIANTS
+from drycastle_pipeline.kits.poles import build_variant
+from drycastle_pipeline.props.propmeshes import _mesh, box_tris
 
 
 def _box(length: float, thickness: float, height: float, colour: str) -> Mesh:
@@ -97,7 +97,7 @@ def mound_entry() -> dict:
         "size_m": list(prim.size_m),
         "tags": ["mound", "hill", "terrain", "flat-colour", "primitive"],
         "licence": "CC0",
-        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/primitives.py)",
+        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/primitives.py)",
         "pack": None,
         # the game collides with these boxes, not one box: each tier rises <= 0.28 m so the player steps up
         "solids": mound_solids(),
@@ -239,8 +239,8 @@ def radio_tower_mesh(params: dict | None = None) -> Mesh:
 def bunker_prim_mesh(params: dict | None = None) -> Mesh:
     """WW2 pillbox: rounded concrete dome on a chamfered rectangle, door facing -y (the object's
     front), firing slits, weathering streaks. Long axis along x. The closed form: a placed object
-    collides as one box, so nobody can go in (the bunkers of the map are buildings, see ``bunker.py``)."""
-    from drycastle_pipeline.bunker import bunker_mesh
+    collides as one box, so nobody can go in (the bunkers of the map are buildings, see ``buildings/landmarks/bunker.py``)."""
+    from drycastle_pipeline.buildings.landmarks.bunker import bunker_mesh
 
     p = {**PRIMITIVES["bunker"].params, **(params or {})}
     hl, hw, ch = float(p["length_m"]) / 2, float(p["width_m"]) / 2, float(p["chamfer_m"])

@@ -1,6 +1,6 @@
 """Swatch sheet of the fence types: every type drawn from its real meshes, UVs and library textures.
 
-    uv run python -m drycastle_pipeline.fence_preview [out.png]      # default out/textures/fences.png
+    uv run python -m drycastle_pipeline.preview.fences [out.png]      # default out/textures/fences.png
 
 A small software renderer (orthographic, z-buffer, back-face culling, nearest texel, alpha test), so
 the picture shows what the GLB holds without starting the game: wrong winding shows as holes, wrong
@@ -14,11 +14,11 @@ from pathlib import Path
 import matplotlib.image as mpimg
 import numpy as np
 
-from drycastle_pipeline.assets import ASSETS_DIR, DEFAULT_MANIFEST
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.edits import FENCE_TYPES
-from drycastle_pipeline.propmeshes import fence_meshes
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.core.assets import ASSETS_DIR, DEFAULT_MANIFEST
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.edits.schema import FENCE_TYPES
+from drycastle_pipeline.props.propmeshes import fence_meshes
 
 DEFAULT_OUT = REPO_ROOT / "out" / "textures" / "fences.png"
 

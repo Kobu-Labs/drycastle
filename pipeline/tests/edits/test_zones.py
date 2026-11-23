@@ -9,16 +9,16 @@ import random
 import numpy as np
 import pytest
 import shapely
-from shapely.geometry import Point, Polygon, box, mapping
+from shapely.geometry import Point, box, mapping
 
-from drycastle_pipeline.buildings import derive_building, footprint_polygon, load_building_rules
-from drycastle_pipeline.export import run_export
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.zones import (
+from drycastle_pipeline.buildings.derive import derive_building, load_building_rules
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits.zones import (
+    FLOCKS,
     KIND_NAMES,
     KINDS,
     PLAYER_SPAWN,
-    FLOCKS,
     WILDLIFE,
     ZonesError,
     build_zone_points,
@@ -33,6 +33,7 @@ from drycastle_pipeline.zones import (
     sample_points,
     zone_cuts,
 )
+from drycastle_pipeline.export.export import run_export
 from tests.synthetic import make_terrain, make_workspace
 
 RULE = {"m2_per_point": 100, "min_points": 10, "max_points": 50, "building_clearance_m": 10, "water_clearance_m": 5}
@@ -77,7 +78,7 @@ def test_wildlife_species_are_species_of_the_game_data() -> None:
     """zones.WILDLIFE must name species of godot/shooter/data/animals.json (the server spawns them by id)."""
     import re
 
-    from drycastle_pipeline.config import REPO_ROOT
+    from drycastle_pipeline.core.config import REPO_ROOT
 
     text = (REPO_ROOT / "godot" / "shooter" / "data" / "animals.json").read_text()
     ids = set(re.findall(r'"id"\s*:\s*"([^"]+)"', re.sub(r"(?m)^\s*//.*$", "", text)))
@@ -85,7 +86,7 @@ def test_wildlife_species_are_species_of_the_game_data() -> None:
 
 
 def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
-    from drycastle_pipeline.ground import rules_ground_types
+    from drycastle_pipeline.ground.areas import rules_ground_types
 
     section = rules(load_section("zones"))
     assert list(section) == list(KIND_NAMES)
@@ -463,9 +464,9 @@ def test_the_export_refuses_a_rule_zone_of_an_unknown_ground_type(tmp_path) -> N
 
 def test_flock_kinds_are_the_flocks_of_the_wildlife_data() -> None:
     """zones.FLOCKS must name the flock kinds of godot/shooter/data/wildlife.json (the server starts a flock at its points)."""
-    from drycastle_pipeline.config import REPO_ROOT
-
     import re
+
+    from drycastle_pipeline.core.config import REPO_ROOT
 
     text = (REPO_ROOT / "godot" / "shooter" / "data" / "wildlife.json").read_text()
     data = json.loads(re.sub(r"(?m)^\s*//.*$", "", text))
@@ -475,7 +476,7 @@ def test_flock_kinds_are_the_flocks_of_the_wildlife_data() -> None:
 def test_ground_areas_are_clipped_to_the_terrain() -> None:
     from shapely.geometry import box
 
-    from drycastle_pipeline.ground import clip_areas
+    from drycastle_pipeline.ground.areas import clip_areas
 
     def area(aid: str, g) -> dict:
         return {"id": aid, "kind": "field", "area": g.area, "polygon": g.__geo_interface__}

@@ -2,9 +2,9 @@
 
 A pole is described by a :class:`PoleSpec` (plain data: the column, the crossarms, the lamp, the
 megaphones, boxes, risers, cables, marks) and built by :func:`build_pole` from the parts in
-``poleparts.py``. :func:`random_spec` draws a spec for one of the pole types the village has
+``kits/poleparts.py``. :func:`random_spec` draws a spec for one of the pole types the village has
 (``ARCHETYPES``); the same seed always gives the same pole. ``VARIANTS`` names the poles that are
-placeable objects (``prim:pole_*``, see ``primitives.py``).
+placeable objects (``prim:pole_*``, see ``kits/primitives.py``).
 
 Frame of a pole: local metres, z up, the foot of the column at the origin (the column goes half a
 metre into the ground). The line (the wires to the neighbouring poles) runs along ``x``; ``-y`` is
@@ -23,9 +23,9 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from drycastle_pipeline import poleparts as pp
-from drycastle_pipeline.meshes import Mesh
-from drycastle_pipeline.poleparts import UP, Column, Kit
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits import poleparts as pp
+from drycastle_pipeline.kits.poleparts import UP, Column, Kit
 
 # ----------------------------------------------------------------------------- the spec
 

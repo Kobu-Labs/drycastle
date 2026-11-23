@@ -41,7 +41,7 @@ middle of the view (`data/village/photos/`, gitignored). See `docs/photo-to-buil
 
 `pipeline/src/drycastle_pipeline/photos/streetview_follow.py` watches the address of a Chrome tab and writes where you
 stand and look to `out/streetview-position.json`. The viewer in editor mode (`--editor`) watches that file
-(`godot/viewer/StreetViewFollow.cs`) and moves the character there, facing the way the camera looks. Press **T**
+(`godot/viewer/StreetView/StreetViewFollow.cs`) and moves the character there, facing the way the camera looks. Press **T**
 in the editor for the top-down view: a red point with a white rim marks the spot straight below the character
 (it keeps about the same size on screen at any height, and is drawn over roofs and trees). The status bar says
 where the character was put. **F2** walks from there. The editor's camera follows the character: the first position takes

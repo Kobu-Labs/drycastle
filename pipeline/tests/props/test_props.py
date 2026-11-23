@@ -3,18 +3,15 @@ import json
 import numpy as np
 import pytest
 import yaml
-from shapely.geometry import LineString, Point, box, shape
+from shapely.geometry import LineString, Point, box
 
-from drycastle_pipeline.propmeshes import fence_mesh, tree_mesh
-from drycastle_pipeline.props import (
-    fences_doc,
-    make_fences,
-    make_spawns,
-    make_trees,
-    run_props,
-    seeded,
-)
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.props.fences import fences_doc, make_fences
+from drycastle_pipeline.props.helpers import seeded
+from drycastle_pipeline.props.propmeshes import fence_mesh, tree_mesh
+from drycastle_pipeline.props.props import run_props
+from drycastle_pipeline.props.spawns import make_spawns
+from drycastle_pipeline.props.trees import make_trees
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
 FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
@@ -34,7 +31,7 @@ def ws(tmp_path):
 
 
 def building_poly(ws):
-    from drycastle_pipeline.buildings import footprint_polygon
+    from drycastle_pipeline.buildings.footprint import footprint_polygon
 
     return footprint_polygon(ws["buildings"][0]["footprint"])
 
@@ -153,7 +150,7 @@ def test_points_follow_area_with_no_minimum_or_maximum(ws) -> None:
 
 
 def test_no_zone_means_random_points_off_the_roads(ws) -> None:
-    from drycastle_pipeline.props import road_zone
+    from drycastle_pipeline.props.helpers import road_zone
 
     a = spawns_of(ws, [])
     assert a and a == spawns_of(ws, []) and all(s["kind"] == "random" and s["zone"] == "" for s in a)
@@ -205,7 +202,7 @@ def test_custom_rules_file_is_merged_over_the_shipped_defaults(tmp_path) -> None
 
 
 def test_cap_trees_is_per_chunk_stable_and_keeps_detected_trees() -> None:
-    from drycastle_pipeline.props import cap_trees
+    from drycastle_pipeline.props.trees import cap_trees
 
     trees = [{"src": "ortho-canopy", "x": float(i), "y": 1.0} for i in range(40)]
     trees += [{"src": "ortho-canopy", "x": 300.0 + i, "y": 1.0} for i in range(5)]
@@ -314,8 +311,13 @@ def glb_attributes(data: bytes, node: str) -> tuple[dict, dict]:
 def test_tree_vertices_carry_their_base_and_fences_the_sentinel() -> None:
     import trimesh
 
-    from drycastle_pipeline.export import NO_TREE_UV2, build_chunk_scene, export_glb, parcel_props_nodes
-    from drycastle_pipeline.propmeshes import parcel_props_meshes, trees_mesh
+    from drycastle_pipeline.export.gltf import (
+        NO_TREE_UV2,
+        build_chunk_scene,
+        export_glb,
+        parcel_props_nodes,
+    )
+    from drycastle_pipeline.props.propmeshes import parcel_props_meshes, trees_mesh
 
     cfg = load_section("props")
     trees = [

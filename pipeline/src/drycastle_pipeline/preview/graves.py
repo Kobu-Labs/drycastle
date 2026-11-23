@@ -1,11 +1,11 @@
-"""Pictures of the generated graves (``graves.py``), to judge shapes and colours without the game::
+"""Pictures of the generated graves (``kits/graves.py``), to judge shapes and colours without the game::
 
-    uv run python -m drycastle_pipeline.graves_preview [--out DIR]
+    uv run python -m drycastle_pipeline.preview.graves [--out DIR]
 
 writes into ``out/graves`` (by default) ``samples.png`` (the hand-picked sample graves, from the foot),
 ``samples_back.png`` (from the head side), ``random.png`` (what :func:`graves.spec_for` picks for a run of seeds) and
 ``neglect.png`` (one grave from kept to abandoned). Drawn with a depth buffer (:func:`render_sheet` here), not the
-painter's sort of ``poles_preview``: that one mis-orders small parts lying on big faces (writing, moss, flowers).
+painter's sort of ``preview/poles.py``: that one mis-orders small parts lying on big faces (writing, moss, flowers).
 """
 
 import argparse
@@ -15,9 +15,9 @@ from pathlib import Path
 
 import numpy as np
 
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.graves import GraveSpec, grave_mesh, spec_for
-from drycastle_pipeline.meshes import Mesh
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.mesh import Mesh
+from drycastle_pipeline.kits.graves import GraveSpec, grave_mesh, spec_for
 
 DEFAULT_OUT = REPO_ROOT / "out" / "graves"
 FOOT, HEAD = (-68.0, 24.0), (112.0, 24.0)  # where the camera stands: compass direction, elevation
@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> None:
     render_sheet(sample_cells(), a.out / "samples_back.png", 4, (3.4, 2.6), px_per_m=150.0, view=HEAD, title="Sample graves, from the head side")
     render_sheet(random_cells(), a.out / "random.png", 6, (3.4, 2.6), px_per_m=110.0, view=FOOT, title="What spec_for picks for 24 seeds")
     render_sheet(neglect_cells(), a.out / "neglect.png", 6, (3.4, 2.6), px_per_m=150.0, view=FOOT, title="One grave, kept to abandoned")
-    from drycastle_pipeline.graves import crucifix_mesh
+    from drycastle_pipeline.kits.graves import crucifix_mesh
 
     cross = [("from the front", crucifix_mesh())]
     render_sheet(cross, a.out / "crucifix.png", 1, (4.6, 7.4), px_per_m=130.0, view=(-78.0, 12.0), title="The graveyard cross (prim:crucifix)", ground=0.86)

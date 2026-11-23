@@ -3,7 +3,7 @@
 import pytest
 from shapely.geometry import Polygon, box
 
-from drycastle_pipeline.parcel_outlines import apply_outlines, splice_outline
+from drycastle_pipeline.parcels.outlines import apply_outlines, splice_outline
 
 SQUARE = [(0.0, 0.0), (0.0, 100.0), (100.0, 100.0), (100.0, 0.0)]
 

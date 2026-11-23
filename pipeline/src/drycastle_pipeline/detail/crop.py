@@ -35,10 +35,25 @@ from shapely.geometry.base import BaseGeometry
 from shapely.geometry.polygon import orient
 from shapely.ops import nearest_points
 
-from drycastle_pipeline import detail as D
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.meadow import value_noise
-from drycastle_pipeline.props import seeded
+from drycastle_pipeline.core.colour import blend, hex_to_rgb
+from drycastle_pipeline.core.geometry import polygons
+from drycastle_pipeline.detail.meadow import value_noise
+from drycastle_pipeline.detail.model import DetailResult, ParcelContext, Patch
+from drycastle_pipeline.detail.parts import free_area
+from drycastle_pipeline.detail.tools import (
+    _along,
+    _clean,
+    _difference,
+    _gen,
+    _lines,
+    _rad,
+    _union,
+    blob,
+    distance_to,
+    jitter_grid,
+    terrain_ok,
+)
+from drycastle_pipeline.props.helpers import seeded
 
 #: The instance kinds of the recipe (``detail.crop_kinds`` in rules.yaml says what each is drawn with).
 PLANT_KINDS = ("crop_wheat", "crop_corn", "crop_potato", "crop_rapeseed")
@@ -50,14 +65,6 @@ CROP_KINDS = (*PLANT_KINDS, *ARTIFACT_KINDS)
 CROP_FORMAT_VERSION = 1
 
 _NOISE_SALT = 7100
-
-
-def _rgb(hx: str) -> list[int]:
-    return hex_to_rgb(hx)
-
-
-def _mix(a, b, w: float) -> list[int]:
-    return [round(x * (1 - w) + y * w) for x, y in zip(a, b, strict=True)]
 
 
 # --- geometry helpers -----------------------------------------------------------------------
@@ -90,7 +97,7 @@ def _inset(geom: BaseGeometry, d: float, amp: float, lattice: float, salt: int, 
     inner = geom.buffer(-d, join_style="round") if d > 0 else geom
     if inner.is_empty or amp <= 0:
         return inner
-    return D._union([_wobble(p, amp, lattice, salt, vertex_m) for p in D._polys(inner)])
+    return _union([_wobble(p, amp, lattice, salt, vertex_m) for p in polygons(inner)])
 
 
 def _smooth(x: np.ndarray) -> np.ndarray:
@@ -134,7 +141,7 @@ class CropPlan:
         return [max(0, min(255, round(v * (k + d)))) for v, d in zip(c, (dr, dg, db), strict=True)]
 
 
-def crop_plan(ctx: D.ParcelContext, cc: dict, long_angle: float | None = None) -> CropPlan:
+def crop_plan(ctx: ParcelContext, cc: dict, long_angle: float | None = None) -> CropPlan:
     """The patch's own look. Public so tests (and tools) can ask which patches are fallow, striped, ..."""
     rng = seeded(f"{ctx.id}:detail:crop:plan")
     vc, tc, sc, fc = cc["variety"], cc["tramlines"], cc["stubble"], cc["fallow"]
@@ -172,7 +179,7 @@ def crop_plan(ctx: D.ParcelContext, cc: dict, long_angle: float | None = None) -
 # --- baulk, headland, ground ----------------------------------------------------------------
 
 
-def _baulk(ctx: D.ParcelContext, bc: dict) -> tuple[BaseGeometry, BaseGeometry, bool]:
+def _baulk(ctx: ParcelContext, bc: dict) -> tuple[BaseGeometry, BaseGeometry, bool]:
     """``(grass, dirt, any)``: this patch's half of the baulks along the edges it shares with other crop patches.
 
     The width and wandering of the strip are a function of the position (value noise), the dirt-or-grass choice is seeded by
@@ -183,7 +190,7 @@ def _baulk(ctx: D.ParcelContext, bc: dict) -> tuple[BaseGeometry, BaseGeometry, 
     tol = float(bc["shared_tol_m"])
     for nid, geom in ctx.crop_neighbours or []:
         line = ctx.polygon.boundary.intersection(geom.buffer(tol))
-        lines = D._lines(line)
+        lines = _lines(line)
         if sum(ln.length for ln in lines) < float(bc["min_shared_m"]):
             continue
         a, b = sorted((ctx.id.split(".")[0], nid))
@@ -199,19 +206,19 @@ def _baulk(ctx: D.ParcelContext, bc: dict) -> tuple[BaseGeometry, BaseGeometry, 
         r = lo + (hi - lo) * k
         strip = shapely.union_all(shapely.buffer(shapely.points(xy), r, quad_segs=3)).intersection(ctx.polygon)
         (dirt if is_dirt else grass).append(strip)
-    g, d = D._union(grass), D._union(dirt)
+    g, d = _union(grass), _union(dirt)
     return g, d, bool(grass or dirt)
 
 
-def _headland(ctx: D.ParcelContext, free: BaseGeometry, hc: dict, near_nb: BaseGeometry) -> BaseGeometry:
+def _headland(ctx: ParcelContext, free: BaseGeometry, hc: dict, near_nb: BaseGeometry) -> BaseGeometry:
     rng = seeded(f"{ctx.id}:detail:crop:headland")
     blobs = []
-    for poly in D._polys(free):
-        for p, ang in D._along(rng, poly.exterior, float(hc["spacing_m"]), float(hc["keep"])):
+    for poly in polygons(free):
+        for p, ang in _along(rng, poly.exterior, float(hc["spacing_m"]), float(hc["keep"])):
             if not near_nb.is_empty and near_nb.contains(p):
                 continue
-            blobs.append(D.blob(rng, p.x, p.y, D._rad(rng, hc["radius_m"]), 0.4, float(hc["stretch"]), int(hc["vertices"]), ang))
-    return D._union(blobs)
+            blobs.append(blob(rng, p.x, p.y, _rad(rng, hc["radius_m"]), 0.4, float(hc["stretch"]), int(hc["vertices"]), ang))
+    return _union(blobs)
 
 
 # --- what lies beside the edge --------------------------------------------------------------
@@ -223,7 +230,7 @@ def _edge_samples(free: BaseGeometry, step: float) -> tuple[np.ndarray, np.ndarr
     nrm: list[tuple[float, float]] = []
     rid: list[int] = []
     r = 0
-    for poly in D._polys(free):
+    for poly in polygons(free):
         poly = orient(poly, 1.0)  # inside on the left of every ring, so the right is out (of the polygon)
         for ring in (poly.exterior, *poly.interiors):
             length = ring.length
@@ -242,7 +249,7 @@ def _edge_samples(free: BaseGeometry, step: float) -> tuple[np.ndarray, np.ndarr
     return np.array(pts).reshape(-1, 2), np.array(nrm).reshape(-1, 2), np.array(rid, dtype=int)
 
 
-def neighbour_colours(ctx: D.ParcelContext, cfg: dict, pts: np.ndarray, nrm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def neighbour_colours(ctx: ParcelContext, cfg: dict, pts: np.ndarray, nrm: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """What lies just outside the edge at each point: ``(colour (n, 3) float, kind (n,))``, kind one of ``self`` (the cut of a
     building, fence or object: the same field goes on, no blend), ``road``, ``crop`` (another crop patch), ``ground`` (any other
     ground unit, its terrain colour), ``water``, ``none`` (the ``surround`` colour)."""
@@ -250,7 +257,7 @@ def neighbour_colours(ctx: D.ParcelContext, cfg: dict, pts: np.ndarray, nrm: np.
     nc = ec["neighbour"]
     n = len(pts)
     q = pts + nrm * float(nc["probe_m"])
-    col = np.tile(np.array(_rgb(cfg["crop"]["surround"]), dtype=float), (n, 1))
+    col = np.tile(np.array(hex_to_rgb(cfg["crop"]["surround"]), dtype=float), (n, 1))
     kind = np.full(n, "none", dtype=object)
     todo = np.ones(n, dtype=bool)
 
@@ -263,17 +270,17 @@ def neighbour_colours(ctx: D.ParcelContext, cfg: dict, pts: np.ndarray, nrm: np.
 
     if ctx.road is not None and not ctx.road.is_empty:
         zone = ctx.road.buffer(float(cfg["road_clearance_m"]) + float(nc["probe_m"]) + 0.5)
-        take(shapely.contains_xy(zone, q[:, 0], q[:, 1]), _rgb(nc["road"]), "road")
+        take(shapely.contains_xy(zone, q[:, 0], q[:, 1]), hex_to_rgb(nc["road"]), "road")
     for _pid, geom, colour, is_crop in ctx.ground_around or []:
         if todo.any():
             take(shapely.contains_xy(geom, q[:, 0], q[:, 1]), colour, "crop" if is_crop else "ground")
     if ctx.water is not None and not ctx.water.is_empty and todo.any():
-        take(shapely.contains_xy(ctx.water, q[:, 0], q[:, 1]), _rgb(nc["water"]), "water")
+        take(shapely.contains_xy(ctx.water, q[:, 0], q[:, 1]), hex_to_rgb(nc["water"]), "water")
     take(shapely.contains_xy(ctx.polygon, q[:, 0], q[:, 1]), [0, 0, 0], "self")
     return col, kind
 
 
-def _neighbour_groups(ctx: D.ParcelContext, cfg: dict, free: BaseGeometry) -> list[tuple[list[int], bool, BaseGeometry]]:
+def _neighbour_groups(ctx: ParcelContext, cfg: dict, free: BaseGeometry) -> list[tuple[list[int], bool, BaseGeometry]]:
     """The neighbour colours along the edge as ``(colour, is_crop, zone)``: ``zone`` is the ground nearer to the stretches of
     the edge with that colour (Voronoi cells of the probes) than to any other group's. Stretches beside the field's own
     ground (``self``) give no group."""
@@ -350,7 +357,7 @@ def _edge_bands(free: BaseGeometry, ec: dict, groups: list, inner: list[tuple[Ba
                     rest = rest.difference(reg)
             parts.append((rest, base))
             for g, inn in parts:
-                col = _mix(nb, inn, w)
+                col = blend(nb, inn, w)
                 if g.is_empty or w >= 0.97 or max(abs(a - b) for a, b in zip(col, inn, strict=True)) <= 2:
                     continue
                 out.append((f"crop_edge_{k}", g, {"colour": col, "tol": 0.0}))
@@ -375,7 +382,7 @@ def _tramlines(free: BaseGeometry, plan: CropPlan, tc: dict, origin: tuple[float
     if not strips:
         return Polygon()
     inner = free.buffer(-float(tc["margin_m"]), join_style="mitre")
-    return D._clean(_world(shapely.union_all(strips), plan.angle, origin).intersection(inner), 0.05) if not inner.is_empty else Polygon()
+    return _clean(_world(shapely.union_all(strips), plan.angle, origin).intersection(inner), 0.05) if not inner.is_empty else Polygon()
 
 
 def _edge_strips(free: BaseGeometry, plan: CropPlan, tc: dict) -> BaseGeometry:
@@ -383,14 +390,14 @@ def _edge_strips(free: BaseGeometry, plan: CropPlan, tc: dict) -> BaseGeometry:
     if not plan.strips or free.is_empty:
         return Polygon()
     rng = seeded(f"{plan.strip_seed}:crop:strips")
-    big = max(D._polys(free), key=lambda p: p.area)
+    big = max(polygons(free), key=lambda p: p.area)
     ring = list(orient(big, 1.0).exterior.coords)
     segs = [LineString([a, b]) for a, b in zip(ring, ring[1:], strict=False) if math.dist(a, b) >= float(tc["edge_strip"]["min_edge_m"])]
     rng.shuffle(segs)
     strips = [_wobble(p, float(tc["edge_strip"]["wobble_m"]), 2.0, _NOISE_SALT + 40 + i)
               for i, seg in enumerate(segs[: plan.strips])
-              for p in D._polys(seg.buffer(plan.strip_w, single_sided=True, cap_style="flat"))]  # single-sided: the left, i.e. inside
-    return D._clean(D._union(strips).intersection(free), 0.1) if strips else Polygon()
+              for p in polygons(seg.buffer(plan.strip_w, single_sided=True, cap_style="flat"))]  # single-sided: the left, i.e. inside
+    return _clean(_union(strips).intersection(free), 0.1) if strips else Polygon()
 
 
 def _stubble(free: BaseGeometry, plan: CropPlan, sc: dict, origin: tuple[float, float]) -> tuple[BaseGeometry, float, tuple[float, float, float, float]]:
@@ -416,7 +423,7 @@ def _stubble(free: BaseGeometry, plan: CropPlan, sc: dict, origin: tuple[float, 
         else:
             hi = mid
     yc = (lo + hi) / 2
-    return D._clean(_world(region(yc), plan.angle, origin).intersection(free), 0.1), yc, (x0, y0, x1, y1)
+    return _clean(_world(region(yc), plan.angle, origin).intersection(free), 0.1), yc, (x0, y0, x1, y1)
 
 
 def _stubble_lanes(stubble: BaseGeometry, plan: CropPlan, sc: dict, origin: tuple[float, float]) -> BaseGeometry:
@@ -428,10 +435,10 @@ def _stubble_lanes(stubble: BaseGeometry, plan: CropPlan, sc: dict, origin: tupl
     if not len(ys):
         return Polygon()
     lanes = shapely.union_all([shapely.box(x0 - 1, y - w / 2, x1 + 1, y + w / 2) for y in ys])
-    return D._clean(_world(lanes.intersection(local), plan.angle, origin).intersection(stubble), 0.05)
+    return _clean(_world(lanes.intersection(local), plan.angle, origin).intersection(stubble), 0.05)
 
 
-def _bales(ctx: D.ParcelContext, stubble: BaseGeometry, plan: CropPlan, sc: dict, yc: float, bounds: tuple, origin: tuple[float, float]) -> list[dict]:
+def _bales(ctx: ParcelContext, stubble: BaseGeometry, plan: CropPlan, sc: dict, yc: float, bounds: tuple, origin: tuple[float, float]) -> list[dict]:
     """Bales lined along the rows on the stubble: ``lines`` rows a few metres in from the stripe's cut."""
     bc = sc["bales"]
     kind = "art_hay_bale_round" if plan.round_bales else "art_hay_bale_square"
@@ -453,7 +460,7 @@ def _bales(ctx: D.ParcelContext, stubble: BaseGeometry, plan: CropPlan, sc: dict
             wx, wy = origin[0] + (lx - origin[0]) * c - (ly - origin[1]) * s, origin[1] + (lx - origin[0]) * s + (ly - origin[1]) * c
             if shapely.contains_xy(safe, wx, wy) and len(out) < int(bc["max"]):
                 rot = rng.random() * math.tau if plan.round_bales else plan.angle + (rng.random() - 0.5) * 0.2
-                out += _emit_one(ctx, kind, wx, wy, rot, D._rad(rng, spec["scale"]))
+                out += _emit_one(ctx, kind, wx, wy, rot, _rad(rng, spec["scale"]))
             x += sp
     return out
 
@@ -464,10 +471,10 @@ def _spots(free: BaseGeometry, area: float, pid: str, sc: dict) -> dict[str, Bas
     if free.is_empty:
         return out
     rng = seeded(f"{pid}:detail:crop:spots")
-    g = D._gen(pid, "crop:spots")
+    g = _gen(pid, "crop:spots")
     inner = free.buffer(-1.0)
     inner = inner if not inner.is_empty else free
-    cand = D.jitter_grid(g, inner, 5.0)
+    cand = jitter_grid(g, inner, 5.0)
     if not len(cand):
         return out
     for i, name in enumerate(("wet", "bare", "weeds")):
@@ -477,8 +484,8 @@ def _spots(free: BaseGeometry, area: float, pid: str, sc: dict) -> dict[str, Bas
         if n <= 0:
             continue
         score = value_noise(cand[:, 0], cand[:, 1], float(sc["lattice_m"]), _NOISE_SALT + 60 + i) + 0.25 * g.random(len(cand))
-        blobs = [D.blob(rng, x, y, D._rad(rng, spec["radius_m"]), 0.4, 1.5, 9) for x, y in cand[np.argsort(-score)[:n]]]
-        geom = D._clean(D._union(blobs).intersection(free), 0.1)
+        blobs = [blob(rng, x, y, _rad(rng, spec["radius_m"]), 0.4, 1.5, 9) for x, y in cand[np.argsort(-score)[:n]]]
+        geom = _clean(_union(blobs).intersection(free), 0.1)
         if not geom.is_empty:
             out[name] = geom
     return out
@@ -492,17 +499,17 @@ def _flowers(free: BaseGeometry, pid: str, fc: dict) -> list[tuple[str, BaseGeom
     if per_ha <= 0 or inner.is_empty:
         return []
     rng = seeded(f"{pid}:detail:crop:flowers")
-    g = D._gen(pid, "crop:flowers")
-    pts = D.jitter_grid(g, inner, math.sqrt(1e4 / per_ha / 2.5))
+    g = _gen(pid, "crop:flowers")
+    pts = jitter_grid(g, inner, math.sqrt(1e4 / per_ha / 2.5))
     if not len(pts):
         return []
     nz = value_noise(pts[:, 0], pts[:, 1], 7.0, _NOISE_SALT + 70)
     pts = pts[g.random(len(pts)) < np.clip(2.5 * nz * nz, 0.0, 1.0)]
-    cols = [_rgb(c) for c in spec["colours"]]
+    cols = [hex_to_rgb(c) for c in spec["colours"]]
     by: dict[int, list[BaseGeometry]] = {}
     for x, y in pts:
-        by.setdefault(rng.randrange(len(cols)), []).append(D.blob(rng, x, y, D._rad(rng, spec["radius_m"]), 0.3, 1.0, 7))
-    return [(f"crop_flower_{i}", D._union(b), {"colour": cols[i], "tol": 0.03}) for i, b in sorted(by.items())]
+        by.setdefault(rng.randrange(len(cols)), []).append(blob(rng, x, y, _rad(rng, spec["radius_m"]), 0.3, 1.0, 7))
+    return [(f"crop_flower_{i}", _union(b), {"colour": cols[i], "tol": 0.03}) for i, b in sorted(by.items())]
 
 
 # --- plants ---------------------------------------------------------------------------------
@@ -514,7 +521,7 @@ def _grid(g: np.random.Generator, geom: BaseGeometry, spec: dict, angle: float, 
     if geom.is_empty:
         return np.zeros((0, 2))
     if row <= 0:
-        return D.jitter_grid(g, geom, step, 0.9)
+        return jitter_grid(g, geom, step, 0.9)
     local = _local(geom, angle, origin)
     x0, y0, x1, y1 = local.bounds
     xs = np.arange(x0, x1 + step, step)
@@ -539,16 +546,16 @@ def plant_density(d: np.ndarray, edge: dict) -> np.ndarray:
     return _smooth((d - margin) / fall)
 
 
-def _plants(ctx: D.ParcelContext, ec: dict, plants: list[dict], planted: BaseGeometry, edge_line: BaseGeometry, plan: CropPlan,
+def _plants(ctx: ParcelContext, ec: dict, plants: list[dict], planted: BaseGeometry, edge_line: BaseGeometry, plan: CropPlan,
             origin: tuple[float, float], keep_off: list[tuple[float, float, float]], bare: BaseGeometry,
             weeds: BaseGeometry, weed_scale: float) -> list[dict]:
     out: list[dict] = []
-    edge_d = D.distance_to(edge_line)
+    edge_d = distance_to(edge_line)
     edge = ec["edge"]
     jit, jlat = float(edge["plant_jitter_m"]), float(edge["plant_jitter_lattice_m"])
     for spec in plants:
         kind = spec["kind"]
-        g = D._gen(ctx.id, f"crop:{kind}")
+        g = _gen(ctx.id, f"crop:{kind}")
         pts = _grid(g, planted, spec, plan.angle, origin)
         if not len(pts):
             continue
@@ -574,10 +581,10 @@ def _plants(ctx: D.ParcelContext, ec: dict, plants: list[dict], planted: BaseGeo
     return out
 
 
-def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float], ctx: D.ParcelContext, mult: np.ndarray) -> list[dict]:
+def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float], ctx: ParcelContext, mult: np.ndarray) -> list[dict]:
     if not len(pts):
         return []
-    ok = D.terrain_ok(ctx.terrain, pts[:, 0], pts[:, 1])
+    ok = terrain_ok(ctx.terrain, pts[:, 0], pts[:, 1])
     rot = g.random(len(pts)) * math.tau  # drawn for every point, so the rest stays put when one falls off the terrain
     sc = (span[0] + g.random(len(pts)) * (span[1] - span[0])) * mult
     pts, rot, sc = pts[ok], rot[ok], sc[ok]
@@ -591,7 +598,7 @@ def _emit(g: np.random.Generator, kind: str, pts: np.ndarray, span: list[float],
 # --- artifacts ------------------------------------------------------------------------------
 
 
-def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: int | None = None) -> list[dict]:
+def _artifacts(ctx: ParcelContext, ac: dict, free: BaseGeometry, max_count: int | None = None) -> list[dict]:
     """A few props: this patch deals ``kinds_per_patch`` of the crop's artifact kinds; clusters at a corner of the patch, spots on
     its edge, a lone one inside. At least ``min`` on a patch of ``min_area_m2`` or more (every crop has some); never more than
     ``max`` (or ``max_count``). On top of that each of the ``extras`` (a lone tractor, a sprinkler line, a hay stack) is tried
@@ -611,7 +618,7 @@ def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: in
         n = min(n, max_count)
     inner = free.buffer(-float(ac["inset_m"]), join_style="round")
     inner = inner if not inner.is_empty else free
-    ring_poly = max(D._polys(free), key=lambda p: p.area)
+    ring_poly = max(polygons(free), key=lambda p: p.area)
     ring = ring_poly.exterior
     mrr = list(ring_poly.minimum_rotated_rectangle.exterior.coords)[:4]
     corners = [nearest_points(Point(c), inner)[1] for c in mrr]
@@ -646,7 +653,7 @@ def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: in
         elif place == "edge":
             anchor = nearest_points(ring.interpolate(rng.random() * ring.length), inner)[1]
         else:
-            pts = D.jitter_grid(np.random.default_rng(rng.getrandbits(32)), deep, 4.0)
+            pts = jitter_grid(np.random.default_rng(rng.getrandbits(32)), deep, 4.0)
             anchor = Point(pts[rng.randrange(len(pts))]) if len(pts) else inner.representative_point()
         count = min(rng.randint(int(item["group"][0]), int(item["group"][1])), budget)
         sep = float(item["sep_m"])
@@ -657,7 +664,7 @@ def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: in
                 x, y = anchor.x + math.cos(ang) * sep * i, anchor.y + math.sin(ang) * sep * i
                 if fits(x, y, item["kind"], sep):
                     placed.append((x, y, item["kind"], sep))
-                    out.extend(_emit_one(ctx, item["kind"], x, y, ang, D._rad(rng, item["scale"])))
+                    out.extend(_emit_one(ctx, item["kind"], x, y, ang, _rad(rng, item["scale"])))
                     got += 1
             return got
         for _ in range(count * 14):
@@ -669,7 +676,7 @@ def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: in
                 continue
             rot = rng.random() * math.tau if place == "interior" else heading(Point(x, y)) + (rng.random() - 0.5) * 0.5
             placed.append((x, y, item["kind"], sep))
-            out.extend(_emit_one(ctx, item["kind"], x, y, rot, D._rad(rng, item["scale"])))
+            out.extend(_emit_one(ctx, item["kind"], x, y, rot, _rad(rng, item["scale"])))
             got += 1
         return got
 
@@ -683,9 +690,9 @@ def _artifacts(ctx: D.ParcelContext, ac: dict, free: BaseGeometry, max_count: in
     return out
 
 
-def _emit_one(ctx: D.ParcelContext, kind: str, x: float, y: float, rot: float, scale: float) -> list[dict]:
+def _emit_one(ctx: ParcelContext, kind: str, x: float, y: float, rot: float, scale: float) -> list[dict]:
     xy = np.array([[x, y]])
-    if not D.terrain_ok(ctx.terrain, xy[:, 0], xy[:, 1])[0]:
+    if not terrain_ok(ctx.terrain, xy[:, 0], xy[:, 1])[0]:
         return []
     z = float(ctx.terrain.surface(xy[:, 0], xy[:, 1])[0])
     return [{"kind": kind, "x": round(x, 3), "y": round(y, 3), "z": round(z, 3), "rot": round(rot % math.tau, 3), "scale": round(scale, 3)}]
@@ -702,17 +709,17 @@ def _tones(free: BaseGeometry, pid: str, area: float, cc: dict, cols: list[list[
         return out
     for i, col in enumerate(cols[1:], start=1):
         rng = seeded(f"{pid}:detail:crop:tones" + ("" if i == 1 else f":{i}"))
-        pts = D.jitter_grid(D._gen(pid, "crop:tonepts" + ("" if i == 1 else f":{i}")), free, max(2.0, math.sqrt(area / max(n, 1)) * 0.9))[:n]
-        tones = D._union([D.blob(rng, p[0], p[1], D._rad(rng, cc["tone_radius_m"]), 0.4, 1.5, 8) for p in pts]) if len(pts) else Polygon()
+        pts = jitter_grid(_gen(pid, "crop:tonepts" + ("" if i == 1 else f":{i}")), free, max(2.0, math.sqrt(area / max(n, 1)) * 0.9))[:n]
+        tones = _union([blob(rng, p[0], p[1], _rad(rng, cc["tone_radius_m"]), 0.4, 1.5, 8) for p in pts]) if len(pts) else Polygon()
         out.append(("crop_tone" if i == 1 else f"crop_tone_{i}", tones, {"colour": col}))
     return out
 
 
-def crop_detail(ctx: D.ParcelContext, cfg: dict) -> D.DetailResult:
+def crop_detail(ctx: ParcelContext, cfg: dict) -> DetailResult:
     """Ground patches, plants and artifacts of one crop patch (see the module doc)."""
     pid, cc = ctx.id, cfg["crop"]
-    res = D.DetailResult(pid)
-    free = D.free_area(ctx, cfg, trunks=False)
+    res = DetailResult(pid)
+    free = free_area(ctx, cfg, trunks=False)
     if free.is_empty:
         return res
     ec, bc, sc, tc, spc = cc["edge"], cc["baulk"], cc["stubble"], cc["tramlines"], cc["spots"]
@@ -720,13 +727,13 @@ def crop_detail(ctx: D.ParcelContext, cfg: dict) -> D.DetailResult:
     plan = crop_plan(ctx, cc, long_angle)
     angle = plan.angle
     ground = cc["fallow"]["colours"] if plan.fallow else cc["ground_colours"]
-    cols = [plan.shade(_rgb(c)) for c in ground]
+    cols = [plan.shade(hex_to_rgb(c)) for c in ground]
     texture = None if plan.fallow else cc.get("texture")
 
-    nb_union = D._union([g for _, g in ctx.crop_neighbours or []])
+    nb_union = _union([g for _, g in ctx.crop_neighbours or []])
     near_nb = nb_union.buffer(1.5) if not nb_union.is_empty else Polygon()
     baulk_grass, baulk_dirt, has_baulk = _baulk(ctx, bc)
-    baulk = D._union([baulk_grass, baulk_dirt]).intersection(free) if has_baulk else Polygon()
+    baulk = _union([baulk_grass, baulk_dirt]).intersection(free) if has_baulk else Polygon()
     head = _headland(ctx, free, cc["headland"], near_nb).difference(baulk) if cc["headland"]["keep"] > 0 else Polygon()
 
     tram = _tramlines(free, plan, tc, origin) if plan.tram else Polygon()
@@ -742,28 +749,28 @@ def crop_detail(ctx: D.ParcelContext, cfg: dict) -> D.DetailResult:
             tram = tram.difference(stubble) if not tram.is_empty else tram
     spots = _spots(free, ctx.polygon.area, pid, spc)
     wet_col = [round(v * float(spc["wet"]["darken"])) for v in cols[0]]
-    straw = plan.shade(_rgb(sc["colours"][0]))
+    straw = plan.shade(hex_to_rgb(sc["colours"][0]))
 
     # ordered batches of layers, the first wins (pieces of one batch are disjoint); the core is what is left
     batches: list[list[tuple[str, BaseGeometry, dict]]] = []
     if not baulk_grass.is_empty or not baulk_dirt.is_empty:
-        batches += [[(n, g, {"colour": _rgb(c)})] for n, g, c in (("crop_baulk", baulk_grass, bc["colours"][0]), ("crop_baulk_dirt", baulk_dirt, bc["dirt_colour"])) if not g.is_empty]
+        batches += [[(n, g, {"colour": hex_to_rgb(c)})] for n, g, c in (("crop_baulk", baulk_grass, bc["colours"][0]), ("crop_baulk_dirt", baulk_dirt, bc["dirt_colour"])) if not g.is_empty]
     if not head.is_empty:
         batches.append([("crop_headland", head, {"texture": cc["headland"].get("texture", "dirt")})])
     if not strip.is_empty:
         batches.append([("crop_dirtstrip", strip, {"texture": cc["headland"].get("texture", "dirt")})])
     if not tram.is_empty:
-        batches.append([("crop_tramline", tram, {"colour": _mix(cols[0], _rgb(tc["colour"]), float(tc["mix"]))})])
+        batches.append([("crop_tramline", tram, {"colour": blend(cols[0], hex_to_rgb(tc["colour"]), float(tc["mix"]))})])
     feather, steps = float(ec["feather_m"]), int(ec["steps"])
     if feather > 0 and steps > 0:
         groups = _neighbour_groups(ctx, cfg, free)
         inner = [(stubble, straw)] if not stubble.is_empty else []
         batches.append(_edge_bands(free, ec, groups, inner, cols[0], float(bc["blend_m"])))
     if not lanes.is_empty:
-        batches.append([("crop_stubble_rows", lanes, {"colour": plan.shade(_rgb(sc["colours"][1]))})])
+        batches.append([("crop_stubble_rows", lanes, {"colour": plan.shade(hex_to_rgb(sc["colours"][1]))})])
     if not stubble.is_empty:
         batches.append([("crop_stubble", stubble, {"colour": straw})])
-    for name, layer, colour in (("wet", "crop_wet", wet_col), ("bare", "crop_bare_spot", _rgb(spc["bare"]["colour"])), ("weeds", "crop_weeds", _rgb(spc["weeds"]["colour"]))):
+    for name, layer, colour in (("wet", "crop_wet", wet_col), ("bare", "crop_bare_spot", hex_to_rgb(spc["bare"]["colour"])), ("weeds", "crop_weeds", hex_to_rgb(spc["weeds"]["colour"]))):
         if name in spots:
             batches.append([(layer, spots[name], {"colour": colour})])
     if plan.fallow:
@@ -777,28 +784,28 @@ def crop_detail(ctx: D.ParcelContext, cfg: dict) -> D.DetailResult:
     for batch in batches:
         made = []
         for name, g, style in batch:
-            g = D._clean(g.intersection(free), float(style.get("tol", 0.15))).intersection(free)
+            g = _clean(g.intersection(free), float(style.get("tol", 0.15))).intersection(free)
             if not taken.is_empty:
                 g = g.difference(taken)
-            g = D._clean(g, 0.0)
+            g = _clean(g, 0.0)
             if g.is_empty:
                 continue
             made.append(g)
-            res.patches.append(D.Patch(name, g, colour=style.get("colour"), texture=style.get("texture")))
+            res.patches.append(Patch(name, g, colour=style.get("colour"), texture=style.get("texture")))
         if made:
-            taken = D._union([taken, *made])
-    core = D._clean(D._clean(D._difference(free, taken), 0.1).intersection(free).difference(taken), 0.0) if not taken.is_empty else D._clean(free, 0.1)
+            taken = _union([taken, *made])
+    core = _clean(_clean(_difference(free, taken), 0.1).intersection(free).difference(taken), 0.0) if not taken.is_empty else _clean(free, 0.1)
     if not core.is_empty:
         if texture:
-            res.patches.append(D.Patch("crop_rows", core, colour=[255, 255, 255], texture=texture, angle=angle, origin=origin))
+            res.patches.append(Patch("crop_rows", core, colour=[255, 255, 255], texture=texture, angle=angle, origin=origin))
         else:
-            res.patches.append(D.Patch("crop_ground", core, colour=cols[0]))
+            res.patches.append(Patch("crop_ground", core, colour=cols[0]))
 
     # plants: everywhere on the free ground but the baulk, the headland, tracks, strips and stubble, thinning toward a real
     # edge (not a baulk's) over the same zone as the ground blend
     off = [baulk.buffer(0.15) if not baulk.is_empty else Polygon(), head.buffer(0.1) if not head.is_empty else Polygon(),
            tram.buffer(0.2) if not tram.is_empty else Polygon(), strip, stubble]
-    planted = free.difference(D._union(off))
+    planted = free.difference(_union(off))
     edge_line = free.boundary
     if not near_nb.is_empty:
         edge_line = edge_line.difference(near_nb)

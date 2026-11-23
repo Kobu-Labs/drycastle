@@ -3,7 +3,8 @@ import json
 import pytest
 from shapely.geometry import LineString, Point, shape
 
-from drycastle_pipeline.edits import (
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.edits.schema import (
     Edits,
     EditsError,
     dump_edits,
@@ -13,8 +14,8 @@ from drycastle_pipeline.edits import (
     resolve_fence,
     validate,
 )
-from drycastle_pipeline.props import make_fences, run_props
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.props.fences import make_fences
+from drycastle_pipeline.props.props import run_props
 from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain, make_workspace
 
 FENCE, TREE = load_section("props")["fences"], load_section("props")["trees"]
@@ -228,7 +229,7 @@ def test_load_reports_bad_json(tmp_path) -> None:
 
 
 def test_shipped_edits_file_is_canonical_and_valid() -> None:
-    from drycastle_pipeline.edits import DEFAULT_EDITS
+    from drycastle_pipeline.edits.schema import DEFAULT_EDITS
 
     text = DEFAULT_EDITS.read_text()
     assert text == dump_text(load_edits(DEFAULT_EDITS))
@@ -616,8 +617,8 @@ def test_parcel_geometry_fixture_is_as_described(ws) -> None:
 
 
 def test_custom_sections_carry_their_own_fence_style(ws) -> None:
-    from drycastle_pipeline.propmeshes import fence_mesh
-    from drycastle_pipeline.rules import load_section as load
+    from drycastle_pipeline.core.rules import load_section as load
+    from drycastle_pipeline.props.propmeshes import fence_mesh
 
     cfg = {**FENCE, "probability": 0.0}
     got = fences(ws, {"P-0001": resolve_fence({"type": "brick_wall"})}, cfg=cfg)
@@ -636,7 +637,7 @@ def test_roundtrip_fixture_is_canonical():
     byte (`make viewer-editor-smoke`); it must stay exactly what dump_text writes for its own content."""
     from pathlib import Path
 
-    text = (Path(__file__).parent / "fixtures" / "edits_roundtrip.json").read_text(encoding="utf-8")
+    text = (Path(__file__).parents[1] / "fixtures" / "edits_roundtrip.json").read_text(encoding="utf-8")
     assert dump_text(parse(json.loads(text))) == text
 
 
@@ -675,7 +676,7 @@ def test_cables_key_is_written_only_when_there_are_cables(tmp_path) -> None:
 
 
 def test_plan_keeps_cables_between_placed_poles_only() -> None:
-    from drycastle_pipeline.props import plan_edits
+    from drycastle_pipeline.props.edit_plan import plan_edits
 
     square = {"type": "Polygon", "coordinates": [[[0, 0], [50, 0], [50, 50], [0, 50], [0, 0]]]}
     parcels = [{"id": "P-0001", "polygon": square}]
@@ -742,7 +743,7 @@ def test_parcel_outline_validation() -> None:
 
 
 def test_paths_validation_roundtrip_and_ground() -> None:
-    from drycastle_pipeline.footpaths import path_polygons
+    from drycastle_pipeline.detail.footpaths import path_polygons
 
     ok = {"version": 1, "parcels": {}, "paths": {"PA-0001": {"points": [[0, 0], [10, 0], [14, 6]], "width_m": 1.0},
                                                   "PA-0002": {"points": [[0, 20], [8, 20], [8, 28]], "closed": True}}}

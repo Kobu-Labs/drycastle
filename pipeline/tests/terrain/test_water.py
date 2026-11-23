@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 from shapely.geometry import Point, Polygon, box
 
-from drycastle_pipeline.bed import DepthGrid, carve_terrain, depth_grid
-from drycastle_pipeline.ground import ground_types
-from drycastle_pipeline.patches import plan_patches
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.water import (
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.ground.areas import ground_types
+from drycastle_pipeline.ground.patches import plan_patches
+from drycastle_pipeline.terrain.bed import DepthGrid, carve_terrain, depth_grid
+from drycastle_pipeline.terrain.water import (
     WATER_FORMAT_VERSION,
     plan_water,
     shore_surface,
@@ -20,7 +20,7 @@ from drycastle_pipeline.water import (
     water_rules,
 )
 from tests.synthetic import make_terrain, parcel, plane
-from tests.test_patches import doc, patch
+from tests.ground.test_patches import doc, patch
 
 RIVER = box(60, 20, 84, 190)  # 24 m wide, 170 m long, flows along y
 POND = box(120, 60, 150, 90)
@@ -220,13 +220,13 @@ OX, OY = -500000.0, -1100000.0  # the synthetic origin (see tests/synthetic.py)
 
 
 def _parse(d):
-    from drycastle_pipeline.edits import parse
+    from drycastle_pipeline.edits.schema import parse
 
     return parse(d)
 
 
 def test_max_depth_is_validated_only_with_water() -> None:
-    from drycastle_pipeline.edits import validate
+    from drycastle_pipeline.edits.schema import validate
 
     wet = {**patch("water"), "water_y": 185.6}
     assert validate(doc(**{"GP-0001": {**wet, "max_depth": 2.0}})) == []
@@ -289,7 +289,7 @@ def test_carve_does_not_raise_low_ground_outside() -> None:
 
 
 def test_export_writes_water_json_v2_and_manifest_entry(tmp_path) -> None:
-    from drycastle_pipeline.export import run_export
+    from drycastle_pipeline.export.export import run_export
     from tests.synthetic import make_workspace
 
     ws = make_workspace(tmp_path)

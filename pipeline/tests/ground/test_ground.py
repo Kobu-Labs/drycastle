@@ -3,8 +3,9 @@
 from shapely.geometry import LineString, box
 from shapely.ops import unary_union
 
-from drycastle_pipeline.detail import RECIPES
-from drycastle_pipeline.ground import (
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.detail.recipes import RECIPES
+from drycastle_pipeline.ground.areas import (
     build_ground,
     dike_ground,
     drawn_ground,
@@ -14,8 +15,7 @@ from drycastle_pipeline.ground import (
     type_colours,
     water_kinds,
 )
-from drycastle_pipeline.patches import plan_patches
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.ground.patches import plan_patches
 
 
 def _terrain(**attrs):
@@ -152,9 +152,8 @@ def test_a_type_without_attributes_claims_no_land() -> None:
 
 
 def test_the_plan_has_every_patch_in_the_colour_of_its_type_for_the_preview() -> None:
-    from drycastle_pipeline.edits import parse
-
-    from .synthetic import SYNTHETIC_ORIGIN, make_terrain
+    from drycastle_pipeline.edits.schema import parse
+    from tests.synthetic import SYNTHETIC_ORIGIN, make_terrain
 
     ox, oy = SYNTHETIC_ORIGIN
     edits = parse({"version": 1, "ground_patches": {

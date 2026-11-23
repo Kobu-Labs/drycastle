@@ -1,8 +1,8 @@
 """Water bodies for the map artifact (``water.json``): one body per water parcel, water ground area or water patch.
 
-The shooter swims in these (``ShooterCore.Water``). Each body has a flat surface and a natural bed (``bed.py``): a depth
+The shooter swims in these (``ShooterCore.Water``). Each body has a flat surface and a natural bed (``terrain/bed.py``): a depth
 grid over the outline, the depth growing from the banks, with pools and riffles along a river (see
-:mod:`drycastle_pipeline.bed`). Heights come from the terrain of the map (the DMR surface, not rebased, like
+:mod:`drycastle_pipeline.terrain.bed`). Heights come from the terrain of the map (the DMR surface, not rebased, like
 ``terrain.json``): the surface is the median terrain height along the shoreline (the parcel outline), or the
 patch's ``water_y``. The terrain is then carved to the bed (:func:`bed.carve_terrain`), so the visible ground,
 the walkable collision and the depth query agree. A parcel with no terrain under its outline gets no body.
@@ -20,9 +20,9 @@ from shapely.geometry import mapping, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import unary_union
 
-from drycastle_pipeline.bed import WaterBody, depth_grid
-from drycastle_pipeline.rules import DEFAULT_RULES, load_section
-from drycastle_pipeline.terrain import Terrain
+from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
+from drycastle_pipeline.terrain.bed import WaterBody, depth_grid
+from drycastle_pipeline.terrain.terrain import Terrain
 
 WATER_FORMAT_VERSION = 2
 SAMPLE_STEP_M = 2.0

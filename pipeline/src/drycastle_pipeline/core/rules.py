@@ -12,7 +12,7 @@ try:  # the C loader when libyaml is present: same documents, much faster than t
 except AttributeError:
     _YamlLoader = yaml.SafeLoader
 
-from drycastle_pipeline.config import PIPELINE_DIR
+from drycastle_pipeline.core.config import PIPELINE_DIR
 
 DEFAULT_RULES = PIPELINE_DIR / "config" / "rules.yaml"
 

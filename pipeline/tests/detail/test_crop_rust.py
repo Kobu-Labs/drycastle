@@ -1,4 +1,4 @@
-"""The crop recipe in the Rust engine against its Python twin (crop.py): same seeds, same instances (``crops.json`` rows), the same
+"""The crop recipe in the Rust engine against its Python twin (detail/crop.py): same seeds, same instances (``crops.json`` rows), the same
 ground by area and colour. The engine runs the same draws in the same order on the same GEOS, so the instances are identical; the
 ground patches are the same shapes, draped the engine's way (the area per layer and colour agrees, the triangles may be cut
 differently where a patch touches a terrain cell border).
@@ -15,9 +15,11 @@ from shapely.geometry import box
 
 pytest.importorskip("drycastle_detail", reason="build the Rust engine: make detail-rust-build")
 
-from drycastle_pipeline import detail as D
-from drycastle_pipeline import detail_rust as R
-from drycastle_pipeline.props import run_props
+from drycastle_pipeline.detail import rust as R
+from drycastle_pipeline.detail.build import build_village_detail
+from drycastle_pipeline.detail.documents import crops_document
+from drycastle_pipeline.detail.patches import load_patches
+from drycastle_pipeline.props.props import run_props
 from tests.synthetic import make_workspace, parcel
 
 
@@ -40,7 +42,7 @@ def ws(tmp_path_factory):
 @pytest.fixture(scope="module")
 def python_crops(ws):
     work, tmp = ws
-    return D.build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
+    return build_village_detail(work, edits_path=tmp / "no-edits.json", recipe="crop")
 
 
 def run_rust(ws, out, threads):
@@ -62,14 +64,14 @@ def _by_layer(rows: np.ndarray) -> dict:
 def test_instances_are_the_python_twins(ws, python_crops, tmp_path) -> None:
     run_rust(ws, tmp_path / "rs", 2)
     rs = json.loads((tmp_path / "rs" / "detail_crops.json").read_text())
-    py = D.crops_document(python_crops)
+    py = crops_document(python_crops)
     assert rs["kinds"] == py["kinds"] and rs["chunk_size_m"] == py["chunk_size_m"] and rs["axes"] == py["axes"]
     assert rs["chunks"] and rs["chunks"] == py["chunks"]  # every row of every chunk and kind, in order
 
 
 def test_ground_patches_cover_the_same_ground(ws, python_crops, tmp_path) -> None:
     stats = run_rust(ws, tmp_path / "rs", 2)
-    rows, tex = D.load_patches(tmp_path / "rs")
+    rows, tex = load_patches(tmp_path / "rs")
     n = sum(stats["patch_triangles_by_type"]["crop"].values())
     rs = rows[len(rows) - n:]  # the crop patches come last in the file
     assert tex == python_crops.textures and n > 0

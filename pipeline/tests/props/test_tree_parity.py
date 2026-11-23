@@ -1,4 +1,4 @@
-"""The drawn tree (propmeshes.tree_mesh), trees.json's model block (export.forest_model) and the collision solids
+"""The drawn tree (propmeshes.tree_mesh), trees.json's model block (export/docs.py forest_model) and the collision solids
 (godot/ShooterCore/Colliders/PropColliders.cs) describe one tree.
 
 The golden file godot/ShooterCore.Tests/fixtures/tree_parity.json holds, per sample tree, the vertices of each drawn piece
@@ -12,12 +12,13 @@ import os
 import numpy as np
 import pytest
 
-from drycastle_pipeline.buildings import hex_to_rgb
-from drycastle_pipeline.config import REPO_ROOT
-from drycastle_pipeline.export import forest_model
-from drycastle_pipeline.propmeshes import is_forest, tree_mesh
-from drycastle_pipeline.props import age_class, seeded
-from drycastle_pipeline.rules import load_section
+from drycastle_pipeline.core.colour import hex_to_rgb
+from drycastle_pipeline.core.config import REPO_ROOT
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.export.docs import forest_model
+from drycastle_pipeline.props.helpers import seeded
+from drycastle_pipeline.props.propmeshes import is_forest, tree_mesh
+from drycastle_pipeline.props.stands import age_class
 
 TREE = load_section("props")["trees"]
 GOLDEN = REPO_ROOT / "godot" / "ShooterCore.Tests" / "fixtures" / "tree_parity.json"

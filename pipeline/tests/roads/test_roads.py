@@ -3,7 +3,8 @@ import pytest
 import shapely
 from shapely.geometry import Point
 
-from drycastle_pipeline.roads import (
+from drycastle_pipeline.core.rules import load_section
+from drycastle_pipeline.roads.roads import (
     build_graph,
     is_unpaved,
     resample,
@@ -14,7 +15,6 @@ from drycastle_pipeline.roads import (
     road_mesh,
     road_width,
 )
-from drycastle_pipeline.rules import load_section
 from tests.synthetic import line_feature, make_terrain
 
 CFG = load_section("roads")
@@ -155,7 +155,7 @@ def test_same_class_roads_of_different_colour_never_overlap() -> None:
 def test_clip_graph_cuts_edges_at_the_terrain_border() -> None:
     from shapely.geometry import box
 
-    from drycastle_pipeline.roads import clip_graph
+    from drycastle_pipeline.roads.roads import clip_graph
 
     graph = {
         "version": 1,
@@ -184,7 +184,7 @@ def test_clip_graph_cuts_edges_at_the_terrain_border() -> None:
 def test_the_rust_engine_drapes_the_triangles_of_the_python_reference() -> None:
     from shapely.geometry import Polygon
 
-    from drycastle_pipeline import roads
+    from drycastle_pipeline.roads import roads
 
     if roads._engine() is None:
         pytest.skip("the Rust engine is not installed (make detail-rust-build)")

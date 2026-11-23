@@ -15,16 +15,13 @@ import shapely
 from shapely.geometry import Point, shape
 from shapely.ops import unary_union
 
-from drycastle_pipeline.buildings import footprint_polygon
-from drycastle_pipeline.roads import edge_lines
-from drycastle_pipeline.terrain import Terrain
+from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.geometry import r3
+from drycastle_pipeline.roads.roads import edge_lines
+from drycastle_pipeline.terrain.terrain import Terrain
 
 LAMPS_FORMAT_VERSION = 1
 LAMPS_AXES = "local metres, x east, y north, z up (elevation); the lamp head sits on top of the pole"
-
-
-def _r3(v: float) -> float:
-    return round(float(v), 3)
 
 
 def _chunk(x: float, y: float, chunk_m: float) -> list[int]:
@@ -120,9 +117,9 @@ def make_lamps(
         out.append(
             {
                 "id": f"L-{n:04d}",
-                "x": _r3(x),
-                "y": _r3(y),
-                "z": _r3(float(terrain.surface(np.array([x]), np.array([y]))[0])),
+                "x": r3(x),
+                "y": r3(y),
+                "z": r3(float(terrain.surface(np.array([x]), np.array([y]))[0])),
                 "source": lp["source"],
                 "osm_id": lp["osm_id"],
                 "highway": lp["highway"],
