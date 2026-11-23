@@ -139,6 +139,8 @@ public partial class NetClient : Node
     MissileClient _missile = null!;
     TurretsClient _turrets = null!;
     ScudClient _scud = null!;
+    readonly TargetsClient _targets;
+    VolumesClient _volumes = null!;
     AnimalsClient _animals = null!;
     FlocksClient _flocks = null!;
     /// <summary>wildlife.json: set by the host (the flock kinds; the kind index of a state is a position in <c>Flocks</c>).</summary>
@@ -202,6 +204,7 @@ public partial class NetClient : Node
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
         _markers = new EnemyMarkers(Ctx);
+        _targets = new TargetsClient(Ctx, Sandbox, _blastDust);
         Sandbox = new SandboxClient(Ctx);
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
@@ -268,6 +271,7 @@ public partial class NetClient : Node
         EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
         _scud = new ScudClient(Ctx, Scud, _blastDust);
+        _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
         InitMatchEdges();
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
@@ -371,7 +375,7 @@ public partial class NetClient : Node
         if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
         if (LinkEnded) return;
         _screens.UpdateMapCursor();
-        if (_volumes != null) UpdateVolumes();
+        if (_volumes.On) _volumes.Update();
         var t = ClientProf.Begin();
         Poll();
         t = ClientProf.Lap(ClientProf.S.Net, t);
@@ -551,7 +555,7 @@ public partial class NetClient : Node
     /// <summary>One reliable event, to every feature that listens, in this order (some ignore the kinds that are not theirs).</summary>
     void DispatchEvent(EventKind kind, byte[] payload)
     {
-        if (kind == EventKind.TargetRoster) OnTargetRoster(payload); // target dummies' names (#148)
+        if (kind == EventKind.TargetRoster) _targets.OnRoster(payload); // target dummies' names (#148)
         Sandbox.OnEvent(kind, payload); // sandbox answer (#156)
         Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
@@ -730,7 +734,7 @@ public partial class NetClient : Node
         if (Chat.HandleInput(e)) return; // T or "/": the chat box
         if (_screens.HandleInput(e)) return; // M: the tactical map, F: the Equipment screen (#268), J: the Hunter's Log (#336), N: the Mineral Log
         if (Sandbox.HandleInput(e)) return; // F4, the sandbox panel (#156)
-        if (HandleVolumeInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
+        if (_volumes.HandleInput(e)) return; // F3, the bounding-volume overlay; [ ] step its mode (#479)
         if (_scud.HandleInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
         if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit

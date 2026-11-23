@@ -23,7 +23,7 @@ public partial class NetClient
         node.AddChild(new Label3D
         {
             Text = Ctx.Names.TryGetValue(id, out var n) ? Sandbox.NameTag(id, n) : $"#{id}", // [SANDBOX] tag for sandbox players (#156)
-            Modulate = target ? TargetTint : Colors.White, // orange name tag for target dummies (#148)
+            Modulate = target ? TargetsClient.DummyTint : Colors.White, // orange name tag for target dummies (#148)
             Position = new Vector3(0, MoveConsts.CapsuleHeight + 0.3f, 0),
             Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
             PixelSize = 0.005f, NoDepthTest = true,
@@ -59,7 +59,7 @@ public partial class NetClient
                 r.View?.SetStance(r.State == EntityState.InVehicle ? (r.RideStanding ? Stance.Stand : Stance.Crouch) : r.Stance); // a rider sits; the gunner in a ring stands
                 if (r.State == EntityState.InVehicle) _lastRode[id] = Ctx.Now;
                 AnimateRemote(r, s.Pos);
-                UpdateNameTag(id, r);
+                _targets.UpdateNameTag(id, r);
             }
         Ctx.Rub.AddRender(rt, Ctx.LastTick, drawn);
     }
