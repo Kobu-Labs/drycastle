@@ -23,7 +23,7 @@ public partial class NetClient
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
-        _viewmodel.Visible = Mode.ShowsViewmodel && !OwnBodyFlung && Ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
+        _viewmodel.Visible = Mode.ShowsViewmodel && !_flings.OwnFlung && Ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
 
     /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
@@ -146,7 +146,7 @@ public partial class NetClient
                 _aircraftClient.OnHelperWarning(hw);
                 break;
             case EventKind.PlayerFlung when PlayerFlungCodec.Decode(payload) is { } flung:
-                OnPlayerFlung(flung);
+                _remotes.OnPlayerFlung(flung);
                 break;
             case EventKind.VehicleCrash when VehicleCrashCodec.Decode(payload) is { } crash:
                 Ctx.Cars.Sounds.OnCrash(crash.Car, crash.Sound);

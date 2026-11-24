@@ -119,8 +119,8 @@ public partial class NetClient
         {
             if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
             var p = e.State.Position;
-            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(RenderTickNow()) != null;
-            if (flying) p = e.Buf.At(RenderTickNow())!.Value.Pos; // the canister's arc is smoothed between snapshots
+            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(Ctx.RenderTick) != null;
+            if (flying) p = e.Buf.At(Ctx.RenderTick)!.Value.Pos; // the canister's arc is smoothed between snapshots
             v.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
             var st = e.State.State;
             var canisterOnly = st == CarePackageRules.StateThrown || st == CarePackageRules.StateMarking;

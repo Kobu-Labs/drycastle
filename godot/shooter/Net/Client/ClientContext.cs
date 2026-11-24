@@ -48,7 +48,7 @@ public sealed class ClientContext
     /// <summary>The rockets and thrown grenades in the air, by entity id.</summary>
     internal Dictionary<ushort, RocketView> Rockets { get; } = new();
     /// <summary>The other players and target dummies being drawn, by entity id.</summary>
-    public Dictionary<ushort, RemotePlayer> Remotes { get; } = new();
+    public RemotePlayers Remotes { get; }
     public Node3D World = null!;
     /// <summary>The loaded map (set by the host).</summary>
     public Drycastle.MapLoader.MapLoader? Map;
@@ -101,6 +101,7 @@ public sealed class ClientContext
         Viewmodel = new OwnViewmodel(this);
         Sound = new ClientSound(this);
         Cars = new ClientCars(this);
+        Remotes = new RemotePlayers(this);
     }
 
     public double Now => Time.GetTicksMsec() / 1000.0;

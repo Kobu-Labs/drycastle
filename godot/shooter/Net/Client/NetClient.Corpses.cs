@@ -58,8 +58,6 @@ public partial class NetClient
 
     /// <summary>The latest death each player had (when, killer): a corpse that appears just after it is a fresh kill and collapses (#357).</summary>
     readonly Dictionary<ushort, (double At, ushort Killer)> _deathSeen = new();
-    /// <summary>The last time each player was seen riding a vehicle: a rider's corpse stays seated or is thrown, it does not collapse.</summary>
-    readonly Dictionary<ushort, double> _lastRode = new();
     /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
     const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
 
@@ -76,6 +74,14 @@ public partial class NetClient
         }
     }
 
+    /// <summary>True while a corpse of player <paramref name="owner"/> is on the map.</summary>
+    bool CorpseOf(ushort owner)
+    {
+        foreach (var id in _corpses.Keys)
+            if (WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) return true;
+        return false;
+    }
+
     void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Ctx.Now, d.Killer);
 
     /// <summary>
@@ -88,7 +94,7 @@ public partial class NetClient
         if (!fresh && Ctx.Now - v.Born < CollapseWaitSeconds) return false;
         v.Decided = true;
         v.Node.Visible = true;
-        var rode = _lastRode.TryGetValue(owner, out var when) && Ctx.Now - when < 1.5;
+        var rode = Ctx.Remotes.LastRode(owner) is { } when && Ctx.Now - when < 1.5;
         if (!fresh || flying || rode) return true;
         var away = new Basis(Vector3.Up, yaw) * Vector3.Back; // no killer to push it (a fall, a suicide): backwards
         Vector3? from = death.Killer == owner ? null : death.Killer == Ctx.MyId ? Ctx.Me?.GlobalPosition : Ctx.Remotes.TryGetValue(death.Killer, out var k) ? k.Node.GlobalPosition : null;

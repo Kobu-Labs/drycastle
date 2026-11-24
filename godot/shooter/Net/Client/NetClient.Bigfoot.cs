@@ -30,37 +30,6 @@ public partial class NetClient
         public const string Roar = "explosion.vehicle", StompWindup = "land", Shockwave = "explosion.rpg", Throw = "shot.knife", Land = "explosion.vehicle", Log = "impact", Grab = "death";
     }
 
-    /// <summary>The figure of one Bigfoot: the node at its feet, the pivot the procedural motion turns and scales, and the model with its clips.</summary>
-    sealed class BigfootView
-    {
-        public Node3D Node = null!, Pivot = null!;
-        public AnimationPlayer? Anim;
-        /// <summary>The clip name the model uses for each plain clip name ("Attack" is "EnemyArmature|EnemyArmature|EnemyArmature|Attack").</summary>
-        public readonly Dictionary<string, string> Clips = new();
-        /// <summary>The act whose clip is playing, as the byte of its <see cref="BigfootAct"/>. A change means the clip is due; <c>Reset</c> after a hit reaction makes it due again.</summary>
-        public Change<byte> Drawn;
-        /// <summary>The replicated hit bit last seen: a flip is a hit that did not kill.</summary>
-        public Change<bool> HitBit;
-        /// <summary>An act was drawn at least once: a giant already dead when first seen lies in its last pose, one that dies in front of us falls.</summary>
-        public bool Introduced;
-        /// <summary>Client time (s) the shown act began, and until which a hit reaction holds the act's clip back.</summary>
-        public double Since, HitUntil;
-        /// <summary>The skeleton and the bone of its right hand (-1 without one): the log it winds up with rides that hand.</summary>
-        public Skeleton3D? Skel;
-        public int HandR = -1;
-        /// <summary>Where it was drawn last frame and the ground speed measured from that (m/s, smoothed): Walk and Run play at it.</summary>
-        public Vector3 LastAt;
-        public bool HasLastAt;
-        public float Speed;
-        /// <summary>The act drawn before the one that plays now: a launch out of a hold is the one-handed throw of a player, any other the two-handed one.</summary>
-        public BigfootAct Before;
-        public BigfootAct Shown;
-        /// <summary>The log on its shoulder while it winds a throw up (the thrown one is a world entity of its own).</summary>
-        public Node3D? HeldLog;
-        /// <summary>The player in its hand while the act is Hold (0 otherwise): when the act ends, a Launch makes the body fly, anything else lets it drop (#360).</summary>
-        public ushort HeldId;
-    }
-
     /// <summary>Finds the skeleton of the giant and its right hand.</summary>
     static void IndexBones(BigfootView v)
     {
@@ -80,14 +49,6 @@ public partial class NetClient
     /// <summary>What the flailing hand adds to the held player's own eye: an offset (metres, world) and a roll (radians). Zero when not held.</summary>
     Vector3 _heldSwing;
     float _heldRoll;
-    /// <summary>The ragdoll phase of each player the Bigfoot picked up (#360): held, flying after the throw, getting up. Absent or None: the normal figure.</summary>
-    readonly Dictionary<ushort, BodyFlingTracker> _flings = new();
-    /// <summary>The giant that holds each player now: the hand's shake the body hangs in.</summary>
-    readonly Dictionary<ushort, BigfootView> _holders = new();
-    Vector3 _ownFlingLast;
-    /// <summary>This client's own body is in the fist or flying: its arms and weapon are not drawn.</summary>
-    bool OwnBodyFlung => Ctx.MyId != 0 && _flings.TryGetValue(Ctx.MyId, out var f) && f.Phase is BodyFling.Held or BodyFling.Flying or BodyFling.Lying;
-
     /// <summary>True while the Bigfoot's throw has the vehicle (the driver's client does not predict it).</summary>
     bool CarThrown(ushort car) => _thrownCars.TryGetValue(car, out var until) && Ctx.Now < until;
 
@@ -187,7 +148,7 @@ public partial class NetClient
 
     // ---- per frame ----
 
-    void RenderBigfoot()
+    void RenderBigfoot(double delta)
     {
         if (_thrownCars.Count > 0)
             foreach (var (car, until) in _thrownCars) if (Ctx.Now >= until) _thrownCars.Remove(car); // expired: CarThrown already says false, the entry just leaked
@@ -195,20 +156,20 @@ public partial class NetClient
         BigfootView? holder = null;
         if (Ctx.LastTick != 0)
         {
-            var rt = RenderTickNow();
-            PlaceBigfoots(rt, ref held, ref holder);
+            var rt = Ctx.RenderTick;
+            PlaceBigfoots(rt, delta, ref held, ref holder);
             PlaceTrunks(rt);
         }
         Ctx.View.HeldByBigfoot = held;
-        TickOwnFling();
-        Ctx.Hud?.SetFlungHidesCrosshair(OwnBodyFlung);
-        SwingHeldEye(holder);
+        _flings.TickOwn(delta);
+        Ctx.Hud?.SetFlungHidesCrosshair(_flings.OwnFlung);
+        SwingHeldEye(holder, delta);
         PlayFightMusic();
         RenderRings();
     }
 
     /// <summary>Places every Bigfoot from its interpolated state and shows what it does; notes whether it holds the local player (<paramref name="held"/>) and which one does (<paramref name="holder"/>).</summary>
-    void PlaceBigfoots(double rt, ref bool held, ref BigfootView? holder)
+    void PlaceBigfoots(double rt, double delta, ref bool held, ref BigfootView? holder)
     {
         var now = Ctx.Now;
         foreach (var (id, v) in _bigfoots)
@@ -218,9 +179,9 @@ public partial class NetClient
             {
                 v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
                 // the server snaps its yaw at the start of an attack and steps it in a detour: the figure turns there quickly instead of jumping
-                var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime())) : s.Yaw;
+                var yaw = v.HasLastAt ? Mathf.LerpAngle(v.Node.Rotation.Y, s.Yaw, 1f - MathF.Exp(-14f * (float)delta)) : s.Yaw;
                 v.Node.Rotation = new Vector3(0, yaw, 0);
-                MeasureSpeed(v);
+                MeasureSpeed(v, delta);
             }
             var raw = e.State.State;
             var act = BigfootRules.ActOf(raw);
@@ -253,7 +214,7 @@ public partial class NetClient
     }
 
     /// <summary>The server holds the body at a fixed point in front of the giant; the flailing is drawn here, so the eye rides the same swing as the figure.</summary>
-    void SwingHeldEye(BigfootView? holder)
+    void SwingHeldEye(BigfootView? holder, double delta)
     {
         var swing = Vector3.Zero; var tilt = 0f;
         if (holder != null && Ctx.Me != null)
@@ -264,7 +225,7 @@ public partial class NetClient
             swing = holder.Node.GlobalBasis * (shaken - local);
             if (!GameSettings.Current.ReduceMotion) tilt = holder.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(t * 17f);
         }
-        var ease = 1f - MathF.Exp(-14f * (float)GetProcessDeltaTime()); // in and out without a jump
+        var ease = 1f - MathF.Exp(-14f * (float)delta); // in and out without a jump
         _heldSwing = _heldSwing.Lerp(swing, ease);
         _heldRoll = Mathf.Lerp(_heldRoll, tilt, ease);
     }
@@ -281,12 +242,6 @@ public partial class NetClient
 
     const double HitReactionGapSeconds = 4;
 
-    BodyFlingTracker FlingOf(ushort id)
-    {
-        if (!_flings.TryGetValue(id, out var f)) _flings[id] = f = new BodyFlingTracker();
-        return f;
-    }
-
     /// <summary>
     /// What the giant's act says of the player in its hand: Hold grabs (<paramref name="owner"/> is the player), and when the Hold is over a Launch throws
     /// them while anything else (the hold cut short, the giant dead or gone) lets them drop.
@@ -295,70 +250,14 @@ public partial class NetClient
     {
         if (act == BigfootAct.Hold && owner != 0)
         {
-            v.HeldId = owner; _holders[owner] = v;
-            FlingOf(owner).Grabbed();
+            v.HeldId = owner;
+            _flings.Grab(owner, v);
             return;
         }
         if (v.HeldId == 0) return;
         var id = v.HeldId;
-        v.HeldId = 0; _holders.Remove(id);
-        if (act == BigfootAct.Launch) FlingOf(id).Flung(); else FlingOf(id).Ended();
-    }
-
-    /// <summary>A killed, respawned or departed player is no longer a ragdoll of this machine (a corpse is its own entity).</summary>
-    void EndFling(ushort id)
-    {
-        if (_flings.TryGetValue(id, out var f) && f.Active) { f.Ended(); _holders.Remove(id); }
-    }
-
-    /// <summary>The own body only needs its phase (the eye and the hidden arms): the landing is read from the predicted body's speed.</summary>
-    void TickOwnFling()
-    {
-        if (Ctx.MyId == 0 || Ctx.Me == null || !_flings.TryGetValue(Ctx.MyId, out var f) || !f.Active) { if (Ctx.Me != null) _ownFlingLast = Ctx.Me.GlobalPosition; return; }
-        if (Dead) { f.Ended(); return; }
-        var dt = (float)GetProcessDeltaTime();
-        var at = Ctx.Me.GlobalPosition;
-        f.Tick(dt, dt > 0 ? (at - _ownFlingLast).Length() / dt : 0, Ctx.Me.State.OnFloor);
-        _ownFlingLast = at;
-        if (f.Phase == BodyFling.Landing && f.Elapsed >= GetUpSeconds) f.StoodUp();
-    }
-
-    /// <summary>How long a player who landed alive stays a ragdoll turning upright (the tumble's own settle is quicker; this ends it for the own body, which is not drawn).</summary>
-    const float GetUpSeconds = 0.4f;
-
-    /// <summary>
-    /// Another player the Bigfoot holds or has thrown (#360): a ragdoll the whole time. In the fist it hangs in the hand's shake (the same the held player's
-    /// own eye rides) with its limbs flailing; thrown it tumbles about its middle (<see cref="RagdollTumble"/>) until it lands, then turns upright and goes
-    /// slack, and the normal figure takes over without a pop (a turn is a whole circle, the pivot height at upright is the body's middle).
-    /// </summary>
-    void FlingRemote(ushort id, RemotePlayer r, BodyFlingTracker f, Vector3 at, float yaw, float dt)
-    {
-        var t = r.Tumble;
-        var speed = dt > 0 ? (at - r.TumbleLast).Length() / dt : 0;
-        r.TumbleLast = at;
-        f.Tick(dt, speed, Map is not { } map || at.Y - map.GroundHeight(at.X, at.Z) < 0.35f);
-        t.Thrown = true; t.StandUp = f.Phase == BodyFling.Landing; // lying on the ground first, then it turns upright // the tumble owns the ragdoll flag: when the machine is over, TumbleRemote's normal path puts the figure back
-        var middle = Vector3.Up * RagdollTumble.Half;
-        if (f.Phase == BodyFling.Held && _holders.TryGetValue(id, out var h))
-        {
-            var local = h.Node.ToLocal(at);
-            var tm = (float)(Ctx.Now - h.Since);
-            var hand = h.Node.GlobalBasis;
-            var shaken = h.Pivot.Transform.Basis * local + new Vector3(0, 0.45f * MathF.Sin(tm * 22f), 0.3f * MathF.Sin(tm * 11f + 1.3f));
-            var tilt = h.Pivot.Rotation.Z * 1.6f + 0.1f * MathF.Sin(tm * 17f);
-            t.Amount = 1f; t.Spin = 0;
-            r.View?.SetRagdoll(true, 1f, false);
-            if (r.View != null) r.View.Position = -middle;
-            r.Node.GlobalPosition = at + hand * (shaken - local) + middle;
-            r.Node.Basis = new Basis(hand.Z.Normalized(), tilt) * new Basis(hand.X.Normalized(), h.Pivot.Rotation.X * 2f) * new Basis(Vector3.Up, yaw);
-            return;
-        }
-        t.Update(at, f.Phase == BodyFling.Flying, dt);
-        if (f.Phase == BodyFling.Landing && t.AtRest) f.StoodUp();
-        r.View?.SetRagdoll(true, t.Amount, t.AtRest);
-        if (r.View != null) r.View.Position = -middle;
-        r.Node.GlobalPosition = at + Vector3.Up * t.PivotHeight;
-        r.Node.Basis = t.BasisFor(yaw);
+        v.HeldId = 0;
+        _flings.Release(id, thrown: act == BigfootAct.Launch);
     }
 
     /// <summary>Plays a one-shot clip (the flinch, the roar) over the act's: the act's clip is held back until it is over, then started again.</summary>
@@ -373,10 +272,10 @@ public partial class NetClient
     }
 
     /// <summary>The ground speed of the figure, from where it was drawn a frame ago (smoothed: the interpolated position steps a little).</summary>
-    void MeasureSpeed(BigfootView v)
+    void MeasureSpeed(BigfootView v, double delta)
     {
         var at = v.Node.GlobalPosition;
-        var dt = (float)GetProcessDeltaTime();
+        var dt = (float)delta;
         if (v.HasLastAt && dt > 1e-4f)
         {
             var moved = new Vector2(at.X - v.LastAt.X, at.Z - v.LastAt.Z).Length() / dt;

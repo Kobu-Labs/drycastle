@@ -98,6 +98,8 @@ public partial class NetClient : Node
     bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
     readonly OwnPrediction _prediction;
+    readonly BodyFlings _flings;
+    RemotesClient _remotes = null!;
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -209,10 +211,12 @@ public partial class NetClient : Node
         Ctx.View.Rising = () => _pounce.Rising;
         Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
         _prediction = new OwnPrediction(Ctx, SpeedFor);
+        _flings = new BodyFlings(Ctx);
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
         _markers = new EnemyChestPoints(Ctx);
         Sandbox = new SandboxClient(Ctx);
+        Ctx.Remotes.NameTag = Sandbox.NameTag;
         Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
@@ -236,6 +240,8 @@ public partial class NetClient : Node
         Ctx.View.MassSeated = () => _mass.Seated;
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
+        Ctx.Remotes.Appeared += (id, r) => r.Binoculars = _binocularsBy.GetValueOrDefault(id);
+        Ctx.Remotes.Appeared += (id, _) => _status.SyncFx(id);
         High = new HighClient(Ctx, _status, Plantation, () => Mode, () => OwnSpawned);
         Squads = new SquadsClient(Ctx);
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
@@ -256,11 +262,13 @@ public partial class NetClient : Node
         _flight = new FlightClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), _session.FlightCorrection);
         _hulls = new VehicleHulls(Ctx, _flight, _driveClient, CarThrown, GlassData);
         _aim = new OwnAim(Ctx, Loadouts, () => _binoculars);
-        _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => LockComplete, () => OwnBodyFlung);
+        _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => LockComplete, () => _flings.OwnFlung);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
         Camo = new CamoClient(Ctx, CamoData, DressCorpses);
+        Ctx.Remotes.Dressing += Camo.Dress;
+        Ctx.Remotes.Dressing += Items.DressPlayer;
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
         InitCorpses();
@@ -274,6 +282,7 @@ public partial class NetClient : Node
         InitBigfoot();
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
+        _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => CorpseOf(id) || HarvestVictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
         EventReceived += _aircraftClient.OnEvent;
@@ -313,7 +322,6 @@ public partial class NetClient : Node
         Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
         if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
-        foreach (var r in Ctx.Remotes.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         Ctx.Remotes.Clear();
         foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         Ctx.Rockets.Clear();
@@ -400,7 +408,7 @@ public partial class NetClient : Node
             return;
         }
         Loadouts.PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
-        RenderPlayersAndProps();
+        RenderPlayersAndProps(delta);
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderCreatures(delta);
         t = ClientProf.Lap(ClientProf.S.Creatures, t);
@@ -420,9 +428,9 @@ public partial class NetClient : Node
     }
 
     /// <summary>The players, their head lamps, the corpses, crates, items, minerals and turrets.</summary>
-    void RenderPlayersAndProps()
+    void RenderPlayersAndProps(double delta)
     {
-        RenderRemotes();
+        _remotes.Render(delta);
         _headLamps.Render();
         if (PoseDemo && !_poseDemoDone && Ctx.Me != null) SpawnPoseDemo();
         RenderCorpses();
@@ -438,7 +446,7 @@ public partial class NetClient : Node
         Companions.Render();
         Companions.TickMarks();
         _flocks.Render(delta);
-        RenderBigfoot();
+        RenderBigfoot(delta);
         _citizens.Render();
         _thieves.Render(delta);
         _demon.Render();
@@ -561,7 +569,7 @@ public partial class NetClient : Node
     void OnLeave(LeaveMsg l)
     {
         Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); Ctx.Snapshots.Forget(l.PlayerId);
-        if (Ctx.Remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
+        Ctx.Remotes.Remove(l.PlayerId);
         Items.Forget(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
         _status.Forget(l.PlayerId);
     }
@@ -666,7 +674,7 @@ public partial class NetClient : Node
         Ctx.LastTick = h.Tick; _lastArrival = Time.GetTicksMsec() / 1000.0; _snaps++;
         Ctx.Clock.OnSnapshot(h.Tick, _lastArrival);
         DayNightCycle.Current?.SetServerTick(h.Tick);
-        foreach (var id in Ctx.Snapshots.Removed) { if (Ctx.Remotes.Remove(id, out var gone)) gone.Node.QueueFree(); if (Ctx.Cars.Remove(id)) { _flight.Remove(id); _driveClient.Remove(id); } }
+        foreach (var id in Ctx.Snapshots.Removed) { Ctx.Remotes.Remove(id); if (Ctx.Cars.Remove(id)) { _flight.Remove(id); _driveClient.Remove(id); } }
         foreach (var (id, rec) in Ctx.Snapshots.States)
         {
             if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
@@ -677,10 +685,7 @@ public partial class NetClient : Node
             if (rec.Type == EntityType.Flight) { _flight.OnState(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Drive) { _driveClient.OnState(rec, h.Tick); continue; }
             if (rec.Type is not (EntityType.Player or EntityType.Target)) continue;
-            if (!Ctx.Remotes.TryGetValue(id, out var r)) { r = MakeRemote(id, rec.Type == EntityType.Target); Ctx.Remotes[id] = r; _status.SyncFx(id); }
-            r.State = rec.State; r.Stance = rec.Stance; r.Slot = rec.Weapon;
-            r.Buf.Push(h.Tick, rec.Position, rec.YawRad, rec.PitchRad);
-            r.Min = NVec3.Min(r.Min, rec.Position); r.Max = NVec3.Max(r.Max, rec.Position);
+            Ctx.Remotes.OnRecord(id, rec, h.Tick);
         }
         _flight.Update(h.Ack); // the helicopter this player flies is predicted, and reconciled here (ADR 0006)
         _driveClient.Update(h.Ack);  // and so is the amphibious transport this player drives (ADR 0010)

@@ -30,7 +30,7 @@ public partial class NetClient
     {
         var gi = GrenadeWeapon();
         var hasRound = gi >= 0 && Ammo is { } a && gi < a.Slots.Count && a.Slots[gi].Mag > 0;
-        var onFoot = Ctx.Me != null && !Bot && Mode.ShowsViewmodel && !Ctx.Driving && !OwnBodyFlung && !_aircraftClient.AtTurret && Input.MouseMode == Input.MouseModeEnum.Captured;
+        var onFoot = Ctx.Me != null && !Bot && Mode.ShowsViewmodel && !Ctx.Driving && !_flings.OwnFlung && !_aircraftClient.AtTurret && Input.MouseMode == Input.MouseModeEnum.Captured;
         var canAim = GrenadeThrower.CanAim(onFoot, !_binoculars, Ctx.Me?.State.OnLadder ?? false, hasRound, _scud.ScreenOn);
         _grenadeKey.Tick(mi.Has(MoveButtons.Throw), mi.Has(MoveButtons.Aim), canAim);
         if (!canAim) mi.Buttons &= ~MoveButtons.Throw;
