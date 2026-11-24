@@ -6,6 +6,22 @@ using Drycastle.Shooter.Glass;
 using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Loudspeaker;
 using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client.Aviation;
+using Drycastle.Shooter.Net.Client.BigfootEvent;
+using Drycastle.Shooter.Net.Client.CarPool;
+using Drycastle.Shooter.Net.Client.Diagnostics;
+using Drycastle.Shooter.Net.Client.Fauna;
+using Drycastle.Shooter.Net.Client.Gear;
+using Drycastle.Shooter.Net.Client.Harvest;
+using Drycastle.Shooter.Net.Client.HudFeeds;
+using Drycastle.Shooter.Net.Client.Incidents;
+using Drycastle.Shooter.Net.Client.OwnPlayer;
+using Drycastle.Shooter.Net.Client.Parish;
+using Drycastle.Shooter.Net.Client.Peers;
+using Drycastle.Shooter.Net.Client.Seating;
+using Drycastle.Shooter.Net.Client.Shooting;
+using Drycastle.Shooter.Net.Client.Streaks;
+using Drycastle.Shooter.Net.Client.Village;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.Shooter.Scenery;
 using Drycastle.Shooter.Weapons;
@@ -39,7 +55,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
-/// Network client over raw ENet (ADR 0002), as a composition root: it makes the feature classes of this folder (one per feature, each given the <see cref="ClientContext"/>
+/// Network client over raw ENet (ADR 0002), as a composition root: it makes the feature classes of the subfolders (one per feature, each given the <see cref="ClientContext"/>
 /// and the few services it needs), wires them, and orders what happens each frame, each physics tick and for each packet. Sends one input per 30 Hz physics tick (the last 3 for loss cover),
 /// predicts the local player with the shared movement step and reconciles against the server position at the
 /// acked input seq (replaying the unacked inputs), and renders remote players about 100 ms (3 ticks) in the past

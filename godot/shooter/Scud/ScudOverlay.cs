@@ -1,5 +1,5 @@
 using Godot;
-using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.HeadsUp.Streaks;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Scud;
 

@@ -1,4 +1,10 @@
 using Godot;
+using Drycastle.Shooter.HeadsUp.Badges;
+using Drycastle.Shooter.HeadsUp.Prompts;
+using Drycastle.Shooter.HeadsUp.RoundFlow;
+using Drycastle.Shooter.HeadsUp.Screens;
+using Drycastle.Shooter.HeadsUp.Vision;
+using Drycastle.Shooter.HeadsUp.Vitals;
 using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Maps;
 using Drycastle.Shooter.Menu;

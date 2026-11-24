@@ -243,6 +243,28 @@ Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a fol
 
 `ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` (`SmokeStats.cs`) holds what the smoke tests count and their verdicts.
 
+## Client code layout (`godot/shooter/Net/Client/`, `godot/shooter/HeadsUp/`)
+
+`NetClient` is the composition root of the client: it makes the feature classes (one per feature, each given the `ClientContext`). Beside it at the folder root: `ClientContext`, `ClientView` (who has the local view), `ClientSound`, `ClientText`, `EffectEvents` (the one-off effects to the feature that draws them) and `ServerLink` (the ENet connection). Every other class sits in a feature folder, namespace = folder (`Drycastle.Shooter.Net.Client.Peers`, ...); a folder equal to a type name or a namespace in scope is avoided (`Vehicles`, `Flight`, `Scenery`, `Thieves` are namespaces: hence `CarPool`, `Aviation`, `Village`, `Incidents`).
+
+| Folder | What |
+|---|---|
+| `OwnPlayer/` | the local body: prediction, reconcile and its smoothing, aim and breath, the weapon in hand and its viewmodel, hotbar, loadout, death view, camera shake, the grenade throw |
+| `Peers/` | other players and target dummies as drawn, camo, head lamps, statuses and the high, flung bodies, water splashes |
+| `CarPool/` | vehicles: the car view, hulls, sounds, drive, tow, glass, the flak and door gun nodes and the guns a rider works |
+| `Seating/` | the seats of the vehicle the player sits in, the seat switch, the rider's camera |
+| `Aviation/` | aircraft and the utility helicopter, rotors, the door gun nodes |
+| `Shooting/` | shots, impacts, rockets in the air, blast dust |
+| `Streaks/` | killstreaks: the tracker, the gunner streaks, missile, MOAB, UAV, Lock-on, enemy points of the overlays |
+| `Gear/` | items, ground items, corpses and their loot, care packages, binoculars, the interact targets and hold ring |
+| `BigfootEvent/`, `Parish/`, `Harvest/`, `Incidents/` | the events: Bigfoot; Holy Mass, demon, pounce, citizens; the harvester, bales and crushed crops; Thieves, Loot, Scud, Intel |
+| `Fauna/` | animals, flocks, companions, poop |
+| `HudFeeds/` | what feeds the HUD: `HudClient`, minimap and blips, the screens a key opens, chat, match events, squads, teams, Hunter's Log, Mineral Log, sandbox |
+| `Village/` | doors, the loudspeaker, sentry turrets |
+| `Diagnostics/` | the session log, perf log, the client report, rubber-band stats, the F3 volumes, dev demos |
+
+`HeadsUp/` keeps `Hud` (the root that builds the widgets), `HudUi` (what every widget shares) and `HudState` at its root. Widgets: `Vitals/` (health, ammo, crosshair, hit marker, damage indicators, breath hint, statuses, spawn protection, speed), `Vision/` (scope, binoculars, blood, dust and pounce veils), `RoundFlow/` (top bar, scoreboard, kill feed, XP panel, respawn screen, chat), `Streaks/` (streak row, UAV panel, MOAB banner, the gunship, missile and Lock-on overlays, enemy markers), `Prompts/` (context prompt, radial progress, rozhlas chips, seat panel), `Screens/` (minimap panel, the full-screen overlays, hit diagram), `Badges/` (sandbox badge, FPS counter, volume line).
+
 ## Known gaps
 
 - Export is unverified (see the top). If the dedicated-server preset needs tuning, edit it in the Godot editor

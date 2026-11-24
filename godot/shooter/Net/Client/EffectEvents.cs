@@ -1,3 +1,10 @@
+using Drycastle.Shooter.Net.Client.Aviation;
+using Drycastle.Shooter.Net.Client.CarPool;
+using Drycastle.Shooter.Net.Client.HudFeeds;
+using Drycastle.Shooter.Net.Client.OwnPlayer;
+using Drycastle.Shooter.Net.Client.Peers;
+using Drycastle.Shooter.Net.Client.Shooting;
+using Drycastle.Shooter.Net.Client.Streaks;
 using Drycastle.Shooter.Scenery;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Flight;

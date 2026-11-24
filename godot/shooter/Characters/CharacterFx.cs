@@ -1,6 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Assets;
-using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Gear;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Movement;

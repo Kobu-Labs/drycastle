@@ -3,7 +3,7 @@ using Drycastle.Shooter.Chat;
 using Drycastle.Shooter.Churches;
 using Drycastle.Shooter.Crystals;
 using Drycastle.Shooter.Dev;
-using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.HeadsUp.Screens;
 using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Intel;
 using Drycastle.Shooter.Maps;

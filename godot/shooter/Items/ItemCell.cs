@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Menu;
-using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Gear;
 using Drycastle.ShooterCore.Items;
 
 namespace Drycastle.Shooter.Items;

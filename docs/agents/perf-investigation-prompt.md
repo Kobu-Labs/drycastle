@@ -67,7 +67,7 @@ Questions:
 - Map version, memory and download size for players.
 
 ### F. Rendering and client frame
-Scope: `godot/shooter/**/*Fx.cs`, `HeadsUp/*.cs`, `Maps/Minimap.cs`, `Scenery/DayNightCycle.cs`, `shaders/`, `Waters/WaterFx.cs`, `Characters/CharacterFx.cs`, project settings.
+Scope: `godot/shooter/**/*Fx.cs`, `HeadsUp/**/*.cs`, `Maps/Minimap.cs`, `Scenery/DayNightCycle.cs`, `shaders/`, `Waters/WaterFx.cs`, `Characters/CharacterFx.cs`, project settings.
 Questions:
 - Draw calls, shadow passes, visibility ranges, MSAA, Forward+ vs. Mobile, for 998 mesh nodes and 16 characters. CPU-bound (draw submission, node churn) or GPU-bound, and for which hardware floor? State the floor you assume and why.
 - Effects: node churn per shot/blast/tracer (T2-15, T2-16, T2-17); which should be pooled, GPU particles, or MultiMesh. Distance gating.
