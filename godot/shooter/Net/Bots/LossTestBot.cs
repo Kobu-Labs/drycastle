@@ -1,6 +1,7 @@
 using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Diagnostics;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;

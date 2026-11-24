@@ -7,7 +7,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Churches;
 using Drycastle.Shooter.Dev;
 using Drycastle.Shooter.Glass;
-using Drycastle.Shooter.HeadsUp;
+using Drycastle.Shooter.HeadsUp.Streaks;
 using Drycastle.Shooter.Intel;
 using Drycastle.Shooter.Loudspeaker;
 using Drycastle.Shooter.Menu;

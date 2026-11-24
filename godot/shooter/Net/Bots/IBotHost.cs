@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Diagnostics;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;

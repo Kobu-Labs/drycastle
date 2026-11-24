@@ -5,6 +5,7 @@ using Drycastle.Shooter.Companions;
 using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Gear;
 using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Hud;

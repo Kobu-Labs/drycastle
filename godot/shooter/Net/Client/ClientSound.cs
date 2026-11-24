@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Net.Client.Peers;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Match;

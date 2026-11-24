@@ -1,6 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Menu;
-using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Client.Fauna;
 using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter.Companions;
