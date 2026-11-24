@@ -33,7 +33,7 @@ sign in as `admin` with `GRAFANA_PASSWORD` from `/opt/drycastle/deploy/.env` on 
 
 ## How the numbers get there
 
-- `NetServer.Metrics.cs`: with `DRYCASTLE_METRICS_URL` set (compose sets `http://metrics:8428/write`), every report period the server posts
+- `Net/Server/Diagnostics/MetricsOut.cs`: with `DRYCASTLE_METRICS_URL` set (compose sets `http://metrics:8428/write`), every report period the server posts
   Influx line protocol built from the same text as the `server: stats` / `server: prof` log lines (`ShooterCore/Diagnostics/Metrics.cs`), so the
   log and the dashboard agree. The request runs off the game thread; a store that is down costs one error line and nothing else.
   Without the variable nothing is sent.
@@ -50,7 +50,7 @@ Every player's game reports its own numbers too: `make monitor-clients` (the "Dr
   reconciles, traffic, and the client's own scopes (ms per second: `net`, `players`, `creatures`, `vehicles`, `projectiles`, `view`, `hud`,
   `predict`, `reconcile`, and `net_snapshot`, `net_world`, `net_events` taken out of `net`).
 - How: `NetClient.Report.cs` gathers them and every 10 s of play sends one small reliable message over the game connection
-  (`EventKind.ClientReport`, `ShooterCore/Diagnostics/ClientPerf.cs`); the server (`OnClientReport`, `NetServer.Metrics.cs`) adds them to its own
+  (`EventKind.ClientReport`, `ShooterCore/Diagnostics/ClientPerf.cs`); the server (`MetricsOut.OnClientReport`, `Net/Server/Diagnostics/MetricsOut.cs`) adds them to its own
   batch as `drycastle_client_<field>{player, gpu}` and `drycastle_client_scope_ms_per_s{player, scope}`. No new port, nothing in the client
   knows the store. The same numbers are in the player's log as `client: perf` and `client: perf scopes` lines.
 - Who: every client with a window, always, while it is in a match. Bots and headless clients send none. About 50 series per player who ever

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes grafana/dashboards/drycastle-server.json and drycastle-clients.json (the provisioned dashboards) from the panel lists below. Run after editing it:
     deploy/monitoring/make_dashboard.py
-Series: drycastle_* are pushed by the game server every 10 s (NetServer.Metrics.cs); node_* are the host's (node-exporter)."""
+Series: drycastle_* are pushed by the game server every 10 s (Net/Server/Diagnostics/MetricsOut.cs); node_* are the host's (node-exporter)."""
 import json, os
 
 DS = {"type": "prometheus", "uid": "metrics"}
