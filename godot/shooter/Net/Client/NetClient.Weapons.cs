@@ -67,7 +67,7 @@ public partial class NetClient
 
     void ReadSlotKeys()
     {
-        if (!Mode.HotbarKeysLive || Input.MouseMode != Input.MouseModeEnum.Captured || ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
+        if (!Mode.HotbarKeysLive || Input.MouseMode != Input.MouseModeEnum.Captured || _loot.ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
         for (var k = 0; k < Math.Min(5, Ctx.Hotbar.Slots.Length); k++)
             if (Input.IsActionPressed($"slot_{k + 1}")) Ctx.Hotbar.Want = Ctx.Hotbar.Slots[k] + 1;
     }

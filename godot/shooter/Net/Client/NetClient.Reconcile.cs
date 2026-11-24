@@ -80,7 +80,7 @@ public partial class NetClient
     {
         if (Ctx.Me == null) return;
         _prediction.FadeCorrection(delta);
-        Ctx.Me.ViewOffset = _prediction.ViewFix + _heldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
-        Ctx.Me.ViewRoll = _heldRoll + High.Roll;
+        Ctx.Me.ViewOffset = _prediction.ViewFix + _bigfoot.HeldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
+        Ctx.Me.ViewRoll = _bigfoot.HeldRoll + High.Roll;
     }
 }

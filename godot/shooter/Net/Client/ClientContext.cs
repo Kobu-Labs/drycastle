@@ -111,6 +111,8 @@ public sealed class ClientContext
     /// <summary>Where a player stands: the local one at the camera's body, another at their drawn node; null when not known.</summary>
     public Vector3? PositionOf(ushort id) => id == MyId ? Me?.GlobalPosition : Remotes.TryGetValue(id, out var r) ? r.Node.GlobalPosition : null;
     public bool MenuIsOpen => MenuOpen?.Invoke() == true;
+    /// <summary>The interact key is held (not while the mouse is released for a menu).</summary>
+    public bool InteractHeld => Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
 
     /// <summary>
     /// The node under <see cref="World"/> that holds everything this client adds to the persistent world (effects, pools, corpses, crates, turrets, aircraft, missiles,

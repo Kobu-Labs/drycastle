@@ -1,5 +1,4 @@
 using Godot;
-using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Hud;
@@ -10,14 +9,23 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>
 /// Care packages on the client (ticket #124, reworked in #151): the crate on its parachute while it falls and on the ground
 /// once landed, the open prompt within reach, and the hold of the interact key (<see cref="CarePackageRules.OpenHoldSeconds"/>).
-/// The hold shows a <see cref="RadialProgress"/> ring that fills over the hold and drains when the key is released. The
+/// The hold shows a <see cref="HoldRing"/> that fills over the hold and drains when the key is released. The
 /// crate is freed the moment the server despawns it (opened or expired). The reward streak arrives as StreakGranted, which
-/// <see cref="NetClient.Killstreaks"/> turns into a toast.
+/// <see cref="KillstreaksClient"/> turns into a toast.
 /// </summary>
-public partial class NetClient
+internal sealed class CarePackagesClient
 {
-    /// <summary>Seconds for the open ring to drain back to empty after the key is released (instant with reduce motion).</summary>
-    const float RingDrainSeconds = 0.25f;
+    readonly ClientContext _ctx;
+    readonly InteractTargets _targets;
+    readonly HoldRing _ring;
+
+    public CarePackagesClient(ClientContext ctx, InteractTargets targets, HoldRing ring)
+    {
+        _ctx = ctx; _targets = targets; _ring = ring;
+        CarePackageRules.Register(WorldEntityRegistry.Shared);
+        ctx.WorldEntities.Spawned += OnCrateSpawned;
+        ctx.WorldEntities.Despawned += OnCrateDespawned;
+    }
 
     sealed class CrateView
     {
@@ -33,23 +41,11 @@ public partial class NetClient
     }
 
     readonly Dictionary<ushort, CrateView> _crates = new();
-    /// <summary>The landed crate within reach, from the last render (null when none).</summary>
-    ushort? _crateNear;
     /// <summary>The interact key's hold at the crate: seconds held, and whether the open request for this hold is sent (<see cref="InteractHold"/>).</summary>
     InteractHold _crateHold;
-    /// <summary>The ring's shown fill (0 to 1): follows the hold up and drains down after a release.</summary>
-    float _ringShown;
     /// <summary>The crate whose open request is sent and the time until which it is treated as gone (hidden, no prompt, no hold) while the server's despawn is on its way. A refused open brings it back after the wait.</summary>
     (ushort Id, double Until)? _crateOpening;
     const double CrateOpeningWaitSeconds = 1.5;
-
-    /// <summary>Called once from <see cref="_Ready"/>: registers the crate type and follows the crate entities.</summary>
-    void InitCarePackages()
-    {
-        CarePackageRules.Register(WorldEntityRegistry.Shared);
-        WorldEntities.Spawned += OnCrateSpawned;
-        WorldEntities.Despawned += OnCrateDespawned;
-    }
 
     static StandardMaterial3D CrateMaterial(Color colour) => new() { AlbedoColor = colour };
 
@@ -91,7 +87,7 @@ public partial class NetClient
         };
         canister.AddChild(smoke);
         node.AddChild(canister);
-        Ctx.Owned.AddChild(node);
+        _ctx.Owned.AddChild(node);
         _crates[e.Id] = new CrateView { Node = node, Canopy = canopy, Box = box, Canister = canister, Smoke = smoke };
     }
 
@@ -103,24 +99,23 @@ public partial class NetClient
     {
         if (!_crates.Remove(id, out var v)) return;
         v.Node.QueueFree();
-        if (_crateNear == id)
+        if (_targets.Crate == id)
         {
-            _crateNear = null;
+            _targets.Crate = null;
             _crateHold.Reset();
-            _ringShown = 0;
-            Ctx.Hud?.SetRadial(null);
+            _ring.Reset();
         }
     }
 
     /// <summary>Places the crates (the canopy shows while they fall) and finds the one in reach.</summary>
-    void RenderCarePackages()
+    public void Render()
     {
         foreach (var (id, v) in _crates)
         {
-            if (!WorldEntities.Entities.TryGetValue(id, out var e)) continue;
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e)) continue;
             var p = e.State.Position;
-            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(Ctx.RenderTick) != null;
-            if (flying) p = e.Buf.At(Ctx.RenderTick)!.Value.Pos; // the canister's arc is smoothed between snapshots
+            var flying = e.State.State == CarePackageRules.StateThrown && e.Buf.At(_ctx.RenderTick) != null;
+            if (flying) p = e.Buf.At(_ctx.RenderTick)!.Value.Pos; // the canister's arc is smoothed between snapshots
             v.Node.GlobalPosition = new Vector3(p.X, p.Y, p.Z);
             var st = e.State.State;
             var canisterOnly = st == CarePackageRules.StateThrown || st == CarePackageRules.StateMarking;
@@ -134,20 +129,20 @@ public partial class NetClient
             v.Smoke.GlobalPosition = st == CarePackageRules.StateFalling && v.Landing is { } l ? l + new Vector3(0, 0.2f, 0) : v.Node.GlobalPosition + new Vector3(0, 0.2f, 0);
             v.Node.Visible = !IsCrateOpening(id);
         }
-        _crateNear = NearestCrateInReach();
+        _targets.Crate = NearestInReach();
     }
 
-    bool IsCrateOpening(ushort id) => _crateOpening is { } o && o.Id == id && Time.GetTicksMsec() / 1000.0 < o.Until;
+    bool IsCrateOpening(ushort id) => _crateOpening is { } o && o.Id == id && _ctx.Now < o.Until;
 
-    ushort? NearestCrateInReach()
+    ushort? NearestInReach()
     {
-        if (Ctx.Me == null || Dead || Ctx.Driving) return null;
+        if (_ctx.Me == null || _ctx.Dead || _ctx.Driving) return null;
         ushort? best = null;
         var bd = CarePackageRules.ReachMetres;
-        var at = Ctx.Me.GlobalPosition;
+        var at = _ctx.Me.GlobalPosition;
         foreach (var (id, v) in _crates)
         {
-            if (IsCrateOpening(id) || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
+            if (IsCrateOpening(id) || !_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.State.State != CarePackageRules.StateLanded) continue;
             var d = v.Node.GlobalPosition.DistanceTo(at);
             if (d <= bd) { best = id; bd = d; }
         }
@@ -158,9 +153,9 @@ public partial class NetClient
     /// The crate prompt in reach while the key is not held. While the key is held the open ring carries the state
     /// ("Opening..."), so the prompt steps aside; null otherwise.
     /// </summary>
-    string? CratePrompt()
+    public string? Prompt()
     {
-        if (_crateNear == null || _crateHold.Held > 0 || _crateHold.Sent) return null;
+        if (_targets.Crate == null || _crateHold.Held > 0 || _crateHold.Sent) return null;
         return Strings.F("hud.crate.hold", InputBindings.Name("interact"));
     }
 
@@ -168,29 +163,18 @@ public partial class NetClient
     /// Hold of the interact key at a landed crate. Held for <see cref="CarePackageRules.OpenHoldSeconds"/> sends the open
     /// request once; releasing or leaving reach before that cancels the hold. Runs on the input tick.
     /// </summary>
-    void TickCarePackages(double dt)
+    public void Tick(bool use, double dt)
     {
-        var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (_crateHold.Tick(use, _crateNear != null, dt, CarePackageRules.OpenHoldSeconds) && _crateNear is { } id)
+        if (_crateHold.Tick(use, _targets.Crate != null, dt, CarePackageRules.OpenHoldSeconds) && _targets.Crate is { } id)
         {
             SendOpenCarePackage(id);
-            _crateOpening = (id, Time.GetTicksMsec() / 1000.0 + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
-            _crateNear = null;
+            _crateOpening = (id, _ctx.Now + CrateOpeningWaitSeconds); // gone for the player now; the despawn confirms
+            _targets.Crate = null;
         }
-        _rozhlas.TickHold(use, dt); // the other hold of the same key (RozhlasClient.cs); the ring shows whichever is on
-        ShowHoldRing(dt);
     }
 
-    /// <summary>The ring fills with the hold and drains after a release; with reduce motion the drain is instant.</summary>
-    void ShowHoldRing(double dt)
-    {
-        var target = _crateHold.Held > 0 && _crateNear != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
-        target = Math.Max(target, Math.Max(_rozhlas.HoldFraction, Math.Max(_thieves.Loot.HoldFraction, _minerals.HoldFraction)));
-        if (target >= _ringShown || GameSettings.Current.ReduceMotion) _ringShown = target;
-        else _ringShown = Mathf.MoveToward(_ringShown, target, (float)dt / RingDrainSeconds);
-        Ctx.Hud?.SetRadial(_ringShown > 0 ? _ringShown : null);
-    }
+    /// <summary>How far the open hold is (0 to 1): the ring fills with it.</summary>
+    public float HoldFraction => _crateHold.Held > 0 && _targets.Crate != null && !_crateHold.Sent ? (float)Math.Min(1.0, _crateHold.Held / CarePackageRules.OpenHoldSeconds) : 0f;
 
-    void SendOpenCarePackage(ushort crate) =>
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.OpenCarePackage, CarePackageCodec.EncodeOpen(crate))), (int)ENetPacketPeer.FlagReliable);
+    void SendOpenCarePackage(ushort crate) => _ctx.Send(EventKind.OpenCarePackage, CarePackageCodec.EncodeOpen(crate));
 }

@@ -15,6 +15,7 @@ using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
+using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Hud;
@@ -100,6 +101,18 @@ public partial class NetClient : Node
     readonly OwnPrediction _prediction;
     readonly BodyFlings _flings;
     RemotesClient _remotes = null!;
+    BaleCorpses _bales = null!;
+    CorpsesClient _corpses = null!;
+    CorpseLoot _loot = null!;
+    readonly InteractTargets _interact = new();
+    GroundItemsClient _groundItems = null!;
+    CarePackagesClient _crates = null!;
+    HoldRing _holdRing = null!;
+    HarvesterClient _harvester = null!;
+    BigfootClient _bigfoot = null!;
+    BigfootFx _bigfootFx = null!;
+    /// <summary>bigfoot.json: set by the host.</summary>
+    public BigfootFile BigfootData = new();
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -256,33 +269,38 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
-        _driveClient = new DriveClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
+        _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
-        _flight = new FlightClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), _session.FlightCorrection);
-        _hulls = new VehicleHulls(Ctx, _flight, _driveClient, CarThrown, GlassData);
+        _flight = new FlightClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), _session.FlightCorrection);
+        _hulls = new VehicleHulls(Ctx, _flight, _driveClient, id => _bigfoot.CarThrown(id), GlassData);
         _aim = new OwnAim(Ctx, Loadouts, () => _binoculars);
         _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => LockComplete, () => _flings.OwnFlung);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
-        Camo = new CamoClient(Ctx, CamoData, DressCorpses);
+        Camo = new CamoClient(Ctx, CamoData, (owner, look) => _corpses.DressCamo(owner, look));
         Ctx.Remotes.Dressing += Camo.Dress;
         Ctx.Remotes.Dressing += Items.DressPlayer;
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
-        InitCorpses();
-        _screens = new ScreensClient(Ctx, Chat, Sandbox, _chooser);
-        InitGroundItems();
-        InitCarePackages();
+        _bales = new BaleCorpses(Ctx, Camo);
+        _corpses = new CorpsesClient(Ctx, Items, Camo, _bales, BigfootData, _interact);
+        _loot = new CorpseLoot(Ctx, Items, _corpses, _interact);
+        _harvester = new HarvesterClient(Ctx, _corpses, _bales, new DroppedBales(Ctx, _bales, at => _harvester.NearestHarvester(at)), _crush);
+        _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
+        _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
+        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction);
+        _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
         _animals = new AnimalsClient(Ctx, AnimalData, AnimalShapes, WildlifeData, _driveClient);
         Companions = new CompanionsClient(Ctx, CompanionData, AnimalData);
-        InitBigfoot();
+        _bigfoot = new BigfootClient(Ctx, BigfootData, _flings);
+        _bigfootFx = new BigfootFx(Ctx, BigfootData, _bigfoot);
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
-        _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => CorpseOf(id) || HarvestVictimHidden(id, dead) };
+        _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
         EventReceived += _aircraftClient.OnEvent;
@@ -433,9 +451,9 @@ public partial class NetClient : Node
         _remotes.Render(delta);
         _headLamps.Render();
         if (PoseDemo && !_poseDemoDone && Ctx.Me != null) SpawnPoseDemo();
-        RenderCorpses();
-        RenderGroundItems();
-        RenderCarePackages();
+        _corpses.Render(delta);
+        _groundItems.Render();
+        _crates.Render();
         _minerals.Render();
         _turrets.Render();
     }
@@ -446,7 +464,8 @@ public partial class NetClient : Node
         Companions.Render();
         Companions.TickMarks();
         _flocks.Render(delta);
-        RenderBigfoot(delta);
+        _bigfoot.Render(delta);
+        _bigfootFx.Render();
         _citizens.Render();
         _thieves.Render(delta);
         _demon.Render();
@@ -455,7 +474,7 @@ public partial class NetClient : Node
     void RenderVehicles(double delta)
     {
         RenderCars();
-        RenderHarvester((float)delta);
+        _harvester.Render((float)delta);
         _aircraftClient.Render(delta);
     }
 
@@ -587,8 +606,8 @@ public partial class NetClient : Node
         Companions.OnEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
         _thieves.OnVoiceEvent(kind, payload); // a Gang member says a line (ticket 09)
-        OnBigfootEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
-        OnHarvesterEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
+        _bigfootFx.OnEvent(kind, payload); // the Bigfoot's effects and the footprints to its corpse (#264)
+        _harvester.OnEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
         _thieves.OnEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
@@ -654,7 +673,7 @@ public partial class NetClient : Node
                 var d = Match.LatestDeath!;
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 Ctx.Sound.Death(d);
-                NoteDeath(d);
+                _corpses.NoteDeath(d);
                 if (d.Victim == Ctx.MyId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; _weapon.ClearReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
                 break;
         }
@@ -716,7 +735,7 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); TickGroundItems(); TickCorpses(dt); TickCarePackages(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
+        if (!Bot) { ReadSlotKeys(); ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
@@ -724,6 +743,15 @@ public partial class NetClient : Node
         if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         _aim.Tick(mi);
         return mi;
+    }
+
+    /// <summary>The care package's hold of the interact key, the loudspeaker's (the same key) and the ring that shows whichever is on.</summary>
+    void TickCrates(double dt)
+    {
+        var use = Ctx.InteractHeld;
+        _crates.Tick(use, dt);
+        _rozhlas.TickHold(use, dt);
+        _holdRing.Show(dt);
     }
 
     /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="OwnPrediction"/> for the server's ack.</summary>
@@ -759,7 +787,7 @@ public partial class NetClient : Node
         if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
         if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
-        if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
+        if (Bot || Weapons == null || Dead || _loot.ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
             if (_aim.DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial

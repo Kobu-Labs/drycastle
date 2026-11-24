@@ -248,7 +248,7 @@ public sealed partial class CharacterView : Node3D
     static Node3D MakeBinoculars(ItemDef? pair)
     {
         var root = new Node3D { Name = "Binoculars" };
-        if (pair is { Model: not "" } && NetClient.ItemModel(pair) is { } model && NetClient.ModelBounds(model, Transform3D.Identity, true) is { } box && box.Size.X > 0.001f)
+        if (pair is { Model: not "" } && ItemModels.Instance(pair) is { } model && ItemModels.Bounds(model, Transform3D.Identity, true) is { } box && box.Size.X > 0.001f)
         {
             // the packs' pairs face +Z (eyepieces at -Z), the hands hold things facing -Z: turned round, with the middle of the eyepiece end on the origin
             var s = BinocularsWidth / box.Size.X;

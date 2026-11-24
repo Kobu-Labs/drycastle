@@ -23,7 +23,7 @@ public partial class NetClient
     void InitMatchEdges()
     {
         Match.PhaseChanged += OnPhaseChanged;
-        Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); HarvesterRoundRestart(); };
+        Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); _harvester.RoundRestart(); };
     }
 
 
@@ -83,7 +83,7 @@ public partial class NetClient
         if (h.Attacker != Ctx.MyId && Ctx.Remotes.TryGetValue(h.Attacker, out var r)) DamageFrom(h.Attacker, () => NodePos(r.Node));
         else if (GangRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => _thieves.NearestGangMember(Ctx.Me.GlobalPosition)); // a blow of a Gang member: the marker points at the nearest one
         else if (RaidVanRules.IsHitId(h.Attacker)) DamageFrom(h.Attacker, () => _thieves.NearestVan(Ctx.Me.GlobalPosition)); // a Raid van ran into the player: the marker points at the nearest van
-        else if (h.Attacker == BigfootRules.TargetId) DamageFrom(h.Attacker, () => _bigfoots.Values.FirstOrDefault() is { } giant ? NodePos(giant.Node) : null); // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
+        else if (h.Attacker == BigfootRules.TargetId) DamageFrom(h.Attacker, () => _bigfoot.FirstNode is { } giant ? NodePos(giant) : null); // the Bigfoot's logs, shockwave and launch: the marker points at it (#264)
     }
 
     static Vector3? NodePos(Node3D n) => GodotObject.IsInstanceValid(n) && n.IsInsideTree() ? n.GlobalPosition : null;
@@ -106,7 +106,7 @@ public partial class NetClient
         Ctx.Hud?.SetControlMode(Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         Ctx.Hud?.SetHealth(Mathf.CeilToInt(Ctx.Me?.Health ?? 100));
         Ctx.Hud?.SetSnapshotCount(_snaps); // the FPS card's TPS line (Hud.Fps.cs)
-        Ctx.Hud?.CoverCrosshair(_chooser.IsOpen);
+        Ctx.Hud?.CoverCrosshair(_loot.ChooserOpen);
         Ctx.Hud?.SetUnarmedSeat(Ctx.View.InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
         _screens.Update();
         _uav.Tick();

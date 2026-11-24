@@ -226,7 +226,7 @@ public partial class NetClient
         else if (_ride.Flown is { } fr) Ctx.Hud?.SetVehicleReadout(_flight.Readout(fr));
         else Ctx.Hud?.SetVehicleSpeed(Ctx.Driving ? _ride.Kmh ?? 0f : null);
         var prompt = RidePrompt();
-        Ctx.Hud?.SetPrompt(LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? CratePrompt() ?? GroundItemPrompt() ?? CorpsePrompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
+        Ctx.Hud?.SetPrompt(LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(prompt) ?? prompt ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt() ?? _crates.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? LadderReachPrompt()); // a placing turret owns the prompt
     }
 
     /// <summary>The prompt of the ride: what the keys do in the seat, a hitched trailer's key, a Scud truck's launcher line, the view key; or the way into the vehicle in reach.</summary>

@@ -63,16 +63,7 @@ public partial class NetClient
             Ctx.Hud?.SetRespawnScrim(_death.ScrimNow);
         }
         var hide = _death.HidesOwnCorpse;
-        if (_deathHidesCorpse.Update(hide) || hide) ShowOwnCorpse(!hide);
-    }
-
-    void ShowOwnCorpse(bool visible)
-    {
-        foreach (var (id, v) in _corpses)
-        {
-            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != Ctx.MyId) continue;
-            if (v.Node.Visible != visible) v.Node.Visible = visible;
-        }
+        if (_deathHidesCorpse.Update(hide) || hide) _corpses.ShowOwn(!hide);
     }
 
     /// <summary>
@@ -127,7 +118,7 @@ public partial class NetClient
             _deathLook = from.Basis.GetRotationQuaternion();
         }
         var look = _deathLook ?? from.Basis.GetRotationQuaternion();
-        if (OwnCorpseAt() is { } body)
+        if (_corpses.OwnBodyAt() is { } body)
         {
             var dir = body - from.Origin;
             var yawNow = look.GetEuler(EulerOrder.Yxz).Y;
@@ -137,19 +128,6 @@ public partial class NetClient
         }
         _deathLook = look;
         return new Transform3D(new Basis(look), from.Origin);
-    }
-
-    /// <summary>Where the own corpse's body is (its middle), or null while it is not in the world yet.</summary>
-    Vector3? OwnCorpseAt()
-    {
-        // the newest own body only: an older one of ours (they last two minutes) lies still elsewhere, and an unplaced one sits at the origin until RenderCorpses decides it
-        CorpseView? newest = null;
-        foreach (var (id, v) in _corpses)
-        {
-            if (v.Giant || v.Bale || !WorldEntities.Entities.TryGetValue(id, out var e) || e.State.Owner != Ctx.MyId) continue;
-            if (newest == null || v.Born > newest.Born) newest = v;
-        }
-        return newest is { Decided: true } ? newest.Node.GlobalPosition : null;
     }
 
     /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>
