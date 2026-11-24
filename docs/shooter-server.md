@@ -184,10 +184,10 @@ The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as desc
 
 ## Code layout (`godot/shooter/Net/Server/`)
 
-`NetServer` (a Godot `Node`) is the composition root: the connection and tick loop, message dispatch (`OnReliable`, `OnInputs`), the order of one tick (`_PhysicsProcess`: `ReceiveAndHousekeep`, `TickWorld`, `SimulatePlayers`,
-`StepVehiclesAndRiders`, `ResolveBlastsAndFlush`, snapshots, report; the order decides the simulation) and the creation of the features in `_Ready` (the order there matters too: a feature that registers an entity type or a
-handler comes before the ones that name it). It is still a `partial class` over the files named `NetServer.*.cs`: the core (`Input`, `Fire`, `Pellets`, `Targeting`, `Snapshots`, `MatchEvents`, `Smoke`, `LagComp`, `Corpses`, `Glass`, `Vehicles`) and the
-features not yet converted (below). Bots: `Net/Bots/NetServer.Bots.cs`.
+`NetServer` (a Godot `Node`, one file; `partial` only because Godot's source generator wants it) is the composition root: the creation of the features in `_Ready` (the order there matters: a feature that registers an entity type or a
+handler comes before the ones that name it), the order of one tick (`_PhysicsProcess`: `ReceiveAndHousekeep`, `TickWorld`, `TickStreaksAndBots`, `SimulatePlayers`, `TickProjectilesAndCorpses`, `StepVehiclesAndRiders`,
+`ResolveBlastsAndFlush`, `CapturePoses`, `SendSnapshots`, then the report; the order decides the simulation) and the routing of packets (`OnPacket`, `OnReliable`). What the host sets (the map, the data files, the flags) is a `ServerConfig`
+(`ServerConfig.cs`), read as `Config`.
 
 A converted feature is a plain class in a folder of its own, owns its state privately and takes only a `ServerContext` (`ServerContext.cs`: the match, the joined players, the clock, `Broadcast` / `Send` / `SendEvent`, chat lines,
 `FindHuman`) plus the few things it needs by constructor (a service below, a data file, a delegate of the one thing it asks the server). Features call each other through the other's small public surface (`IntelServer.Announce` /
@@ -229,13 +229,19 @@ Features:
 | `FlakServer`, `LockOnServer`, `MoabServer`, `MissileServer`, `HelperServer`, `Ac130Server`, `AttackHelicopterServer` | `Streaks/` | the flak truck's shells, the Lock-on launcher and its homing missiles, and the adapters of the killstreaks (each makes its `IKillstreak`; the table-to-adapter mapping is `NetServer.BuildStreaks`) |
 | `ChurchServer`, `CitizenServer`, `MassServer`, `DemonServer` | `Parish/` | the church doors and shelter (`ChurchDoorPolicy` decides), the citizens' crowd and houses, the Holy Mass, the demon's fight and fireballs |
 
-Not converted yet, and what blocks each group: `Vehicles` / `Tow` / `Harvester` / `Scud*` / `RunOver` (the vehicle step, seats and damage are one loop that every one of them hooks into; `Crash`, `DamageVehicle` and `RunOverTargets` reach the other
-converted features as delegates meanwhile), `Bigfoot`, the core (`Fire`, `Pellets`, `LagComp`, `Targeting`, `Input`: the shot path, the rocket sim and the lag-compensation poses that the features above ask through delegates), `Plantation` (its key-competition list asks
-features that are still partials), and the diagnostics (`Telemetry`, `Perf*`, `Prof`, `Metrics`, `LossTest`: counters written from the whole tick).
+Plumbing (no game rules; each a plain class that takes the context):
+
+| Class | Folder | What |
+|---|---|---|
+| `ConnectionServer`, `PlayerRoster`, `Outbox`, `InputIntake` | `Sessions/` | the ENet events and the hello (protocol and map checks, one session per token, silent peers); join and leave (what a joiner is told is a list in `NetServer.BuildRoster`) and the free player ids; every packet sent (bytes per client, the perf audit, the net-sim); the packet of inputs and its acks |
+| `DebugServer` | `Playground/` | the client's debug teleport, vehicle damage and kill (dev servers and smokes) |
+| `ChatCommandTable` | `ChatRoom/` | which class answers which chat command |
+| `RoundHooks` | `RoundFlow/` | what a round's start and end clear outside the match |
+| `ServerDiagnostics` | `Diagnostics/` | what NetServer holds for measuring and testing: `PerfHarness` (`--perf-out`: `ServerPerf`, `PerfAudit`, event stamps), `LagCompLog`, `TickPhases`, `ServerHealth` (the stats line), `ProfLines` (the prof lines), `MetricsOut` (the metrics push), `LossRun` (`--loss-test`), `SmokeRun`, `SmokeArena` (the verdict and the arena of the smoke tests). The tick calls `TickBegin`, `Lap(phase)`, `TickEnd`; the phase laps stay where each phase ends in the tick |
 
 Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a folder is named so that it does not equal a type name (`Garage`, `Minerals`, `Rozhlas`, `Equipment`, `Status`, `Aircraft`, `Church`, `Killstreaks` are types or namespaces in scope: hence `BusGarage`, `MineralLog`, `VillageRadio`, `Gear`, `Statuses`, `Streaks`, `Parish`).
 
-`ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` holds what the smoke tests count and their verdicts.
+`ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` (`SmokeStats.cs`) holds what the smoke tests count and their verdicts.
 
 ## Known gaps
 
@@ -246,7 +252,7 @@ Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a fol
 ## Performance log
 
 Every 10 s the server prints one `server: stats` line (tick p50/p99, the phases, GC) and, since the `Prof` timers, these `key=value` lines
-(`NetServer.Prof.cs`, `ShooterCore/Diagnostics/Prof.cs`). The tick lines are only printed while somebody plays; the memory line always.
+(`Net/Server/Diagnostics/ProfLines.cs`, `ShooterCore/Diagnostics/Prof.cs`). The tick lines are only printed while somebody plays; the memory line always.
 
 | Line | Meaning |
 |---|---|

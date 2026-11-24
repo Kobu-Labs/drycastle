@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Server;
@@ -33,7 +34,7 @@ internal sealed class FxDemoClient
         var dir = Mode["vehicle:".Length..];
         if (_demoStart == 0) { _demoStart = _ctx.Now; System.IO.Directory.CreateDirectory(dir); }
         var t = _ctx.Now - _demoStart;
-        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        var c = new NVec3(SmokeArena.X, 0, SmokeArena.Z);
         if (!_demoTp) { _demoTp = true;
             _ctx.Send(EventKind.Debug, WeaponCodec.EncodeDebugTeleport(_ctx.MyId, c + new NVec3(2, 0, -42))); }
         mi.Yaw = MathF.PI; _ctx.Me.Pitch = -0.08f;
