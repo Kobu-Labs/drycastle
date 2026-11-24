@@ -38,7 +38,8 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Client;
 
 /// <summary>
-/// Network client over raw ENet (ADR 0002). Sends one input per 30 Hz physics tick (the last 3 for loss cover),
+/// Network client over raw ENet (ADR 0002), as a composition root: it makes the feature classes of this folder (one per feature, each given the <see cref="ClientContext"/>
+/// and the few services it needs), wires them, and orders what happens each frame, each physics tick and for each packet. Sends one input per 30 Hz physics tick (the last 3 for loss cover),
 /// predicts the local player with the shared movement step and reconciles against the server position at the
 /// acked input seq (replaying the unacked inputs), and renders remote players about 100 ms (3 ticks) in the past
 /// from interpolation buffers as capsules with a name label.
@@ -82,7 +83,6 @@ public partial class NetClient : Node
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
-    OwnViewmodel _viewmodel => Ctx.Viewmodel;
     readonly FxDemoClient _fxDemo;
     /// <summary>Dev aid (<c>--fx-demo</c>, set by the host): see <see cref="FxDemoClient"/>.</summary>
     public string FxDemo { get => _fxDemo.Mode; set => _fxDemo.Mode = value; }
@@ -395,7 +395,7 @@ public partial class NetClient : Node
     void HudWelcome()
     {
         if (!ShotFx.Enabled || Ctx.Hud != null) return; // headless runs have no HUD
-        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars.Up, Binoculars = _binoculars.View, Aim = () => _viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = _hud.CrosshairSpread };
+        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars.Up, Binoculars = _binoculars.View, Aim = () => Ctx.Viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = _hud.CrosshairSpread };
         AddChild(Ctx.Hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         Ctx.Hud.TacticalMapTeleport = _screens.OnMapTeleport;
         Sandbox.ShowOnHud(); // the SANDBOX badge (#156)
@@ -590,7 +590,7 @@ public partial class NetClient : Node
         CasingFx.Water = Water;
         Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = _animals };
         World.AddChild(Ctx.Me);
-        _viewmodel.Create();
+        Ctx.Viewmodel.Create();
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
         if (WeaponsBot != "" || CarBot != "" || _fxDemo.Mode.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
         if (Bot) Ctx.Me.InputOverride = new MoveInput { SpeedScale = 1 };
