@@ -78,7 +78,7 @@ internal sealed class HudClient
     {
         _ctx.Hud?.SetControlMode(_ctx.View.Mode.RemoteViewOwnsScreen); // one mode switch: a turret or the missile owns the screen (ticket #152)
         _ctx.Hud?.SetHealth(Mathf.CeilToInt(_ctx.Me?.Health ?? 100));
-        _ctx.Hud?.SetSnapshotCount(_snapshots()); // the FPS card's TPS line (Hud.Fps.cs)
+        _ctx.Hud?.SetSnapshotCount(_snapshots()); // the FPS card's TPS line (FpsCounter)
         _ctx.Hud?.CoverCrosshair(_targets.ChooserOpen());
         _ctx.Hud?.SetUnarmedSeat(_ctx.View.InUnarmedSeat); // no crosshair, no ammo readout where nothing can be fired (#373)
         _screens.Update();
