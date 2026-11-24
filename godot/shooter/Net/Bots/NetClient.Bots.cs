@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Bots;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;
 
@@ -96,6 +97,7 @@ public partial class NetClient : IBotHost
     void IBotHost.SendMic(byte[] packet) => SendMic(packet);
     void IBotHost.SendChat(string text) => Chat.Send(text);
     bool IBotHost.SandboxGranted => Sandbox.Granted;
+    AmmoMsg? IBotHost.Ammo => Ctx.Ammo;
 
     void SendMic(byte[] packet)
     {

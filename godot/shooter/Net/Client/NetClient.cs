@@ -48,7 +48,6 @@ public partial class NetClient : Node
 {
     public const double InterpDelayTicks = 3.0;
     public const float SnapDistance = 2f;
-    const float ReconcileEpsilon = 0.03f;
 
     /// <summary>What the features of this client may use of the rest of it (see <see cref="ClientContext"/>); the plain members below forward to it.</summary>
     public ClientContext Ctx { get; }
@@ -84,8 +83,6 @@ public partial class NetClient : Node
     public WeaponsFile Weapons { get => Ctx.Weapons!; set => Ctx.Weapons = value; }
     /// <summary>match.json as the client shipped it: the gunfire blips' radius, lifetime and rate limit (null: no blips, e.g. headless bots).</summary>
     public MatchConfig? BlipConfig;
-    /// <summary>Latest owner ammo state from the server (null before the first one).</summary>
-    public AmmoMsg? Ammo => Ctx.Ammo;
     OwnViewmodel _viewmodel => Ctx.Viewmodel;
     readonly FxDemoClient _fxDemo;
     /// <summary>Dev aid (<c>--fx-demo</c>, set by the host): see <see cref="FxDemoClient"/>.</summary>
@@ -126,6 +123,7 @@ public partial class NetClient : Node
     VehiclesClient _vehicles = null!;
     HudClient _hud = null!;
     EffectEvents _effects = null!;
+    MatchEvents _match = null!;
     PoseDemoClient? _poseDemo;
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
@@ -134,9 +132,7 @@ public partial class NetClient : Node
     double _lastArrival;
     double _elapsed;
     int _snaps;
-    float _maxErr;
     NVec3 _meMin = new(float.MaxValue), _meMax = new(float.MinValue);
-    int _deaths;
 
     // the features that need only the context; the ones that take the host's data are made in _Ready
     readonly MoabClient _moab;
@@ -339,10 +335,10 @@ public partial class NetClient : Node
         _vehicles = new VehiclesClient(Ctx, _tow, _glass, _hulls, _flight, _driveClient, _rider, _guns, _seats, _aircraftClient, _water, _scud, _blastDust) { PromptLine = PromptLine };
         _hud = new HudClient(Ctx, _weapon, _driveClient, _aircraftClient, _thieves, _bigfoot, _screens, _uav, new MinimapFeed(Ctx, _missile, _aircraftClient, _intel), _interact, () => _snaps);
         _shots = new ShotsClient(Ctx, _weapon, _hulls, _water, _guns, _aircraftClient, _impacts);
+        _match = new MatchEvents(Ctx, _streaks, Loadouts, _blastDust, _prediction, _link, _weapon, _death, _corpses, _scud, _bot);
         _effects = new EffectEvents(Ctx, _weapon, _hud, _blips, _guns, _shots, _rockets, _hunts, _moab, _missile, _impacts, _aircraftClient, _remotes, _vehicles, _glass);
         _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
-        Match.PhaseChanged += OnPhaseChanged;
         Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); _harvester.RoundRestart(); };
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
@@ -544,7 +540,6 @@ public partial class NetClient : Node
         _scud.Render(delta);
     }
 
-    /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
     /// <summary>Fades the drawn part of the last on-foot correction, once per frame, at the same rate as the vehicles' corrections.</summary>
     void FadeOwnCorrection(double delta)
     {
@@ -554,6 +549,7 @@ public partial class NetClient : Node
         Ctx.Me.ViewRoll = _bigfoot.HeldRoll + High.Roll;
     }
 
+    /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
     void UpdateView(double delta)
     {
         _water.Render();
@@ -562,7 +558,7 @@ public partial class NetClient : Node
         _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
-        High.Update(delta); // a high player's sway (NetClient.High.cs), before the roll is composed
+        High.Update(delta); // a high player's sway, before the roll is composed
         FadeOwnCorrection(delta);
     }
 
@@ -682,7 +678,7 @@ public partial class NetClient : Node
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
-        OnMatchEvent(kind, payload);
+        _match.OnEvent(kind, payload); // the match: phase, scoreboard, kills, the own spawn and death
         Loadouts.OnEvent(kind, payload);
         _streaks.OnEvent(kind, payload);
         _uav.OnEvent(kind, payload);
@@ -693,55 +689,6 @@ public partial class NetClient : Node
         EventReceived?.Invoke(kind, payload);
     }
 
-
-    /// <summary>The round start and end sounds, on a phase change (<see cref="ClientMatchState.PhaseChanged"/>; the first state of a connection is no round start).</summary>
-    void OnPhaseChanged(MatchPhase? prev, MatchPhase p)
-    {
-        if (p is MatchPhase.Running or MatchPhase.Ending) _streaks.Reset(); // a round reset drops earned streaks too, as on the server
-        if (p == MatchPhase.Running) _scud.RoundStart(); // the burnt ground and the missiles in the air of the last round
-        if (prev == null || !Sfx.Enabled) return;
-        if (p == MatchPhase.Running) Sfx.Play2D("round.start");
-        else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
-    }
-
-    static Vector3 G(NVec3 v) => new(v.X, v.Y, v.Z);
-
-    void OnMatchEvent(EventKind kind, byte[] payload)
-    {
-        if (!Match.Apply(kind, payload, Ctx.Now)) return;
-        switch (kind)
-        {
-            case EventKind.MatchState:
-                Ctx.Hud?.SetTeams(Match);
-                Ctx.Hud?.SetMatch(Match.Phase, Match.TimeRemaining(Ctx.Now), Match.Rows, Match.Winners, Match.NameOf);
-                break;
-            case EventKind.Kill:
-                var k = Match.KillFeed[^1];
-                Ctx.Hud?.AddKill(k, Match.NameOf(k.Killer), Match.NameOf(k.Victim));
-                _streaks.OnKill(k);
-                GD.Print($"client {PlayerName}: kill feed: {Match.NameOf(k.Killer)} -> {Match.NameOf(k.Victim)} (weapon {k.Weapon})");
-                break;
-            case EventKind.Spawn:
-                var sp = Match.LatestSpawn!; // the spawn of this event; the per-player table's last entry is another player's
-                GD.Print($"client {PlayerName}: spawn #{sp.Id} protected {sp.Protection:F1}s");
-                if (sp.Id == Ctx.MyId && Ctx.Me != null)
-                {
-                    Loadouts.ApplySpawn(); _streaks.Arm(); // the hotbar and perk the server applied at this spawn
-                    Ctx.Hotbar.Want = Ctx.Hotbar.Start;
-                    Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _prediction.ClearInputs(); _prediction.ClearViewFix(); // the next snapshot carries the spawn position
-                    _bot?.OnSpawn(sp.Protection);
-                    _death.End(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _weapon.OnSpawn();
-                }
-                break;
-            case EventKind.Death:
-                var d = Match.LatestDeath!;
-                GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
-                Ctx.Sound.Death(d);
-                _corpses.NoteDeath(d);
-                if (d.Victim == Ctx.MyId) { _bot?.OnOwnDeath(); _death.Begin(d.RespawnDelay, d.Flight); Ctx.Dead = true; _weapon.ClearReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
-                break;
-        }
-    }
 
     /// <summary>Raised for every reliable event envelope (shot, hit, kill, ... handled by later issues).</summary>
     public event Action<EventKind, byte[]>? EventReceived;
@@ -838,8 +785,6 @@ public partial class NetClient : Node
         Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(_prediction.Recent(3), Ctx.Snapshots.AckTick, WorldEntities.AckTick), 0);
         _conn.Flush();
     }
-
-    // ---- weapons: input, events, placeholder effects (the HUD lives in NetClient.Hud.cs) ----
 
     public override void _UnhandledInput(InputEvent e)
     {
