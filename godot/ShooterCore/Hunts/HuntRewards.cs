@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>One reward of a collection tier (#473): a weapon or an item that carries the tier as its <c>reward_tier</c> in the data.</summary>
 /// <param name="Kind">"weapon", "item" or "companion" (<see cref="CompanionRules.UnlockKind"/>): which icon set and which table the id is in.</param>

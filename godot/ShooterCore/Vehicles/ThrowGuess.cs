@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>What the driver's client is doing about one animal its predicted vehicle touched (<see cref="ThrowGuess"/>).</summary>
 public enum ThrowGuessPhase : byte { None = 0, Flying = 1, Confirmed = 2, Settling = 3 }

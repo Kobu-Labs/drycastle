@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Assets;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>What <see cref="CrystalAssets.MakeBody"/> found in the crystal rock mesh: where its crystals end and which faces props can sit on.</summary>
 public sealed class CrystalInfo

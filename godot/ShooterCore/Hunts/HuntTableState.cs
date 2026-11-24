@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// The All hunts table's query: filters, sort and page (docs/hunters-log.md). Pure. Any change of filter or sort goes back to the first page; a header

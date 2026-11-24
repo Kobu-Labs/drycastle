@@ -6,5 +6,5 @@ and the terms for the artwork (the village's coat of arms is its own heraldic de
 board.png is NOT claimed to be CC0. Before any release or public distribution the owner must confirm the terms.
 
 The structure (posts, legs, rails, caps, balls, the board's shape) is original geometry written as code in
-scripts/make_welcome_sign_model.py (CC0). welcome_sign.glb embeds board.png, so as a whole it is unverified too.
-Rebuild: python3 -I scripts/make_welcome_sign_model.py   (add --photo <picture> to re-cut board.png first; needs Pillow).
+scripts/models/make_welcome_sign_model.py (CC0). welcome_sign.glb embeds board.png, so as a whole it is unverified too.
+Rebuild: python3 -I scripts/models/make_welcome_sign_model.py   (add --photo <picture> to re-cut board.png first; needs Pillow).

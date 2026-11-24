@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>
 /// The reasons a hit on a player does nothing, in the order <see cref="MatchSim.ApplyDamage"/> asks them. The first that applies wins, so the order is

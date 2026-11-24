@@ -1,6 +1,4 @@
-using Godot;
-
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>English strings of sandbox mode (#156). Registered with <see cref="Strings.Register"/>; screens use the keys.</summary>
 public static class SandboxStrings

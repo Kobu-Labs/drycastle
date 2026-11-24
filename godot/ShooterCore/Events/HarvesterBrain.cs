@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>Where the AI harvester is in its job. The values travel in the harvester state event (<see cref="HarvesterCodec"/>), so they never change.</summary>
 public enum HarvesterPhase : byte

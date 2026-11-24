@@ -1,7 +1,10 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>Where a Lock is: nothing in the lock circle, building on one Aircraft, or complete (the launcher may fire).</summary>
 public enum LockPhase : byte { Idle, Locking, Locked }
@@ -18,7 +21,7 @@ public readonly record struct LockCandidate(ushort Id, Vector3 Position, string 
 /// <summary>
 /// The rules of the Lock-on launcher (ADR 0031, glossary "Lock-on launcher", "Lock"): which Aircraft the lock circle holds, how the Lock builds
 /// and is lost, what the Aircraft's owner is told, and when a missile fired on a Lock reaches its Aircraft. Godot-free; the server is the only
-/// one that decides (<c>NetServer.LockOn</c>), the client draws what it is sent.
+/// one that decides (<c>Net/Server/Streaks/LockOnServer.cs</c>), the client draws what it is sent.
 /// </summary>
 public static class LockRules
 {

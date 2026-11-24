@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Plantation;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>Who has the interact key (E) on foot when several things are in reach.</summary>
 public enum InteractOwner
@@ -17,7 +20,7 @@ public enum InteractOwner
 /// <summary>
 /// Arbitration of the interact key between the things on foot that listen to it, in one place: the care package first, then a ground item (when it is nearer
 /// than the corpse and the chooser is not up), then the corpse, then, last of all, the plantation. Vehicles, the door gun and the Mass seat have their own state (a seat, a mode) and
-/// are not candidates here: the prompt chain in NetClient.Cars.cs puts them before these (turret, vehicle, Mass, then crate, ground item, corpse).
+/// are not candidates here: the prompt chain in NetClient.PromptLine puts them before these (turret, vehicle, Mass, then crate, ground item, corpse).
 /// </summary>
 public static class InteractArbiter
 {

@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>
 /// Target: a stationary target dummy (#148), drawn like a player with the target look. Turret: the aim of a vehicle's gun (<see cref="FlakRecord"/>),

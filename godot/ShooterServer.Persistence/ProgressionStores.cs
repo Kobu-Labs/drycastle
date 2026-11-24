@@ -1,5 +1,6 @@
 using Drycastle.ShooterServer.Persistence.Postgres;
 using Drycastle.ShooterServer.Persistence.Sqlite;
+using Drycastle.ShooterCore.Progression;
 
 namespace Drycastle.ShooterServer.Persistence;
 

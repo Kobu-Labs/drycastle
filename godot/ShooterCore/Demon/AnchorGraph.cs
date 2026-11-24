@@ -1,7 +1,9 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>A place the demon can hold on to: on a wall or the ceiling, with the surface normal (pointing into the room) and the anchors it can crawl to. Godot axes (x east, y up, z = -north).</summary>
 public sealed record Anchor(int Id, Vector3 Pos, Vector3 Normal, int[] Links);
@@ -58,10 +60,7 @@ public sealed class AnchorGraph
     /// <summary>The graph of a church.json text (an object with an <c>anchors</c> array) or of a bare anchors array.</summary>
     public static AnchorGraph FromJson(string json, string name = "church.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var arr = doc.RootElement;
             if (arr.ValueKind == JsonValueKind.Object && !arr.TryGetProperty("anchors", out arr))

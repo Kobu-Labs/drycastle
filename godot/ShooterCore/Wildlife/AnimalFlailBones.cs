@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>A part of an animal's rig that swings loose while the body is thrown (<see cref="AnimalFlailBones"/>).</summary>
 public enum FlailBone : byte { Leg, Neck, Head, Tail, Ear }

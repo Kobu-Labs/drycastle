@@ -1,6 +1,15 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Weapons;
+using static Drycastle.ShooterCore.Movement.Planar;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>The three kinds of Gang member (GLOSSARY "Gang member"). Travels in bits 1-2 of the hit-point byte of the entity state.</summary>
 public enum GangMemberKind : byte { Thief = 0, Enforcer = 1, GangBoss = 2 }
@@ -568,11 +577,5 @@ public sealed partial class GangMember : IWorldEntity
     {
         if (Flat(Position, to) < 0.05f) return;
         Yaw = TurretMath.StepAngle(Yaw, TurretMath.YawTo(Position, to), _d.TurnRateDegPerS * MathF.PI / 180f * dt);
-    }
-
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
     }
 }

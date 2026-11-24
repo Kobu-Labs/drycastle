@@ -1,0 +1,174 @@
+using Godot;
+using Drycastle.Shooter.Audio;
+using Drycastle.ShooterCore.Glass;
+using NVec3 = System.Numerics.Vector3;
+
+namespace Drycastle.Shooter.Glass;
+
+/// <summary>
+/// Client visuals of a glass pane (ADR 0007, docs/glass.md). A pane that is not whole gets an overlay quad just in front of it
+/// (glass_crack.gdshader): cracks that reach further with each crack stage, and a dark opening with shards along the edge once it has
+/// shattered. The moment it shatters, the pane's rectangle is cut into fragments (<see cref="GlassShards"/>) that fly out of it as one mesh
+/// (glass_shards.gdshader), freed when they are gone. A pane with an outline polygon (generated vehicle models, ADR 0008) is clipped to it by
+/// the crack shader and cut to it by the fragments. A whole pane has no node here at all. Callers skip headless runs (ShotFx.Enabled).
+/// </summary>
+public static class GlassFx
+{
+    public const string CrackMaterialPath = "res://materials/glass_crack.tres";
+    public const string ShardMaterialPath = "res://materials/glass_shards.tres";
+    /// <summary>How far in front of the pane the overlay sits, metres (clear of the pane's own surface, no z-fighting).</summary>
+    const float Lift = 0.015f;
+    /// <summary>Most points of an outline the crack shader takes (glass_crack.gdshader, `outline[12]`; vehicles.json allows no more).</summary>
+    const int MaxOutline = 12;
+
+    /// <summary>
+    /// What a pane looks like when it is hurt and when it breaks: glass by default (white cracks, a rim of shards left along the opening, translucent fragments); the mechanic
+    /// garage's OSB plate has black cracks, leaves nothing behind when it goes and its fragments are pale-brown opaque chips.
+    /// </summary>
+    public readonly record struct ShardLook(Vector3 Colour, float Opacity, float Roughness, Vector3 CrackColour, bool EdgeShards);
+    public static readonly ShardLook OsbShards = new(new Vector3(0.78f, 0.58f, 0.32f), 1f, 0.95f, new Vector3(0.02f, 0.015f, 0.01f), false);
+
+    static ShaderMaterial? _crack, _shards;
+    static int _active;
+
+    /// <summary>
+    /// Loads the two glass materials (materials/glass_*.tres). Called from the loading steps: a material the engine sees at load time can have
+    /// its shader pipeline compiled ahead, one first created at the moment of the first hit stalls that frame. Each pane works on its own copy
+    /// (<see cref="Crack"/>, <see cref="Shards"/>), which shares the shader and so the compiled pipeline.
+    /// </summary>
+    public static void Load()
+    {
+        _crack ??= GD.Load<ShaderMaterial>(CrackMaterialPath);
+        _shards ??= GD.Load<ShaderMaterial>(ShardMaterialPath);
+    }
+
+    /// <summary>
+    /// Draws both glass shaders once, a hand's width in front of the player's camera, so their pipelines compile at the start and not on the first crack or shatter of the match
+    /// (loading the material alone does not draw it: the first hit of a session stalled a frame, most visibly on the big OSB plate of the mechanic garage). The two pieces are
+    /// a millimetre across and have the vertex layout of the real overlay and fragments; they are gone after a moment.
+    /// </summary>
+    public static void WarmUp(Camera3D camera)
+    {
+        Load();
+        var overlay = new MeshInstance3D { Name = "GlassWarmCrack", Mesh = new QuadMesh { Size = new Vector2(0.002f, 0.002f) }, MaterialOverride = Crack(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = new[] { new Vector3(0, 0, 0), new Vector3(0.002f, 0, 0), new Vector3(0, 0.002f, 0) };
+        arrays[(int)Mesh.ArrayType.Normal] = new[] { Vector3.Back, Vector3.Back, Vector3.Back };
+        arrays[(int)Mesh.ArrayType.TexUV2] = new[] { Vector2.Zero, Vector2.Zero, Vector2.Zero };
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        var shards = new MeshInstance3D { Name = "GlassWarmShards", Mesh = mesh, MaterialOverride = Shards(), Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
+        camera.AddChild(overlay);
+        camera.AddChild(shards);
+        var timer = camera.GetTree().CreateTimer(0.5);
+        timer.Timeout += () => { if (GodotObject.IsInstanceValid(overlay)) overlay.QueueFree(); if (GodotObject.IsInstanceValid(shards)) shards.QueueFree(); };
+    }
+
+    static ShaderMaterial Crack() { Load(); return (ShaderMaterial)_crack!.Duplicate(); }
+    static ShaderMaterial Shards() { Load(); return (ShaderMaterial)_shards!.Duplicate(); }
+
+    static Vector3 G(NVec3 v) => new(v.X, v.Y, v.Z);
+
+    /// <summary>The pane's frame in its parent's space: x along the width, y up the pane, z out of it, the origin <paramref name="lift"/> metres in front of its centre.</summary>
+    public static Transform3D Frame(GlassPaneRect r, float lift = 0) => new(new Basis(G(r.Right), G(r.Up), G(r.Normal)), G(r.Centre + r.Normal * lift));
+
+    /// <summary>A number that differs between panes, for the crack pattern and the cut of the fragments.</summary>
+    public static float Seed(GlassPaneKey key) => (key.Owner * 7919 + key.Index * 104729) % 9973 / 97f;
+
+    /// <summary>Gives the crack shader the pane's outline polygon (none: the whole rectangle).</summary>
+    static void SetOutline(ShaderMaterial mat, GlassPaneRect rect)
+    {
+        var o = rect.Outline;
+        var n = Math.Min(o?.Count ?? 0, MaxOutline);
+        var points = new Vector2[MaxOutline];
+        for (var i = 0; i < MaxOutline; i++) points[i] = n > 0 ? new Vector2(o![Math.Min(i, n - 1)].X, o[Math.Min(i, n - 1)].Y) : Vector2.Zero;
+        mat.SetShaderParameter("outline", points);
+        mat.SetShaderParameter("outline_count", n);
+    }
+
+    /// <summary>The overlay of one pane under <paramref name="parent"/> (the vehicle's node, or a world node for a building's pane). <paramref name="holeDarkness"/> is how opaque the opening of the shattered pane is.</summary>
+    public static MeshInstance3D MakeOverlay(Node3D parent, GlassPaneRect rect, GlassPaneKey key, float holeDarkness, ShardLook? look = null)
+    {
+        var mat = Crack();
+        mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
+        mat.SetShaderParameter("seed", Seed(key));
+        mat.SetShaderParameter("hole_darkness", holeDarkness);
+        SetOutline(mat, rect);
+        if (look is { } l) { mat.SetShaderParameter("crack_colour", l.CrackColour); mat.SetShaderParameter("edge_shards", l.EdgeShards ? 1f : 0f); }
+        var mi = new MeshInstance3D
+        {
+            Name = $"Glass_{key.Owner}_{key.Index}",
+            Mesh = new QuadMesh { Size = new Vector2(rect.Width, rect.Height) },
+            MaterialOverride = mat,
+            Transform = Frame(rect, Lift),
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+        };
+        parent.AddChild(mi);
+        return mi;
+    }
+
+    /// <summary>Shows a standing pane's crack stage (1..<paramref name="maxStage"/>) or, when <paramref name="shattered"/>, the opening.</summary>
+    public static void SetOverlay(MeshInstance3D overlay, int crackStage, int maxStage, bool shattered)
+    {
+        if (overlay.MaterialOverride is not ShaderMaterial mat) return;
+        mat.SetShaderParameter("stage", (float)crackStage);
+        mat.SetShaderParameter("stages", (float)maxStage);
+        mat.SetShaderParameter("shattered", shattered ? 1f : 0f);
+    }
+
+    /// <summary>
+    /// The shatter animation: the fragments of the pane fly out of it under <paramref name="world"/>, from where the pane is now
+    /// (<paramref name="paneParent"/> is the global transform of the node the rectangle is in; with <paramref name="follow"/> the fragments are children of that node and move with it). Skipped beyond the effect range of
+    /// glass.json and when too many run already (the pane still changes to its shattered look).
+    /// </summary>
+    public static void Shatter(Node3D world, Transform3D paneParent, GlassPaneRect rect, GlassConfig cfg, GlassPaneKey key, ShardLook? look = null, Node3D? follow = null)
+    {
+        if (_active >= cfg.MaxShatterEffects) return;
+        var frame = paneParent * Frame(rect, Lift);
+        if (Sfx.ListenerDistance(frame.Origin) > cfg.ShatterEffectRange) return;
+
+        var shards = GlassShards.Cut(rect.Width, rect.Height, cfg.Shards, (uint)(key.Owner * 7919 + key.Index * 104729), rect.Outline);
+        var verts = new Vector3[shards.Count * 3];
+        var normals = new Vector3[shards.Count * 3];
+        var centres = new Vector2[shards.Count * 3];
+        for (var i = 0; i < shards.Count; i++)
+        {
+            var s = shards[i];
+            var c = new Vector2(s.Centre.X, s.Centre.Y);
+            verts[i * 3] = new Vector3(s.A.X, s.A.Y, 0); verts[i * 3 + 1] = new Vector3(s.B.X, s.B.Y, 0); verts[i * 3 + 2] = new Vector3(s.C.X, s.C.Y, 0);
+            for (var k = 0; k < 3; k++) { normals[i * 3 + k] = Vector3.Back; centres[i * 3 + k] = c; }
+        }
+        var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = verts;
+        arrays[(int)Mesh.ArrayType.Normal] = normals;
+        arrays[(int)Mesh.ArrayType.TexUV2] = centres;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+
+        var mat = Shards();
+        mat.SetShaderParameter("pane_size", new Vector2(rect.Width, rect.Height));
+        mat.SetShaderParameter("seed", Seed(key));
+        mat.SetShaderParameter("speed", cfg.ShardSpeed);
+        mat.SetShaderParameter("life", cfg.ShardLife);
+        mat.SetShaderParameter("t", 0f);
+        if (look is { } l) { mat.SetShaderParameter("tint", l.Colour); mat.SetShaderParameter("opacity", l.Opacity); mat.SetShaderParameter("roughness", l.Roughness); }
+        var mi = new MeshInstance3D
+        {
+            Name = "GlassShards",
+            Mesh = mesh,
+            MaterialOverride = mat,
+            CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
+            // the shader moves the fragments out of the mesh's own bounds: keep it drawn while they fly
+            ExtraCullMargin = cfg.ShardSpeed * cfg.ShardLife * 2f + 5f * cfg.ShardLife * cfg.ShardLife + 1f,
+        };
+        if (follow != null) { follow.AddChild(mi); mi.Transform = Frame(rect, Lift); } // a vehicle's pane: the fragments ride along with it
+        else { world.AddChild(mi); mi.GlobalTransform = frame; }
+        _active++;
+        mi.TreeExiting += () => _active = Math.Max(0, _active - 1); // also when the client leaves mid-flight
+        var tw = mi.CreateTween();
+        tw.TweenMethod(Callable.From<float>(v => mat.SetShaderParameter("t", v)), 0f, cfg.ShardLife, cfg.ShardLife);
+        tw.TweenCallback(Callable.From(mi.QueueFree));
+    }
+}

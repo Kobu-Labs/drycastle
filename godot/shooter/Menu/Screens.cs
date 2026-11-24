@@ -1,7 +1,6 @@
 using Godot;
-using Drycastle.ShooterCore;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 public static class App
 {

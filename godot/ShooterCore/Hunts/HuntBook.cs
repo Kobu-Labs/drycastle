@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>What a new hunt did to the book: the player's first of its species, and the records it took (a first one that is also a record is one outcome).</summary>
 public readonly record struct HuntOutcome(bool FirstTime, bool Heaviest, bool Longest)

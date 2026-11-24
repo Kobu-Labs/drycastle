@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// When a driverless car can stop being stepped (perf audit T2-04, D-01, G-05). A driverless step is a function of the car's state, its place and the

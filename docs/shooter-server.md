@@ -67,7 +67,7 @@ Flags (after `--`):
 | `--day-length MIN` | real minutes for one 24-hour day; overrides `day_length_minutes` in `environment.json` (default `24`) |
 | `--freeze-time` | hold the clock at its start time (or at `--time`), so the sky does not move |
 | `--match-set k=v,k=v` | override match options, see below |
-| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
+| `--targets N` | plant N stationary target dummies ("Target 01" ...) around the spawn area, 0-64; default 0 from `match.json`. The dummies are not players: they are outside the roster, the player cap, the score goal and the round end, and they respawn 3 s after a kill on the same spot. Planned at start on the ground under the map colliders (rays from above, steep faces rejected; a roof counts as ground where a ray meets one first); no cover or wall spots yet. Wire: entity type 3 in snapshots, event kind 140 (`TargetRoster`) on join. Code: `godot/shooter/Net/Server/NetServer.Targets.cs`. `make shooter-server` passes `TARGETS` (default 24; `make shooter-server TARGETS=0` for none) |
 | `--debug-cmds` | honour the client debug kill command and give every player the full weapon list on the hotbar (dev aid); leave off on a public server |
 | `--unlock-all` | dev mode: every item unlocked, see the next section. Also on when `DRYCASTLE_UNLOCK_ALL` is `1` or `true`. Leave off on a public server |
 | `--allow-sandbox` | grant sandbox mode to clients that ask for it (#156): godmode, unlimited ammo, the whole hotbar, every killstreak on demand (no kill requirement, no cap). A sandbox player's kills and XP are not scored, nothing is written to the database, the round never ends on their kills and they rank last with a `[SANDBOX]` tag. The panel's "Take damage" checkbox turns the godmode off for that player (off by default): they are hurt, die and respawn like anyone, the rest of sandbox mode stays, their death writes no stat and grants no XP, and the HUD badge reads "SANDBOX - TAKING DAMAGE". A server without the flag refuses the request with a notice. `make shooter-server` passes it (`SANDBOX=1` is the default; `SANDBOX=0` for none). Leave off on a public server |
@@ -96,7 +96,7 @@ The Makefile dev targets turn it on: `shooter-server` passes `--unlock-all`, and
 set it, and nothing in the export does.
 
 The clock flags are read in `Shooter.ServerClock` (`godot/shooter/Shooter.cs`) and resolved by `EnvironmentConfig.ToClock`
-(`godot/ShooterCore/Environment/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
+(`godot/ShooterCore/Scenery/EnvironmentConfig.cs`). The clock is owned by the server and sent to each client in the
 welcome message (protocol 3 and later), so clients never need the flags.
 Example: `./drycastle-server.x86_64 --headless -- --role server --port 27015 --map /srv/drycastle/map --db /srv/drycastle/shooter.db --time 22:00 --freeze-time`.
 
@@ -157,7 +157,7 @@ files below is missing.
 | `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |
 | `sounds.json` | sound ids and file names (validated against `assets/` by the server) | `SoundData.cs` |
-| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
+| `rozhlas_voice.json` | the announcement's voice chain (ffmpeg filters in order, their values, the echo tap ranges); read by the bake (`scripts/sounds/make_rozhlas.py`) and by the live feed, so they cannot drift | `RozhlasVoice.cs`, `RozhlasFeed.cs` |
 
 Sounds, models and textures are not in the `.pck`; they are read from `assets/` on disk (section 2).
 Shaders (`godot/shooter/shaders/*.gdshader`) are compiled by Godot from the project resources, so they are in the export
@@ -182,6 +182,89 @@ Windows: `New-NetFirewallRule -DisplayName "Drycastle server" -Direction Inbound
 
 The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as described above.
 
+## Code layout (`godot/shooter/Net/Server/`)
+
+`NetServer` (a Godot `Node`, one file; `partial` only because Godot's source generator wants it) is the composition root: the creation of the features in `_Ready` (the order there matters: a feature that registers an entity type or a
+handler comes before the ones that name it), the order of one tick (`_PhysicsProcess`: `ReceiveAndHousekeep`, `TickWorld`, `TickStreaksAndBots`, `SimulatePlayers`, `TickProjectilesAndCorpses`, `StepVehiclesAndRiders`,
+`ResolveBlastsAndFlush`, `CapturePoses`, `SendSnapshots`, then the report; the order decides the simulation) and the routing of packets (`OnPacket`, `OnReliable`). What the host sets (the map, the data files, the flags) is a `ServerConfig`
+(`ServerConfig.cs`), read as `Config`.
+
+A converted feature is a plain class in a folder of its own, owns its state privately and takes only a `ServerContext` (`ServerContext.cs`: the match, the joined players, the clock, `Broadcast` / `Send` / `SendEvent`, chat lines,
+`FindHuman`) plus the few things it needs by constructor (a service below, a data file, a delegate of the one thing it asks the server). Features call each other through the other's small public surface (`IntelServer.Announce` /
+`Withdraw`, `StatusServer.GrantBlessing`). New feature: a class next to the others, one line in `NetServer._Ready`, one line at each hook in the tick, never a new partial of `NetServer`.
+
+Services (what several features share, each owning its state):
+
+| Class | Folder | What it owns, its surface |
+|---|---|---|
+| `Fleet` | `CarPool/` | every vehicle in the order made: `Cars`, `Find(id)`, `Add`, `NextId`, `OccupantAt`, `Occupants`, `SeatOccupants` |
+| `TargetBook` | `Combat/` | what a shot can hit: sources add their `HitTarget`s in order, `Live()` hands a pooled list, `Return`, `Rent` (the rewound path builds its own) |
+| `DealDamage` | `Combat/` | the delegate of `NetServer.Deal`: what a feature that hurts a player is given (statuses, sentries) |
+| `ChatServer` | `ChatRoom/` | chat lines, admin check, the command registry: `Register(command, handler)`, `OnSend`, `SendStatus`, `IsAdmin` |
+| `ProfileServer` | `Profiles/` | profile load and the guest fallback, loadouts, camo, the player's Respawn: `StartLoad`, `Tick`, `Send`, `NewGuest` / `Attach`, `OnMessage`, `OnRedeploy` |
+| `AnimalWorld` | `Fauna/` | the animals' view of the world: the crowd, the per-tick player list, `Wild` / `Pets` / `Companions` (`IAnimalWorld`): `Prepare`, `Done`, `PlayerHurt` |
+| `Sitters` | `Seating/` | who sits in a pew or at the dictation table and what each was told: `IsSeated`, `StandUp`, `Input`, `StanceOf` |
+| `WalkerGround`, `GroundHug` | `Terrain/` | what a navmesh walker meets; the ray that follows the ground |
+| `DeathPush` | `Combat/` | the throw a killing blow gives its victim, recorded before the damage: `Record`, `Clear`, `Has`, `Take`, `Forget`, `TakeFlight` |
+| `ImpactFx`, `Splash`, `RocketIds` | `Combat/` | impact particles and their surface (`At`, `Broadcast`, `BulletPuff`, `Warm`); the splash rule of ADR 0028 (`Share`); the ids of rockets and blasts (`Next`) |
+| `StreakServer` | `Streaks/` | the killstreak rules (`Rules`: the `KillstreakService`) and the server's hooks on them: `Arm`, `Activate`, `Kill`, `Death`, `Wipe`, `Tick`, `Leave`; owns the UAV and `SpawnOverMap` |
+| `GunshipServer` | `Streaks/` | aircraft entities and the gunship's rounds: `Spawn`, `ControlFor`, `Detonate`, `DamageAircraft`, `RoutedVehicles`, the tick's FX batch (`Fx`, `FlushFx`), `NoteHit` |
+| `PounceServer` | `Parish/` | who the demon holds down and who is immune to its fire: `IsPinned`, `TryYaw`, `Immune`, `Stage`, `LetGo`, `Sweep` |
+
+Features:
+
+| Class | Folder | What |
+|---|---|---|
+| `SceneryServer` | `Scenery/` | shootable pole lamps and road sign plates (ADR 0037, 0039) |
+| `MineralsServer` | `MineralLog/` | mineral nodes and finds (#401) |
+| `IntelServer` | `Intel/` | the intel board and its announcements |
+| `GarageServer` | `BusGarage/` | the bus garage's doors and parked vehicle |
+| `RozhlasServer`, `UradServer`, `RozhlasFeedServer`, `RozhlasSetServer` | `VillageRadio/` | the village loudspeaker, the Obecny Urad (workers, door), the live feed with the combat mix, the dictation set |
+| `PetServer`, `WildlifeServer`, `CompanionServer` | `Fauna/` | pets and their pens, wild animals and the Phoenix, the Companions |
+| `ItemsServer` | `Gear/` | worn items, the bag, binoculars, the head lamp, corpse and ground items |
+| `StatusServer` | `Statuses/` | blessing, curse, burn (`Burns` is shared with the demon and the harvester) |
+| `HuntLogServer` | `HuntLog/` | the Hunter's Log: books, records, the three queries, collection rewards |
+| `SentryWorld` | `Sentries/` | the sentry turrets' bridge to the match |
+| `ThievesServer` (+ `GangServer`, `RaidServer`, `RaidLauncher`, `LootServer`, `ThievesPayout`, the Loot worlds `TireCars`, `PoleSites`, `DishLoot`, `PetLoot`) | `Thieves/` | the Thieves event: its phase, the Gang members, the Raid vans and where they park, what they steal, the reward |
+| `FlakServer`, `LockOnServer`, `MoabServer`, `MissileServer`, `HelperServer`, `Ac130Server`, `AttackHelicopterServer` | `Streaks/` | the flak truck's shells, the Lock-on launcher and its homing missiles, and the adapters of the killstreaks (each makes its `IKillstreak`; the table-to-adapter mapping is `NetServer.BuildStreaks`) |
+| `ChurchServer`, `CitizenServer`, `MassServer`, `DemonServer` | `Parish/` | the church doors and shelter (`ChurchDoorPolicy` decides), the citizens' crowd and houses, the Holy Mass, the demon's fight and fireballs |
+
+Plumbing (no game rules; each a plain class that takes the context):
+
+| Class | Folder | What |
+|---|---|---|
+| `ConnectionServer`, `PlayerRoster`, `Outbox`, `InputIntake` | `Sessions/` | the ENet events and the hello (protocol and map checks, one session per token, silent peers); join and leave (what a joiner is told is a list in `NetServer.BuildRoster`) and the free player ids; every packet sent (bytes per client, the perf audit, the net-sim); the packet of inputs and its acks |
+| `DebugServer` | `Playground/` | the client's debug teleport, vehicle damage and kill (dev servers and smokes) |
+| `ChatCommandTable` | `ChatRoom/` | which class answers which chat command |
+| `RoundHooks` | `RoundFlow/` | what a round's start and end clear outside the match |
+| `ServerDiagnostics` | `Diagnostics/` | what NetServer holds for measuring and testing: `PerfHarness` (`--perf-out`: `ServerPerf`, `PerfAudit`, event stamps), `LagCompLog`, `TickPhases`, `ServerHealth` (the stats line), `ProfLines` (the prof lines), `MetricsOut` (the metrics push), `LossRun` (`--loss-test`), `SmokeRun`, `SmokeArena` (the verdict and the arena of the smoke tests). The tick calls `TickBegin`, `Lap(phase)`, `TickEnd`; the phase laps stay where each phase ends in the tick |
+
+Namespaces follow folders (`Drycastle.Shooter.Net.Server.BusGarage`, ...); a folder is named so that it does not equal a type name (`Garage`, `Minerals`, `Rozhlas`, `Equipment`, `Status`, `Aircraft`, `Church`, `Killstreaks` are types or namespaces in scope: hence `BusGarage`, `MineralLog`, `VillageRadio`, `Gear`, `Statuses`, `Streaks`, `Parish`).
+
+`ServerClient` (one connection: human or bot) and `PlayerProfile` are plain state in `ServerClient.cs`; `SmokeStats` (`SmokeStats.cs`) holds what the smoke tests count and their verdicts.
+
+## Client code layout (`godot/shooter/Net/Client/`, `godot/shooter/HeadsUp/`)
+
+`NetClient` is the composition root of the client: it makes the feature classes (one per feature, each given the `ClientContext`). Beside it at the folder root: `ClientContext`, `ClientView` (who has the local view), `ClientSound`, `ClientText`, `EffectEvents` (the one-off effects to the feature that draws them) and `ServerLink` (the ENet connection). Every other class sits in a feature folder, namespace = folder (`Drycastle.Shooter.Net.Client.Peers`, ...); a folder equal to a type name or a namespace in scope is avoided (`Vehicles`, `Flight`, `Scenery`, `Thieves` are namespaces: hence `CarPool`, `Aviation`, `Village`, `Incidents`).
+
+| Folder | What |
+|---|---|
+| `OwnPlayer/` | the local body: prediction, reconcile and its smoothing, aim and breath, the weapon in hand and its viewmodel, hotbar, loadout, death view, camera shake, the grenade throw |
+| `Peers/` | other players and target dummies as drawn, camo, head lamps, statuses and the high, flung bodies, water splashes |
+| `CarPool/` | vehicles: the car view, hulls, sounds, drive, tow, glass, the flak and door gun nodes and the guns a rider works |
+| `Seating/` | the seats of the vehicle the player sits in, the seat switch, the rider's camera |
+| `Aviation/` | aircraft and the utility helicopter, rotors, the door gun nodes |
+| `Shooting/` | shots, impacts, rockets in the air, blast dust |
+| `Streaks/` | killstreaks: the tracker, the gunner streaks, missile, MOAB, UAV, Lock-on, enemy points of the overlays |
+| `Gear/` | items, ground items, corpses and their loot, care packages, binoculars, the interact targets and hold ring |
+| `BigfootEvent/`, `Parish/`, `Harvest/`, `Incidents/` | the events: Bigfoot; Holy Mass, demon, pounce, citizens; the harvester, bales and crushed crops; Thieves, Loot, Scud, Intel |
+| `Fauna/` | animals, flocks, companions, poop |
+| `HudFeeds/` | what feeds the HUD: `HudClient`, minimap and blips, the screens a key opens, chat, match events, squads, teams, Hunter's Log, Mineral Log, sandbox |
+| `Village/` | doors, the loudspeaker, sentry turrets |
+| `Diagnostics/` | the session log, perf log, the client report, rubber-band stats, the F3 volumes, dev demos |
+
+`HeadsUp/` keeps `Hud` (the root that builds the widgets), `HudUi` (what every widget shares) and `HudState` at its root. Widgets: `Vitals/` (health, ammo, crosshair, hit marker, damage indicators, breath hint, statuses, spawn protection, speed), `Vision/` (scope, binoculars, blood, dust and pounce veils), `RoundFlow/` (top bar, scoreboard, kill feed, XP panel, respawn screen, chat), `Streaks/` (streak row, UAV panel, MOAB banner, the gunship, missile and Lock-on overlays, enemy markers), `Prompts/` (context prompt, radial progress, rozhlas chips, seat panel), `Screens/` (minimap panel, the full-screen overlays, hit diagram), `Badges/` (sandbox badge, FPS counter, volume line).
+
 ## Known gaps
 
 - Export is unverified (see the top). If the dedicated-server preset needs tuning, edit it in the Godot editor
@@ -191,7 +274,7 @@ The client needs the same `--map`/`DRYCASTLE_MAP` and `DRYCASTLE_ASSETS` as desc
 ## Performance log
 
 Every 10 s the server prints one `server: stats` line (tick p50/p99, the phases, GC) and, since the `Prof` timers, these `key=value` lines
-(`NetServer.Prof.cs`, `ShooterCore/Diagnostics/Prof.cs`). The tick lines are only printed while somebody plays; the memory line always.
+(`Net/Server/Diagnostics/ProfLines.cs`, `ShooterCore/Diagnostics/Prof.cs`). The tick lines are only printed while somebody plays; the memory line always.
 
 | Line | Meaning |
 |---|---|

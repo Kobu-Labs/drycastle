@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>
 /// When each output frame of the live feed goes to the clients: a FIXED delay after the moment its input was due, whatever ffmpeg's own latency was.

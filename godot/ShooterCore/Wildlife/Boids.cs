@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>The numbers of a boid swarm (wildlife.json, "flocks"): Reynolds' three rules plus a pull to the flock's goal. Metres and seconds.</summary>
 public sealed class BoidRules

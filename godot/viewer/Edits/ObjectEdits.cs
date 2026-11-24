@@ -1,0 +1,461 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Obj = System.Collections.Generic.SortedDictionary<string, object?>;
+
+namespace Drycastle.Viewer.Edits;
+
+/// <summary>
+/// Placed objects in an edits.json tree (see EditsFile): the top-level `objects` list (an object belongs to no parcel, it
+/// is only a position), ids, entries, adding, removing, and a C# mirror of the
+/// Python validator (edits/schema.py `validate`) over the whole document, so the editor never writes a file the pipeline
+/// would reject. Entries are written as `id`, `asset`, `position` [x, y] in absolute S-JTSK metres (3 decimals),
+/// `rotation_deg` (always), and `scale` / `colour` only when they differ from the defaults (1 / none); `z` is
+/// never written (the terrain height is used).
+/// </summary>
+public static class ObjectEdits
+{
+    public const string IdPrefix = "o-";
+    static readonly Regex IdRx = new("^o-(\\d+)$", RegexOptions.Compiled);
+    static readonly Regex AssetRx = new("^(pack:[^/\\s]+/\\S+|prim:[A-Za-z0-9_.-]+)$", RegexOptions.Compiled);
+    static readonly Regex ParcelRx = new("^P-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex GroupRx = new("^G-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex PatchRx = new("^GP-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex ZoneRx = new("^Z-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex ZoneCutRx = new("^ZC-\\d{4,}$", RegexOptions.Compiled);
+
+    /// <summary>The zone kinds the map knows (parcels.json `zone_kinds`; set by the editor). Empty: unknown, a zone's kind is not checked against the catalog.</summary>
+    public static IReadOnlyCollection<string> ZoneKinds { get; set; } = Array.Empty<string>();
+
+    public static Obj Parcels(Obj root) => (Obj)root["parcels"]!;
+
+    internal static EditsFile.Num N3(double v) => new(EditsFile.PyFloat(Math.Round(v, 3, MidpointRounding.AwayFromZero)));
+
+    public static double? Number(object? v) => FenceDraft.Number(v);
+
+    /// <summary>The top-level objects list, or null when the document has none.</summary>
+    public static List<object?>? Items(Obj root) => root.GetValueOrDefault("objects") as List<object?>;
+
+    /// <summary>Every object in the document with its index in the list.</summary>
+    public static IEnumerable<(int index, Obj obj)> All(Obj root)
+    {
+        if (Items(root) is not { } list) yield break;
+        for (var i = 0; i < list.Count; i++)
+            if (list[i] is Obj o) yield return (i, o);
+    }
+
+    public static (int index, Obj obj)? Find(Obj root, string id)
+    {
+        foreach (var t in All(root)) if (t.obj.GetValueOrDefault("id") as string == id) return t;
+        return null;
+    }
+
+    /// <summary>"o-NNNN" one above the highest number in use (files may also hold ids of another form, those are ignored).</summary>
+    public static string NextId(Obj root)
+    {
+        var max = 0;
+        foreach (var (_, o) in All(root))
+            if (o.GetValueOrDefault("id") is string s && IdRx.Match(s) is { Success: true } m && int.TryParse(m.Groups[1].Value, out var n))
+                max = Math.Max(max, n);
+        return $"{IdPrefix}{max + 1:0000}";
+    }
+
+    public static Obj Make(string id, string asset, double x, double y, double rotationDeg, double scale = 1.0, string? colour = null)
+    {
+        var o = EditsFile.NewObject();
+        o["id"] = id;
+        o["asset"] = asset;
+        o["position"] = new List<object?> { N3(x), N3(y) };
+        o["rotation_deg"] = new EditsFile.Num(EditsFile.PyFloat(Math.Round(rotationDeg, 3)));
+        if (Math.Abs(scale - 1.0) > 1e-12) o["scale"] = new EditsFile.Num(EditsFile.PyFloat(Math.Round(scale, 6)));
+        if (colour != null) o["colour"] = colour.ToLowerInvariant();
+        return o;
+    }
+
+    /// <summary>Fix the object at an elevation (map metres, the terrain's datum) instead of on the ground: a connector on a wall or roof.</summary>
+    public static void SetZ(Obj o, double z) => o["z"] = N3(z);
+
+    /// <summary>Append an object to the top-level list (made when the file has none yet).</summary>
+    public static void Add(Obj root, Obj o)
+    {
+        if (root.TryGetValue("objects", out var existing) && existing is not List<object?>) throw new InvalidOperationException("objects in the file is not a list");
+        if (existing is not List<object?> list) root["objects"] = list = new List<object?>();
+        list.Add(o);
+    }
+
+    /// <summary>Remove the object; an emptied list goes away with it (the key is only written when there are objects).</summary>
+    public static bool Remove(Obj root, string id)
+    {
+        if (Find(root, id) is not { } f) return false;
+        var list = Items(root)!;
+        list.RemoveAt(f.index);
+        if (list.Count == 0) root.Remove("objects");
+        return true;
+    }
+
+    public static void SetPosition(Obj o, double x, double y) => o["position"] = new List<object?> { N3(x), N3(y) };
+    public static void SetRotation(Obj o, double deg) => o["rotation_deg"] = new EditsFile.Num(EditsFile.PyFloat(Math.Round(deg, 3)));
+
+    public static void SetScale(Obj o, double s)
+    {
+        o.Remove("size_m"); // would win over the scale
+        if (Math.Abs(s - 1.0) < 1e-12) o.Remove("scale");
+        else o["scale"] = new EditsFile.Num(EditsFile.PyFloat(Math.Round(s, 6)));
+    }
+
+    public static void SetColour(Obj o, string? colour)
+    {
+        if (colour == null) o.Remove("colour"); else o["colour"] = colour.ToLowerInvariant();
+    }
+
+    public static (double x, double y) Position(Obj o)
+        => o.GetValueOrDefault("position") is List<object?> p && p.Count == 2 ? (Number(p[0]) ?? 0, Number(p[1]) ?? 0) : (0, 0);
+
+    public static double Rotation(Obj o) => Number(o.GetValueOrDefault("rotation_deg")) ?? 0;
+    public static double Scale(Obj o) => Number(o.GetValueOrDefault("scale")) ?? 1;
+
+    /// <summary>Deep copy of a tree made of SortedDictionary / List / string / bool / Num / null.</summary>
+    public static object? Clone(object? v) => v switch
+    {
+        Obj o => CloneObj(o),
+        List<object?> l => l.Select(Clone).ToList(),
+        _ => v,
+    };
+
+    public static Obj CloneObj(Obj o)
+    {
+        var c = EditsFile.NewObject();
+        foreach (var (k, v) in o) c[k] = Clone(v);
+        return c;
+    }
+
+    /// <summary>One status line for validation errors: the first few with their paths, then how many more.</summary>
+    public static string Summarise(List<string> errors, int show = 3)
+        => string.Join("; ", errors.Take(show)) + (errors.Count > show ? $" (+{errors.Count - show} more)" : "");
+
+    // ---- the validator ----
+
+    static bool IsNum(object? v) => v is EditsFile.Num n && double.TryParse(n.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out var d) && double.IsFinite(d);
+
+    public static List<string> CheckObjects(object? v, string path, Dictionary<string, string> seen)
+    {
+        var errs = new List<string>();
+        if (v is not List<object?> list) { errs.Add($"{path}: must be a list"); return errs; }
+        string[] allowed = { "id", "asset", "position", "z", "rotation_deg", "scale", "size_m", "colour", "solid" };
+        for (var i = 0; i < list.Count; i++)
+        {
+            var p = $"{path}.{i}";
+            if (list[i] is not Obj o) { errs.Add($"{p}: must be an object"); continue; }
+            foreach (var k in o.Keys) if (!allowed.Contains(k)) errs.Add($"{p}.{k}: unknown key");
+            foreach (var k in new[] { "id", "asset", "position" }) if (!o.ContainsKey(k)) errs.Add($"{p}.{k}: required");
+            if (o.TryGetValue("id", out var id))
+            {
+                if (id is not string s || s == "") errs.Add($"{p}.id: must be a non-empty string");
+                else if (seen.TryGetValue(s, out var first)) errs.Add($"{p}.id: duplicate object id '{s}' (first at {first})");
+                else seen[s] = p;
+            }
+            if (o.TryGetValue("asset", out var asset) && !(asset is string a && AssetRx.IsMatch(a))) errs.Add($"{p}.asset: must be pack:<pack>/<model> or prim:<name>");
+            if (o.TryGetValue("position", out var pos) && !(pos is List<object?> pl && pl.Count == 2 && pl.All(IsNum))) errs.Add($"{p}.position: must be [x, y]");
+            if (o.TryGetValue("z", out var z) && !IsNum(z)) errs.Add($"{p}.z: must be a number");
+            if (o.TryGetValue("rotation_deg", out var r) && !IsNum(r)) errs.Add($"{p}.rotation_deg: must be a number");
+            if (o.TryGetValue("scale", out var sc) && !(IsNum(sc) && Number(sc) > 0)) errs.Add($"{p}.scale: must be a number > 0");
+            if (o.TryGetValue("size_m", out var sz) && !(sz is List<object?> szl && szl.Count == 3 && szl.All(c => IsNum(c) && Number(c) > 0))) errs.Add($"{p}.size_m: must be [length, width, height], three numbers > 0 (metres)");
+            if (o.TryGetValue("colour", out var c) && !(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{p}.colour: must be #rrggbb");
+            if (o.TryGetValue("solid", out var so) && so is not bool) errs.Add($"{p}.solid: must be true or false");
+        }
+        return errs;
+    }
+
+    /// <summary>Every problem the Python validator would report (same rules, C# messages); empty means valid.</summary>
+    public static List<string> ValidateDocument(Obj root)
+    {
+        var errs = new List<string>();
+        if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "paths")) errs.Add($"{k}: unknown key");
+        var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
+        if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
+        errs.AddRange(CheckParcels(root, seen));
+        errs.AddRange(CheckGroups(root));
+        var editsTypes = root.GetValueOrDefault("ground_types") as Obj;
+        errs.AddRange(CheckEntries(root, "ground_patches", PatchRx, "ground patch IDs look like GP-0001", (e, path) => CheckPatch(e, path, editsTypes)));
+        errs.AddRange(CheckEntries(root, "zones", ZoneRx, "zone IDs look like Z-0001", CheckZone));
+        errs.AddRange(CheckEntries(root, "zone_cuts", ZoneCutRx, "zone cut IDs look like ZC-0001", CheckZone));
+        errs.AddRange(CheckObjectOf(root, "cables", CheckCables));
+        errs.AddRange(CheckObjectOf(root, "ground_types", GroundTypeEdits.Validate));
+        errs.AddRange(CheckEntries(root, "paths", PathRx, "path IDs look like PA-0001", CheckPath));
+        return errs;
+    }
+
+    /// <summary>A top-level section that, when present, must be an object; <paramref name="check"/> sees the object.</summary>
+    static IEnumerable<string> CheckObjectOf(Obj root, string key, Func<Obj, IEnumerable<string>> check)
+    {
+        if (root.GetValueOrDefault(key) is not { } section) return Array.Empty<string>();
+        return section is Obj o ? check(o) : new[] { $"{key}: must be an object" };
+    }
+
+    /// <summary>A top-level section of id -> entry: each id must match <paramref name="idRx"/>, each entry passes <paramref name="check"/> (entry, path).</summary>
+    static IEnumerable<string> CheckEntries(Obj root, string key, Regex idRx, string idHint, Func<object?, string, IEnumerable<string>> check)
+    {
+        IEnumerable<string> Entries(Obj map)
+        {
+            foreach (var (id, entry) in map)
+            {
+                var path = $"{key}.{id}";
+                if (!idRx.IsMatch(id)) yield return $"{path}: {idHint}";
+                foreach (var e in check(entry, path)) yield return e;
+            }
+        }
+        return CheckObjectOf(root, key, Entries);
+    }
+
+    static List<string> CheckParcels(Obj root, Dictionary<string, string> seen)
+    {
+        var errs = new List<string>();
+        foreach (var (pid, entry) in Parcels(root))
+        {
+            var path = $"parcels.{pid}";
+            if (!ParcelRx.IsMatch(pid)) errs.Add($"{path}: parcel IDs look like P-0412");
+            if (entry is not Obj e) { errs.Add($"{path}: must be an object"); continue; }
+            if (e.ContainsKey("trees")) errs.Add($"{path}.trees: per-parcel tree settings were removed; delete this entry");
+            foreach (var k in e.Keys) if (k is not ("fence" or "ground_type" or "outline" or "trees" or "objects")) errs.Add($"{path}.{k}: unknown key");
+            if (e.TryGetValue("fence", out var f)) errs.AddRange(CheckFenceObject(f, $"{path}.fence"));
+            if (e.TryGetValue("ground_type", out var gt))
+            {
+                var (exists, water) = gt is string gs && gs != "" ? GroundTypeEdits.PatchType(gs, root.GetValueOrDefault("ground_types") as Obj) : (false, null);
+                if (!exists) errs.Add($"{path}.ground_type: {gt} is not a ground type (or it is deleted)");
+                else if (water is true) errs.Add($"{path}.ground_type: {gt} is a water type, a parcel cannot be water");
+            }
+            // mirror of edits/schema.py: a parcel's outline is a simple ring like a patch's polygon (that two edited outlines must not overlap is checked by the Python validator only)
+            if (e.ContainsKey("outline")) errs.AddRange(CheckPolygon(e, path, "outline"));
+            if (e.TryGetValue("objects", out var ob)) errs.AddRange(CheckObjects(ob, $"{path}.objects", seen));
+        }
+        return errs;
+    }
+
+    static List<string> CheckGroups(Obj root)
+    {
+        var errs = new List<string>();
+        var owner = new Dictionary<string, string>();
+        foreach (var (gid, entry) in EditsFile.Groups(root))
+        {
+            var path = $"groups.{gid}";
+            if (!GroupRx.IsMatch(gid)) errs.Add($"{path}: group IDs look like G-0001");
+            if (entry is not Obj g) { errs.Add($"{path}: must be an object"); continue; }
+            foreach (var k in g.Keys) if (k is not ("parcels" or "fence")) errs.Add($"{path}.{k}: unknown key");
+            if (g.GetValueOrDefault("parcels") is not List<object?> members || members.Count == 0) errs.Add($"{path}.parcels: must be a non-empty list of parcel IDs");
+            else
+                foreach (var m in members)
+                {
+                    if (!(m is string pid && ParcelRx.IsMatch(pid))) errs.Add($"{path}.parcels: must be a parcel ID like P-0412");
+                    else if (owner.TryGetValue(pid, out var og)) errs.Add($"{path}.parcels: parcel {pid} is already in group {og}");
+                    else owner[pid] = gid;
+                }
+            if (g.TryGetValue("fence", out var gf)) errs.AddRange(CheckFenceObject(gf, $"{path}.fence"));
+        }
+        return errs;
+    }
+
+    static IEnumerable<string> CheckFenceObject(object? fence, string path)
+        => fence is Obj o ? EditModel.CheckFence(o, path) : new[] { $"{path}: must be an object" };
+
+    /// <summary>Mirror of edits/schema.py `_check_paths`: a worn footpath is a line of at least 2 [x, y] points, an optional width and "closed".</summary>
+    static List<string> CheckPath(object? entry, string path)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj pe) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in pe.Keys) if (k is not ("points" or "width_m" or "closed")) errs.Add($"{path}.{k}: unknown key");
+        var pts = pe.GetValueOrDefault("points") as List<object?>;
+        if (pts == null || pts.Count < 2 || !pts.All(p => p is List<object?> { Count: 2 } xy && xy.All(v => Number(v) is double n && double.IsFinite(n))))
+            errs.Add($"{path}.points: must be a list of at least 2 [x, y] points");
+        if (pe.TryGetValue("width_m", out var w) && !(Number(w) is double wm && wm >= 0.3 && wm <= 4.0))
+            errs.Add($"{path}.width_m: must be a number of metres from 0.3 to 4");
+        if (pe.TryGetValue("closed", out var cl) && cl is not bool) errs.Add($"{path}.closed: must be true or false");
+        return errs;
+    }
+
+    static readonly Regex CableRx = new("^C-\\d{4,}$", RegexOptions.Compiled);
+    static readonly Regex PathRx = new("^PA-\\d{4,}$", RegexOptions.Compiled);
+
+    /// <summary>Mirror of edits/schema.py `_check_cables`: two different object ids per cable, and no pair of poles joined twice.</summary>
+    static List<string> CheckCables(Obj cables)
+    {
+        var errs = new List<string>();
+        var seen = new Dictionary<(string, string), string>();
+        foreach (var (cid, entry) in cables)
+        {
+            var path = $"cables.{cid}";
+            if (!CableRx.IsMatch(cid)) errs.Add($"{path}: cable IDs look like C-0001");
+            if (entry is not Obj c) { errs.Add($"{path}: must be an object"); continue; }
+            foreach (var k in c.Keys) if (k is not ("from" or "to")) errs.Add($"{path}.{k}: unknown key");
+            var ok = true;
+            foreach (var key in new[] { "from", "to" })
+            {
+                if (!c.TryGetValue(key, out var v)) { errs.Add($"{path}.{key}: required"); ok = false; }
+                else if (!(v is string s && s != "")) { errs.Add($"{path}.{key}: must be the id of a placed object"); ok = false; }
+            }
+            if (!ok) continue;
+            var a = (string)c["from"]!; var b = (string)c["to"]!;
+            if (a == b) { errs.Add($"{path}: from and to must be two different poles"); continue; }
+            var pair = string.CompareOrdinal(a, b) <= 0 ? (a, b) : (b, a);
+            if (seen.TryGetValue(pair, out var other)) errs.Add($"{path}: {pair.Item1} and {pair.Item2} are already joined by {other}");
+            else seen[pair] = cid;
+        }
+        return errs;
+    }
+
+    /// <summary>
+    /// Mirror of edits/schema.py `_check_ground_patch`: a `type` that exists (rules.yaml or ground_types, not deleted), a `water_y` that is there exactly
+    /// when the type carries water, an optional `max_depth` (0 to 20 m, only with `water_y`), and a simple ring of at least 3 [x, y] points (closing point optional).
+    /// </summary>
+    static List<string> CheckPatch(object? entry, string path, Obj? types)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in r.Keys) if (k is not ("type" or "polygon" or "water_y" or "max_depth")) errs.Add($"{path}.{k}: unknown key");
+        if (!r.TryGetValue("type", out var tv)) errs.Add($"{path}.type: required");
+        else if (tv is not string type || type == "") errs.Add($"{path}.type: must be a ground type name");
+        else
+        {
+            var (exists, water) = GroundTypeEdits.PatchType(type, types);
+            if (!exists) errs.Add($"{path}.type: {type} is not a ground type (or it is deleted)");
+            else if (water is true && !r.ContainsKey("water_y")) errs.Add($"{path}.water_y: required: {type} is water, so the patch needs the height of its surface");
+            else if (water is false && r.ContainsKey("water_y")) errs.Add($"{path}.water_y: refused: {type} is not water");
+        }
+        if (r.TryGetValue("water_y", out var wy) && !(Number(wy) is double w && double.IsFinite(w))) errs.Add($"{path}.water_y: must be a number (metres, terrain datum)");
+        if (r.TryGetValue("max_depth", out var md))
+        {
+            if (!r.ContainsKey("water_y")) errs.Add($"{path}.max_depth: only a body of water (with water_y) has a depth");
+            else if (!(Number(md) is double d && double.IsFinite(d) && d > 0 && d <= 20)) errs.Add($"{path}.max_depth: must be a number of metres in (0, 20]");
+        }
+        errs.AddRange(CheckPolygon(r, path));
+        return errs;
+    }
+
+    /// <summary>Mirror of edits/schema.py `_check_zone`: a `kind` of the catalog and a simple ring of at least 3 [x, y] points.</summary>
+    static List<string> CheckZone(object? entry, string path)
+    {
+        var errs = new List<string>();
+        if (entry is not Obj r) { errs.Add($"{path}: must be an object"); return errs; }
+        foreach (var k in r.Keys) if (k is not ("kind" or "polygon")) errs.Add($"{path}.{k}: unknown key");
+        if (!r.TryGetValue("kind", out var kv)) errs.Add($"{path}.kind: required");
+        else if (kv is not string kind || kind == "") errs.Add($"{path}.kind: must be a zone kind name");
+        else if (ZoneKinds.Count > 0 && !ZoneKinds.Contains(kind)) errs.Add($"{path}.kind: unknown zone kind {kind} (the catalog has {string.Join(", ", ZoneKinds)})");
+        errs.AddRange(CheckPolygon(r, path));
+        return errs;
+    }
+
+    static List<string> CheckPolygon(Obj r, string path, string key = "polygon")
+    {
+        var errs = new List<string>();
+        if (!r.TryGetValue(key, out var poly)) { errs.Add($"{path}.{key}: required"); return errs; }
+        if (poly is not List<object?> pts) { errs.Add($"{path}.{key}: must be a list of [x, y] points"); return errs; }
+        var ring = new List<(double x, double y)>();
+        for (var i = 0; i < pts.Count; i++)
+        {
+            if (pts[i] is List<object?> p && p.Count == 2 && Number(p[0]) is double x && Number(p[1]) is double y) ring.Add((x, y));
+            else errs.Add($"{path}.{key}.{i}: must be [x, y] in absolute S-JTSK metres");
+        }
+        if (errs.Count > 0) return errs;
+        switch (RingProblemCode(ring))
+        {
+            case RingTooFew: errs.Add($"{path}.{key}: needs at least 3 points"); break;
+            case RingRepeated: errs.Add($"{path}.{key}: has repeated consecutive points"); break;
+            case RingNotSimple: errs.Add($"{path}.{key}: must not intersect or touch itself, and must enclose an area"); break;
+        }
+        return errs;
+    }
+
+    /// <summary>
+    /// The ring without its spikes: a corner where the outline goes out along a line and straight back (a zero-width antenna, as ground
+    /// areas from cadastre data have) is dropped, repeatedly. A ring without spikes comes back as given.
+    /// </summary>
+    public static List<(double x, double y)> Despiked(IReadOnlyList<(double x, double y)> points)
+    {
+        var ring = points.ToList();
+        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+        for (var again = true; again && ring.Count > 3;)
+        {
+            again = false;
+            for (var i = 0; i < ring.Count && ring.Count > 3; i++)
+            {
+                var p = ring[(i + ring.Count - 1) % ring.Count]; var v = ring[i]; var n = ring[(i + 1) % ring.Count];
+                double ax = v.x - p.x, ay = v.y - p.y, bx = n.x - v.x, by = n.y - v.y;
+                var la = Math.Sqrt(ax * ax + ay * ay); var lb = Math.Sqrt(bx * bx + by * by);
+                if (la == 0 || lb == 0 || ax * bx + ay * by >= 0 || Math.Abs(ax * by - ay * bx) > 1e-3 * la * lb) continue;
+                ring.RemoveAt(i); again = true; i--;
+            }
+        }
+        return ring;
+    }
+
+    public const int RingOk = 0, RingTooFew = 1, RingRepeated = 2, RingNotSimple = 3;
+
+    /// <summary>What is wrong with a patch or zone ring (RingOk when nothing): the same three rules as the validator. A repeated closing point is ignored.</summary>
+    public static int RingProblemCode(IReadOnlyList<(double x, double y)> points)
+    {
+        var ring = points.ToList();
+        if (ring.Count > 1 && ring[0] == ring[^1]) ring.RemoveAt(ring.Count - 1);
+        if (ring.Count < 3) return RingTooFew;
+        if (Enumerable.Range(0, ring.Count).Any(i => ring[i] == ring[(i + 1) % ring.Count])) return RingRepeated;
+        return IsSimpleRing(ring) ? RingOk : RingNotSimple;
+    }
+
+    /// <summary>
+    /// Whether adding <paramref name="p"/> to an open chain of corners is allowed: not the last corner again, and the new
+    /// edge neither crosses nor touches an earlier edge (it may only start at the last corner, and not double back along it).
+    /// </summary>
+    public static bool ChainAccepts(IReadOnlyList<(double x, double y)> chain, (double x, double y) p)
+    {
+        if (chain.Count == 0) return true;
+        var last = chain[^1];
+        if (last == p) return false;
+        for (var i = 0; i + 1 < chain.Count; i++)
+        {
+            var a = chain[i]; var b = chain[i + 1];
+            if (i + 2 == chain.Count)
+            {
+                if (Cross(last, a, p) == 0 && (OnSegment(last, a, p) || OnSegment(last, p, a))) return false;
+            }
+            else if (SegmentsMeet(last, p, a, b)) return false;
+        }
+        return true;
+    }
+
+    static double Cross((double x, double y) o, (double x, double y) a, (double x, double y) b)
+        => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+
+    static bool OnSegment((double x, double y) a, (double x, double y) b, (double x, double y) p)
+        => Math.Min(a.x, b.x) <= p.x && p.x <= Math.Max(a.x, b.x) && Math.Min(a.y, b.y) <= p.y && p.y <= Math.Max(a.y, b.y);
+
+    /// <summary>Closed segments ab and cd share at least one point.</summary>
+    static bool SegmentsMeet((double x, double y) a, (double x, double y) b, (double x, double y) c, (double x, double y) d)
+    {
+        double d1 = Cross(a, b, c), d2 = Cross(a, b, d), d3 = Cross(c, d, a), d4 = Cross(c, d, b);
+        if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
+        return (d1 == 0 && OnSegment(a, b, c)) || (d2 == 0 && OnSegment(a, b, d)) || (d3 == 0 && OnSegment(c, d, a)) || (d4 == 0 && OnSegment(c, d, b));
+    }
+
+    /// <summary>No two edges meet except neighbours at their shared vertex (a neighbour doubling back counts as meeting), and the area is not 0.</summary>
+    static bool IsSimpleRing(List<(double x, double y)> r)
+    {
+        int n = r.Count;
+        double area = 0;
+        for (var i = 0; i < n; i++) area += r[i].x * r[(i + 1) % n].y - r[(i + 1) % n].x * r[i].y;
+        if (area == 0) return false;
+        for (var i = 0; i < n; i++)
+            for (var j = i + 1; j < n; j++)
+            {
+                var a = r[i]; var b = r[(i + 1) % n]; var c = r[j]; var d = r[(j + 1) % n];
+                if (j == i + 1 || (i == 0 && j == n - 1))
+                {
+                    // neighbours: they may only share the common vertex; the far end of one must not lie on the other
+                    var (shared, far1, far2) = j == i + 1 ? (b, a, d) : (a, b, c);
+                    if (Cross(shared, far1, far2) == 0 && OnSegment(shared, far1, far2) | OnSegment(shared, far2, far1)) return false;
+                }
+                else if (SegmentsMeet(a, b, c, d)) return false;
+            }
+        return true;
+    }
+}

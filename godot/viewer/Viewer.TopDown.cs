@@ -1,9 +1,11 @@
+using Godot;
 using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Godot;
+
+namespace Drycastle.Viewer;
 
 /// <summary>
 /// `--topdown PNG`: renders the whole loaded map straight down (orthographic, north up) into one PNG plus a sidecar

@@ -1,7 +1,11 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Citizens;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Demon;
 
 /// <summary>What the demon is doing: the replicated state byte. Waiting is still at its anchor (nobody inside), Dwelling rests, Telegraphing is the wind-up of a fireball, Roaring is the aggressive roar, Crouching the crouch before a leap, Leaping the arc across the nave, Breathing the fire from its mouth (windup, then the stream), PounceWind the crouch before the pounce, Pouncing the homing leap at its victim, Pinning it stands over the pinned victim and bites. Climbing to the first anchor after the turning shows as Crawling.</summary>
 public enum DemonState : byte { Transforming = 0, Waiting = 1, Dwelling = 2, Crawling = 3, Telegraphing = 4, Dead = 5, Roaring = 6, Crouching = 7, Leaping = 8, Breathing = 9, PounceWind = 10, Pouncing = 11, Pinning = 12 }
@@ -118,7 +122,7 @@ public sealed class DemonEntity : IWorldEntity
     public WorldDespawnReason? Ended { get; set; }
 
     public void Tick(float dt) { }
-    public void OnDamage(float amount, ushort attacker) { } // hits go to the brain (NetServer.Demon), not through the entity manager
+    public void OnDamage(float amount, ushort attacker) { } // hits go to the brain (Net/Server/Parish/DemonServer.cs), not through the entity manager
 
     public WorldState Serialize()
     {

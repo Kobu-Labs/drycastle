@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>Where illegal transitions go. Production: <see cref="Report"/> is called and the transition still happens (a rare bad edge must not take a match down). Tests turn <see cref="Strict"/> on and it throws.</summary>
 public static class StateMachineDiagnostics

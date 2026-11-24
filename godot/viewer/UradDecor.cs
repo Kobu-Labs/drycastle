@@ -1,7 +1,9 @@
+using Godot;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-using Godot;
+
+namespace Drycastle.Viewer;
 
 /// <summary>
 /// The inside of the Obecny Urad as the game dresses it (ADR 0020), so the viewer and the editor show what a player sees: the <c>props</c> of the map's urad.json as

@@ -16,7 +16,7 @@
 #                            its high edge is on the left of that direction)
 #              wall_colour   "#rrggbb"
 #              roof_colour   "#rrggbb"
-#              model         name of a hand-modelled landmark (pipeline/src/drycastle_pipeline/landmarks.py)
+#              model         name of a hand-modelled landmark (pipeline/src/drycastle_pipeline/buildings/landmarks/catalog.py)
 #                            that replaces the generated mesh, e.g. church
 #              model_axis    with model: bearing of the model's front in radians, counter-clockwise from east
 #              remove        true: the building is left out of the map (a placed object stands there instead)
@@ -51,7 +51,7 @@ buildings:
     roof_height_m: 5.6  # measured: steep roof, eave 3.6 m, ridge 9.2 m
 
   # WW2 bunkers (P-0876, P-0823): the real footprint with a rounded concrete dome, an open doorway and
-  # firing slits; players can go in (pipeline/src/drycastle_pipeline/bunker.py). model_axis is the
+  # firing slits; players can go in (pipeline/src/drycastle_pipeline/buildings/landmarks/bunker.py). model_axis is the
   # bearing the door faces: towards the parcel's road side.
   w378900225:
     model: bunker
@@ -111,7 +111,7 @@ buildings:
   # P-0666 (G-0124, beside the church): the bus garage, two parts sharing a wall. White render, two lean-to
   # roofs of old rusty standing-seam sheet falling away from the shared wall, a brown double door in the
   # deep part (w378900337) and a barred window in the other. From the owner's photos of 2026-11-16. The
-  # deep part is hollow and its door and walls are raised for the bus (pipeline/src/drycastle_pipeline/garage.py);
+  # deep part is hollow and its door and walls are raised for the bus (pipeline/src/drycastle_pipeline/buildings/landmarks/garage.py);
   # the roof and height here only describe the model. The generated defaults (two storeys, gabled) were wrong.
   w378900337:
     model: bus_garage
@@ -142,7 +142,7 @@ buildings:
 
   # P-0561 (Drycastle 295): two-storey house of four flats, pale cream render, one gabled roof with a
   # deep front overhang, loggias with balconies and a staircase block over the open entrance. Modelled by
-  # hand from four Street View frames (pipeline/src/drycastle_pipeline/flats.py); the generated default
+  # hand from four Street View frames (pipeline/src/drycastle_pipeline/buildings/landmarks/flats.py); the generated default
   # (four storeys, flat roof, 11.5 m) was wrong. The roof and height here only describe the model.
   w378900224:
     model: flats
@@ -168,7 +168,7 @@ buildings:
   # The six two-storey houses of flats in the east of the village: the row P-0297, P-0296,
   # P-0295 and the row P-0331 (inside P-0330), P-0332 (G-0070), P-0333 (G-0069). Grey render, flat roof,
   # corner loggias and a staircase bay set back in the street front. Modelled by hand from two Street View
-  # frames of one of them (pipeline/src/drycastle_pipeline/loggia_house.py); the generated default (four
+  # frames of one of them (pipeline/src/drycastle_pipeline/buildings/landmarks/loggia_house.py); the generated default (four
   # storeys, 12 m) was wrong. model_axis is the bearing the loggia front faces: south-west, away from
   # the access road, which runs along the rear wall with the door. All six use the model as it is;
   # P-0333 is 23.9 m long with a small projection at the rear, so there the model is stretched by 1.4

@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Match;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Bots;
 
 /// <summary>
 /// Who a bot may fight (the host's half of <see cref="IBotWorld.Enemies"/>): in team deathmatch the teammates are no enemies,

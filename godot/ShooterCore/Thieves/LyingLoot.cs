@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>Rules of the lying Loot entity that need no world: the wire type and the state layout.</summary>
 public static class LootRules

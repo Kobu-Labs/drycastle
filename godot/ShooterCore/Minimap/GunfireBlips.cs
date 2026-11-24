@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>One live gunfire blip: where the shot came from (ground x, z) and how far through its life it is (0 = just fired, 1 = gone).</summary>
 public readonly record struct GunfireBlip(Vector2 Position, float Age01)

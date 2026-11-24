@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Vehicles;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>What a rocket's tick ended in: still flying, a player hit, the world hit, or its life ran out.</summary>
 public enum RocketOutcome : byte { Flying, Player, World, Expired }

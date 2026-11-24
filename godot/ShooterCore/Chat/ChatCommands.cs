@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Chat;
 
 /// <summary><see cref="Text"/>: free text; as the last argument it takes the rest of the line, case and spaces kept.</summary>
 public enum ChatArgKind { Int, Choice, Time, Player, IntOrChoice, Text }

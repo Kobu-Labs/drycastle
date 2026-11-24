@@ -1,7 +1,7 @@
 # Google Street View reference imagery
 
 Photos of the village buildings to look at while modelling them by hand. Not an input of the
-generated map (`pipeline/src/drycastle_pipeline/streetview.py`). Mapillary has poor coverage here
+generated map (`pipeline/src/drycastle_pipeline/photos/streetview.py`). Mapillary has poor coverage here
 (see `docs/mapillary.md`).
 
 ## Terms
@@ -21,9 +21,9 @@ generated from them automatically. They are for human eyes only.
 
 ```
 cd pipeline
-uv run python -m drycastle_pipeline.streetview                 # coverage report, free
-uv run python -m drycastle_pipeline.streetview --building w378920327 --download
-uv run python -m drycastle_pipeline.streetview --download --max-images 200
+uv run python -m drycastle_pipeline.photos.streetview                 # coverage report, free
+uv run python -m drycastle_pipeline.photos.streetview --building w378920327 --download
+uv run python -m drycastle_pipeline.photos.streetview --download --max-images 200
 ```
 
 For each building it probes 8 points around it (free metadata calls), keeps panoramas that look at
@@ -39,9 +39,9 @@ middle of the view (`data/village/photos/`, gitignored). See `docs/photo-to-buil
 
 ## Following a Street View tab (character and top-down point)
 
-`pipeline/src/drycastle_pipeline/streetview_follow.py` watches the address of a Chrome tab and writes where you
+`pipeline/src/drycastle_pipeline/photos/streetview_follow.py` watches the address of a Chrome tab and writes where you
 stand and look to `out/streetview-position.json`. The viewer in editor mode (`--editor`) watches that file
-(`godot/viewer/StreetViewFollow.cs`) and moves the character there, facing the way the camera looks. Press **T**
+(`godot/viewer/StreetView/StreetViewFollow.cs`) and moves the character there, facing the way the camera looks. Press **T**
 in the editor for the top-down view: a red point with a white rim marks the spot straight below the character
 (it keeps about the same size on screen at any height, and is drawn over roofs and trees). The status bar says
 where the character was put. **F2** walks from there. The editor's camera follows the character: the first position takes
@@ -51,7 +51,7 @@ the camera back to where it was. No model and no MCP server is involved.
 
 ```
 cd pipeline
-uv run python -m drycastle_pipeline.streetview_follow --launch     # opens its own Chrome (signed out) on the village
+uv run python -m drycastle_pipeline.photos.streetview_follow --launch     # opens its own Chrome (signed out) on the village
 ```
 
 Open Street View in that window and walk. Nothing is added to the sketches automatically. Without `--launch` it

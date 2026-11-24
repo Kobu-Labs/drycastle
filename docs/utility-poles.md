@@ -6,9 +6,9 @@ address horns, boxes and a tangle of cables) are generated from parts. Three mod
 
 | Module | What it holds |
 |---|---|
-| `poleparts.py` | The parts kit: `Kit` (flat-coloured solids: loft, lathe, tube, beam, box, swept cable) and one builder per part. `PARTS` lists them. |
-| `poles.py` | `PoleSpec` (a pole as plain data), `build_pole(spec)`, `random_spec(seed, archetype)`, `VARIANTS` (the placeable poles) and `span_mesh` (wires between two placed poles). |
-| `poles_preview.py` | Pictures of all of it (`make poles-preview`) and the manifest sync (`make poles-manifest`). |
+| `kits/poleparts.py` | The parts kit: `Kit` (flat-coloured solids: loft, lathe, tube, beam, box, swept cable) and one builder per part. `PARTS` lists them. |
+| `kits/poles.py` | `PoleSpec` (a pole as plain data), `build_pole(spec)`, `random_spec(seed, archetype)`, `VARIANTS` (the placeable poles) and `span_mesh` (wires between two placed poles). |
+| `preview/poles.py` | Pictures of all of it (`make poles-preview`) and the manifest sync (`make poles-manifest`). |
 
 ## Frame
 
@@ -70,14 +70,14 @@ generator) and `make poles-preview` to look at the result.
 ## Cables
 
 A cable joins two placed poles: `cables` in `edits.json`, `{"C-0001": {"from": "o-0012", "to": "o-0015"}}`
-(schema in `edits.py`; a pair of poles has at most one cable, the direction means nothing). The props stage
+(schema in `edits/schema.py`; a pair of poles has at most one cable, the direction means nothing). The props stage
 copies the cables whose two ends are placed poles into `objects.json` (`cables`, a list of `id`, `from`, `to`);
 the others are skipped with a warning. Nothing of a cable is baked into the map: the game strings the wires
 when it loads the objects, from the poles as they stand and the wire seats of their assets (`seats` in
 `assets/manifest.json`, written by `make poles-manifest`). So the viewer, the editor and the shooter show the
 same wires, and moving or turning a pole in the editor moves them at once. Wires have no collision.
 
-The rule (`godot/ShooterCore/Environment/CableWires.cs`, tested in `CableWiresTests`):
+The rule (`godot/ShooterCore/Scenery/CableWires.cs`, tested in `CableWiresTests`):
 
 - **Poles are not turned.** Each keeps the rotation it was given.
 - On each pole the crossarm that stands most squarely across the span is used (a junction pole's branch arm
@@ -106,7 +106,7 @@ have no night and show no light.
 ## House connections
 
 A cable can also end on a house: on a **house connector**, a small fitting on a wall or a roof
-(`pipeline/src/drycastle_pipeline/connectors.py`, drawn in `out/poles/connectors.png`). There are six,
+(`pipeline/src/drycastle_pipeline/kits/connectors.py`, drawn in `out/poles/connectors.png`). There are six,
 placeable objects like the poles (`prim:connector_*`, category `connector`, no collision), each with wire seats:
 
 | Asset | Where | What |
@@ -137,7 +137,7 @@ the id of a connector that exists, e.g. `[pole, connector]`.
 
 ### A street at a time
 
-`python -m drycastle_pipeline.house_connections` (`--dry-run` first) places the connectors and their cables
+`python -m drycastle_pipeline.edits.house_connections` (`--dry-run` first) places the connectors and their cables
 for every dwelling within `--service-m` (default 40) of a pole, into `edits.json` like the editor would: `objects` with a
 `z`, and `cables` from the pole. A house takes the nearest pole that has room (`--per-pole`, default 4 drops) over a wire
 that does not go through a building. The wire lands on the wall that faces the pole, under the eave and away from the

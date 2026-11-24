@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// Everything <see cref="FlightModel"/> carries from tick to tick for one flying vehicle. The server owns the true one; the pilot's client
@@ -203,7 +205,33 @@ public static class FlightModel
             s.Grounded = false;
         }
 
-        // ---- attitude: what the keys ask for, plus the stabiliser's flare on each axis the keys leave alone
+        Tilt(ref s, f, dt);
+        TurnNose(ref s, f, input, dt);
+        var vh = HorizontalVelocity(ref s, def, dt);
+        var vy = VerticalSpeed(in s, f, lift, sink, dt);
+        s.Velocity = new Vector3(vh.X, vy, vh.Z);
+
+        // ---- the map's edge: the speed towards it is held down to nothing at the edge
+        var b = world.Bounds;
+        s.Velocity.X = EdgeLimit(s.Velocity.X, s.Position.X, b.MinX, b.MaxX, def.TopSpeed, f.EdgeMargin, ref s.AtEdge);
+        s.Velocity.Z = EdgeLimit(s.Velocity.Z, s.Position.Z, b.MinZ, b.MaxZ, def.TopSpeed, f.EdgeMargin, ref s.AtEdge);
+
+        var landed = Sweep(ref s, world, dt);
+
+        // water is not solid to the physics, but the helicopter does not go under it
+        if (!float.IsNegativeInfinity(water) && s.Position.Y < water)
+        {
+            s.Position.Y = water;
+            if (s.Velocity.Y < 0) { s.Impact = MathF.Max(s.Impact, -s.Velocity.Y); s.Velocity.Y = 0; }
+        }
+        s.InWater = !float.IsNegativeInfinity(water) && s.Position.Y <= water + WaterTouch;
+
+        if (landed) SlideToStop(ref s, f, lift, dt);
+    }
+
+    /// <summary>Attitude: what the keys ask for, plus the stabiliser's flare on each axis the keys leave alone, as a spring on pitch and roll.</summary>
+    static void Tilt(ref FlightState s, VehicleFlightDef f, float dt)
+    {
         var (sy, cy) = MathF.SinCos(s.Yaw);
         var fwd = new Vector3(-sy, 0, -cy); var right = new Vector3(cy, 0, -sy);
         var vF = Vector3.Dot(s.Velocity, fwd); var vR = Vector3.Dot(s.Velocity, right);
@@ -218,23 +246,31 @@ public static class FlightModel
         rollTarget = Math.Clamp(rollTarget, -rollLimit, rollLimit);
         Spring(ref s.Pitch, ref s.PitchRate, pitchTarget - s.Pitch, f.AttitudeResponse, dt);
         Spring(ref s.Roll, ref s.RollRate, rollTarget - s.Roll, f.AttitudeResponse, dt);
+    }
 
-        // ---- yaw: the nose swings to the view, never faster than the yaw rate
+    /// <summary>Yaw: the nose swings to the view, never faster than the yaw rate.</summary>
+    static void TurnNose(ref FlightState s, VehicleFlightDef f, in FlightInput input, float dt)
+    {
         var maxYawRate = f.MaxYawRateDeg * FlightMath.Deg2Rad;
         var yawError = input.Piloted && !input.HoldHeading ? FlightMath.Wrap(input.Yaw - s.Yaw) : 0f;
         s.YawRate += (f.YawResponse * f.YawResponse * yawError - 2f * f.YawResponse * s.YawRate) * dt;
         s.YawRate = Math.Clamp(s.YawRate, -maxYawRate, maxYawRate);
         if (MathF.Abs(yawError) < StillAngle && MathF.Abs(s.YawRate) < StillAngle) s.YawRate = 0;
         s.Yaw = FlightMath.Wrap(s.Yaw + s.YawRate * dt);
-        (sy, cy) = MathF.SinCos(s.Yaw);
-        fwd = new Vector3(-sy, 0, -cy); right = new Vector3(cy, 0, -sy);
+    }
 
-        // ---- horizontal: the tilt accelerates, drag opposes; full nose-down ends at the type's top speed
+    /// <summary>Horizontal: the tilt accelerates, drag opposes; full nose-down ends at the type's top speed. Returns the new velocity on the plane.</summary>
+    static Vector3 HorizontalVelocity(ref FlightState s, VehicleDef def, float dt)
+    {
+        var f = def.Flight!;
+        var (sy, cy) = MathF.SinCos(s.Yaw);
+        var fwd = new Vector3(-sy, 0, -cy); var right = new Vector3(cy, 0, -sy);
+        float maxPitch = f.MaxPitchDeg * FlightMath.Deg2Rad, maxRoll = f.MaxRollDeg * FlightMath.Deg2Rad;
         var aF = -def.Acceleration * MathF.Sin(s.Pitch) / MathF.Sin(maxPitch);
         var aR = -f.StrafeAcceleration * MathF.Sin(s.Roll) / MathF.Sin(maxRoll);
         var vh = new Vector3(s.Velocity.X, 0, s.Velocity.Z);
         var speed = vh.Length();
-        vF = Vector3.Dot(vh, fwd); vR = Vector3.Dot(vh, right);
+        var vF = Vector3.Dot(vh, fwd); var vR = Vector3.Dot(vh, right);
         // the hull is slippery nose first and a barn door any other way: sideways and backwards it meets more drag
         var drag = f.DragLow + DragHigh(def) * speed;
         vh += (fwd * (aF - vF * drag * (vF < 0 ? f.OffAxisDrag : 1f)) + right * (aR - vR * drag * f.OffAxisDrag)) * dt;
@@ -252,8 +288,12 @@ public static class FlightModel
             var (so, co) = MathF.SinCos(off * (1f - k));
             vh = fwd * (speed * co) + right * (speed * so);
         }
+        return vh;
+    }
 
-        // ---- vertical: the keys set a climb or descent rate; no key, no vertical speed
+    /// <summary>Vertical: the keys set a climb or descent rate; no key, no vertical speed. Returns the new vertical speed.</summary>
+    static float VerticalSpeed(in FlightState s, VehicleFlightDef f, int lift, bool sink, float dt)
+    {
         float targetVy;
         if (sink) targetVy = -f.AutorotateDescent;
         else if (lift > 0) targetVy = f.ClimbRate * (float.IsPositiveInfinity(s.Agl) ? 0f : Math.Clamp((f.Ceiling - s.Agl) / f.CeilingFade, 0f, 1f));
@@ -266,14 +306,12 @@ public static class FlightModel
         var vy = s.Velocity.Y + Math.Clamp((targetVy - s.Velocity.Y) * f.VerticalResponse, -f.VerticalAccel, f.VerticalAccel) * dt;
         vy = MathF.Max(vy, -allowed);
         if (targetVy == 0 && MathF.Abs(vy) < StillSpeed) vy = 0;
-        s.Velocity = new Vector3(vh.X, vy, vh.Z);
+        return vy;
+    }
 
-        // ---- the map's edge: the speed towards it is held down to nothing at the edge
-        var b = world.Bounds;
-        s.Velocity.X = EdgeLimit(s.Velocity.X, s.Position.X, b.MinX, b.MaxX, def.TopSpeed, f.EdgeMargin, ref s.AtEdge);
-        s.Velocity.Z = EdgeLimit(s.Velocity.Z, s.Position.Z, b.MinZ, b.MaxZ, def.TopSpeed, f.EdgeMargin, ref s.AtEdge);
-
-        // ---- move: what a surface takes from the speed is the impact; then slide along it once
+    /// <summary>The move: what a surface takes from the speed is the impact; then it slides along it once. True when it touched ground.</summary>
+    static bool Sweep(ref FlightState s, IFlightWorld world, float dt)
+    {
         var landed = false;
         var target = s.Position + s.Velocity * dt;
         var move = world.Move(s.Position, s.Yaw, s.Pitch, s.Roll, s.Velocity * dt);
@@ -289,28 +327,21 @@ public static class FlightModel
             }
         }
         s.Position = move.Position;
+        return landed;
+    }
 
-        // water is not solid to the physics, but the helicopter does not go under it
-        if (!float.IsNegativeInfinity(water) && s.Position.Y < water)
+    /// <summary>The skids slide to a stop; at rest, and not being pulled up, it stands.</summary>
+    static void SlideToStop(ref FlightState s, VehicleFlightDef f, int lift, float dt)
+    {
+        var vh = new Vector3(s.Velocity.X, 0, s.Velocity.Z);
+        var speed = vh.Length();
+        if (speed > 0) vh *= MathF.Max(0f, speed - f.GroundFriction * dt) / speed;
+        s.Velocity = new Vector3(vh.X, s.Velocity.Y, vh.Z);
+        if (vh.Length() < RestSpeed && lift <= 0)
         {
-            s.Position.Y = water;
-            if (s.Velocity.Y < 0) { s.Impact = MathF.Max(s.Impact, -s.Velocity.Y); s.Velocity.Y = 0; }
-        }
-        s.InWater = !float.IsNegativeInfinity(water) && s.Position.Y <= water + WaterTouch;
-
-        if (landed)
-        {
-            // the skids slide to a stop; at rest, and not being pulled up, it stands
-            vh = new Vector3(s.Velocity.X, 0, s.Velocity.Z);
-            speed = vh.Length();
-            if (speed > 0) vh *= MathF.Max(0f, speed - f.GroundFriction * dt) / speed;
-            s.Velocity = new Vector3(vh.X, s.Velocity.Y, vh.Z);
-            if (vh.Length() < RestSpeed && lift <= 0)
-            {
-                s.Grounded = true;
-                s.Velocity = Vector3.Zero;
-                s.YawRate = s.PitchRate = s.RollRate = 0;
-            }
+            s.Grounded = true;
+            s.Velocity = Vector3.Zero;
+            s.YawRate = s.PitchRate = s.RollRate = 0;
         }
     }
 

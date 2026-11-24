@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// One hunt as a viewer may see it (<see cref="HuntRedaction"/>). <see cref="Species"/> is the index id, the mystery id, or a hidden id when

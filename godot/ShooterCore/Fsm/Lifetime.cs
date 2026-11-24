@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Fsm;
 
 /// <summary>
 /// "Lives this long, then expires": the <c>_age += dt; if (_age &gt;= limit) Ended = Expired</c> pair that every world entity repeats. A value type holding only

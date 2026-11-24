@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// One player's longest kill of another player (GLOSSARY "Player kill"): not a <see cref="HuntRecord"/> (no species, weight or rarity). Killer and victim are

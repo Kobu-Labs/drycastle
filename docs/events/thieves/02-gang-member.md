@@ -4,7 +4,7 @@ The person of a Raid: entity, Hit count, three kinds, walking, melee. No stealin
 
 ## Reuse
 - Pattern of `Citizen` / `CitizenCrowd` (`godot/ShooterCore/Citizens/`): `IWorldEntity`, world interface, hit-id maps, `AddTargets`, `Follow(route, dt, speed)`.
-- Routes: `BotNav.Route` (`godot/shooter/BotNav.cs`), a few ms each, tick thread. Bots are rationed to one per tick (`ServeBotRoute`, `NetServer.Bots.cs`): put gang members on the same ration (a shared queue).
+- Routes: `BotNav.Route` (`godot/shooter/Net/Bots/BotNav.cs`), a few ms each, tick thread. Bots are rationed to one per tick (`ServeBotRoute`, `NetServer.Bots.cs`): put gang members on the same ration (a shared queue).
 - Hit count rules: the Bigfoot's (`godot/ShooterCore/Events/Bigfoot*.cs`), here with headshot = 2.
 - Player damage from an entity: as the Bigfoot does through `Deal` with a `SpecialWeapons` id.
 
@@ -16,7 +16,7 @@ The person of a Raid: entity, Hit count, three kinds, walking, melee. No stealin
 - Hits: `LiveTargets`, `RewoundTargets` (decide: they run, so rewind like the Bigfoot's `PoseRing`, or document why not), `MatchSim.ApplyDamage` / `Deal` routing: hit marker, kill = small XP, no kill feed, streak or assist. Run over by a vehicle = dead (see how a citizen or pet is road-killed).
 - `NonEnemyTargets`: gang members are NOT in it (turrets and killstreak weapons shoot them). Bots do not see them.
 - Dead: lies `corpse_seconds` (10), then ends.
-- Client `NetClient.Thieves.cs` + a view: without the private pack a coloured capsule per kind (Thief, Enforcer with a stick, boss bigger). With it: `SyntyLib` peasant models as a stand-in until ticket 08. Clips by state.
+- Client `ThievesClient.cs` + a view: without the private pack a coloured capsule per kind (Thief, Enforcer with a stick, boss bigger). With it: `SyntyLib` peasant models as a stand-in until ticket 08. Clips by state.
 - `ThiefGang` (pure): owns the members of one Raid, the aggro list, the route queue.
 
 ## Accept
@@ -24,7 +24,7 @@ The person of a Raid: entity, Hit count, three kinds, walking, melee. No stealin
 - A member is never invisible (capsule fallback).
 
 ## Done: notes
-Code: pure `godot/ShooterCore/Thieves/` (`GangMember.cs` entity, enums, `GangRules`, interfaces; `ThiefGang.cs` gang, `GangRoster`, `GangHitIds`; `GangPlacement.cs`; data in `ThievesData.cs` + `thieves.json` section `gang`), server `NetServer.Thieves.Gang.cs`, client `NetClient.Thieves.cs` + `GangMemberView.cs`. Tests `GangMemberTests.cs`. Protocol 43.
+Code: pure `godot/ShooterCore/Thieves/` (`GangMember.cs` entity, enums, `GangRules`, interfaces; `ThiefGang.cs` gang, `GangRoster`, `GangHitIds`; `GangPlacement.cs`; data in `ThievesData.cs` + `thieves.json` section `gang`), server `NetServer.Thieves.Gang.cs`, client `ThievesClient.cs` + `GangMemberView.cs`. Tests `GangMemberTests.cs`. Protocol 43.
 
 ### API for 03 and 04
 - `GangRoster` (`NetServer.Gangs`): `NewGang(post)` per Raid, `Remove(gang)`, `Clear()`, `Killed` event, `SourceOf`. It is the match's `IGangHits` (`MatchSim.Gang`) and owns the one set of hit ids and the one route ration (`ServeRoute`, `AnyRouteWaiting`).

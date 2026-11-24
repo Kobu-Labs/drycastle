@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Killstreaks;
 
 /// <summary>Why an active killstreak ended. The byte is on the wire (StreakEnded).</summary>
 public enum KillstreakEndReason : byte

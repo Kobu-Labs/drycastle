@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>When to start a blow clip: after <see cref="DelayS"/> seconds of Windup, from <see cref="FromS"/> seconds into the clip.</summary>
 public readonly record struct BlowPlan(float DelayS, float FromS);

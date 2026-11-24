@@ -1,6 +1,6 @@
 # Placed objects belong to no parcel
 
-Decided with the user while adding Street View poles (`docs/streetview.md`). On the polygon map only properties are parcels; the roads and the rest of the land are ground areas (map outline, `ground.py`). Poles stand beside roads, so they stood on no parcel. `edits.json` kept every placed object in the list of a parcel (`parcels.<ID>.objects`), the editor refused to place or move one onto ground that is no parcel, and `place_object` needed a parcel id.
+Decided with the user while adding Street View poles (`docs/streetview.md`). On the polygon map only properties are parcels; the roads and the rest of the land are ground areas (map outline, `ground/areas.py`). Poles stand beside roads, so they stood on no parcel. `edits.json` kept every placed object in the list of a parcel (`parcels.<ID>.objects`), the editor refused to place or move one onto ground that is no parcel, and `place_object` needed a parcel id.
 
 **Decision.** A placed object is only a position. The list moves to the top level, `edits.json` `objects`, written sorted by id. Nothing about an object names a parcel: the editor and MCP place, move and duplicate it anywhere, and `objects.json` still carries a derived `parcel` (the one containing it, or null) so the game can group the nodes and a parcel-run can find the objects inside it. The old `owner` field is gone.
 

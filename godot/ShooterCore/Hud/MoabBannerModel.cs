@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Hud;
 
 /// <summary>What the MOAB banner shows.</summary>
 public enum MoabBannerPhase

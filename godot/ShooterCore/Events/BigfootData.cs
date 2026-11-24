@@ -1,4 +1,10 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>
 /// bigfoot.json, schema version 1 (issue #264): every number of the Bigfoot event. Lengths are metres, speeds metres per second, angles degrees,
@@ -8,7 +14,7 @@ public sealed class BigfootFile : IVersioned
 {
     public int Version { get; set; }
 
-    /// <summary>The model (scripts/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
+    /// <summary>The model (scripts/models/make_bigfoot_model.py: skinned, its own clips, see <see cref="BigfootRules.Clips"/>), relative to the asset library (assets/).</summary>
     public string Model { get; set; } = "drycastle-generated-models/bigfoot.glb";
     /// <summary>Uniform scale that brings the model, as it imports, to <see cref="HeightM"/>. The generated one is built at that height.</summary>
     public float ModelScale { get; set; } = 1f;
@@ -43,17 +49,31 @@ public sealed class BigfootFile : IVersioned
     /// <summary>One roll of the damage a player takes from Bigfoot.</summary>
     public int RollDamage(Random rng) => rng.Next(DamageMin, DamageMax + 1);
 
+    const string F = "bigfoot.json";
+    static void Positive(float v, string what) { if (!(v > 0) || !float.IsFinite(v)) throw new DataFileException($"{F}: {what} must be positive"); }
+    static void NotNegative(float v, string what) { if (!(v >= 0) || !float.IsFinite(v)) throw new DataFileException($"{F}: {what} must not be negative"); }
+
     public static BigfootFile Validate(BigfootFile f)
     {
-        const string F = "bigfoot.json";
-        void Positive(float v, string what) { if (!(v > 0) || !float.IsFinite(v)) throw new DataFileException($"{F}: {what} must be positive"); }
-        void NotNegative(float v, string what) { if (!(v >= 0) || !float.IsFinite(v)) throw new DataFileException($"{F}: {what} must not be negative"); }
         if (!f.Model.EndsWith(".glb", StringComparison.Ordinal) || f.Model.StartsWith('/') || f.Model.Contains("..", StringComparison.Ordinal))
             throw new DataFileException($"{F}: model is a .glb path inside the asset library");
         Positive(f.ModelScale, "model_scale"); Positive(f.HeightM, "height_m"); Positive(f.HitScale, "hit_scale");
         Positive(f.Movement.WalkStrideM, "movement.walk_stride_m"); Positive(f.Movement.RunStrideM, "movement.run_stride_m");
         if (f.DamageMin < 1 || f.DamageMax < f.DamageMin) throw new DataFileException($"{F}: damage_min is at least 1 and not above damage_max");
+        ValidateHits(f);
+        ValidateMovement(f);
+        ValidateTrunk(f);
+        ValidateStomp(f);
+        ValidateVehicleThrow(f);
+        ValidateHuntAndGrab(f);
+        ValidateWipe(f);
+        ValidateReward(f);
+        ValidateFallbackSpawn(f);
+        return f;
+    }
 
+    static void ValidateHits(BigfootFile f)
+    {
         var h = f.Hits;
         Positive(h.PerPlayer, "hits.per_player"); Positive(h.ParticipantRadiusM, "hits.participant_radius_m");
         if (h.MinPlayers < 1) throw new DataFileException($"{F}: hits.min_players is at least 1");
@@ -62,45 +82,67 @@ public sealed class BigfootFile : IVersioned
             throw new DataFileException($"{F}: hits.second_phase_at < third_phase_at < enrage_at, all between 0 and 1");
         Positive(h.EnrageSpeedMultiplier, "hits.enrage_speed_multiplier"); Positive(h.EnrageCooldownMultiplier, "hits.enrage_cooldown_multiplier");
         NotNegative(h.HealthRegainPerSecond, "hits.health_regain_per_second");
+    }
 
+    static void ValidateMovement(BigfootFile f)
+    {
         var m = f.Movement;
         Positive(m.WalkSpeed, "movement.walk_speed");
         if (m.RunSpeed < m.WalkSpeed) throw new DataFileException($"{F}: movement.run_speed is not below walk_speed");
         Positive(m.TurnRateDegPerS, "movement.turn_rate_deg_per_s"); Positive(m.RunBeyondM, "movement.run_beyond_m");
         Positive(m.MaxStepM, "movement.max_step_m"); Positive(m.BodyRadiusM, "movement.body_radius_m"); Positive(m.RetargetSeconds, "movement.retarget_seconds");
         Positive(m.StopDistanceM, "movement.stop_distance_m"); Positive(m.GiveUpM, "movement.give_up_m");
+        var h = f.Hits; // the phase timers are checked after the movement numbers
         NotNegative(h.SecondPhaseAfterSeconds, "hits.second_phase_after_seconds"); NotNegative(h.ThirdPhaseAfterSeconds, "hits.third_phase_after_seconds");
         NotNegative(h.EnrageAfterSeconds, "hits.enrage_after_seconds");
+    }
 
+    static void ValidateTrunk(BigfootFile f)
+    {
         var t = f.Trunk;
         Positive(t.MinRangeM, "trunk.min_range_m");
         if (t.MaxRangeM <= t.MinRangeM) throw new DataFileException($"{F}: trunk.max_range_m is above min_range_m");
         Positive(t.CooldownSeconds, "trunk.cooldown_seconds"); Positive(t.WindupSeconds, "trunk.windup_seconds"); Positive(t.SpeedMps, "trunk.speed_mps");
         Positive(t.RadiusM, "trunk.radius_m"); Positive(t.LifeSeconds, "trunk.life_seconds"); NotNegative(t.AimLeadSeconds, "trunk.aim_lead_seconds");
         Positive(t.MinFlightSeconds, "trunk.min_flight_seconds");
+    }
 
+    static void ValidateStomp(BigfootFile f)
+    {
         var s = f.Stomp;
         Positive(s.TriggerM, "stomp.trigger_m"); Positive(s.CooldownSeconds, "stomp.cooldown_seconds"); Positive(s.WindupSeconds, "stomp.windup_seconds");
         Positive(s.WaveSpeedMps, "stomp.wave_speed_mps"); Positive(s.WaveMaxRadiusM, "stomp.wave_max_radius_m"); Positive(s.WaveBandM, "stomp.wave_band_m");
         Positive(s.WaveHeightM, "stomp.wave_height_m"); NotNegative(s.KnockbackMps, "stomp.knockback_mps"); NotNegative(s.KnockbackLiftMps, "stomp.knockback_lift_mps");
+    }
 
+    static void ValidateVehicleThrow(BigfootFile f)
+    {
         var v = f.VehicleThrow;
         Positive(v.ContactM, "vehicle_throw.contact_m"); Positive(v.WindupSeconds, "vehicle_throw.windup_seconds"); Positive(v.CooldownSeconds, "vehicle_throw.cooldown_seconds");
         Positive(v.MinDistanceM, "vehicle_throw.min_distance_m"); Positive(v.HoldHeightM, "vehicle_throw.hold_height_m");
         if (v.MaxDistanceM < v.MinDistanceM) throw new DataFileException($"{F}: vehicle_throw.max_distance_m is not below min_distance_m");
         Positive(v.FlightSeconds, "vehicle_throw.flight_seconds"); NotNegative(v.SpinRadPerS, "vehicle_throw.spin_rad_per_s");
         if (v.PlacementTries < 1) throw new DataFileException($"{F}: vehicle_throw.placement_tries is at least 1");
+    }
 
+    static void ValidateHuntAndGrab(BigfootFile f)
+    {
         Positive(f.Hunt.RoarEverySeconds, "hunt.roar_every_seconds"); Positive(f.Hunt.MaxSeconds, "hunt.max_seconds"); Positive(f.Hunt.RadiusM, "hunt.radius_m");
         var g = f.Grab;
         Positive(g.RangeM, "grab.range_m"); Positive(g.CooldownSeconds, "grab.cooldown_seconds"); Positive(g.ReachSeconds, "grab.reach_seconds");
         Positive(g.HoldSeconds, "grab.hold_seconds"); Positive(g.LaunchFlightSeconds, "grab.launch_flight_seconds"); NotNegative(g.LaunchGraceSeconds, "grab.launch_grace_seconds");
         Positive(g.LaunchHitRadiusM, "grab.launch_hit_radius_m"); Positive(g.HandHeightM, "grab.hand_height_m"); Positive(g.HandForwardM, "grab.hand_forward_m");
         Positive(g.RandomLaunchSpeedMps, "grab.random_launch_speed_mps"); Positive(g.MinLaunchDistanceM, "grab.min_launch_distance_m");
+    }
 
+    static void ValidateWipe(BigfootFile f)
+    {
         var w = f.Wipe;
         Positive(w.WakeRadiusM, "wipe.wake_radius_m"); Positive(w.DespawnMinutes, "wipe.despawn_minutes"); Positive(w.DespawnRadiusM, "wipe.despawn_radius_m");
+    }
 
+    static void ValidateReward(BigfootFile f)
+    {
         var r = f.Reward;
         if (r.HeadItem == "") throw new DataFileException($"{F}: reward.head_item is empty");
         Positive(r.CorpseSeconds, "reward.corpse_seconds"); Positive(r.DeathSeconds, "reward.death_seconds");
@@ -109,11 +151,13 @@ public sealed class BigfootFile : IVersioned
         if (r.TrailLengthM / r.TrailSpacingM > BigfootTrail.MaxPrints) throw new DataFileException($"{F}: reward.trail_length_m / trail_spacing_m is at most {BigfootTrail.MaxPrints} footprints");
         if (r.TrailTries < 1) throw new DataFileException($"{F}: reward.trail_tries is at least 1");
         NotNegative(r.CreditMinHits, "reward.credit_min_hits");
+    }
 
+    static void ValidateFallbackSpawn(BigfootFile f)
+    {
         var fb = f.FallbackSpawn;
         Positive(fb.MinDistanceM, "fallback_spawn.min_distance_m");
         if (fb.MaxDistanceM < fb.MinDistanceM) throw new DataFileException($"{F}: fallback_spawn.max_distance_m is not below min_distance_m");
-        return f;
     }
 }
 
@@ -150,7 +194,7 @@ public sealed class BigfootMovement
     public float WalkSpeed { get; set; } = 3.4f;
     public float RunSpeed { get; set; } = 6.8f;
     /// <summary>
-    /// The ground one loop of the model's Walk and Run clips covers (scripts/make_bigfoot_model.py prints them). The client plays the clip at
+    /// The ground one loop of the model's Walk and Run clips covers (scripts/models/make_bigfoot_model.py prints them). The client plays the clip at
     /// ground speed / (stride / clip length), so the feet do not slide whatever the speed is tuned to.
     /// </summary>
     public float WalkStrideM { get; set; } = 2.8f;
@@ -280,7 +324,7 @@ public sealed class BigfootReward
     /// <summary>The body lies where it fell (the death clip) this long, then it is gone and the footsteps begin.</summary>
     public float DeathSeconds { get; set; } = 8;
     /// <summary>
-    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/make_bigfoot_model.py prints it). The corpse
+    /// Where the head lies on the dead body, in the model's frame (x to its right, y up, z behind it; scripts/models/make_bigfoot_model.py prints it). The corpse
     /// is over five metres long and is looted for its head, so the reach is measured from here (<see cref="CorpseRules.ReachPoint"/>), not from its feet.
     /// </summary>
     public float[] CorpseHeadM { get; set; } = { -0.22f, 1.03f, 2.88f };
@@ -344,7 +388,7 @@ public static class BigfootRules
         (byte)((byte)act | (hitToggle ? HitToggle : 0) | (Math.Clamp(phase, 0, 2) << PhaseShift) | (enraged ? Enraged : 0));
 
     /// <summary>
-    /// The clips the model has (scripts/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
+    /// The clips the model has (scripts/models/make_bigfoot_model.py CLIPS): one per act, a flinch and a roar. The wind-ups end on their blow (the log leaves, the
     /// foot lands, the vehicle is overhead at three quarters), so a client stretches each over its act's time.
     /// </summary>
     public const string ClipIdle = "Idle", ClipWalk = "Walk", ClipRun = "Run", ClipHit = "Hit", ClipRoar = "Roar", ClipDeath = "Death",

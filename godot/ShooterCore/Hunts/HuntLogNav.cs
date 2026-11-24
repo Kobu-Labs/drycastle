@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>Which page of the Hunter's Log screen shows. MyLog and PlayerLog are the first tab (the asker's own log, or another player's).</summary>
 public enum HuntLogPage { MyLog, PlayerLog, Records, AllHunts, Rewards }

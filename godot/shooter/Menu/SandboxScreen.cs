@@ -1,7 +1,10 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Icons;
+using Drycastle.ShooterCore.Sandbox;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The sandbox panel (F4, #156): the eight killstreaks as icon buttons (pick one to hold it), "Use now" for the held one,
@@ -50,10 +53,10 @@ public sealed partial class SandboxScreen : MenuScreen
 
         _body.AddChild(Ui.Lbl(Strings.T("sandbox.panel.actions"), "HudHead"));
         var actions = Ui.HBox();
-        _use = Ui.Btn(Strings.T("sandbox.panel.use"), () => _client.SendSandboxAction(SandboxAction.Activate), "MenuPrimary", 200);
+        _use = Ui.Btn(Strings.T("sandbox.panel.use"), () => _client.Sandbox.SendAction(SandboxAction.Activate), "MenuPrimary", 200);
         actions.AddChild(_use);
-        actions.AddChild(Ui.Btn(Strings.T("sandbox.panel.heal"), () => _client.SendSandboxAction(SandboxAction.Heal), null, 220));
-        actions.AddChild(Ui.Btn(Strings.T("sandbox.panel.teleport"), () => _client.SendSandboxAction(SandboxAction.Teleport), null, 220));
+        actions.AddChild(Ui.Btn(Strings.T("sandbox.panel.heal"), () => _client.Sandbox.SendAction(SandboxAction.Heal), null, 220));
+        actions.AddChild(Ui.Btn(Strings.T("sandbox.panel.teleport"), () => _client.Sandbox.SendAction(SandboxAction.Teleport), null, 220));
         _body.AddChild(actions);
 
         _body.AddChild(Ui.Lbl(Strings.T("sandbox.panel.vehicles"), "HudDim"));
@@ -62,7 +65,7 @@ public sealed partial class SandboxScreen : MenuScreen
         {
             var index = data.Vehicles.Vehicles.FindIndex(v => v.Id == id);
             if (index < 0) continue; // a vehicle missing from vehicles.json is left out, not an error
-            vehicles.AddChild(Ui.Btn(Strings.T("sandbox.vehicle." + id), () => _client.SendSandboxAction(SandboxAction.SpawnVehicle, (byte)index), null, 140));
+            vehicles.AddChild(Ui.Btn(Strings.T("sandbox.vehicle." + id), () => _client.Sandbox.SendAction(SandboxAction.SpawnVehicle, (byte)index), null, 140));
         }
         _body.AddChild(vehicles);
 
@@ -73,7 +76,7 @@ public sealed partial class SandboxScreen : MenuScreen
             FocusMode = Control.FocusModeEnum.All, MouseDefaultCursorShape = Control.CursorShape.PointingHand,
             SizeFlagsHorizontal = Control.SizeFlags.ShrinkBegin,
         };
-        _damage.Toggled += on => _client.SetSandboxTakesDamage(on);
+        _damage.Toggled += on => _client.Sandbox.SetTakesDamage(on);
         _body.AddChild(_damage);
         _body.AddChild(Ui.Lbl(Strings.T("sandbox.panel.damage.hint"), "HudDim", 0, true));
 
@@ -86,7 +89,7 @@ public sealed partial class SandboxScreen : MenuScreen
         footer.AddChild(Ui.Fill());
         root.AddChild(footer);
 
-        _client.SandboxChanged += Refresh;
+        _client.Sandbox.Changed += Refresh;
         Refresh();
 
         var card = new PanelContainer { ThemeTypeVariation = "MenuCard" };
@@ -97,7 +100,7 @@ public sealed partial class SandboxScreen : MenuScreen
     Button StreakCell(IconRegistry icons, string id)
     {
         var cell = new Button { Text = "", FocusMode = Control.FocusModeEnum.All, CustomMinimumSize = new Vector2(216, 144), MouseDefaultCursorShape = Control.CursorShape.PointingHand };
-        cell.Pressed += () => _client.SendSandboxGrant(id);
+        cell.Pressed += () => _client.Sandbox.SendGrant(id);
         var col = Ui.VBox();
         col.MouseFilter = Control.MouseFilterEnum.Ignore;
         col.Alignment = BoxContainer.AlignmentMode.Center;
@@ -121,7 +124,7 @@ public sealed partial class SandboxScreen : MenuScreen
     void ToggleRespawn()
     {
         _respawnOn = !_respawnOn;
-        _client.SendSandboxAction(SandboxAction.TargetRespawn, (byte)(_respawnOn ? 1 : 0));
+        _client.Sandbox.SendAction(SandboxAction.TargetRespawn, (byte)(_respawnOn ? 1 : 0));
         Refresh();
     }
 
@@ -129,10 +132,10 @@ public sealed partial class SandboxScreen : MenuScreen
     void Refresh()
     {
         if (!IsInstanceValid(_body)) return;
-        var granted = _client.SandboxGranted;
+        var granted = _client.Sandbox.Granted;
         _off.Visible = !granted;
         _body.Visible = granted;
-        var held = _client.SandboxHeldStreak;
+        var held = _client.Sandbox.HeldStreak;
         _held.Text = held == "" ? Strings.T("sandbox.held.none") : Strings.F("sandbox.held", SandboxStrings.StreakName(held));
         foreach (var (cell, mark, id) in _streaks)
         {
@@ -141,12 +144,12 @@ public sealed partial class SandboxScreen : MenuScreen
             mark.Visible = isHeld;
         }
         _use.Disabled = held == "";
-        _damage.SetPressedNoSignal(_client.SandboxTakesDamage);
+        _damage.SetPressedNoSignal(_client.Sandbox.TakesDamage);
         _respawn.Text = Strings.T(_respawnOn ? "sandbox.panel.respawn_on" : "sandbox.panel.respawn_off");
     }
 
     protected override Control? FirstFocusTarget() =>
-        _client.SandboxGranted && _streaks.Count > 0 ? _streaks[0].Cell : null;
+        _client.Sandbox.Granted && _streaks.Count > 0 ? _streaks[0].Cell : null;
 
     /// <summary>F4 again closes the panel, like Esc.</summary>
     public override bool HandleInput(InputEvent e)
@@ -161,6 +164,6 @@ public sealed partial class SandboxScreen : MenuScreen
 
     public override void _ExitTree()
     {
-        if (_client != null && IsInstanceValid(_client)) _client.SandboxChanged -= Refresh;
+        if (_client != null && IsInstanceValid(_client)) _client.Sandbox.Changed -= Refresh;
     }
 }

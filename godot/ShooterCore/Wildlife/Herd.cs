@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// A herd of wild animals of one species (GLOSSARY "Herd"): its members wander about the herd's <see cref="Anchor"/> (within <see cref="Spread"/>), the anchor

@@ -1,7 +1,7 @@
 {
   "version": 1,
   // The marijuana plantation (GLOSSARY "Plantation", "High"). A player on foot inside a `plantation` zone who holds the interact key (nothing else in reach of it) for hold_seconds is high for high_seconds;
-  // another completed hold while high starts the time over. Nothing is shown for the hold. The server counts it (NetServer.Plantation.cs); a map with no plantation zone has none of this.
+  // another completed hold while high starts the time over. Nothing is shown for the hold. The server counts it (Net/Server/Highs/PlantationServer.cs); a map with no plantation zone has none of this.
   "hold_seconds": 1.5,
   "high_seconds": 120,
   // The high player's own camera (ShooterCore Nausea; NetClient.High.cs). Each axis is a sum of sines: deg (the size of the sway) and period_s. yaw and pitch move the REAL look angles (the ones sent, so

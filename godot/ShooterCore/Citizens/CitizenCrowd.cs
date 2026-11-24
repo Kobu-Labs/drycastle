@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>What the crowd needs from the server: the houses that send citizens, and walkable routes on the navigation mesh.</summary>
 public interface ICitizenWorld

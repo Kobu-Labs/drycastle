@@ -1,6 +1,11 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// One Raid (GLOSSARY "Raid"): a <see cref="RaidVan"/> and the <see cref="ThiefGang"/> that rides in it, pure. The van drives the path of its <see cref="RaidPlan"/>; the Raid lets the crew out
@@ -10,7 +15,6 @@ namespace Drycastle.ShooterCore;
 public sealed class Raid : IRaidCrew
 {
     readonly VanConfig _cfg;
-    readonly GangConfig _gang;
     readonly Func<Vector3, Vector3>? _snap;
     readonly Func<Vector3, Vector3> _edgeFor;
     readonly Queue<GangMemberKind> _queue = new();
@@ -22,7 +26,7 @@ public sealed class Raid : IRaidCrew
     /// <param name="loot">The event's Loot: with it the Thieves of the gang steal and load the van (<see cref="RaidWork"/>); without, they stand about.</param>
     public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, GangConfig gangCfg, GangRaidCounts crew, RaidPlan plan, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, LootBook? loot = null)
     {
-        Van = van; Gang = gang; _cfg = cfg; _gang = gangCfg; Plan = plan; _snap = snap; _edgeFor = edgeFor; _loot = loot;
+        Van = van; Gang = gang; _cfg = cfg; Plan = plan; _snap = snap; _edgeFor = edgeFor; _loot = loot;
         foreach (var k in Order(crew)) _queue.Enqueue(k);
         van.Crew = this;
         van.StateChanged += OnVanState;

@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>
 /// The player's own Respawn (GLOSSARY "Respawn", ticket #284): the client asks (<see cref="EventKind.Redeploy"/>) and the server kills them as a suicide

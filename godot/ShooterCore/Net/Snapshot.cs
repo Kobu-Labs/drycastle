@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
+using Drycastle.ShooterCore.Movement;
+using static Drycastle.ShooterCore.Net.Bytes;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>
 /// The complete entity states of recent ticks. The server keeps what it sent and the client what it committed, so a
@@ -181,8 +183,6 @@ public sealed class SnapshotEncoder
         return pkt;
     }
 
-    static void W16(byte[] b, ref int o, short v) { BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(o), v); o += 2; }
-    static void W32(byte[] b, ref int o, int v) { BinaryPrimitives.WriteInt32LittleEndian(b.AsSpan(o), v); o += 4; }
     static void WritePosAbs(byte[] b, ref int o, in EntityRecord q) { W32(b, ref o, q.X); W32(b, ref o, q.Y); W32(b, ref o, q.Z); }
     static void WriteRot(byte[] b, ref int o, in EntityRecord q) { W16(b, ref o, (short)q.Yaw); W16(b, ref o, q.Pitch); }
     static void WriteStatus(byte[] b, ref int o, in EntityRecord q) { b[o++] = q.Health; b[o++] = (byte)((byte)q.State | ((byte)q.Stance << 4)); b[o++] = q.Weapon; }
@@ -236,7 +236,25 @@ public sealed class SnapshotDecoder
         header = new SnapshotHeader(tick, ack);
         if (HasState && tick <= LastTick) return false;
         if (total < 1 || total > 64 || index >= total) return false;
+        if (!JoinTick(tick, baseTick, total, index)) return false;
 
+        // parse first: a malformed packet changes nothing
+        if (!TryStage(d, count, out var staged)) return false;
+        foreach (var s in staged)
+        {
+            if (s.Remove) _asm!.Remove(s.Id);
+            else _asm![s.Id] = s.Rec;
+        }
+        _asmGot |= 1UL << index;
+        if (_asmGot != (ulong.MaxValue >> (64 - _asmTotal))) return false;
+        Commit(tick);
+        TicksCompleted++;
+        return true;
+    }
+
+    /// <summary>Starts assembling <paramref name="tick"/> (from a copy of its baseline) or joins the tick being assembled. False for a baseline that is gone, an older tick, or a packet already seen.</summary>
+    bool JoinTick(uint tick, uint baseTick, int total, int index)
+    {
         if (!_assembling || tick > _asmTick)
         {
             Dictionary<ushort, EntityRecord> start;
@@ -246,10 +264,13 @@ public sealed class SnapshotDecoder
             _asm = start; _asmTick = tick; _asmTotal = total; _asmGot = 0; _assembling = true; TicksStarted++;
         }
         else if (tick < _asmTick) return false; // older than the tick being assembled
-        if (total != _asmTotal || (_asmGot & (1UL << index)) != 0) return false;
+        return total == _asmTotal && (_asmGot & (1UL << index)) == 0;
+    }
 
-        // parse first: a malformed packet changes nothing
-        var staged = new List<Staged>(count);
+    /// <summary>Reads the packet's records against the tick being assembled, without changing it. False for a malformed packet or a delta its baseline cannot take.</summary>
+    bool TryStage(ReadOnlySpan<byte> d, int count, out List<Staged> staged)
+    {
+        staged = new List<Staged>(count);
         var o = SnapshotEncoder.HeaderBytes;
         for (var i = 0; i < count; i++)
         {
@@ -261,41 +282,39 @@ public sealed class SnapshotDecoder
             if (!known) r = new EntityRecord { Id = id, Type = type };
             // a delta for an entity the baseline does not have is meaningless: the packet is not usable
             if (!known && (flags & Wire.FKey) != Wire.FKey) return false;
-            if ((flags & Wire.FPosAbs) != 0)
-            {
-                if (o + 12 > d.Length) return false;
-                r.X = BinaryPrimitives.ReadInt32LittleEndian(d[o..]); r.Y = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 4)..]); r.Z = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 8)..]);
-                o += 12;
-            }
-            if ((flags & Wire.FPosDelta) != 0)
-            {
-                if (o + 6 > d.Length) return false;
-                r.X += BinaryPrimitives.ReadInt16LittleEndian(d[o..]); r.Y += BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]); r.Z += BinaryPrimitives.ReadInt16LittleEndian(d[(o + 4)..]);
-                o += 6;
-            }
-            if ((flags & Wire.FRot) != 0)
-            {
-                if (o + 4 > d.Length) return false;
-                r.Yaw = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]); r.Pitch = BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]);
-                o += 4;
-            }
-            if ((flags & Wire.FStatus) != 0)
-            {
-                if (o + 3 > d.Length) return false;
-                r.Health = d[o]; r.State = (EntityState)(d[o + 1] & 0x0F); r.Stance = (Stance)(d[o + 1] >> 4); r.Weapon = d[o + 2];
-                o += 3;
-            }
+            if (!TryReadFields(d, ref o, flags, ref r)) return false;
             staged.Add(new Staged(id, false, r));
         }
-        foreach (var s in staged)
+        return true;
+    }
+
+    /// <summary>Applies the fields the record's flags name to <paramref name="r"/>, in the order the encoder wrote them.</summary>
+    static bool TryReadFields(ReadOnlySpan<byte> d, ref int o, int flags, ref EntityRecord r)
+    {
+        if ((flags & Wire.FPosAbs) != 0)
         {
-            if (s.Remove) _asm!.Remove(s.Id);
-            else _asm![s.Id] = s.Rec;
+            if (o + 12 > d.Length) return false;
+            r.X = BinaryPrimitives.ReadInt32LittleEndian(d[o..]); r.Y = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 4)..]); r.Z = BinaryPrimitives.ReadInt32LittleEndian(d[(o + 8)..]);
+            o += 12;
         }
-        _asmGot |= 1UL << index;
-        if (_asmGot != (ulong.MaxValue >> (64 - _asmTotal))) return false;
-        Commit(tick);
-        TicksCompleted++;
+        if ((flags & Wire.FPosDelta) != 0)
+        {
+            if (o + 6 > d.Length) return false;
+            r.X += BinaryPrimitives.ReadInt16LittleEndian(d[o..]); r.Y += BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]); r.Z += BinaryPrimitives.ReadInt16LittleEndian(d[(o + 4)..]);
+            o += 6;
+        }
+        if ((flags & Wire.FRot) != 0)
+        {
+            if (o + 4 > d.Length) return false;
+            r.Yaw = BinaryPrimitives.ReadUInt16LittleEndian(d[o..]); r.Pitch = BinaryPrimitives.ReadInt16LittleEndian(d[(o + 2)..]);
+            o += 4;
+        }
+        if ((flags & Wire.FStatus) != 0)
+        {
+            if (o + 3 > d.Length) return false;
+            r.Health = d[o]; r.State = (EntityState)(d[o + 1] & 0x0F); r.Stance = (Stance)(d[o + 1] >> 4); r.Weapon = d[o + 2];
+            o += 3;
+        }
         return true;
     }
 

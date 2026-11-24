@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// What a hitched trailer takes from its tractor, as scales the drive step applies (<see cref="DriveModel.Step"/> and <see cref="CarModel.Step"/> take it as an optional last

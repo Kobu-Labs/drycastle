@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Corpses;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Items;
 
 /// <summary>Ground item rules (issue #267, ADR 0018): an <see cref="ItemStack"/> a player dropped, lying where it landed until someone takes it.</summary>
 public static class GroundItemRules

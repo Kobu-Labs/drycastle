@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>One standing section of a property group's fence (<c>fences.json</c>): two ground points (x, z in Godot axes) and the ground height under each, and how high it is.</summary>
 public readonly record struct FenceSection(Vector2 A, Vector2 B, float ZA, float ZB, float HeightM)

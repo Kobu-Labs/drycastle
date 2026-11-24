@@ -1,7 +1,9 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Audio;
+using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Menu;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 public enum ToastKind { Info, Warn, Error }
 

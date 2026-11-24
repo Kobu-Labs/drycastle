@@ -54,8 +54,8 @@ def perimeter_len(p: dict) -> float:
 def python_facts() -> dict:
     code = (
         "import json\n"
-        "from drycastle_pipeline import edits\n"
-        "from drycastle_pipeline.rules import DEFAULT_RULES, load_section\n"
+        "from drycastle_pipeline.edits import schema as edits\n"
+        "from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section\n"
         "print(json.dumps({'types': edits.FENCE_TYPES, 'modes': list(edits.FENCE_MODES), 'default_type': edits.DEFAULT_FENCE_TYPE,\n"
         "}))\n"
     )
@@ -227,7 +227,7 @@ def verify_steps(steps: Path, origin, by_id, c_id, probe1, a, b, shared_edges, o
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from drycastle_pipeline import edits\n"
+        "from drycastle_pipeline.edits import schema as edits\n"
         "bad = 0\n"
         "for f in sys.argv[1:]:\n"
         "    t = Path(f).read_text(encoding='utf-8')\n"

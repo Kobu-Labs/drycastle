@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>What <see cref="RozhlasFeedJitter.Pop"/> has for the next 20 ms.</summary>
 public enum JitterPop

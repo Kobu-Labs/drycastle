@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>What the sniper hears of its own breath this tick. <see cref="BeatDb"/> is the heartbeat's level offset (louder as the breath runs out).</summary>
 public readonly record struct BreathCue(bool Inhale, bool Exhale, bool ForcedExhale, bool Beat, float BeatDb);

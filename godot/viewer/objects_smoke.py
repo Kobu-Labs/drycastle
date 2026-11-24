@@ -275,7 +275,8 @@ def verify_steps(steps_dir: Path, work: Path, pdoc: dict) -> int:
     check = (
         "import sys, json\n"
         "from pathlib import Path\n"
-        "from drycastle_pipeline import edits, props\n"
+        "from drycastle_pipeline.edits import schema as edits\n"
+        "from drycastle_pipeline.props import props\n"
         "pdoc = json.loads((Path(sys.argv[1]) / 'parcels.json').read_text())\n"
         "bad = 0\n"
         "for f in sys.argv[2:]:\n"

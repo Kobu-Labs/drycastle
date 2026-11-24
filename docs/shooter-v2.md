@@ -61,17 +61,17 @@ Mechanics added in v2:
 - Snipers have a scope (`scope_fov`) and breath hold (`breath_hold_seconds`, `breath_recover_seconds`). Zoom levels
   beyond one are not implemented (#113).
 - The breath hold has no meter: an inhale, a heartbeat under 40 % of the breath (faster and louder to the end) and a loud
-  exhale when it is forced out (`BreathCues`; sounds by `scripts/make_breath_sounds.py`).
+  exhale when it is forced out (`BreathCues`; sounds by `scripts/sounds/make_breath_sounds.py`).
 - Sniper bullets drop (`muzzle_velocity`, `zero_distance`; `BulletDrop`): the server resolves the shot at once along a
   curve of 25 m pieces, each against the rewound targets (ADR 0013 holds). The mouse wheel while scoped dials the zero in
   10 m steps (event 24, `SetZero`); the scope shows the zero and mil-dots at true angles. A bot's shots do not drop.
 - Hit diagram: a sniper kill of a wild animal sends the shooter event 25 (`HuntShot`: species, where the bullet entered the
-  body box, distance, weapon); the HUD shows the species' side view (`scripts/make_animal_silhouettes.py`) with the entry
+  body box, distance, weapon); the HUD shows the species' side view (`scripts/art/make_animal_silhouettes.py`) with the entry
   marked. A bullet tests a wild animal against its hit shape (`AnimalShapes`, `animal_shapes.json` baked by
-  `scripts/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
+  `scripts/art/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
   (`hit_box`, `hit_box_ahead`); no longer the scaled capsule. The diagram draws that same shape.
 - Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
-  the client (`NetClient.Binoculars.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
+  the client (`BinocularsClient.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
   the others see the pair held at the face (`ArmsReadyPose.Binoculars`, `CharacterView.SetBinoculars`).
 - Iron sights (hold zoom) ease the gun to centre and fade the crosshair; the sniper keeps its scope (commit bda2271).
 - Bullet holes (64-decal ring buffer, fade after 15 s) and sparks oriented along the surface normal on hitscan hits (commit 189b6bf).
@@ -304,18 +304,18 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 - Seat switch: while seated in any vehicle the number keys (the `slot_1` to `slot_5` actions, rebindable) take that seat, and a seat
   schematic shows the seats (bottom right). Client request: event kind 161 (u8 seat index); the server answers the riders with kind 162 (who
   sits in each seat) whenever that changes; protocol 20. `VehicleSeat.TrySwitch` is the rule, `SeatSchematic` the layout.
-- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
+- Bus (`bus`): a 12 m land vehicle with a generated model (`scripts/models/make_bus_model.py`), one on the map and in the sandbox vehicle list. It is data
   only: a driver seat and three passenger seats (the seat limit is five since protocol 66), the usual driving model with a wide turn circle (`turn_radius` 9.5), smoke
   from the rear where its engine is. It is boarded like a car, within 3 m of its centre, so along the middle of either side (the middle door is there),
   not at the front door. Its doors are separate model nodes that nothing moves yet.
-- Scud truck (`scud`, `scud.json`, GLOSSARY "Scud truck"): a 11.9 m launcher (3.13 m wide, 8 wheels) with a driver and an operator seat in two half cabs, spawned by the Scud event or `/scud spawn`, never dealt, never returning once destroyed (`returns: false`). `NetServer.Scud.cs` is the server (launcher machine per truck, brakes while the rack moves, the missile entity, `ScudBlast`), `NetClient.Scud.cs` + `ScudOverlay.cs` the client (rack animation by node name, the targeting screen, the feed, the warning, the blast). Hooks for the rocket cart: `SpawnScudTruck(position, yaw)`, `TryReloadScud(truck)`, `ReloadScudNow(truck)` and `ScudBlast(position, attackerId)`. Model ids `pack:synty-simple-military/scud` (nodes hull, rack > missile, `wheel_l1..l4` / `wheel_r1..r4` with the front two axles under `wheel_lN_steer` / `wheel_rN_steer`, glass) and `.../scud_missile` (nose along -Z); grey boxes without the pack. The numbers are the model's (`docs/research/scud-models-facts.md`, pinned by `ScudModelTests`). The missile entity spawns at `launcher.muzzle`, the centre of the erected rocket on the raised rack. Loading from a rocket cart (`scud.json` `reload`, `ScudReloadRules`, `ScudReloadKey`, `NetServer.Scud.cs`): with the rack Empty and a loaded, live cart within `cart_reach_m` of the truck's box (box to box, hitched or not), a player in the truck or within `player_reach_m` of it on foot holds interact for `hold_seconds`; a tap still gets in or out (the key's action then runs on the release, only while such an offer stands, and never while Loot lies in reach). The launcher goes to `Loading` (first `transfer_share` of `launcher.reload_seconds`, the truck braked, the rocket still on the cart, which must stay alive, loaded and in reach and neither it nor the truck may move `moved_cancel_m`), then at the transfer point the host empties the cart (`SetRocketCartLoaded`) and the launcher is `Reloading` with the rocket on the rack for the rest. A shot loaded cart is the Scud blast (`OnRocketCartDetonated` calls `ScudBlast`); loaded carts in another Scud blast's damage are doomed with a delay (`blast.chain_delay_seconds`, the wave's travel included) and go up once each. Protocol 69: launcher state 10 `Loading`, notices 11, 12 and 13 (`EventFound`), and an intel board entry's place may be an AREA (flags bit 4: a f32 radius in metres after the centre; `IntelEvent.Radius`, `IntelCodec`).
+- Scud truck (`scud`, `scud.json`, GLOSSARY "Scud truck"): a 11.9 m launcher (3.13 m wide, 8 wheels) with a driver and an operator seat in two half cabs, spawned by the Scud event or `/scud spawn`, never dealt, never returning once destroyed (`returns: false`). `Net/Server/Scuds/ScudServer.cs` is the server (launcher machine per truck, brakes while the rack moves, the missile entity, `ScudBlast`), `ScudClient.cs` + `ScudOverlay.cs` the client (rack animation by node name, the targeting screen, the feed, the warning, the blast). Hooks for the rocket cart: `SpawnScudTruck(position, yaw)`, `TryReloadScud(truck)`, `ReloadScudNow(truck)` and `ScudBlast(position, attackerId)`. Model ids `pack:synty-simple-military/scud` (nodes hull, rack > missile, `wheel_l1..l4` / `wheel_r1..r4` with the front two axles under `wheel_lN_steer` / `wheel_rN_steer`, glass) and `.../scud_missile` (nose along -Z); grey boxes without the pack. The numbers are the model's (`docs/research/scud-models-facts.md`, pinned by `ScudModelTests`). The missile entity spawns at `launcher.muzzle`, the centre of the erected rocket on the raised rack. Loading from a rocket cart (`scud.json` `reload`, `ScudReloadRules`, `ScudReloadKey`, `Net/Server/Scuds/ScudLoading.cs`): with the rack Empty and a loaded, live cart within `cart_reach_m` of the truck's box (box to box, hitched or not), a player in the truck or within `player_reach_m` of it on foot holds interact for `hold_seconds`; a tap still gets in or out (the key's action then runs on the release, only while such an offer stands, and never while Loot lies in reach). The launcher goes to `Loading` (first `transfer_share` of `launcher.reload_seconds`, the truck braked, the rocket still on the cart, which must stay alive, loaded and in reach and neither it nor the truck may move `moved_cancel_m`), then at the transfer point the host empties the cart (`SetRocketCartLoaded`) and the launcher is `Reloading` with the rocket on the rack for the rest. A shot loaded cart is the Scud blast (`OnRocketCartDetonated` calls `ScudBlast`); loaded carts in another Scud blast's damage are doomed with a delay (`blast.chain_delay_seconds`, the wave's travel included) and go up once each. Protocol 69: launcher state 10 `Loading`, notices 11, 12 and 13 (`EventFound`), and an intel board entry's place may be an AREA (flags bit 4: a f32 radius in metres after the centre; `IntelEvent.Radius`, `IntelCodec`).
 - Utility helicopter (ADR 0006): the flown vehicle (`utility_helicopter`, medium `air`), see "Utility helicopter" below.
 - Amphibious transport (ADR 0010, 0011, 0012): an open three-seat vehicle with its own driving model on land and water, an armed seat and a
   ring gun, and riders the hull does not cover (`amphibious`, medium `amphibious`), see "Amphibious transport" below.
 - Water bodies (#138, #142): the pipeline writes `water.json` into the map artifact; the server and clients float and swim at
   the surface in deep water (ADR 0023: no diving, no breath, no drowning), wade in shallow water and splash on entry.
   Surfaces and splashes are client-side and not yet compiled by Godot.
-- Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `NetServer.PickEventSpawn("bigfoot")` for a random one, or gets
+- Zone points: `zone_points.json` holds baked candidate points inside the zones of each kind the server needs (Bigfoot, the wild species). The server asks `MapAreas.PickEventSpawn("bigfoot")` for a random one, or gets
   `null` when none exists (`docs/pipeline.md`, "Zones"). No client use.
 - Day/night (#135): one server clock, `environment.json` (start time 08:00, day length 24 minutes by default). The sun,
   moon, sky shader and ambient light follow it. Street lamps (#136) light up at night from `lamps.json`.
@@ -330,7 +330,7 @@ one match and level 20 after about six good matches. No telemetry exists yet.
 ### Utility helicopter
 
 One spawns on the map (`spawn_count` 1, on flat ground with room for the rotor) and it is in the sandbox vehicle list. The model is generated
-(`scripts/make_utility_helicopter_model.py`). The pilot's client predicts it and the server corrects it (ADR 0006); everyone else sees it
+(`scripts/models/make_utility_helicopter_model.py`). The pilot's client predicts it and the server corrects it (ADR 0006); everyone else sees it
 interpolated, pitching and rolling from the flight record of the snapshot.
 
 **Controls** (the rebindable movement actions; nothing new to bind):
@@ -364,7 +364,7 @@ belt), hitscan from the muzzle, and its kills are ordinary kills (kill-feed weap
 client as a turret record (entity type 4, as the flak's, here the mount's yaw and the gun's pitch against the airframe), so the gun follows the
 aim on everyone's model; the tracer leaves the drawn muzzle, the barrel recoils and the muzzle flashes. The gunner's ammo is event 160.
 
-**What it shows and sounds like** (client only, `NetClient.FlightFx.cs`; nothing but the flight record is on the wire). The rotors turn at the
+**What it shows and sounds like** (client only, `FlightClient.cs`; nothing but the flight record is on the wire). The rotors turn at the
 record's rotor speed: they spool up when a pilot sits down (`spool_up_time`) and run down on the ground without one, a little faster under load
 (climbing, tilted hard), with a faint disc for the blur of the blades at speed. The rotor sound is generated (`RotorSound`, as the killstreak
 aircraft's) and its blade beat, engine tone and level follow the rotor speed and the load. The body pitches and rolls for everyone. Damage
@@ -400,7 +400,7 @@ as the driver of every other vehicle is: to stop the pilot, destroy the helicopt
 ### Amphibious transport
 
 Two spawn on the map (`spawn_count` 2, near a shore where there is one) and it is in the sandbox vehicle list. The model is generated
-(`scripts/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
+(`scripts/models/make_amphibious_model.py`): a boat-shaped hull on four wheels, no roof, no doors, low sides, a propeller under the stern. Three seats
 (it had four): the driver front left, an armed seat beside them, and a gunner standing in a ring over the rear. The driver's client predicts it
 and the server corrects it (ADR 0010); everyone else, its riders included, sees it interpolated.
 
@@ -513,12 +513,12 @@ the model's numbers (12.6 m with the drawbar because it carries the whole 11.1 m
 - **On the wire (protocol 67).** The trailer's vehicle record is a vehicle's with two fields read differently (`VehicleRecord.MakeTrailer`): the pitch field (a driver's id on any other vehicle) is the id of the tractor
   it is hitched to, 0 when loose, and bit 6 of the health byte (free until then) is the loaded flag. Position and yaw are the trailer's own, so everything that reads a vehicle record (the hit box, the solid, bullet
   holes) works on it; nothing else is sent. The articulation of a hitched trailer is its record's yaw less its tractor's yaw in the same snapshot (the two are within a quantum of the server's `Phi`).
-- **Client.** `NetClient.Tow.cs`. A trailer is never drawn from its own raw record while hitched: `RenderTrailers` runs after every tractor has its drawn pose and places the trailer from the drawn tractor's hitch
+- **Client.** `TowClient.cs`. A trailer is never drawn from its own raw record while hitched: `RenderTrailers` runs after every tractor has its drawn pose and places the trailer from the drawn tractor's hitch
   (`tractor.Node.GlobalTransform * hitch`, so it leans with the tractor) and the articulation, then fits the ground (pitch from the hitch's height over the axle's ground, `TowModel.PitchFor`; roll from the ground
   under the wheels; smoothed), rolls `wheel_l`/`wheel_r` with the drawn speed and shows `missile` while loaded. Loose, it is drawn at its record on the ground. A tractor's driver sees the tractor as that type is
   seen: the truck and the flak truck are `CarModel` types, interpolated for everyone, so their trailer's articulation is the interpolated snapshot's (it cannot lag its tractor, both come from the same
   render tick); a `DriveModel` type with a `tow` block (none yet) is predicted by its driver, who also steps a copy of the trailer's body with `TowModel` after it (`DrivePrediction.AttachTrailer`, the effect
-  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `PlayCarSound`
+  and the blocked-trailer hold as the server's) and reconciles it from the articulation the snapshot gives. A coupling or an uncoupling (the record's tractor id changes) plays `tow.clunk` through `CarSounds.PlayOnce`
   (car-design section 9) and toasts the driver ("Trailer hitched" / "Trailer unhitched"); while towing the driver's prompt adds "Hold E  Unhitch trailer".
 
 Approximations and open points: the trailer's mass is its loaded one whether or not the missile is on; the tractor's crash damage from a blocked trailer is the wall's rule on the pair's speed; a hitched
@@ -553,7 +553,7 @@ items, ADR 0018 (#267, protocol 31).
   `ItemRules` (pure, `ShooterCore/Items/Equipment.cs`) holds the rules and `BagTests` the tests.
 - **Ground items.** A dropped item lands at the terrain height under the player's feet (no throw), or under the vehicle they ride, any seat, a
   helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) drawn as the item's own model
-  (`NetClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
+  (`GroundItemsClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
   slot, else the bag; with both full nothing is taken or counted ("Your bag is full"). Each take counts one pickup (the dropper's too); an item at its
   limit crumbles. It expires after 120 s and shares the corpse cap.
 - **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next
@@ -563,7 +563,7 @@ items, ADR 0018 (#267, protocol 31).
   keeps it on the player (the round's corpses and ground items, and any item on them, go); a reconnect starts bare.
 - **HUD.** Nothing on the HUD shows Items (the "Headgear / name" chip beside the health bar is gone): what is worn and carried is the Equipment screen's.
 - **The Equipment screen (#268).** F (rebindable action `inventory`, default F, saved with the other controls) opens it; F and Esc close it. A non-pausing
-  overlay in the HUD like the tactical map (`EquipmentScreen`, `Hud.Equipment.cs`): the mouse is released, the movement keys still work
+  overlay in the HUD like the tactical map (`EquipmentScreen`, `OverlayScreens.cs`): the mouse is released, the movement keys still work
   (`Player.MoveWithFreeMouse`: move, jump, sprint, crouch, prone), firing and the other keys do not. It opens on foot and in a vehicle seat, never in a turret or
   missile view, and closes on death, at the end of the match and when a menu or the corpse chooser opens. No title, labels, buttons or explanation text.
   The figure (`CamoPreview`, the player's Camouflage, worn Items drawn) is in the middle, the headgear slot above its head (an empty slot shows the ghost
@@ -585,7 +585,7 @@ items, ADR 0018 (#267, protocol 31).
   the origin is the middle of the head). `CharacterView.SetWorn(slot, item)` (`CharacterView.Worn.cs`) hangs it on the head bone, so it follows every
   clip, stance, the prone roll and the ragdoll, and hides what it replaces: the helmet and the hair, the head's foliage and the face paint. The same call
   dresses remote players (from event 194), the local player's seat view, a corpse that carries the item (from event 191: gone again once taken or crumbled)
-  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/make_bigfoot_model.py` (732
+  and the menu figure (`CamoPreview.ShowWorn(slot, item)`). The Bigfoot head is the giant's own head from `scripts/models/make_bigfoot_model.py` (732
   triangles, about twice the width of the head it covers). An item without a model is worn but not drawn.
 - **Icons.** `IconRegistry` has `IconKind.Item`: `ui/icons/items/<id>.png` (128x128, a render of `model` from `tools/render_icons.gd`); an item without a
   file shows `item_fallback.png` (a plain box glyph from `make_icons.py`), not the crossed placeholder.
@@ -603,16 +603,16 @@ items, ADR 0018 (#267, protocol 31).
 ## 7c. Events and the Bigfoot (#264)
 
 An **Event** (GLOSSARY) is a short happening with a challenge and a reward. The lifecycle is `EventRun` / `EventBook` (`ShooterCore/Events/EventRun.cs`): active, then won or
-despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `NetServer.Bigfoot.cs`; client: `NetClient.Bigfoot.cs`; the fight itself is
+despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `Net/Server/BigfootEvent/` (`BigfootServer.cs`); client: `BigfootClient.cs`, `BigfootFx.cs`; the fight itself is
 `ShooterCore/Events/Bigfoot.cs` (a plain class, tested with a fake world in `BigfootTests`). Every number is in `data/bigfoot.json` (`BigfootFile`).
 
 - **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such
   area (the village has none until one is drawn) gets the dev fallback: `fallback_spawn` metres from a random living player, said to the admin and in the log as a FALLBACK.
   `/event current end` kills it (a win, for testing), `/event current cancel` removes it with no reward. The first version announces nothing but a system chat line:
-  it does not use the intel board (`AnnounceIntel` is the one call that would).
+  it does not use the intel board (`IntelServer.Announce` is the one call that would).
 - **A world entity, not a bot** (wire type 60). The state byte is the act (`BigfootAct`, bits 0-3), a bit that flips on every hit that did not kill, the phase (bits 5-6) and
   the enrage (bit 7); the owner field is the player it holds; the hp byte is the hit count left in percent. The client draws the generated giant
-  (`drycastle-generated-models/bigfoot.glb`, `scripts/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
+  (`drycastle-generated-models/bigfoot.glb`, `scripts/models/make_bigfoot_model.py`: a skinned mesh, 26 bones, 14 clips) and picks the clip from the act (`ClipFor`): every act
   has its own, and a wind-up is stretched over its act's time so the blow lands with the server's. Walk and Run play at the speed it moves (`PaceGait`: ground speed over
   the clip's stride, `movement.walk_stride_m` / `run_stride_m`). A hit makes it flinch only while it stands. When a phase begins or it enrages it owes a roar: the first tick it has no
   attack to make it stops, faces its target and roars for `BigfootRules.RoarSeconds` (the act `Roar`); its arrival plays the same clip on the client. A launch out of a
@@ -698,7 +698,7 @@ the game at all, so the gamepad part of the standard cannot be met yet.
 Tests and checks that fail or are known to fail:
 - `VehicleTests.ShippedFileHasCarMotorcycleAndBicycleWithTheAgreedSpawnCounts` expects 8 cars, the data has 12. It was
   failing on the integration branch before #133 and is left alone.
-- `pipeline/tests/test_edits.py` fails on the shipped `edits.json` (reported on #138; unrelated to shooter).
+- `pipeline/tests/edits/test_edits.py` fails on the shipped `edits.json` (reported on #138; unrelated to shooter).
 - The smoke and bot scripts were reviewed statically in #133, not run (section 9).
 
 Server and persistence:
@@ -716,7 +716,7 @@ Commands are for admins. The dev server (`make shooter-server`) passes `--admin-
 folder, `shooter_settings.cfg`). They run on the server, so they work live: `/bots N` (0 to 64) changes the roster on the next tick (the first time bots are wanted after a start with none, the navigation is
 baked once, and the server pauses for that, the admin is told); `/spawn vehicle` puts a vehicle in front of the admin (up to 32 a run, counting the sandbox's; the sandbox itself is uncapped; spawned vehicles are not removed);
 `/time HH:MM|dawn|morning|noon|dusk|night|midnight|freeze|resume` sets the day clock and sends it to every client at once (event 183); `/event bigfoot` starts the Bigfoot event, `/event current end` concludes the running event as a win and `/event current cancel` removes it with no reward (section 7c); `/restart [ffa|tdm]` starts a fresh round now (scores, lives and world entities reset), in the current match mode or, with an argument, in that one (the teams are regrouped, everyone is told; the mode reaches clients in the next scoreboard). `/event rozhlas` starts the village loudspeaker broadcast on every client now (event 184, no payload; each client starts its own copy at once and the scheduled broadcast waits until it ends); `/event intel [clear]` announces a made-up test event (section 8c; `clear` takes it off again); `/give <item> [player]` puts an item of `items.json` on a living player (by name or `#id`) or on the admin, a fresh one with no pickups counted, replacing what was worn in its slot (section 7b); `/help [command]` lists them for anyone.
-The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `NetServer.Chat.cs` runs the commands, `ChatBox.cs` draws the window.
+The grammar, completion and history are pure code in `ShooterCore/Chat` (`ChatCommands`, `ChatCompleter`, `ChatHistory`) with tests in `ChatTests`; `ChatRoom/ChatServer.cs` parses a line and calls the handler a feature registered for the command, `ChatBox.cs` draws the window.
 
 ## 8c. Event announcements and the intel room (#262, ADR 0017)
 

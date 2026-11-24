@@ -1,6 +1,6 @@
 {
 "version": 1,
-"_note": "Where the wood of every pack tree model is (#375): a tree is solid there and its leaves stop nothing. Written by scripts/tree_collider_audit.py --write; regenerate when pack_trees.json names a new tree model or a model changes. limbs: [z0, z1, half0, half1, u0, v0, u1, v1] in the model's own metres (ShooterCore Limb). A limb is followed until it has run inside foliage for 0.3 of the crown's height.",
+"_note": "Where the wood of every pack tree model is (#375): a tree is solid there and its leaves stop nothing. Written by scripts/tools/tree_collider_audit.py --write; regenerate when pack_trees.json names a new tree model or a model changes. limbs: [z0, z1, half0, half1, u0, v0, u1, v1] in the model's own metres (ShooterCore Limb). A limb is followed until it has run inside foliage for 0.3 of the crown's height.",
 "models": [
   {"pack": "nature", "name": "SM_Plant_Bush_01", "height_m": 2.0405, "limbs": []},
   {"pack": "nature", "name": "SM_Plant_Bush_03", "height_m": 1.8667, "limbs": []},

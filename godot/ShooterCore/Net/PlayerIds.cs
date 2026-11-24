@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Vehicles;
+
+namespace Drycastle.ShooterCore.Net;
 
 /// <summary>
 /// Player ids on the wire (#197). 0 means "no hello yet", cars start at <see cref="VehicleRecord.FirstId"/>, rockets at 0x8000

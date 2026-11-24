@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>How rare a hunted animal's weight is for its kind (GLOSSARY "Hunt rarity"): the Life List tile's rim. Ordered, so the best of two is the larger.</summary>
 public enum HuntTier : byte { Common = 0, Bronze = 1, Silver = 2, Gold = 3 }

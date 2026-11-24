@@ -1,6 +1,8 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>Poop world entity rules: the wire type id.</summary>
 public static class PoopRules

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>Where the server's live feed is in one mic-live phase.</summary>
 public enum RozhlasFeedState { Idle, Live, Draining, Failed }

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>
 /// How a recorded hit is drawn: the standing shape of the animal (null: its baked picture, else its body box), the entry marked on it (0 rear to 1 front, 0 ground to 1 top),

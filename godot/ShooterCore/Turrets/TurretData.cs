@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Turrets;
 
 /// <summary>Tuning of the sentry turret (turret.json). Lengths are metres, angles degrees, times seconds.</summary>
 public sealed class TurretDef

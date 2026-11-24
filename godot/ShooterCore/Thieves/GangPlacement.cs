@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Minimap;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>Where a Raid's crew appears when there is no van yet (the dev fallback of <c>/event thieves</c>, ticket 02), and where the map edge is for a crew that flees.</summary>
 public static class GangPlacement

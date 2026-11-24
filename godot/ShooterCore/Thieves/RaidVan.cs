@@ -1,6 +1,12 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
+using static Drycastle.ShooterCore.Movement.Planar;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>What a Raid van is doing: the replicated state byte (GLOSSARY "Raid van").</summary>
 public enum RaidVanState : byte { Arriving = 0, Opening = 1, Parked = 2, Boarding = 3, Closing = 4, Leaving = 5, Destroyed = 6 }
@@ -409,12 +415,6 @@ public sealed class RaidVan : IWorldEntity
         while (a > MathF.PI) a -= MathF.Tau;
         while (a < -MathF.PI) a += MathF.Tau;
         return a;
-    }
-
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
     }
 
     // ---- hit volume ----

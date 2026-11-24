@@ -1,0 +1,236 @@
+using Godot;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Companions;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Wildlife;
+using Drycastle.ShooterCore.Companions;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Wildlife;
+
+namespace Drycastle.Shooter.Net.Client.Fauna;
+
+/// <summary>
+/// Companions on the client (GLOSSARY "Companion", #488): the world entities of type <see cref="CompanionRules.TypeId"/>. Each is drawn as the model of its species' look
+/// (companions.json names the species and the asset; animals.json the model) and plays the clip of the <see cref="CompanionPose"/> the server sends. The client knows no kind:
+/// a new kind of Companion needs nothing here unless it needs a clip no pose names. A Companion appears and goes in a puff. The server owns it; the client only shows it.
+/// </summary>
+public sealed class CompanionsClient
+{
+    readonly ClientContext _ctx;
+    readonly CompanionsFile _data;
+    readonly AnimalsFile _animals;
+
+    /// <param name="data">companions.json (set by the host: the index of a Companion in it is what the wire carries).</param>
+    /// <param name="animals">animals.json: the species' models.</param>
+    public CompanionsClient(ClientContext ctx, CompanionsFile data, AnimalsFile animals)
+    {
+        _ctx = ctx; _data = data; _animals = animals;
+        CompanionRules.Register(WorldEntityRegistry.Shared);
+        ctx.WorldEntities.Spawned += OnSpawned;
+        ctx.WorldEntities.DespawnedFor += OnDespawnedFor;
+        ctx.WorldEntities.Despawned += OnDespawned;
+        ctx.WorldEntities.DormancyChanged += e => { if (e.Type == CompanionRules.TypeId && _companions.TryGetValue(e.Id, out var v)) SetDormant(v, e); };
+    }
+
+    sealed class CompanionView
+    {
+        public Node3D Node = null!;
+        public AnimationPlayer? Anim;
+        public string?[] Clips = Array.Empty<string?>();
+        public float Height = 0.5f;
+        /// <summary>The pose whose clip is showing; 255 = none yet.</summary>
+        public byte Shown = 255;
+    }
+
+    readonly Dictionary<ushort, CompanionView> _companions = new();
+
+    // ---- the picker of the Equipment screen: what the local player can pick and what is out (the server's word, EventKind.Companions) ----
+
+    CompanionRoster _companionRoster = CompanionRoster.None;
+
+    /// <summary>The roster changed (a pick was answered, a Companion was unlocked or given): the Equipment screen redraws its picker.</summary>
+    public event Action? Changed;
+
+    /// <summary>The Companions the local player can pick (indices of companions.json, in its order). Stable between <see cref="Changed"/> events.</summary>
+    public IReadOnlyList<int> Owned => _companionRoster.Owned;
+
+    /// <summary>
+    /// The reward Companions the local player does not own yet (companions.json <c>reward_tier</c>), in its order: the picker shows them locked, so a player sees what
+    /// there is to earn and where.
+    /// </summary>
+    public IReadOnlyList<int> Locked
+    {
+        get
+        {
+            var locked = new List<int>();
+            for (var i = 0; i < _data.Companions.Count; i++)
+                if (_data.Companions[i].RewardTierOf != HuntTier.Common && !_companionRoster.Owns(i)) locked.Add(i);
+            return locked;
+        }
+    }
+
+    /// <summary>The collection tier of the Hunter's Log that unlocks a Companion (Common: none does).</summary>
+    public HuntTier TierOf(int def) => def >= 0 && def < _data.Companions.Count ? _data.Companions[def].RewardTierOf : HuntTier.Common;
+
+    /// <summary>The Companion that is out (an index of companions.json), or -1.</summary>
+    public int Out => _companionRoster.Out;
+
+    /// <summary>The display name of a Companion: the translation "companion.&lt;id&gt;" when there is one, else the name in companions.json.</summary>
+    public string NameOf(int def)
+    {
+        if (def < 0 || def >= _data.Companions.Count) return "";
+        var entry = _data.Companions[def];
+        var k = "companion." + entry.Id;
+        var t = Strings.T(k);
+        return t == k ? entry.Name : t;
+    }
+
+    /// <summary>A live 3D view of a Companion's look for a picker cell (<see cref="CompanionPortrait"/>); null when the species or its model is not there.</summary>
+    public CompanionPortrait? NewPortrait(int def)
+    {
+        if (def < 0 || def >= _data.Companions.Count) return null;
+        var entry = _data.Companions[def];
+        return _animals.Find(entry.Species) is { } animal ? CompanionPortrait.Of(animal, Math.Max(0, entry.VariantIn(animal))) : null;
+    }
+
+    /// <summary>A wish: have this Companion out (an index of <see cref="Owned"/>'s values). The server answers with the roster.</summary>
+    public void Request(int def) => _ctx.SendHuman(EventKind.CompanionPick, CompanionRoster.EncodePick(def));
+
+    // ---- the marks of a scout (the Eagle): the players the local player's Companion marked, drawn through walls for them alone ----
+
+    static readonly StandardMaterial3D CompanionMarkMaterial = new()
+    {
+        ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded, Transparency = BaseMaterial3D.TransparencyEnum.Alpha, NoDepthTest = true,
+        AlbedoColor = new Color(ShooterTheme.Danger, 0.5f), RenderPriority = 20,
+    };
+
+    ushort[] _companionMarks = Array.Empty<ushort>();
+    readonly HashSet<ushort> _companionMarkShown = new();
+
+    /// <summary>The server's word on whom the Companion has marked now: a new set says so once (a toast and a sound), an empty one clears.</summary>
+    void OnMarks(ushort[] marks)
+    {
+        _companionMarks = marks;
+        if (marks.Length == 0) return;
+        Sfx.Ui("ui.accept");
+        UiShell.Instance?.Toast(Strings.F(marks.Length == 1 ? "toast.companion.marked.one" : "toast.companion.marked", marks.Length), ToastKind.Info);
+    }
+
+    /// <summary>
+    /// Once a frame: the highlight (a pulsing overlay drawn through walls, as the binoculars' mark on an animal, in the danger colour) is on the marked players' models
+    /// and off everyone else's. A model that was rebuilt while marked (a new look) gets it again when the next set comes.
+    /// </summary>
+    public void TickMarks()
+    {
+        if (_companionMarks.Length == 0 && _companionMarkShown.Count == 0) return;
+        CompanionMarkMaterial.AlbedoColor = new Color(ShooterTheme.Danger, 0.38f + 0.14f * MathF.Sin((float)_ctx.Now * 5f));
+        foreach (var id in _companionMarkShown.ToArray())
+            if (Array.IndexOf(_companionMarks, id) < 0) { SetMark(id, false); _companionMarkShown.Remove(id); }
+        foreach (var id in _companionMarks)
+            if (_companionMarkShown.Add(id)) SetMark(id, true);
+    }
+
+    void SetMark(ushort player, bool on)
+    {
+        if (!_ctx.Remotes.TryGetValue(player, out var r) || !GodotObject.IsInstanceValid(r.Node)) return;
+        foreach (var mi in r.Node.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
+            mi.MaterialOverlay = on ? CompanionMarkMaterial : null;
+    }
+
+    public void OnEvent(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.CompanionMarks && ScoutCompanion.TryDecodeMarks(payload, out var marks)) { OnMarks(marks); return; }
+        if (kind != EventKind.Companions || !CompanionRoster.TryDecode(payload, out var roster)) return;
+        _companionRoster = roster;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Called once from <see cref="_Ready"/>: registers the Companion type and follows its entities.</summary>
+    static void SetDormant(CompanionView v, WorldReplica.Entity e)
+    {
+        v.Node.Visible = !e.Dormant;
+        v.Node.ProcessMode = e.Dormant ? Node.ProcessModeEnum.Disabled : Node.ProcessModeEnum.Inherit;
+        if (!e.Dormant) v.Shown = 255;
+    }
+
+    void OnSpawned(WorldReplica.Entity e)
+    {
+        if (e.Type != CompanionRules.TypeId) return;
+        var index = e.State.Owner;
+        if (index >= _data.Companions.Count || _animals.Find(_data.Companions[index].Species) is not { } def)
+        {
+            GD.PrintErr($"client: companion {e.Id} is entry {index} of companions.json, which has {_data.Companions.Count}; not drawn (data files differ from the server's?)");
+            return;
+        }
+        var entry = _data.Companions[index];
+        var variant = Math.Max(0, entry.VariantIn(def));
+        var box = def.HitBoxOf(variant).Select(x => x * entry.Scale).ToArray();
+        var node = new Node3D { Name = $"Companion{e.Id}" };
+        var (_, anim, clips) = AnimalsClient.AddModel(node, def, variant, entry.Scale, box);
+        _ctx.Owned.AddChild(node);
+        var at = e.State.Position;
+        node.GlobalPosition = new Vector3(at.X, at.Y, at.Z);
+        node.Rotation = new Vector3(0, e.State.YawRad, 0);
+        var view = new CompanionView { Node = node, Anim = anim, Clips = clips, Height = box.Length == 3 ? box[1] : 0.5f };
+        _companions[e.Id] = view;
+        if (e.Dormant) SetDormant(view, e);
+        else PetFx.Puff(_ctx.Owned, node.GlobalPosition + Vector3.Up * (view.Height / 2), view.Height); // it appears in a puff, as it goes
+    }
+
+    /// <summary>A Companion whose owner died or took a seat goes in a puff; one removed with the round just leaves. Runs before <see cref="OnDespawned"/> frees the node.</summary>
+    void OnDespawnedFor(ushort id, WorldDespawnReason reason)
+    {
+        if (reason != WorldDespawnReason.Destroyed || !_companions.TryGetValue(id, out var v) || !v.Node.Visible) return;
+        PetFx.Puff(_ctx.Owned, v.Node.GlobalPosition + Vector3.Up * (v.Height / 2), v.Height);
+    }
+
+    void OnDespawned(ushort id)
+    {
+        if (_companions.Remove(id, out var v)) v.Node.QueueFree();
+    }
+
+    /// <summary>Places the Companions (interpolated, a little in the past like every remote body) and plays the clip of their pose.</summary>
+    public void Render()
+    {
+        if (_companions.Count == 0 || _ctx.LastTick == 0) return;
+        var rt = _ctx.RenderTick;
+        foreach (var (id, v) in _companions)
+        {
+            if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e) || e.Dormant) continue;
+            if (e.Buf.At(rt) is { } s)
+            {
+                v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
+                v.Node.Rotation = new Vector3(s.Pitch, s.Yaw, 0);
+            }
+            var pose = e.State.State;
+            if (v.Shown != pose) ShowPose(v, CompanionRules.PoseOf(pose));
+        }
+    }
+
+    /// <summary>The clip of a pose. Sitting is sit-down then the held pose (one already sitting when first seen just sits), and standing up plays before what follows.</summary>
+    static void ShowPose(CompanionView v, CompanionPose pose)
+    {
+        var was = v.Shown;
+        v.Shown = (byte)pose;
+        if (v.Anim == null || v.Clips.Length == 0) return;
+        string? Clip(AnimalClip c) => v.Clips[(int)c];
+        if (pose == CompanionPose.Sit)
+        {
+            if (Clip(AnimalClip.SitIdle) is not { } hold) return;
+            if (was != 255 && Clip(AnimalClip.SitStart) is { } down) { v.Anim.Play(down, 0.2); v.Anim.Queue(hold); }
+            else v.Anim.Play(hold, 0.2);
+            return;
+        }
+        var clip = pose switch
+        {
+            CompanionPose.Walk => Clip(AnimalClip.Walk),
+            CompanionPose.Run => Clip(AnimalClip.Run) ?? Clip(AnimalClip.Walk),
+            CompanionPose.Fly => Clip(AnimalClip.Cruise) ?? Clip(AnimalClip.Idle),
+            _ => Clip(AnimalClip.Idle), // Idle, and a flyer's Hover
+        };
+        if (clip == null) return;
+        if (was == (byte)CompanionPose.Sit && Clip(AnimalClip.SitUp) is { } up) { v.Anim.Play(up, 0.2); v.Anim.Queue(clip); return; }
+        v.Anim.Play(clip, 0.2);
+    }
+}

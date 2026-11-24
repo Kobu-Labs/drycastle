@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Match;
 
 /// <summary>What a player can ask of their squad from the Squads screen or /squad (#379).</summary>
 public enum SquadAction : byte

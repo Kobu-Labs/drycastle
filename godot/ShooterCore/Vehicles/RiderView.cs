@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>How a seated local rider sees the world (#339). Per rider, this client only: nothing is sent.</summary>
 public enum RiderView

@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// Where the buildings are, for <see cref="IAnimalWorld.NearestBuildingM"/>: polygons in ground axes (x, z), even-odd over a polygon's rings (outer first, then holes).

@@ -1,6 +1,7 @@
 using System.Numerics;
+using static Drycastle.ShooterCore.Movement.Planar;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// The stealing half of the Gang member (docs/events/thieves/04): a Thief with <see cref="Work"/> seeks a target, goes to it, steals (or climbs, works aloft and climbs down), hauls the Loot to the

@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>How near an on-foot player is to a vehicle for getting in (#217): measured to the footprint rectangle, not to the centre, so a 12 m bus can be boarded anywhere along its side.</summary>
 public static class VehicleReach

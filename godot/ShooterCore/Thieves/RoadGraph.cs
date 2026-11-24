@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>A spot on a road edge: the edge and how far along its polyline from its From end, metres.</summary>
 public readonly record struct RoadPlace(int Edge, float At);

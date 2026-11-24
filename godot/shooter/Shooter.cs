@@ -1,6 +1,31 @@
 using Godot;
-using Drycastle.ShooterCore;
-using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
+using Drycastle.Shooter.Assets;
+using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Buildings;
+using Drycastle.Shooter.Bunkers;
+using Drycastle.Shooter.Characters;
+using Drycastle.Shooter.Churches;
+using Drycastle.Shooter.Dev;
+using Drycastle.Shooter.Glass;
+using Drycastle.Shooter.HeadsUp.Streaks;
+using Drycastle.Shooter.Intel;
+using Drycastle.Shooter.Loudspeaker;
+using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.Shooter.Net.Server;
+using Drycastle.Shooter.Scenery;
+using Drycastle.Shooter.Vehicles;
+using Drycastle.Shooter.Weapons;
+using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Menu;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Scenery;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Wildlife;
+using WaterSurfaces = Drycastle.MapLoader.Waters.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 
@@ -60,7 +85,7 @@ public partial class Shooter : Node3D
     /// <summary>Vehicle models of the paid packs (the harvester, #331) come from the map's asset library.</summary>
     void HookPackModels() => CarFx.PackLoader = id => _map.InstantiateAsset(id);
     /// <summary>The map's water (water.json), parsed when the map loads; Water.Empty on a dry map.</summary>
-    Drycastle.ShooterCore.Water _water = Drycastle.ShooterCore.Water.Empty;
+    Drycastle.ShooterCore.Waters.Water _water = Drycastle.ShooterCore.Waters.Water.Empty;
     Drycastle.ShooterServer.Persistence.IProgressionStore? _progression;
     bool _smoke;
     bool _smokeMove;
@@ -194,11 +219,11 @@ public partial class Shooter : Node3D
     {
         _shell = new UiShell
         {
-            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
-                _client is { CanManageTeams: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.OpenHuntersLog(),
-                _client is { CanUseSquads: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.OpenMineralLog()),
-            WantsFreeMouse = () => _client is { WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
-            BackHandler = () => (_client?.CloseChat() ?? false) || (_client?.CloseEquipment() ?? false) || (_client?.CloseHuntersLog() ?? false) || (_client?.CloseMineralLog() ?? false) || (_client?.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
+            PauseFactory = () => new PauseScreen(() => { }, () => LeaveMatch(null), () => _shell.Push(NewLoadouts()), () => _client?.Loadouts.Profile is { } p && DevUnlocks.IsMarked(p.Unlocks),
+                _client is { TeamAdmin.CanManage: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.Screens.OpenHuntersLog(),
+                _client is { Squads.CanUse: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.Screens.OpenMineralLog()),
+            WantsFreeMouse = () => _client is { Screens.WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
+            BackHandler = () => (_client?.Chat.Close() ?? false) || (_client?.Screens.CloseEquipment() ?? false) || (_client?.Screens.CloseHuntersLog() ?? false) || (_client?.Screens.CloseMineralLog() ?? false) || (_client?.Screens.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -299,7 +324,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080"), SandboxRequested = SandboxAsked(_cfg), KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, XpCurve = _data.Levels.Curve, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), Report = { PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080") }, Sandbox = { Requested = SandboxAsked(_cfg) }, KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.OnFailed = (why, joined) =>
@@ -307,12 +332,12 @@ public partial class Shooter : Node3D
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
-            client.OpenLoadouts = () => _shell.Push(NewLoadouts());
+            client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts());
             client.MenuOpen = () => _shell.Top != null;
-            client.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
-            client.SandboxAnswered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
-            client.SandboxNoticed += text => _shell.Toast(text, ToastKind.Warn);
-            client.OpenSandbox = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
+            client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
+            client.Sandbox.Answered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
+            client.Sandbox.Noticed += text => _shell.Toast(text, ToastKind.Warn);
+            client.Sandbox.OpenPanel = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
             AddChild(client);
             result = await done.Task;
         }
@@ -349,7 +374,7 @@ public partial class Shooter : Node3D
     /// <summary>Back to the main menu; with a message when the server dropped us (what happened and what to do).</summary>
     void LeaveMatch(string? error)
     {
-        var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Autosave.HasUnconfirmed);
+        var lostEdits = _client is { } c && Enumerable.Range(0, Loadout.SlotCount).Any(c.Loadouts.Autosave.HasUnconfirmed);
         DropClient();
         EnterPhase(AppPhase.Menu);
         _shell.SetGameActive(false);
@@ -387,7 +412,7 @@ public partial class Shooter : Node3D
             _map.SpawnFilter = (x, z) => MechanicGarageSite.Covers(x, z, 1.5f);
         }
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
-        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Water.Empty : Drycastle.ShooterCore.Water.Parse(_map.WaterJson);
+        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Waters.Water.Empty : Drycastle.ShooterCore.Waters.Water.Parse(_map.WaterJson);
         WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
         WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
         IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
@@ -402,7 +427,7 @@ public partial class Shooter : Node3D
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
-            var bunkers = Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
+            var bunkers = Drycastle.ShooterCore.Bunkers.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
             if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
@@ -461,7 +486,7 @@ public partial class Shooter : Node3D
         _progression = Drycastle.ShooterServer.Persistence.ProgressionStores.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
         GD.Print($"server: progression db {Drycastle.ShooterServer.Persistence.ProgressionStores.Describe(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var server = new NetServer
+        var config = new ServerConfig
         {
             World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
@@ -481,20 +506,21 @@ public partial class Shooter : Node3D
             AllowSandbox = cfg.Flag("allow-sandbox"),
             AdminAll = cfg.Flag("admin-all"),
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
-            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
+            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, ServerConfig.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
             PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"), NoLagComp = cfg.Flag("no-lagcomp"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
-        if (server.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
-        if (server.AdminTokens.Count > 0) GD.Print($"server: {server.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
-        if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
-        if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");
-        if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
-        if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
+        var server = new NetServer { Config = config };
+        if (config.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
+        if (config.AdminTokens.Count > 0) GD.Print($"server: {config.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
+        if (config.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
+        if (config.Bots > 0) GD.Print($"server: {config.Bots} bots join while a player is in the match (--bots, #214)");
+        if (config.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
+        if (config.Sim != null) GD.Print($"server: net-sim {config.Sim}");
         // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.
-        Engine.MaxFps = server.LossTest > 0 || server.Sim != null ? 200 : 60;
+        Engine.MaxFps = config.LossTest > 0 || config.Sim != null ? 200 : 60;
         Engine.MaxPhysicsStepsPerFrame = 2; // a slow tick drops simulation time instead of spiralling
         AddChild(server);
     }
@@ -580,9 +606,9 @@ public partial class Shooter : Node3D
         _smoke = false;
         AddChild(new NetClient
         {
-            World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, SandboxRequested = SandboxAsked(cfg),
+            World = this, Host = host, Port = port, PlayerName = cfg.Str("name", "player"), Bot = bot, KillY = killY, Sandbox = { Requested = SandboxAsked(cfg) },
             BotSeconds = double.TryParse(cfg.Str("bot-seconds", "6"), out var bs) ? bs : 6, BotChat = cfg.Str("bot-chat"),
-            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), PerfPlay = cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(cfg), PerfRes = cfg.Str("perf-res", "1920x1080"), PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
+            Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), Report = { PerfPlay = cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(cfg), PerfRes = cfg.Str("perf-res", "1920x1080") }, PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Scud = _data.Scud, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
         });
@@ -599,7 +625,7 @@ public partial class Shooter : Node3D
     {
         AddLightAndSky();
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
+        var player = new Player { Name = "Player", KillY = killY, Water = _water, Ladders = ObjectLadders.WithObjects(Drycastle.ShooterCore.Bunkers.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; no ladders")).Ladders, _map), PickSpawn = RandomSpawn, CaptureMouse = !_smokeMove };
         AddChild(player);
         var spawn = RandomSpawn();
         player.Teleport(spawn + Vector3.Up * 0.1f);

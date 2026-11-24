@@ -1,6 +1,7 @@
 using Godot;
+using Drycastle.Shooter.Assets;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Crystals;
 
 /// <summary>
 /// Marihuanite (crystals.md): the weed stone. Deep green, somewhat translucent crystals (<c>shaders/crystal_quartz.gdshader</c>) with a low green glow and a soft green light, and the plantation's own

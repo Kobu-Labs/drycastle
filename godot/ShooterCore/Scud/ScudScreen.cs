@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Scud;
 
 /// <summary>Which screen of a Scud truck the local player has up.</summary>
 public enum ScudScreenMode : byte

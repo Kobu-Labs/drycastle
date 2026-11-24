@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// Vehicles are the Thieves' priority (GLOSSARY "Loot"): when a car newly becomes available to a Raid, a share of its free Thieves is sent to its tires. Pure: who goes and how many

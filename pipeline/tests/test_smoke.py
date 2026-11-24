@@ -1,7 +1,9 @@
+import importlib
+
 import pytest
 
 from drycastle_pipeline import cli
-from drycastle_pipeline.stages import STAGES
+from drycastle_pipeline.cli import STAGES
 
 EXPECTED_ORDER = ["fetch", "normalise", "ortho", "ortho-trees", "parcels", "rules", "terrain", "roads", "props", "detail", "export"]
 
@@ -48,5 +50,6 @@ def test_force_flag_reaches_fetch(fake_fetch: list[bool]) -> None:
     assert fake_fetch == [True, False]
 
 
-def test_cli_stage_names_match_stages() -> None:
-    assert list(cli.STAGE_NAMES) == list(STAGES)
+def test_every_stage_module_has_a_run() -> None:
+    for module in cli.STAGE_MODULES.values():
+        assert callable(importlib.import_module(f"drycastle_pipeline.{module}").run)

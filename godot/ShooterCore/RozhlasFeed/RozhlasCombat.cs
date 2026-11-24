@@ -1,11 +1,13 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.RozhlasFeed;
 
 /// <summary>What happened in the world that the live feed may rebroadcast.</summary>
 public enum CombatKind { Shot, Launch, Explosion, VehicleExplosion, Death }
 
 /// <summary>
 /// The combat mix of the rozhlas live feed (docs/events/README.md, "Live feed"): which game events become which sound, and whether they reach the feed. Godot-free.
-/// The ids are exactly what the client plays for the same event (NetClient.Sound.cs), so a gunshot on the megaphones is the gunshot the player heard:
+/// The ids are exactly what the client plays for the same event (ClientSound.cs), so a gunshot on the megaphones is the gunshot the player heard:
 /// <c>shot.&lt;weapon&gt;</c> for a Shot or PelletFan, <c>launch.&lt;weapon&gt;</c> for a Launch, <c>explosion.&lt;weapon&gt;</c> for an Explosion, <c>explosion.vehicle</c> for a vehicle's blast, <c>death</c>.
 /// An event is mixed only while the mic is live and its position is inside the Urad volume (the caller evaluates both and passes them in); there is no distance falloff and the position is used for nothing else.
 /// The sound is the dry sample of the id (<see cref="RozhlasSampleBank"/>: first file, the table's volume and pitch, never a random pitch), added on top of the feed's input.

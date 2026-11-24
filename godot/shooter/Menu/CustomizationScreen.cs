@@ -1,7 +1,12 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Menu;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The camouflage customiser (ticket #141; docs/standards/ui-ux.md sections 1 to 5). One look per loadout slot.
@@ -75,14 +80,14 @@ public partial class CustomizationScreen : MenuScreen
     {
         base._Ready();
         _net = _client();
-        if (_net != null) { _net.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
-        if (_net?.Profile is { } p) OnProfile(p);
+        if (_net != null) { _net.Loadouts.ProfileChanged += OnProfile; _net.ServerError += OnServerError; }
+        if (_net?.Loadouts.Profile is { } p) OnProfile(p);
         else Refresh();
     }
 
     public override void _ExitTree()
     {
-        if (_net != null) { _net.ProfileChanged -= OnProfile; _net.ServerError -= OnServerError; }
+        if (_net != null) { _net.Loadouts.ProfileChanged -= OnProfile; _net.ServerError -= OnServerError; }
         base._ExitTree();
     }
 
@@ -481,7 +486,7 @@ public partial class CustomizationScreen : MenuScreen
     {
         _slot = slot;
         _slotTabs[slot].ButtonPressed = true;
-        _saved = _net?.Profile is { } p ? ServerCopy(p, slot) : CamoSpec.Default;
+        _saved = _net?.Loadouts.Profile is { } p ? ServerCopy(p, slot) : CamoSpec.Default;
         _draft = _saved;
         ClearHistory();
         _wait.Cancel();
@@ -598,7 +603,7 @@ public partial class CustomizationScreen : MenuScreen
     void Apply()
     {
         if (_net == null || !Dirty || AwaitingSave) return;
-        if (!_net.SaveCamo(_slot, _draft)) { Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); return; }
+        if (!_net.Camo.Save(_slot, _draft)) { Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); return; }
         _wait.Begin(_slot, _draft, Now());
         Sync();
     }

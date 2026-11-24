@@ -1,7 +1,14 @@
 using Godot;
-using Drycastle.ShooterCore;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Hunts;
+using Drycastle.ShooterCore.Icons;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.Shooter;
+namespace Drycastle.Shooter.Menu;
 
 /// <summary>
 /// The loadout screen, laid out as a "Create a class" menu (ticket #147; docs/standards/ui-ux.md). A strip of five class tabs
@@ -71,7 +78,7 @@ public partial class LoadoutScreen : MenuScreen
     public LoadoutScreen(Func<NetClient?> client, Func<GameData> data) { _client = client; _data = data; }
 
     /// <summary>The connection's autosave (null offline). It outlives this screen, so a save in flight is still answered.</summary>
-    LoadoutAutosave? Autosave => _net?.Autosave;
+    LoadoutAutosave? Autosave => _net?.Loadouts.Autosave;
 
     /// <summary>The loadout the screen shows for a slot: the draft if there is one, else the server copy.</summary>
     Loadout LoadoutAt(int slot) => Autosave?.Effective(slot) ?? ServerCopy(slot);
@@ -89,15 +96,15 @@ public partial class LoadoutScreen : MenuScreen
         _devBadge = DevBadge.Create(false);
         AddChild(_devBadge);
         _tab = LoadoutEditor.ClampTab(int.TryParse(GameSettings.LoadUi("loadout_tab", "0"), out var t) ? t : 0);
-        if (_net != null) { _net.ProfileChanged += OnProfile; _net.LoadoutAcked += OnAck; }
-        if (_net?.Profile is { } p) OnProfile(p);
+        if (_net != null) { _net.Loadouts.ProfileChanged += OnProfile; _net.Loadouts.Acked += OnAck; }
+        if (_net?.Loadouts.Profile is { } p) OnProfile(p);
         else Refresh();
     }
 
     public override void _ExitTree()
     {
-        _net?.FlushAutosave(); // unsent edits go out now, not after the debounce
-        if (_net != null) { _net.ProfileChanged -= OnProfile; _net.LoadoutAcked -= OnAck; }
+        _net?.Loadouts.FlushAutosave(); // unsent edits go out now, not after the debounce
+        if (_net != null) { _net.Loadouts.ProfileChanged -= OnProfile; _net.Loadouts.Acked -= OnAck; }
         base._ExitTree();
     }
 
@@ -477,7 +484,7 @@ public partial class LoadoutScreen : MenuScreen
     void UseNext()
     {
         if (_net == null || _profile?.ActiveSlot == _tab) return;
-        _net.SelectSlot(_tab);
+        _net.Loadouts.SelectSlot(_tab);
         Shell.Toast(Strings.F("loadout.toast.active", _tab + 1));
     }
 
@@ -602,7 +609,7 @@ public partial class LoadoutScreen : MenuScreen
         var net = _net;
         var target = _tab;
         Shell.Push(new DialogScreen(Strings.F("loadout.reset.title", slot), Strings.F("loadout.reset.body", slot),
-            new[] { new DialogScreen.Choice(Strings.T("loadout.reset.confirm"), () => { net.FlushAutosave(); if (!net.ResetLoadout(target)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
+            new[] { new DialogScreen.Choice(Strings.T("loadout.reset.confirm"), () => { net.Loadouts.FlushAutosave(); if (!net.Loadouts.Reset(target)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
     }
 
     /// <summary>Step one: pick the class to overwrite. Step two confirms the overwrite (the copy has no undo here).</summary>
@@ -620,7 +627,7 @@ public partial class LoadoutScreen : MenuScreen
         var net = _net;
         var from = _tab;
         Shell.Push(new DialogScreen(Strings.F("loadout.copy.overwrite.title", to + 1), Strings.F("loadout.copy.overwrite.body", from + 1, to + 1),
-            new[] { new DialogScreen.Choice(Strings.T("loadout.copy.confirm"), () => { net.FlushAutosave(); if (!net.CopyLoadout(from, to)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
+            new[] { new DialogScreen.Choice(Strings.T("loadout.copy.confirm"), () => { net.Loadouts.FlushAutosave(); if (!net.Loadouts.Copy(from, to)) Shell.Toast(Strings.T("net.not_sent"), ToastKind.Error); }, "MenuDanger") }));
     }
 
     /// <summary>Esc: one level up. A rename is cancelled, a picker closes, and the screen flushes unsent edits on the way out.</summary>
@@ -628,7 +635,7 @@ public partial class LoadoutScreen : MenuScreen
     {
         if (_renaming) { CancelRename(); return; }
         if (_picker >= 0) { ClosePicker(); return; }
-        _net?.FlushAutosave();
+        _net?.Loadouts.FlushAutosave();
         base.Back();
     }
 

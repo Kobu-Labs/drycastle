@@ -1,4 +1,8 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Movement;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Weapons;
+
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// Who aboard a vehicle can be shot, and what a rider can do from their seat (ADR 0011, ADR 0012), pure so the server and the tests agree.

@@ -1,6 +1,9 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Net;
+using static Drycastle.ShooterCore.Movement.Planar;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// Where the event's Loot is (GLOSSARY "Loot"), pure: the kinds and their claims (<see cref="Registry"/>), the Loot that lies on the ground (<see cref="Lying"/>, world entities with a cap), and the
@@ -253,11 +256,6 @@ public sealed class LootBook
         Pieces.Forget(l.Origin);
     }
 
-    static float Flat(Vector3 a, Vector3 b)
-    {
-        var dx = a.X - b.X; var dz = a.Z - b.Z;
-        return MathF.Sqrt(dx * dx + dz * dz);
-    }
 }
 
 /// <summary>Where one hold of the use key on lying Loot is (<see cref="LootReturnHold"/>): nothing counted, counting toward the return, or spent (done or interrupted) and waiting for the key to be released.</summary>

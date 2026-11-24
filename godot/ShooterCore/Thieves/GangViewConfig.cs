@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+
+namespace Drycastle.ShooterCore.Thieves;
 
 /// <summary>
 /// How a Gang member is drawn (client only; thieves.json <c>gang.view</c>, docs/events/thieves/08). With the private Gang Warfare pack: a model of <see cref="Models"/> by kind and look number, one of the

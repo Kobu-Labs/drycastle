@@ -1,4 +1,4 @@
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// The minimap's settings (ticket #143): size in pixels, opacity and zoom (the half-width of the view in metres, see

@@ -1,10 +1,15 @@
+using Drycastle.MapLoader.Waters;
+using Drycastle.Viewer.Editor;
+using Drycastle.Viewer.Edits;
+using Drycastle.Viewer.StreetView;
+using Godot;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using Godot;
-using Drycastle.MapLoader;
+
+namespace Drycastle.Viewer;
 
 /// <summary>
 /// Map viewer root. Loads the map, adds light and sky, spawns the player.
@@ -160,7 +165,7 @@ public partial class Viewer : Node3D
         if (string.IsNullOrEmpty(_map.WaterJson)) return;
         try
         {
-            WaterSurfaces.Attach(this, Drycastle.ShooterCore.Water.Parse(_map.WaterJson));
+            WaterSurfaces.Attach(this, Drycastle.ShooterCore.Waters.Water.Parse(_map.WaterJson));
         }
         catch (Exception e)
         {

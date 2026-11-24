@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Weapons;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// The riders of one vehicle its hull does not cover, as hit targets: the flak truck's or the utility helicopter's gunner (one), or everyone

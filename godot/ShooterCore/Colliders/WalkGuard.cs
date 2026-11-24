@@ -1,6 +1,10 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Turrets;
+using Drycastle.ShooterCore.Wildlife;
+using static Drycastle.ShooterCore.Movement.Planar;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Colliders;
 
 /// <summary>
 /// What a navmesh walker (a citizen, a Gang member, a bot's route) asks of the world as it walks (ADR 0028, the Walker row of <see cref="CollisionRules"/>): what is ahead of it that its row
@@ -87,6 +91,4 @@ public struct WalkGuard
         _clear.Reset();
         return null;
     }
-
-    static float Flat(Vector3 a, Vector3 b) { var dx = a.X - b.X; var dz = a.Z - b.Z; return MathF.Sqrt(dx * dx + dz * dz); }
 }

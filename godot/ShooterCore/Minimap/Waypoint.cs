@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Minimap;
 
 /// <summary>
 /// The waypoint a player sets by clicking the tactical map: one ground point (x, z) per player, local only, shown in the world

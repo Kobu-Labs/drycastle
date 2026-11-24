@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Bunkers;
 
 /// <summary>
 /// One ladder between two floors of a bunker (bunkers.json, #224). The climber stands at <see cref="Rail"/> and faces

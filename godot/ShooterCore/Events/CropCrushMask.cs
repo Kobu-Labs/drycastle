@@ -1,6 +1,6 @@
 using System.Numerics;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Events;
 
 /// <summary>One ground vehicle as a pose, for <see cref="CropCrushMask.Step"/>: where it is (game x, z), its yaw (0 faces -Z, positive turns left), its body, how fast it moves and whether it can crush at all.</summary>
 /// <param name="Ground">Not destroyed, not flying, not afloat: the caller knows (the server from its car, a client from what it draws).</param>

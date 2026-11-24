@@ -1,7 +1,8 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Citizens;
 
 /// <summary>One seat of the church: where the pelvis rests on the pew, the way the sitter faces, the scripted route to it from the door, and the floor (0 ground, 1 gallery). A standing spot (<c>Stand</c>) has no pew: its point is on the floor and the citizen stands or kneels there.</summary>
 public sealed record ChurchSeat(int Id, Vector3 Pos, float Yaw, IReadOnlyList<Vector3> Path, int Floor, bool Stand = false);
@@ -60,10 +61,7 @@ public sealed class Church
     /// <summary>Parse church.json: <c>{"door": {"x","y","z","yaw"}, "aisle": [[x,y,z]...], "seats": [{"id","pos":[x,y,z],"yaw","path":[[x,y,z]...],"floor","stand"}], "exit"|"pastor"|"sacristy_door": {"pos","yaw"}, "monks": [{"pos","yaw"}], "props": [{"kind","pos","yaw"}, {"kind":"painting","pos","yaw","w","h"}]}</c> (everything but door and seats optional; props other than paintings are the game's furniture and not read here).</summary>
     public static Church Parse(string json, string name = "church.json")
     {
-        JsonDocument doc;
-        try { doc = JsonDocument.Parse(json); }
-        catch (JsonException e) { throw new DataFileException($"{name}: not JSON: {e.Message}", e); }
-        using (doc)
+        using (var doc = DataFile.Document(json, name))
         {
             var root = doc.RootElement;
             if (!root.TryGetProperty("door", out var door) || door.ValueKind != JsonValueKind.Object) throw new DataFileException($"{name}: missing door");

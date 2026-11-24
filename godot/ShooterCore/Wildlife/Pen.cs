@@ -1,7 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>
 /// The ground a pet may stand on: the union of the parcels of one property group. Each parcel is a polygon (an outer ring, then holes, even-odd);

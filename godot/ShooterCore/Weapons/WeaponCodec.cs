@@ -1,7 +1,8 @@
 using System.Buffers.Binary;
 using System.Numerics;
+using Drycastle.ShooterCore.Effects;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>Shot fired (broadcast, for remote effects). <see cref="Weapon"/> is the 0-based hotbar index; End is where the tracer stops.</summary>
 public sealed record ShotMsg(ushort Shooter, byte Weapon, Vector3 Origin, Vector3 End);

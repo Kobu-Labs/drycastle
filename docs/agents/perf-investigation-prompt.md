@@ -25,7 +25,7 @@ You coordinate. You do not do the deep reading yourself: spawn the specialist ag
 Give each agent: the ground rules above, its scope, its questions, and the output format. Do not paste your whole prompt; paste the rules and its own section.
 
 ### A. Netcode and replication
-Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, the loss test.
+Scope: `godot/ShooterCore/Net/*`, `godot/shooter/Net/Server/NetServer*.cs`, `NetClient*.cs`, `NetSim.cs`, ADR 0002, the loss test.
 Questions:
 - Is "unreliable-sequenced quantised deltas with 30-tick keyframes" still right? The audit's open defect: deltas against the last *sent* state, not an acked one (T1-2). Size the fix and check what else depends on it.
 - Bandwidth and CPU as a function of players, entities (vehicles, turrets, aircraft, animals, corpses, glass), and events. At what n does it stop fitting: 16, 32, 64? Is the lack of interest management a real cost, and where is the break-even?
@@ -42,7 +42,7 @@ Questions:
 - Verdict: build it, defer it, or never; with the latency/speed threshold at which the answer flips.
 
 ### C. Players: movement, prediction and reconciliation
-Scope: `Player.cs`, `Movement.cs`, `NetClient.Predict.cs`, `Interpolator.cs`, ADRs 0006 and 0010.
+Scope: `Player.cs`, `Movement.cs`, `OwnWeapon.cs`, `OwnPrediction.cs`, `Interpolator.cs`, ADRs 0006 and 0010.
 Questions:
 - Is the shared `Player.Simulate` step truly deterministic on both sides (same layers, same collision, same float inputs)? Where can client and server disagree (the vehicle-box bug in `docs/vehicle-collision-and-entering.md` was one)? Cost of reconciliation: why 2205 reconciliations on a *clean* link in the loss test?
 - Cost per tick of `MoveAndSlide` per player, per bot, per vehicle on the server; what scales with player count.
@@ -50,7 +50,7 @@ Questions:
 - Remote player representation: interpolation, ragdoll/corpse flail, character animation cost.
 
 ### D. Vehicle models and collisions
-Scope: `godot/ShooterCore/Vehicles/*`, `godot/ShooterCore/Aircraft/*`, `ServerCar.cs`, `VehicleCollider.cs`, `NetServer.Vehicles.cs`, `NetServer.ResolveVehicleContacts`, `data/vehicles.json`, glass ADR 0008.
+Scope: `godot/ShooterCore/Vehicles/*`, `godot/ShooterCore/Flight/*`, `ServerCar.cs`, `VehicleCollider.cs`, `NetServer.Vehicles.cs`, `NetServer.ResolveVehicleContacts`, `data/vehicles.json`, glass ADR 0008.
 Questions:
 - Kinematic arcade drive/flight models with box colliders on a dedicated layer: right for 29 vehicles and the intended gameplay (ramming, run-over, riding, boats, amphibious, helicopters)? What does it fundamentally not support (stacking, towing, riding on a roof, slopes, ramps, terrain damage), and is that acceptable?
 - Per-tick cost: 29 vehicles stepped, parked ones (T2-04), pairwise contacts (O(n²)?), run-over footprint tests against all players, per-pane glass nodes.
@@ -58,7 +58,7 @@ Questions:
 - Determinism and prediction cost for the driver; bytes per vehicle per snapshot, parked and driven.
 
 ### E. World representation and physics world
-Scope: `godot/MapLoader/*`, chunk GLBs and collision meshes, `godot/ShooterCore/Colliders`, `Environment`, `Water.cs`, `BotNav.cs`, ADR 0004, `docs/pipeline.md` for the *artifact* shape (not the pipeline's own speed).
+Scope: `godot/MapLoader/*`, chunk GLBs and collision meshes, `godot/ShooterCore/Colliders`, `godot/ShooterCore/Scenery`, `godot/ShooterCore/Waters/Water.cs`, `BotNav.cs`, ADR 0004, `docs/pipeline.md` for the *artifact* shape (not the pipeline's own speed).
 Questions:
 - Is "chunk GLBs with trimesh colliders, trees as bodies, one shared lamp body" the right world representation for the server (collision only) and the client (rendering)? Alternatives: heightfield terrain plus instanced props, merged static collision, a separate lightweight collision-only artifact for the server, a spatial grid for gameplay queries.
 - Server memory and startup: it builds visual meshes and materials it never draws (T2-26). What is the minimum representation the server needs, and what does a dedicated collision artifact cost in pipeline work?
@@ -67,7 +67,7 @@ Questions:
 - Map version, memory and download size for players.
 
 ### F. Rendering and client frame
-Scope: `godot/shooter/*Fx.cs`, `Hud*.cs`, `Minimap.cs`, `DayNightCycle.cs`, `shaders/`, `WaterFx.cs`, `CharacterFx.cs`, project settings.
+Scope: `godot/shooter/**/*Fx.cs`, `HeadsUp/**/*.cs`, `Maps/Minimap.cs`, `Scenery/DayNightCycle.cs`, `shaders/`, `Waters/WaterFx.cs`, `Characters/CharacterFx.cs`, project settings.
 Questions:
 - Draw calls, shadow passes, visibility ranges, MSAA, Forward+ vs. Mobile, for 998 mesh nodes and 16 characters. CPU-bound (draw submission, node churn) or GPU-bound, and for which hardware floor? State the floor you assume and why.
 - Effects: node churn per shot/blast/tracer (T2-15, T2-16, T2-17); which should be pooled, GPU particles, or MultiMesh. Distance gating.

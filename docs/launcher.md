@@ -1,7 +1,7 @@
 # Launcher and release pipeline
 
 Players install the launcher once (`drycastle-launcher-windows.zip`, `-linux.zip` or `-macos.zip`); it downloads and updates the game from GitHub Releases of Kobu-Labs/drycastle
-(public repo, unauthenticated API). Code: `godot/launcher` (Godot UI), `godot/LauncherCore` (logic, tested in `ShooterCore.Tests/LauncherTests.cs`).
+(public repo, unauthenticated API). Code: `godot/launcher` (Godot UI), `godot/LauncherCore` (logic, tested in `ShooterCore.Tests/Launcher/LauncherTests.cs`).
 
 ## Flow at a glance
 
@@ -9,7 +9,7 @@ Players install the launcher once (`drycastle-launcher-windows.zip`, `-linux.zip
 maintainer                      GitHub Releases (Kobu-Labs/drycastle)            player
 ----------                      -------------------------------------            ------
 make map
-scripts/publish-map.sh  ------> map-<date>-<hash>   (map.zip, map.json)
+scripts/release/publish-map.sh  ------> map-<date>-<hash>   (map.zip, map.json)
 commit map-version.txt
 PR main -> release, merge ------> deploys the server to the VPS, THEN publishes v0.<run> (game zips for Windows + Linux + macOS, manifest.json)
 tag launcher-vX.Y.Z     ------> launcher-vX.Y.Z     (launcher zips)
@@ -29,7 +29,7 @@ what changed, then Play. **Maintainer, release (game and server together):** ope
 |---|---|---|
 | `v0.<run>` (stable) | merging a PR into the `release` branch (`.github/workflows/release.yml`, which also deploys the server first) | `drycastle-game-windows.zip`, `drycastle-game-linux.zip`, `drycastle-game-macos.zip` (no map), `manifest.json` |
 | `dev-<run>` (prerelease) | manual run of the `release` workflow on any branch (no deploy) | same, channel `dev`; last 15 kept |
-| `map-<date>-<hash>` (prerelease) | you, `scripts/publish-map.sh` | `map.zip`, `map.json` |
+| `map-<date>-<hash>` (prerelease) | you, `scripts/release/publish-map.sh` | `map.zip`, `map.json` |
 | `launcher-vX.Y.Z` (prerelease, so it is never GitHub "latest") | pushing a tag `launcher-v*` (`launcher.yml`) | `drycastle-launcher-windows.zip`, `drycastle-launcher-linux.zip`, `drycastle-launcher-macos.zip` |
 
 `manifest.json` (schema 2) lists one build per platform (`windows`, `linux`, `macos`: exe and game zip) and the map release, each with sha256 and size. The launcher picks the build for its own OS. Players on **stable** get the newest non-prerelease
@@ -37,18 +37,18 @@ what changed, then Play. **Maintainer, release (game and server together):** ope
 
 ## The map
 
-The village map is generated from gitignored data, so CI cannot build it. After `make map`, run `scripts/publish-map.sh`
+The village map is generated from gitignored data, so CI cannot build it. After `make map`, run `scripts/release/publish-map.sh`
 (zips it, publishes a `map-*` release, writes `map-version.txt`), then commit `map-version.txt`. Game builds pick the map named there, so game and map
 move together. Until the first map is published, `map-version.txt` holds a placeholder: the release job stays green, publishes nothing and prints a warning.
 Most game updates then download only the game zip; a map change downloads the map zip only.
 
 ## The private asset pack
 
-Paid assets (Synty models, voices, songs) are never in the repo, a game zip or a GitHub release (the CI step `scripts/check-no-private-assets.sh` fails when one is tracked).
+Paid assets (Synty models, voices, songs) are never in the repo, a game zip or a GitHub release (the CI step `scripts/release/check-no-private-assets.sh` fails when one is tracked).
 They travel as one **encrypted** zip from the game host:
 
-- `make private-pack` (`scripts/make_private_pack.py`) zips the runtime subset of `assets-private/` (its `INCLUDE` list is the definition of the pack).
-- `scripts/publish-private-pack.sh user@host` encrypts it with the pack password (`openssl enc -aes-256-cbc -pbkdf2`, 600 000 iterations), uploads it to
+- `make private-pack` (`scripts/release/make_private_pack.py`) zips the runtime subset of `assets-private/` (its `INCLUDE` list is the definition of the pack).
+- `scripts/release/publish-private-pack.sh user@host` encrypts it with the pack password (`openssl enc -aes-256-cbc -pbkdf2`, 600 000 iterations), uploads it to
   `/opt/drycastle/pack/` (served by the `pack` service of `deploy/docker-compose.yml`: plain HTTP, TCP 27080, no listing) and the unencrypted files to
   `/opt/drycastle/assets-private/` (mounted into the game server), and writes **`private-pack.json`**. Commit that file; the release job copies it into
   `manifest.json` as `"pack"` (id, encrypted file url/sha256/size, `plain_sha256`, `iterations`). No `private-pack.json`: the release has no pack.

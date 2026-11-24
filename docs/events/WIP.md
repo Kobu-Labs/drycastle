@@ -12,7 +12,7 @@ Branch `events` = `main` + `rozhlas` (fast-forwarded, they are the same commit `
 | #260 Layered ground types with attributes | implemented, merged into `events` | `ground-attributes` | ADR 0015. Pipeline output verified byte-identical. Editor UI compiles, **never run** |
 | #261 Inventory: headgear slot, Bigfoot head, pickup limit | implemented, merged | `inventory-headgear` | ADR 0016, protocol 28, `/give`. Game **never run** |
 | #262 Intel room and NPC announcements | implemented, merged | `intel-room` | ADR 0017, protocol 29, `/event intel`. Needs `make export`; game **never run**. No NPC built |
-| #263 Runtime zones: baked candidate points | implemented, branch not merged | `event-spawn-points` | option B: `zone_points.json` (ADR 0022), `NetServer.PickEventSpawn("bigfoot")`. Game **never run** |
+| #263 Runtime zones: baked candidate points | implemented, branch not merged | `event-spawn-points` | option B: `zone_points.json` (ADR 0022), `MapAreas.PickEventSpawn("bigfoot")`. Game **never run** |
 | #264 Bigfoot event | implemented, on its own branch (not merged into `events`) | `bigfoot-event` | `docs/shooter-v2.md` 7c, protocol 32, `bigfoot.json`. Builds, `ShooterCore.Tests` pass. Game **never run** |
 | #266 to #269 Worn items drawn, bag, ground items, Equipment screen (F), corpse chooser list | implemented, merged | `items-worn-render`, `items-bag-ground`, `equipment-screen` | ADR 0018, protocol 31. Game **never run** |
 | #265 Private asset pack (VPS download, launcher password) | not started | | independent |
@@ -33,7 +33,7 @@ Bigfoot (first event, ticket #264):
 - Started with `/event bigfoot`, ended with `/event current end`. **No scheduler and no announcement in this ticket** (both postponed). Reward is the footsteps to a corpse carrying the Bigfoot head, plus XP. The event waits for the head (#261), which is done.
 
 Spawn areas (tickets #260, #263):
-- ADR 0022: a ground type is terrain only; where an event may spawn is a **zone** of kind `bigfoot` (drawn, or by rule). The pipeline bakes candidate points per zone kind (`zones` in `rules.yaml`) into `zone_points.json`; the server picks one with `NetServer.PickEventSpawn`. Count is a density rule in data; only buildings and water need clearance (Bigfoot tramples trees). See `docs/pipeline.md`, "Zones".
+- ADR 0022: a ground type is terrain only; where an event may spawn is a **zone** of kind `bigfoot` (drawn, or by rule). The pipeline bakes candidate points per zone kind (`zones` in `rules.yaml`) into `zone_points.json`; the server picks one with `MapAreas.PickEventSpawn`. Count is a density rule in data; only buildings and water need clearance (Bigfoot tramples trees). See `docs/pipeline.md`, "Zones".
 
 Private assets (ticket #265):
 - Paid packs (Synty) must never enter this **public** repo or public GitHub Releases. Plan: gitignored `assets-private/`, a CI guard against tracking it, a pack published to the VPS and downloaded by the launcher with a password, a fallback to the CC0 placeholder models.
@@ -50,10 +50,10 @@ goes up; credit is 3 hits or being near at the kill; the body lies 8 s and then 
 vehicles are thrown; a launched player's fall damage is replaced by 2-5; the dev fallback spawn is 55-85 m from a random player.
 Open:
 - **An area with `event spawn: bigfoot`** must be drawn (the village has none): until then every start is the fallback.
-- **Intel board:** `AnnounceIntel` / `WithdrawIntel` is not called by the Bigfoot (the ticket says no announcement). It is one call each at start and end.
-- **Sounds:** no roar, no stomp, no throw sound exists; `NetClient.Bigfoot.cs` `BigfootSounds` reuses the closest ones.
+- **Intel board:** `IntelServer.Announce` / `Withdraw` is not called by the Bigfoot (the ticket says no announcement). It is one call each at start and end.
+- **Sounds:** no roar, no stomp, no throw sound exists; `BigfootFx.cs` `BigfootSounds` reuses the closest ones.
 - **A boss bar or any HUD** for the hit count or the phase: none (the hit marker and the roar are the feedback).
-- **The model and animations** are the project's own since #286 (`scripts/make_bigfoot_model.py`, `drycastle-generated-models/bigfoot.glb`); the Quaternius placeholder is gone. It stops and roars at a new phase and at the enrage (act `Roar`), and the chase is steadier (#285). Not yet seen in the game.
+- **The model and animations** are the project's own since #286 (`scripts/models/make_bigfoot_model.py`, `drycastle-generated-models/bigfoot.glb`); the Quaternius placeholder is gone. It stops and roars at a new phase and at the enrage (act `Roar`), and the chase is steadier (#285). Not yet seen in the game.
 - **Launched player's client** does not know the launch velocity (it reconciles to the server, as for a blast's knockback); a better hand-off would send it in `BigfootFx`.
 - Tuning: every number in `bigfoot.json` is a first guess (the fight is meant to take about a minute: 300 hits per participant).
 - The corpse and its footsteps are not on the minimap or the tactical map.

@@ -1,4 +1,7 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Perks;
+using Drycastle.ShooterCore.Progression;
+
+namespace Drycastle.ShooterCore.Weapons;
 
 /// <summary>
 /// Weapon related input of one tick. <see cref="Slot"/> is the wanted hotbar slot 1..4 (0 = no preference). <see cref="Locked"/> is whether the

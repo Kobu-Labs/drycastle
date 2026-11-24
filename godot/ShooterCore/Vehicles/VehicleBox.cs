@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Glass;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// A ray hit on a vehicle's hit box, in the vehicle's own frame: the node frame of the vehicle (origin on the ground under its centre,

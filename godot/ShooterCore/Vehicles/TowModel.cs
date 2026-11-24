@@ -1,6 +1,7 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Wildlife;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Vehicles;
 
 /// <summary>
 /// The numbers of one tractor and one trailer type, flattened for the step (build once with <see cref="Of"/>). Metres, radians, seconds; offsets in each vehicle's own frame

@@ -1,4 +1,6 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Fsm;
+
+namespace Drycastle.ShooterCore.Hunts;
 
 /// <summary>Where one query of the Hunter's Log is: not asked, waiting, answered, failed to read, or no such player.</summary>
 public enum HuntLoad { Idle, Loading, Ready, Failed, Missing }

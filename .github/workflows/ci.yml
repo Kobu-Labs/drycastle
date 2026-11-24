@@ -9,7 +9,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: No paid asset is tracked
-        run: scripts/check-no-private-assets.sh
+        run: scripts/release/check-no-private-assets.sh
       - uses: actions/setup-dotnet@v4
         with: { dotnet-version: 8.0.x }
       - run: dotnet test godot/ShooterCore.Tests/ShooterCore.Tests.csproj

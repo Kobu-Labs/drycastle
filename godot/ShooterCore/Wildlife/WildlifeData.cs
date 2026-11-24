@@ -1,4 +1,9 @@
-namespace Drycastle.ShooterCore;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Mining;
+using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Scenery;
+
+namespace Drycastle.ShooterCore.Wildlife;
 
 /// <summary>How a species gathers into herds (wildlife.json): its animals are split into groups of <see cref="Min"/> to <see cref="Max"/> that stay together (<see cref="Herd"/>).</summary>
 public sealed class HerdRules
@@ -204,10 +209,23 @@ public sealed class WildlifeFile : IVersioned
 
     public static WildlifeFile Parse(string json) => Validate(DataFile.Parse<WildlifeFile>(json, "wildlife.json"));
 
+    const string F = "wildlife.json";
+
     public static WildlifeFile Validate(WildlifeFile f)
     {
-        const string F = "wildlife.json";
         if (f.MaxAnimals is < 0 or > MaxAnimalsLimit) throw new DataFileException($"{F}: max_animals is 0..{MaxAnimalsLimit} (wildlife, pets and their poop share the world's entity cap)");
+        var seen = ValidateSpecies(f);
+        var seenRare = ValidateRare(f, seen);
+        ValidatePhoenix(f, seen, seenRare);
+        ValidateHerds(f);
+        ValidateFlocks(f, seen, seenRare);
+        if (f.Flocks.Sum(k => k.Flocks) + f.MaxAnimals > MaxAnimalsLimit + 20) throw new DataFileException($"{F}: animals and flocks together exceed the entity budget");
+        return f;
+    }
+
+    /// <summary>Species ids are one namespace with rare species and flocks; returns the species ids.</summary>
+    static HashSet<string> ValidateSpecies(WildlifeFile f)
+    {
         var seen = new HashSet<string>();
         foreach (var s in f.Species)
         {
@@ -221,6 +239,11 @@ public sealed class WildlifeFile : IVersioned
                 if (!(h.MoveMinSeconds > 0) || h.MoveMaxSeconds < h.MoveMinSeconds) throw new DataFileException($"{F}: species {s.Id}: herd move_min_seconds must be positive and not above move_max_seconds");
             }
         }
+        return seen;
+    }
+
+    static HashSet<string> ValidateRare(WildlifeFile f, HashSet<string> seen)
+    {
         var seenRare = new HashSet<string>();
         foreach (var r in f.Rare)
         {
@@ -229,6 +252,11 @@ public sealed class WildlifeFile : IVersioned
             if (r.Count is < 1 or > 10) throw new DataFileException($"{F}: rare species {r.Id}: count is 1..10");
             if (!(r.MinBuildingM >= 0) || !(r.RespawnSeconds > 0)) throw new DataFileException($"{F}: rare species {r.Id}: min_building_m must not be negative and respawn_seconds must be positive");
         }
+        return seenRare;
+    }
+
+    static void ValidatePhoenix(WildlifeFile f, HashSet<string> seen, HashSet<string> seenRare)
+    {
         if (f.Phoenix is { } px)
         {
             const string P = F + ": phoenix: ";
@@ -239,6 +267,10 @@ public sealed class WildlifeFile : IVersioned
             if (!(px.CrashMinM >= 0) || px.CrashMaxM < px.CrashMinM || !(px.CrashClearM > 0) || !(px.CrashMaxSlopeM >= 0) || !(px.CrashBuildingM >= 0)) throw new DataFileException(P + "crash_min_m is not negative and not above crash_max_m; crash_clear_m must be positive; crash_max_slope_m and crash_building_m not negative");
             if (Minerals.Find(px.Drops) == null) throw new DataFileException(P + $"drops {px.Drops} is not a mineral (Minerals.All)");
         }
+    }
+
+    static void ValidateHerds(WildlifeFile f)
+    {
         var seenHerds = new HashSet<string>();
         foreach (var m in f.Herds)
         {
@@ -264,6 +296,10 @@ public sealed class WildlifeFile : IVersioned
             if (!m.Members.Any(k => k.Weight > 0)) throw new DataFileException($"{h}: at least one member needs a weight (it fills the herd)");
             if (counted >= m.Size.Min) throw new DataFileException($"{h}: the members' min counts ({counted}) must be below size min ({m.Size.Min})");
         }
+    }
+
+    static void ValidateFlocks(WildlifeFile f, HashSet<string> seen, HashSet<string> seenRare)
+    {
         var seenFlocks = new HashSet<string>();
         foreach (var k in f.Flocks)
         {
@@ -277,8 +313,6 @@ public sealed class WildlifeFile : IVersioned
             if (!(b.NeighbourM > 0) || !(b.SeparationM > 0) || !(b.MinSpeed > 0) || b.MaxSpeed < b.MinSpeed || !(b.MaxAccel > 0) || !(b.BandM >= 0) || !(b.LeashM > 0) || !(b.PanicSpeedFactor >= 1) || !(b.AvoidMarginM >= 0) || !(b.AvoidAccelFactor > 0) || !(b.AvoidHorizonS > 0))
                 throw new DataFileException($"{F}: flock {k.Id}: boids: neighbour_m, separation_m, min_speed, max_accel and leash_m must be positive, max_speed not below min_speed, panic_speed_factor at least 1");
         }
-        if (f.Flocks.Sum(k => k.Flocks) + f.MaxAnimals > MaxAnimalsLimit + 20) throw new DataFileException($"{F}: animals and flocks together exceed the entity budget");
-        return f;
     }
 
     /// <summary>Checks that every species and herd member id is a wild species of <paramref name="animals"/> (one that flees: a pet lives in a Pen, not in a zone).</summary>

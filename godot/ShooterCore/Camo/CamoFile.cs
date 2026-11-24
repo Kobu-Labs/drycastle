@@ -1,6 +1,8 @@
 using System.Globalization;
+using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Movement;
 
-namespace Drycastle.ShooterCore;
+namespace Drycastle.ShooterCore.Camo;
 
 /// <summary>A named look in camo.json: its id, its display name and the resolved <see cref="CamoSpec"/>.</summary>
 public sealed record CamoPreset(string Id, string Name, CamoSpec Spec);

@@ -16,23 +16,23 @@ Unit costs that the budget depends on are not in the repo. The main one is the c
 
 - **Measured headroom.** Tick p50 1.59 ms, p95 2.55 ms, p99 3.20 ms, 30.00 ticks/s, 9 % of one core (`docs/spikes/shooter-loss-test.md`, results table). The loss test runs the real map collision.
 - **Frame cap and step cap are set for the dedicated server.** `Engine.MaxFps = 60` and `Engine.MaxPhysicsStepsPerFrame = 2` at `godot/shooter/Shooter.cs:421-422`. This closes audit T1-1 and most of T2-05.
-- **Catch-up ticks do not send snapshots.** `CatchUpTick` (`godot/shooter/Net/NetServer.cs:183`, `:212`) skips the snapshot on a tick that starts right after the last one, so a slow frame does not add traffic.
-- **Bounded inputs and receive per peer.** Input queue capped at 8 (`NetServer.cs:379`), `PacketsPerTick = 64` with a drop counter (`godot/shooter/Net/NetServer.Telemetry.cs:14`, `NetServer.cs:343`), and a token bucket on profile saves (`NetServer.Telemetry.cs:59-63`). Audit T2-06 is closed.
+- **Catch-up ticks do not send snapshots.** `CatchUpTick` (`godot/shooter/Net/Server/NetServer.cs:183`, `:212`) skips the snapshot on a tick that starts right after the last one, so a slow frame does not add traffic.
+- **Bounded inputs and receive per peer.** Input queue capped at 8 (`NetServer.cs:379`), `PacketsPerTick = 64` with a drop counter (`godot/shooter/Net/Server/NetServer.Telemetry.cs:14`, `NetServer.cs:343`), and a token bucket on profile saves (`NetServer.Telemetry.cs:59-63`). Audit T2-06 is closed.
 - **Turret re-pick is at 5 Hz.** `RepickIntervalS = 0.2f` (`godot/ShooterCore/Turrets/TurretEntity.cs:60`); the held target is checked with one ray per tick (`:128-135`). Audit T2-01 is closed.
-- **Player and vehicle snapshots are acknowledged.** The input packet carries the snapshot tick (`godot/shooter/Net/NetClient.cs:527`); the server commits it only when it still holds that state (`NetServer.cs:371`); the encoder deltas against that baseline (`godot/ShooterCore/Net/Snapshot.cs:68-70`). A lost delta is repaired by the next tick, not the next keyframe. This closes audit T1-2 for players and vehicles (see G-03 for the world channel).
+- **Player and vehicle snapshots are acknowledged.** The input packet carries the snapshot tick (`godot/shooter/Net/Client/NetClient.cs:527`); the server commits it only when it still holds that state (`NetServer.cs:371`); the encoder deltas against that baseline (`godot/ShooterCore/Net/Snapshot.cs:68-70`). A lost delta is repaired by the next tick, not the next keyframe. This closes audit T1-2 for players and vehicles (see G-03 for the world channel).
 - **Broadcast encodes once.** `BroadcastEvent` encodes the bytes once and sends them to every recipient (`NetServer.cs:497-503`). Audit T2-10 is closed.
 - **Shared baseline history.** One `SnapshotHistory` of 64 ticks serves every client (`Snapshot.cs:10-40`, `NetServer.cs:118`), so the per-tick dictionary is built once, not per client.
 - **Player-ray exclusion list is cached.** `PlayerRids()` rebuilds only after a join or drop (`NetServer.cs:708-715`). Audit T2-02 is closed for the common path (`WorldHit`, `:722`).
-- **Glass is event-driven.** Panes change only on a hit (`godot/shooter/Net/NetServer.Glass.cs:44-60`, flushed at `:153`), and there are 35 building panes (`out/village/map/windows.json`). Nothing runs per tick.
-- **Vehicle contacts use a broad phase.** `ResolveVehicleContacts` checks all 406 pairs of 29 cars with a squared-distance test before any shape test (`godot/shooter/Net/NetServer.Vehicles.cs:399-410`).
+- **Glass is event-driven.** Panes change only on a hit (`godot/shooter/Net/Server/NetServer.Glass.cs:44-60`, flushed at `:153`), and there are 35 building panes (`out/village/map/windows.json`). Nothing runs per tick.
+- **Vehicle contacts use a broad phase.** `ResolveVehicleContacts` checks all 406 pairs of 29 cars with a squared-distance test before any shape test (`godot/shooter/Net/Server/NetServer.Vehicles.cs:399-410`).
 - **Caps on the entity sets.** World entities are capped at 256 (`godot/ShooterCore/Net/WorldEntities.cs:84`, `:104`); corpses at 16, oldest first (`godot/ShooterCore/Corpses/Corpses.cs:13`, `:139`).
 - **Flak is planned at fire, not per tick.** `FlakRules.Plan` marches shell and aircraft in 1/120 s steps once (`godot/ShooterCore/Vehicles/FlakRules.cs:24`, `:90`). A 2,500 m shell at 700 m/s is about 430 steps, roughly 20 microseconds per aircraft (UNVERIFIED cost).
 - **Persistence is off the tick, with bounded queues.** Separate write and read lanes on their own threads (`godot/ShooterServer.Persistence/Sqlite/SqliteWorker.cs:24-28`, `Postgres/PostgresWorker.cs:23-30`); a write budget of 10,000 with a counted drop (`godot/ShooterServer.Persistence/DbLane.cs:42-70`); reconnect backoff from 1 s to 30 s (`DbLane.cs:75-100`); a shutdown join with a limit that logs abandoned jobs (`DbLane.cs`, `Join`). Audit T2-12, T2-14 (mostly), T3-027 are closed.
-- **Telemetry exists.** One line every 10 s with tick p50 and p99, overruns, skipped snapshots, players, bots, bytes per client per second, entity count, database queue depth, dropped packets and rejected saves (`godot/shooter/Net/NetServer.Telemetry.cs:32-60`). Audit T2-07 is partly closed (gaps in G-07).
+- **Telemetry exists.** One line every 10 s with tick p50 and p99, overruns, skipped snapshots, players, bots, bytes per client per second, entity count, database queue depth, dropped packets and rejected saves (`godot/shooter/Net/Server/NetServer.Telemetry.cs:32-60`). Audit T2-07 is partly closed (gaps in G-07).
 - **Deploy.** Log rotation (`deploy/docker-compose.yml:8-14`), `init: true` and `stop_grace_period: 30s` (`:39-40`), a healthcheck that waits for the map (`:51`, `Shooter.cs` ready marker), image prune in `deploy/deploy.sh:20`. Audit T2-36, T2-37, T2-39, T3-110 are closed.
-- **Lamps are headless-safe.** `StreetLamps` turns processing off on the headless server (`godot/shooter/StreetLamps.cs:66`). Audit T3-021 is closed.
+- **Lamps are headless-safe.** `StreetLamps` turns processing off on the headless server (`godot/shooter/Scenery/StreetLamps.cs:66`). Audit T3-021 is closed.
 - **Connection cap is explicit.** One peer slot over `MaxPeers` (32) is kept to tell the 33rd connection it is full (`NetServer.cs:146`, `:335`). Audit T3-020 is closed.
-- **Bots are bounded by design.** They use no vehicles and no killstreaks (`docs/shooter-server.md`, `--bots` row), one route per tick (`godot/shooter/Net/NetServer.Bots.cs:101-117`), and a 0.15 s think (`godot/ShooterCore/Bots/BotBrain.cs:34`).
+- **Bots are bounded by design.** They use no vehicles and no killstreaks (`docs/shooter-server.md`, `--bots` row), one route per tick (`godot/shooter/Net/Bots/NetServer.Bots.cs:101-117`), and a 0.15 s think (`godot/ShooterCore/Bots/BotBrain.cs:34`).
 
 ---
 
@@ -75,7 +75,7 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 ### G-01. Live target lists are built per call, several hundred per tick
 
 - **Mechanism.** `LiveTargets()` allocates a fresh `List<HitTarget>` each call, because callers nest (`NetServer.cs:684-694`, comment says a shared buffer would be cleared under them). Callers include every rocket every tick (`NetServer.cs:845`), every gunship round twice (`NetServer.Aircraft.cs:140`, `:166`), the missile per tick (`NetServer.Missile.cs:69`), turret enemies every tick per turret (`ShooterCore/Turrets/TurretEntity.cs:128`, `NetServer.Turrets.cs:52-54`), helper enemies every tick per helper (`NetServer.Helicopter.cs:63-65`, `HelicopterHelperStreak.cs:100`), and every shot (`NetServer.cs:756`). Turret and helper lists are also built with LINQ `Where().Select().ToList()`.
-- **Citation.** `godot/shooter/Net/NetServer.cs:684-694`; callers as above; audit T3-001 (open), T3-002 (open, helper).
+- **Citation.** `godot/shooter/Net/Server/NetServer.cs:684-694`; callers as above; audit T3-001 (open), T3-002 (open, helper).
 - **Cost.** About 8,500 calls per second at worst, about 280 per tick, about 3.6 MB/s (UNVERIFIED GC cost). At 16 bots with no streaks, about 160 calls per second (shots) = 67 kB/s.
 - **Fix.** (1) Rent and return lists from a small pool (a stack of lists): the nesting problem goes away because each caller returns its list. (2) Build the turret and helper enemy lists once per tick, like `_botContacts` (`NetServer.Bots.cs:150-153`), and drop the per-turret LINQ. (3) Let the rocket loop reuse one per-tick list and check liveness per target, since StepRockets does not move players.
 - **Effort.** S.
@@ -86,7 +86,7 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 
 - **Mechanism.** A gunship rocket's life is `range / speed + 0.5` = 3,000 / 250 + 0.5 = 12.5 s (`godot/ShooterCore/Weapons/RocketFlight.cs:19-22`, `killstreaks.json` gunship rocket: interval 1.2 s, range 3,000 m, speed 250 m/s). It ends only at a collider or the end of its life (`NetServer.cs:833-858`). Every rocket in flight is a snapshot record sent to every client each tick (`NetServer.cs:909-913`, `:924`) and costs one ray and one LiveTargets call per tick (`NetServer.cs:842-845`).
 - **Arithmetic.** At 16 attack helicopters: 12.5 / 1.2 = 10.4 rockets alive per helicopter, so 167 alive. That is 167 rays and 167 LiveTargets calls per tick (5,000 rays/s), and 167 x 10 bytes x 30 = 50 kB/s per client. At 32: 333 rockets, 100 kB/s per client.
-- **Citation.** `godot/ShooterCore/Weapons/RocketFlight.cs:19-22`; `godot/shooter/Net/NetServer.cs:833-858`, `:909-913`; `godot/shooter/data/killstreaks.json` (gunship rockets).
+- **Citation.** `godot/ShooterCore/Weapons/RocketFlight.cs:19-22`; `godot/shooter/Net/Server/NetServer.cs:833-858`, `:909-913`; `godot/shooter/data/killstreaks.json` (gunship rockets).
 - **Fix.** (a) Expire a rocket when it leaves the map footprint or goes below the ground-level bound (`KillY`, `NetServer.cs` field) and cap life to the map diagonal over speed: S. (b) Send rockets only to clients within a radius, with the rest at 10 Hz or skipped (interest for rockets only): M. (c) Pool the per-tick target list (G-01).
 - **Effort.** S for (a) and (c); M for (b).
 - **Confidence.** CONFIRMED (arithmetic on cited constants). The map diagonal is not in this repo's code path; it must be read from the manifest (UNVERIFIED).
@@ -107,12 +107,12 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 - **Cost.** See section 3.0 "Downstream bytes": 304 kB/s total at 16 clients with everything moving, 818 kB/s at 32; rockets add 50 to 100 kB/s per client at all-streak worst.
 - **Fix.** Per-client interest set by distance with hysteresis, always including the client's own vehicle and streak entities; rockets and effects first (G-02b, G-06); far players and vehicles at 10 Hz.
 - **Effort.** L for the full set; M for rockets and effects only.
-- **Confidence.** CONFIRMED (no filter in code; `grep` for radius filters in `godot/shooter/Net/NetServer*.cs` and `godot/ShooterCore/Net` finds none). Benefit magnitude taken from the spike (CONFIRMED for the spike, UNVERIFIED for this game).
+- **Confidence.** CONFIRMED (no filter in code; `grep` for radius filters in `godot/shooter/Net/Server/NetServer*.cs` and `godot/ShooterCore/Net` finds none). Benefit magnitude taken from the spike (CONFIRMED for the spike, UNVERIFIED for this game).
 - **Audit.** T2-08 (open). The audit's "16 players x 14 B x 30 = 6.7 kB/s" figure is the players-only term; with vehicles and rockets it is larger (section 3.0).
 
 ### G-05. Parked vehicles are stepped every tick
 
-- **Mechanism.** `StepVehicles` steps each live car every tick, including driverless cars at rest, through `car.Step` (`NetServer.Vehicles.cs:347-367`), which ends in `MoveAndSlide` (`godot/shooter/ServerCar.cs`, one call). The occupant list is LINQ per car per tick (`NetServer.Vehicles.cs:277`, `:375`).
+- **Mechanism.** `StepVehicles` steps each live car every tick, including driverless cars at rest, through `car.Step` (`NetServer.Vehicles.cs:347-367`), which ends in `MoveAndSlide` (`godot/shooter/Vehicles/ServerCar.cs`, one call). The occupant list is LINQ per car per tick (`NetServer.Vehicles.cs:277`, `:375`).
 - **Cost.** 29 moves per tick, 870 per second. Per-move cost UNVERIFIED. The encoder also compares 29 unchanged records per client per tick, which costs CPU but no bytes.
 - **Fix.** Skip `Step` for a driverless car at rest at its origin; wake on seat change, damage or blast. Keep the abandon timer (`NetServer.Vehicles.cs:382`), fall check and detonation running. Replace the LINQ with a seat loop.
 - **Effort.** M.
@@ -130,7 +130,7 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 
 ### G-07. Telemetry: the stats line exists, but a live server still cannot be watched
 
-- **What exists.** `godot/shooter/Net/NetServer.Telemetry.cs:32-60`: tick p50 and p99, overruns, skipped snapshots, bytes per client per second, entity count, DB queue depth, dropped packets, rejected saves. Bot routes: mean and max every 10 s (`NetServer.Bots.cs:101-125`). Bot status line every 10 s.
+- **What exists.** `godot/shooter/Net/Server/NetServer.Telemetry.cs:32-60`: tick p50 and p99, overruns, skipped snapshots, bytes per client per second, entity count, DB queue depth, dropped packets, rejected saves. Bot routes: mean and max every 10 s (`NetServer.Bots.cs:101-125`). Bot status line every 10 s.
 - **Missing.**
   1. Tick p95 and max (only p50 and p99 are printed). Max is in the loss test only.
   2. Phase breakdown: Poll, bots, player simulation, rockets, vehicles, snapshot send. Without it the first slow tick cannot be attributed.
@@ -173,7 +173,7 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 
 ### G-11. Progression writes are one commit per event
 
-- **Mechanism.** `AwardXp` queues `AddXpAsync` per grant (`godot/shooter/Net/NetServer.Progression.cs:57-64`); `RecordKill` and `RecordDeath` queue one write each (`:77`, `:83`). `synchronous=NORMAL` is set for SQLite (`SqliteWorker.cs:47-50`), so commits do not fsync per write, which closes most of the cost in audit T2-13.
+- **Mechanism.** `AwardXp` queues `AddXpAsync` per grant (`godot/shooter/Net/Server/NetServer.Progression.cs:57-64`); `RecordKill` and `RecordDeath` queue one write each (`:77`, `:83`). `synchronous=NORMAL` is set for SQLite (`SqliteWorker.cs:47-50`), so commits do not fsync per write, which closes most of the cost in audit T2-13.
 - **Cost.** About 3 to 5 writes per kill (estimate from the three call sites). At 60 kills per minute (the loss test had 25 kills in 30 s with chase bots), about 5 writes per second. Far below what the worker can do (not measured). Not on the tick.
 - **Fix.** In-memory counters flushed every 5 s and on leave and round end, one transaction per flush. Only worth it when writes per second are in the hundreds.
 - **Effort.** M.
@@ -193,7 +193,7 @@ Per-tick work by system. "Worst" is 16 players, every killstreak active (each ow
 
 - **Snapshot packet per tick for every client.** `SnapshotEncoder.Encode` always returns at least one packet, to carry the acknowledgement (`Snapshot.cs:114`). At 16 clients that is 480 small packets per second even when nothing changes. Audit T3-022 (open), about 0.6 kB/s per client.
 - **Per-packet `ToArray()`.** `Finish` copies each packet into a new array (`Snapshot.cs:161`; `WorldReplication.cs:152`). The scratch buffers are reused (audit T2-03 mostly closed); this copy remains. Cost small.
-- **Two `Seat.Exit` and two `InVehicle = false` lines** in `LeaveSeat` (`godot/shooter/Net/NetServer.Vehicles.cs:209-216`). Harmless; cleanup.
+- **Two `Seat.Exit` and two `InVehicle = false` lines** in `LeaveSeat` (`godot/shooter/Net/Server/NetServer.Vehicles.cs:209-216`). Harmless; cleanup.
 - **Road surface scan** (audit T3-003, open): `RoadSurfaces.Contains` is linear over about 940 segments per impact. Only on impacts.
 - **Dockerfile `chmod` layer** (audit T2-38, open): `deploy/Dockerfile:16`.
 
@@ -280,4 +280,4 @@ Ordered by value. Nothing here has been run.
 
 ## Sources cited
 
-`GLOSSARY.md`; `docs/adr/0002`, `0003`, `0005`, `0007`, `0011`; `docs/perf-audit.md`; `docs/spikes/shooter-loss-test.md`; `docs/spikes/netcode-spike.md`; `docs/shooter-v2.md`; `docs/shooter-server.md`; `godot/shooter/Net/NetServer*.cs`; `godot/shooter/Shooter.cs`; `godot/shooter/data/killstreaks.json`, `turret.json`, `vehicles.json`, `weapons.json`; `godot/ShooterCore/Net/Snapshot.cs`, `WorldReplication.cs`, `WorldEntities.cs`, `Wire.cs`; `godot/ShooterCore/Bots/BotBrain.cs`; `godot/ShooterCore/Turrets/TurretEntity.cs`; `godot/ShooterCore/Weapons/RocketFlight.cs`; `godot/ShooterCore/Vehicles/FlakRules.cs`; `godot/ShooterServer.Persistence/*`; `deploy/*`.
+`GLOSSARY.md`; `docs/adr/0002`, `0003`, `0005`, `0007`, `0011`; `docs/perf-audit.md`; `docs/spikes/shooter-loss-test.md`; `docs/spikes/netcode-spike.md`; `docs/shooter-v2.md`; `docs/shooter-server.md`; `godot/shooter/Net/Server/NetServer*.cs`; `godot/shooter/Shooter.cs`; `godot/shooter/data/killstreaks.json`, `turret.json`, `vehicles.json`, `weapons.json`; `godot/ShooterCore/Net/Snapshot.cs`, `WorldReplication.cs`, `WorldEntities.cs`, `Wire.cs`; `godot/ShooterCore/Bots/BotBrain.cs`; `godot/ShooterCore/Turrets/TurretEntity.cs`; `godot/ShooterCore/Weapons/RocketFlight.cs`; `godot/ShooterCore/Vehicles/FlakRules.cs`; `godot/ShooterServer.Persistence/*`; `deploy/*`.

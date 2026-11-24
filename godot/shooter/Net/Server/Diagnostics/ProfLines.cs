@@ -1,0 +1,183 @@
+using System.Globalization;
+using System.Text;
+using Godot;
+using Drycastle.ShooterCore.Diagnostics;
+
+namespace Drycastle.Shooter.Net.Server.Diagnostics;
+
+/// <summary>
+/// The "server: prof" log lines, printed with the stats line every <see cref="ServerHealth.ReportSeconds"/> seconds (always on; docs/shooter-server.md, "Performance log"):
+/// the scoped timers of <see cref="Prof"/>, the slowest tick of the period with its phases and scopes, the navigation worker, the CPU of every
+/// thread of the process and its memory. All <c>key=value</c>, so a log shipper can read them. The lines about the tick are only printed while
+/// somebody plays; the memory line always (it is what shows a leak on an empty server).
+/// </summary>
+internal sealed class ProfLines
+{
+    readonly ServerContext _ctx;
+    readonly TickPhases _phases;
+    readonly MetricsOut _metrics;
+    int _profReports;
+
+    /// <summary>The slowest tick of the period: its length, its number and the microseconds of each of its phases.</summary>
+    double _profWorstMs;
+    uint _profWorstTick;
+    readonly double[] _profWorstPhaseUs = new double[(int)ServerPerf.Ph.Count];
+    /// <summary>CPU clock ticks (user + system) of each thread at the last report, by thread id.</summary>
+    Dictionary<int, long> _threadCpu = new();
+    long _raysLast, _liveTargetsLast;
+    /// <summary>The garbage collector's counters at the start of the tick, and of the slowest tick: the collections and the pause that fell in it.</summary>
+    int _tickGc0, _tickGc1, _tickGc2, _worstGc0, _worstGc1, _worstGc2;
+    double _tickPauseMs, _worstPauseMs;
+    /// <summary>Ticks of the period in which a collection ran, and the slowest tick in which none did.</summary>
+    int _gcTicks;
+    double _worstNoGcMs;
+
+    public ProfLines(ServerContext ctx, TickPhases phases, MetricsOut metrics) { _ctx = ctx; _phases = phases; _metrics = metrics; }
+
+    /// <summary>Start of a tick: the collector's counters, for what falls in this tick.</summary>
+    public void TickBegin()
+    {
+        _tickGc0 = GC.CollectionCount(0); _tickGc1 = GC.CollectionCount(1); _tickGc2 = GC.CollectionCount(2);
+        _tickPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds;
+    }
+
+    /// <summary>End of a tick that took <paramref name="ms"/>: remembered when it is the slowest of the period.</summary>
+    public void TickEnd(double ms)
+    {
+        var gc0 = GC.CollectionCount(0) - _tickGc0;
+        if (gc0 > 0) _gcTicks++;
+        else if (ms > _worstNoGcMs) _worstNoGcMs = ms;
+        if (!Prof.TickEnd(ms)) return;
+        _profWorstMs = ms; _profWorstTick = _ctx.Tick;
+        _worstGc0 = gc0; _worstGc1 = GC.CollectionCount(1) - _tickGc1; _worstGc2 = GC.CollectionCount(2) - _tickGc2;
+        _worstPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds - _tickPauseMs;
+        for (var i = 0; i < _profWorstPhaseUs.Length; i++)
+            _profWorstPhaseUs[i] = i == (int)ServerPerf.Ph.Telemetry || _phases.Us[i].Count == 0 ? 0 : _phases.Us[i][^1]; // the telemetry phase of this tick is not over yet
+    }
+
+    /// <summary>The period's lines, then the next period starts.</summary>
+    public void Report(double seconds)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var active = _ctx.Players.Count > 0;
+        var nav = Prof.Nav(seconds); // read (and cleared) every period
+        var threads = ThreadCpu(seconds); // likewise: the baseline moves every period
+        if (active)
+        {
+            var scopes = Prof.Scopes(seconds);
+            GD.Print("server: prof scopes ms/s|calls/s|kb/s " + scopes);
+            _metrics.Batch?.Tagged("drycastle_scope", "scope", scopes, "ms_s", "calls_s", "kb_s");
+            _metrics.Batch?.Begin("drycastle_worst_tick").Field("ms", _profWorstMs).Field("gc_pause_ms", _worstPauseMs).Field("ticks_with_gc", _gcTicks).Field("without_gc_ms", _worstNoGcMs).End();
+            var sb = new StringBuilder();
+            for (var i = 0; i < _profWorstPhaseUs.Length; i++)
+            {
+                if (_profWorstPhaseUs[i] < 50) continue;
+                sb.Append(' ').Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append('=').Append(_profWorstPhaseUs[i].ToString("F0", inv));
+            }
+            GD.Print($"server: prof worst tick={_profWorstTick} ms={_profWorstMs.ToString("F2", inv)} gc0={_worstGc0} gc1={_worstGc1} gc2={_worstGc2} gc_pause_ms={_worstPauseMs.ToString("F1", inv)}" +
+                $" ticks_with_gc={_gcTicks} worst_without_gc_ms={_worstNoGcMs.ToString("F2", inv)} phases_us{sb} | scopes_us {Prof.Worst()}");
+            var al = new StringBuilder();
+            for (var i = 0; i < _phases.Alloc.Length; i++)
+            {
+                var kb = _phases.Alloc[i] / 1000.0 / Math.Max(seconds, 1e-3);
+                if (kb < 1) continue;
+                al.Append(' ').Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append('=').Append(kb.ToString("F0", inv));
+            }
+            GD.Print("server: prof alloc kb/s" + al);
+            GD.Print("server: prof nav ms/s|calls/s " + nav);
+            _metrics.Batch?.Tagged("drycastle_phase", "phase", al.ToString(), "alloc_kb_s");
+            _metrics.Batch?.Tagged("drycastle_nav", "what", nav, "ms_s", "calls_s");
+        }
+        if (threads.Length > 0 && (active || _profReports % 6 == 0)) GD.Print("server: prof threads cpu_pct " + threads);
+        var mem = MemoryLine(seconds); var gc = GcLine();
+        GD.Print("server: prof mem " + mem);
+        GD.Print("server: prof gc " + gc);
+        if (threads.Length > 0) _metrics.Batch?.Tagged("drycastle_thread", "thread", threads, "cpu_pct");
+        _metrics.Batch?.Fields("drycastle_mem", mem);
+        _metrics.Batch?.Fields("drycastle_gc", gc);
+        _metrics.Flush(_profReports);
+        _profReports++;
+        Prof.Reset();
+        _profWorstMs = 0; _gcTicks = 0; _worstNoGcMs = 0;
+    }
+
+    /// <summary>
+    /// The CPU each thread of the process used in the period, in percent of one core, threads of one kind summed ("WorkerThread 3" and
+    /// "WorkerThread 7" are <c>workerthread</c>; the game thread is <c>main</c>). From /proc/self/task: empty where that does not exist, and on the first call.
+    /// </summary>
+    string ThreadCpu(double seconds)
+    {
+        try
+        {
+            if (!System.IO.Directory.Exists("/proc/self/task")) return "";
+            var now = new Dictionary<int, long>();
+            var groups = new Dictionary<string, long>();
+            var first = _threadCpu.Count == 0;
+            var pid = System.Environment.ProcessId;
+            foreach (var dir in System.IO.Directory.EnumerateDirectories("/proc/self/task"))
+            {
+                if (!int.TryParse(System.IO.Path.GetFileName(dir), out var tid)) continue;
+                string stat;
+                try { stat = System.IO.File.ReadAllText(dir + "/stat"); } catch (System.IO.IOException) { continue; } // the thread ended meanwhile
+                if (!ProcStat.Parse(stat, out var comm, out var ticks)) continue;
+                now[tid] = ticks;
+                var used = ticks - (_threadCpu.TryGetValue(tid, out var before) ? before : 0);
+                var name = tid == pid ? "main" : ProcStat.Group(comm);
+                groups[name] = groups.GetValueOrDefault(name) + used;
+            }
+            _threadCpu = now;
+            if (first) return "";
+            var inv = CultureInfo.InvariantCulture;
+            var per = 100.0 / ProcStat.ClockTicksPerSecond / Math.Max(seconds, 1e-3);
+            var sb = new StringBuilder();
+            long total = 0;
+            foreach (var g in groups.OrderByDescending(g => g.Value))
+            {
+                total += g.Value;
+                if (g.Value * per < 0.05) continue;
+                sb.Append(g.Key).Append('=').Append((g.Value * per).ToString("F1", inv)).Append(' ');
+            }
+            return sb.Append("total=").Append((total * per).ToString("F1", inv)).ToString();
+        }
+        catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { return ""; }
+    }
+
+    /// <summary>Memory of the process and the engine's object counts, and the rays and target lists per second.</summary>
+    string MemoryLine(double seconds)
+    {
+        var inv = CultureInfo.InvariantCulture;
+        string Mb(double bytes) => (bytes / 1e6).ToString("F0", inv);
+        string Mon(Performance.Monitor m) => Performance.GetMonitor(m).ToString("F0", inv);
+        double rss = 0;
+        try
+        {
+            if (System.IO.File.Exists("/proc/self/statm"))
+                rss = long.Parse(System.IO.File.ReadAllText("/proc/self/statm").Split(' ')[1], inv) * (double)System.Environment.SystemPageSize;
+        }
+        catch (Exception e) when (e is System.IO.IOException or FormatException or IndexOutOfRangeException) { }
+        seconds = Math.Max(seconds, 1e-3);
+        long rays = PerfCounters.Rays, lt = PerfCounters.LiveTargetsCalls;
+        var line = $"rss_mb={Mb(rss)} heap_mb={Mb(GC.GetTotalMemory(false))} gc_committed_mb={Mb(GC.GetGCMemoryInfo().TotalCommittedBytes)} godot_static_mb={Mb(Performance.GetMonitor(Performance.Monitor.MemoryStatic))}" +
+            $" objects={Mon(Performance.Monitor.ObjectCount)} nodes={Mon(Performance.Monitor.ObjectNodeCount)} orphans={Mon(Performance.Monitor.ObjectOrphanNodeCount)}" +
+            $" phys_active={Mon(Performance.Monitor.Physics3DActiveObjects)} phys_pairs={Mon(Performance.Monitor.Physics3DCollisionPairs)} phys_islands={Mon(Performance.Monitor.Physics3DIslandCount)}" +
+            $" rays_s={((rays - _raysLast) / seconds).ToString("F0", inv)} live_targets_s={((lt - _liveTargetsLast) / seconds).ToString("F0", inv)}";
+        _raysLast = rays; _liveTargetsLast = lt;
+        return line;
+    }
+
+    /// <summary>
+    /// The last garbage collection of the young generations: which generation it was, how long it paused, how much it found alive and moved up
+    /// (<c>promoted_kb</c>: what a pause is paid for), the sizes of generations 0 and 1 before and after it, and the pinned objects it met.
+    /// </summary>
+    static string GcLine()
+    {
+        var inv = CultureInfo.InvariantCulture;
+        var g = GC.GetGCMemoryInfo(GCKind.Ephemeral);
+        string Kb(long bytes) => (bytes / 1000.0).ToString("F0", inv);
+        var pause = g.PauseDurations.Length > 0 ? g.PauseDurations[0].TotalMilliseconds : 0;
+        var gen = g.GenerationInfo;
+        return $"last_index={g.Index} gen={g.Generation} pause_ms={pause.ToString("F1", inv)} promoted_kb={Kb(g.PromotedBytes)} gen0_kb={Kb(gen[0].SizeBeforeBytes)}>{Kb(gen[0].SizeAfterBytes)}" +
+            $" gen1_kb={Kb(gen[1].SizeBeforeBytes)}>{Kb(gen[1].SizeAfterBytes)} gen2_mb={(gen[2].SizeAfterBytes / 1e6).ToString("F0", inv)} pinned={g.PinnedObjectsCount} finalize_pending={g.FinalizationPendingCount}" +
+            $" compacted={(g.Compacted ? 1 : 0)} concurrent={(g.Concurrent ? 1 : 0)} fragmented_mb={(g.FragmentedBytes / 1e6).ToString("F0", inv)}";
+    }
+}

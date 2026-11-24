@@ -4,13 +4,13 @@ Voice lines, van music, the speaker.
 
 ## Facts
 - Recordings: `~/downloads/New Recording.mov`, `New Recording 2.mov` … `15.mov` (15, a few seconds each).
-- Template: `scripts/make_rozhlas.py` (stdlib + ffmpeg, `make rozhlas`), chain as data in `godot/shooter/data/rozhlas_voice.json`.
-- Private audio loader to copy: `godot/shooter/ChurchChant.cs` (private folder first, a missing file logged once). `sounds.json` must not name private files.
+- Template: `scripts/sounds/make_rozhlas.py` (stdlib + ffmpeg, `make rozhlas`), chain as data in `godot/shooter/data/rozhlas_voice.json`.
+- Private audio loader to copy: `godot/shooter/Churches/ChurchChant.cs` (private folder first, a missing file logged once). `sounds.json` must not name private files.
 - Moving loops: `LoopVoice` (`Sfx.cs`) has 10 shared voices: do not use it here; make own `AudioStreamPlayer3D`s as `ChurchChant` / `DemonAudio`.
 - Long synced audio precedent: `RozhlasState` (variant + offset, sent to joiners).
 
 ## Do
-- `scripts/make_thief_voices.py` + `make thief-voices`: every recording through one raspy "heavy smoker" chain (pitch down a little, saturation, band-limit, breath noise), peak-normalised mono `.ogg`, into `assets-private/audio/thieves/voice/line_NN.ogg`. Chain in `godot/shooter/data/thief_voice.json` so it is tuned without touching code; `--keep-wavs`, `--only N` for quick listening. Expect several rounds of tuning by ear.
+- `scripts/sounds/make_thief_voices.py` + `make thief-voices`: every recording through one raspy "heavy smoker" chain (pitch down a little, saturation, band-limit, breath noise), peak-normalised mono `.ogg`, into `assets-private/audio/thieves/voice/line_NN.ogg`. Chain in `godot/shooter/data/thief_voice.json` so it is tuned without touching code; `--keep-wavs`, `--only N` for quick listening. Expect several rounds of tuning by ear.
 - Voice lines, server-decided: a living member (not swinging, not Down) with a player within `voice_near_m` (8) rolls `voice_chance` every `voice_roll_s`; cooldown per member; one line at a time per Raid. Fx event (member id, line index); clients play it at the member, following it, to `voice_range_m` (25). Line count comes from the folder at load on the client; the server sends an index modulo.
 - Van music: each van gets a song index at spawn; clients loop it at the van (~60 m), in sync by the server clock offset, stopped when Destroyed or gone.
 - Speaker: each member rolls `speaker_chance` (0.05) at spawn; flag in its wire state; clients draw the speaker and loop another song at it (~30 m). On death the music stops and a ground Item `speaker` drops (append to `items.json`; no equip slot: Bag only, silent).
@@ -25,7 +25,7 @@ Voice lines, van music, the speaker.
 ## Done: notes
 Member-side half only (voice lines, speaker, private-folder loader). Not done here: the voice bake (done earlier, `make thief-voices`), the van's song (03 calls the API below). Protocol 44, event kind 236 `ThiefVoice` (237 stays free).
 
-Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceCodec`, `GangAudio`), server `NetServer.Thieves.Audio.cs`, client `ThiefAudio.cs` + `NetClient.Thieves.Audio.cs`, tests `GangAudioTests.cs`. Numbers: new last section `audio` in `thieves.json`.
+Code: pure `ShooterCore/Thieves/GangVoice.cs` (`ThievesAudioConfig`, `GangVoiceCodec`, `GangAudio`), server `NetServer.Thieves.Audio.cs`, client `ThiefAudio.cs` + `ThievesClient.cs`, tests `GangAudioTests.cs`. Numbers: new last section `audio` in `thieves.json`.
 
 ### Van song API (client, for 03)
 `NetClient.ThiefSounds` (made on first use) -> `ThiefAudio`:
