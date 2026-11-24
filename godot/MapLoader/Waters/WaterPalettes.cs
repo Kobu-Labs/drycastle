@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore.Waters;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Waters;
 
 /// <summary>
 /// The look of one water body: the murky palette (olive shallows with some sediment to dark brown-green deep water),

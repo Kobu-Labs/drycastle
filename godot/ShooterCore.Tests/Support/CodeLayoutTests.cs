@@ -15,6 +15,7 @@ public class CodeLayoutTests
         ("godot/ShooterCore", "Drycastle.ShooterCore"),
         ("godot/viewer", "Drycastle.Viewer"),
         ("godot/netspike", "Drycastle.Netspike"),
+        ("godot/MapLoader", "Drycastle.MapLoader"),
     };
 
     static readonly string[] SkippedDirs = { "bin", "obj", ".godot", "addons" };

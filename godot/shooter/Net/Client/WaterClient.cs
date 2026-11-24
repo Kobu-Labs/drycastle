@@ -6,8 +6,8 @@ using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Waters;
 using NVec3 = System.Numerics.Vector3;
-using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
-using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
+using WaterPalettes = Drycastle.MapLoader.Waters.WaterPalettes;
+using WaterSurfaces = Drycastle.MapLoader.Waters.WaterSurfaces;
 
 namespace Drycastle.Shooter.Net.Client;
 

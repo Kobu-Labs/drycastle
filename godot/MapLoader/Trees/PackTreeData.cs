@@ -1,9 +1,10 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.MapLoader.Vegetation;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Trees;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. The pack trees (#287): detailed models of the private nature pack
 // near the player in place of the baked trees. Config: shooter/data/pack_trees.json. Streaming and drawing: MapLoader.PackTrees.cs.

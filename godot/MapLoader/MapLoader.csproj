@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <!-- The water surface shader ships inside the assembly so the viewer and the shooter (separate Godot projects) share one file. -->
-    <EmbeddedResource Include="Water/water_surface.gdshader" LogicalName="water_surface.gdshader" />
+    <EmbeddedResource Include="Waters/water_surface.gdshader" LogicalName="water_surface.gdshader" />
     <!-- The tree cut (pack trees, #287): the baked props material, the pack tree material and the code they share. -->
     <EmbeddedResource Include="Shaders/tree_cut.gdshaderinc" LogicalName="tree_cut.gdshaderinc" />
     <EmbeddedResource Include="Shaders/props_tree_cut.gdshader" LogicalName="props_tree_cut.gdshader" />

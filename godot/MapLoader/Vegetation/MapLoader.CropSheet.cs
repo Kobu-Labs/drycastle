@@ -1,4 +1,6 @@
 using Godot;
+using Drycastle.MapLoader.Trees;
+using Drycastle.MapLoader.Vegetation;
 
 namespace Drycastle.MapLoader;
 

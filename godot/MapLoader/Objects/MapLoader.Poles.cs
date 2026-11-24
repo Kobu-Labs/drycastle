@@ -1,10 +1,8 @@
 using Godot;
+using Drycastle.MapLoader.Objects;
 using Num = System.Numerics;
 
 namespace Drycastle.MapLoader;
-
-/// <summary>A placed utility pole that carries wires: its object id, where its column stands (the foot, map space), how tall it is, and the highest wire seat on it (null: no seat is known).</summary>
-public readonly record struct PoleSite(string ObjectId, Num.Vector3 Foot, float Height, Num.Vector3? TopSeat);
 
 // Poles as the Thieves event needs them (docs/events/thieves/07): which poles carry wires, how tall they are and where their wire seats are now. Reads the placed objects and the cables;
 // builds nothing, so it works on the headless server (CollisionOnly) too, where the object nodes exist but the wires are not drawn.

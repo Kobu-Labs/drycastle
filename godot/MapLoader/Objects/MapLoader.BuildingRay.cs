@@ -1,9 +1,7 @@
 using Godot;
+using Drycastle.MapLoader.Objects;
 
 namespace Drycastle.MapLoader;
-
-/// <summary>Where a ray meets a building: the point, the surface normal there (facing the ray's origin) and the parcel the building is on. Map space, Godot axes.</summary>
-public readonly record struct BuildingHit(Vector3 Point, Vector3 Normal, string ParcelId, float Distance);
 
 // A ray against the buildings as they are drawn (walls with their openings, the real roof), not their collision
 // blocks: the editor uses it to fix things to a wall or a roof (house connectors).

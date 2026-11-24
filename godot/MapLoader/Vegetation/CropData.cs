@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Vegetation;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link (with ClutterData.cs), so parsing, variant choice and placeholders can be tested.
 

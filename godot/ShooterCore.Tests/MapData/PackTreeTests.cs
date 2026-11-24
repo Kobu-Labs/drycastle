@@ -1,4 +1,4 @@
-using Drycastle.MapLoader;
+using Drycastle.MapLoader.Trees;
 using Xunit;
 using V2 = System.Numerics.Vector2;
 using V3 = System.Numerics.Vector3;

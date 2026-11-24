@@ -1,6 +1,6 @@
 using System.IO.Compression;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Vegetation;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. The format and the generator are specified in
 // pipeline/src/drycastle_pipeline/detail/meadow.py, which has the same hash and the same instance rules (a test pins both).

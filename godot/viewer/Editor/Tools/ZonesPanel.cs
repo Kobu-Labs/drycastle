@@ -133,7 +133,7 @@ public sealed class ZonesPanel
     }
 
     /// <summary>The list of kinds: a toggle button per kind, rebuilt when a kind, its tint, its zone count or the selection changes.</summary>
-    void RefreshKinds(List<ZoneInfo> zones, IReadOnlyList<Drycastle.MapLoader.ZoneKindInfo> kinds)
+    void RefreshKinds(List<ZoneInfo> zones, IReadOnlyList<Drycastle.MapLoader.Core.ZoneKindInfo> kinds)
     {
         var counts = zones.GroupBy(z => z.Kind).ToDictionary(g => g.Key, g => g.Count());
         var sig = string.Join("|", kinds.Select(k => k.Name + k.Tint + counts.GetValueOrDefault(k.Name))) + "#" + _tool.SelectedKind;
@@ -161,7 +161,7 @@ public sealed class ZonesPanel
     }
 
     /// <summary>The form of the selected zone: its kind.</summary>
-    void RefreshForm(ZoneInfo? sel, IReadOnlyList<Drycastle.MapLoader.ZoneKindInfo> kinds)
+    void RefreshForm(ZoneInfo? sel, IReadOnlyList<Drycastle.MapLoader.Core.ZoneKindInfo> kinds)
     {
         var showForm = _host.Shapes.Mode == ShapeState.Selected && sel != null;
         _kindRow.Visible = showForm;

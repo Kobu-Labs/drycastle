@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Trees;
 
 /// <summary>
 /// The shaders of the tree cut (#287): near the focus the baked trees (props meshes, UV2 = base of the tree) give way to the pack trees, in the shader,

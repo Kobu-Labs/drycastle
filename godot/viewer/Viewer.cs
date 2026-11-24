@@ -1,4 +1,4 @@
-using Drycastle.MapLoader;
+using Drycastle.MapLoader.Waters;
 using Drycastle.Viewer.Editor;
 using Drycastle.Viewer.Edits;
 using Drycastle.Viewer.StreetView;

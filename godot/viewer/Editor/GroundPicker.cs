@@ -1,4 +1,4 @@
-using Drycastle.MapLoader;
+using Drycastle.MapLoader.Core;
 using Godot;
 using System;
 using System.Collections.Generic;

@@ -1,12 +1,10 @@
 using System.Text.Json;
 using Godot;
+using Drycastle.MapLoader.Objects;
 using Drycastle.ShooterCore.Scenery;
 using Num = System.Numerics;
 
 namespace Drycastle.MapLoader;
-
-/// <summary>A cable between two placed utility poles (objects.json "cables", or the editor's edits file): the ids of the cable and of its two poles.</summary>
-public sealed record CableSpec(string Id, string From, string To);
 
 // Cables: the wires strung between placed utility poles. Nothing of them is baked into the map; they are built here
 // from the poles as they stand (position, rotation, scale) and the wire seats of their assets (assets/manifest.json

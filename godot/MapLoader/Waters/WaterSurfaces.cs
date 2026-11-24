@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore.Waters;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Waters;
 
 /// <summary>
 /// The visible water: one mesh per water body at its surface height, a regular triangle grid the waves move.
