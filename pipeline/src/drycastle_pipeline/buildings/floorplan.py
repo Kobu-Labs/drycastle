@@ -11,8 +11,9 @@ parallel or square to the house's main walls):
    most, the other rooms off that space).
 2. **Hall**: a strip from the front door inward (the stem). When the door is in a long wall and the house is deep enough
    the stem ends in a corridor along the house (the spine). A closed house too shallow for that is planned twice, with
-   an entry hall only and with a corridor along the door's wall, and the plan that fits better is kept. A strip that
-   would leave a sliver beside it is widened to the wall instead.
+   a corridor along the door's wall as well. A strip that would leave a sliver beside it is widened to the wall instead.
+   Each house is planned many times (the long hall, an entry only, no hall; TRIES of each) and the plan with the fewest
+   faults (``_faults``) is kept.
 3. **Programme**: the rooms the house is to have and how large each should be, from the floor left beside the hall
    (roomtypes.programme): rooms of unequal size, as their uses are.
 4. **Rooms**: each piece of floor beside the hall gets its share of the programme, the largest rooms in the largest
@@ -55,6 +56,11 @@ SMALL_MOST_M2 = 6.5  # a bathroom or a closet is asked for no larger than this w
 HALL_MOST_W_M = 2.8  # a stem widened past this (a narrow wing, wall to wall) is no hall: the door opens into a room
 CORRIDOR_ROOM_DEPTH_M = 2.2  # a corridor to rooms nothing else reaches makes do with less
 NO_HALL_BELOW_M2 = 80.0  # an open house smaller than this has no hall: the door opens into the living space
+MAX_DWELLING_M2 = 350.0  # more floor than this is no house (a culture house, a farm hall): no plan, one open space
+TRIES = 4  # plans drawn at most for each kind of hall; the one with the fewest faults is kept
+GOOD_FAULTS = 0.8  # a plan with so few ends the search
+HALL_SHARE, HALL_FREE_M2, HALL_PER_DOOR_M2 = 0.12, 4.0, 3.0  # the floor a hall may take before it counts as waste
+MOST_M2 = {rt.LIVING: 45.0, rt.LIVING_KITCHEN: 60.0, rt.KITCHEN: 20.0, rt.DINING: 20.0, rt.BEDROOM: 22.0, rt.STUDY: 16.0, rt.BATHROOM: 9.0, rt.STORAGE: 7.0}
 
 
 @dataclass
@@ -169,8 +175,11 @@ class _Maker:
         reach, left, right = self._runs()
         return reach < 0.75 * (left + right) and reach < SPINE_MIN_DEPTH_M and reach - HALL_W_M[1] >= SIDE_ROOM_DEPTH_M
 
-    def hall(self, side: bool = False) -> Polygon | None:
-        if self.entry is None or (self.style == "open" and self.f.area < NO_HALL_BELOW_M2):
+    def hall(self, kind: str = "stem") -> Polygon | None:
+        """The hall of one kind: ``stem`` (see above), ``side`` (a corridor along the door's wall), ``vestibule`` (an entry
+        only), or ``none``."""
+        side = kind == "side"
+        if kind == "none" or self.entry is None or (self.style == "open" and self.f.area < NO_HALL_BELOW_M2):
             return None
         cx, cy = self.entry
         rng = self.rng
@@ -181,7 +190,7 @@ class _Maker:
         end_door = reach >= 0.75 * along  # the door is in an end wall: the hall runs down the house
         if side:
             stem, spine = w, True  # the spine alone, against the door's wall
-        elif self.style == "open":
+        elif self.style == "open" or kind == "vestibule":
             stem, spine = min(max(reach * 0.2, 1.8), 3.2), False  # a vestibule
         elif end_door:
             stem, spine = reach * (rng.uniform(0.6, 0.85) if self.style == "closed" else rng.uniform(0.4, 0.6)), False
@@ -410,13 +419,46 @@ def _links(cells: list[Polygon], types: list[str], root: int, rng: random.Random
     return links, sorted(set(range(n)) - reached)
 
 
+def _faults(cells: list, types: list, links: list, ops: list, entry, has_hall: bool, style: str) -> float:
+    """What is wrong with a plan, in points: floor wasted on halls, rooms a house cannot do without, a front door into
+    the wrong room, rooms too large or too thin, rooms without daylight, rooms walked through."""
+    floor = sum(c.area for c in cells)
+    windows = [seg.interpolate(0.5, normalized=True) for _, kind, seg, _ in ops if kind == "window"]
+    halls = [i for i, t in enumerate(types) if t == rt.HALL]
+    score = 15.0 * max(0.0, sum(cells[i].area for i in halls) / floor - HALL_SHARE)
+    for i in halls:
+        doors = sum(1 for l in links if i in (l.a, l.b))
+        score += 0.15 * max(0.0, cells[i].area - HALL_FREE_M2 - HALL_PER_DOOR_M2 * doors)
+    living = {rt.LIVING, rt.LIVING_KITCHEN} & set(types)
+    score += 0.0 if living else 5.0
+    score += 0.0 if {rt.KITCHEN, rt.LIVING_KITCHEN} & set(types) else 4.0
+    score += 4.0 if floor >= 34.0 and rt.BATHROOM not in types else 0.0
+    if entry is not None:
+        first = min(range(len(cells)), key=lambda i: cells[i].distance(entry))
+        score += 4.0 if types[first] not in (rt.HALL, rt.LIVING, rt.LIVING_KITCHEN) else 0.0
+        score += 1.0 if style == "closed" and not has_hall and floor >= 45.0 else 0.0
+    for i, (cell, kind) in enumerate(zip(cells, types)):
+        if kind == rt.HALL:
+            continue
+        score += 0.2 * max(0.0, cell.area - MOST_M2[kind])
+        c = list(cell.minimum_rotated_rectangle.exterior.coords)
+        short, long = sorted((math.dist(c[0], c[1]), math.dist(c[1], c[2])))
+        score += 0.6 * max(0.0, long / max(short, 0.1) - 2.2)
+        if kind not in rt.SMALL and not any(cell.boundary.distance(w) < 0.05 for w in windows):
+            score += {rt.BEDROOM: 1.5, rt.LIVING: 2.0, rt.LIVING_KITCHEN: 2.0}.get(kind, 0.6)
+    for l in links:  # (links lead away from the root: l.a is the room walked through)
+        if types[l.a] in (rt.BEDROOM, rt.STUDY) and types[l.b] != rt.BATHROOM:
+            score += 1.0
+    return score
+
+
 def make_plan(b: dict, d, ins, wall_m: float) -> Plan | None:
     """The plan of building ``b`` (detail ``d``, room ``ins`` of interior.inside_of), in map coordinates; None when the
-    footprint leaves no room inside its walls."""
+    footprint leaves no room inside its walls, or far too much to be a house."""
     poly = orient(footprint_polygon(b["footprint"]), 1.0)
     ring = list(poly.exterior.coords)[:-1]
     inner = max(_polygons(poly.buffer(-wall_m, join_style=2)), key=lambda g: g.area, default=None)
-    if inner is None or inner.area < 8.0:
+    if inner is None or not 8.0 <= inner.area <= MAX_DWELLING_M2:
         return None
     rng = random.Random(zlib.crc32(str(b.get("id", d.id)).encode()))
     openness = round(rng.random(), 3)
@@ -451,10 +493,10 @@ def make_plan(b: dict, d, ins, wall_m: float) -> Plan | None:
     e = to_frame(Point(entry)) if entry is not None else None
     seed = rng.getrandbits(32)
 
-    def build(variant: str):
-        rng = random.Random(f"{seed}:{variant}")
+    def build(variant: str, n: int):
+        rng = random.Random(f"{seed}:{variant}:{n}")
         mk = _Maker(f, f_ops, (e.x, e.y) if e is not None else None, rng, style)
-        hall = mk.hall(side=variant == "side")
+        hall = mk.hall(variant)
         pieces = sorted(_polygons(f.difference(hall)), key=lambda g: -g.area) if hall is not None else [f]
         wants = rt.programme(sum(p.area for p in pieces), style, rng)
         # the largest rooms into the pieces with the most floor left; each piece keeps the programme's order
@@ -529,13 +571,20 @@ def make_plan(b: dict, d, ins, wall_m: float) -> Plan | None:
             spare = [i for i, t in enumerate(types) if t in (rt.STORAGE, rt.STUDY) and 3.0 <= cells[i].area <= 9.0]
             if spare:
                 types[min(spare, key=lambda i: abs(cells[i].area - 5.5))] = rt.BATHROOM
-        # how well it fits: rooms entered straight from the hall, a hall that does not eat the house; and some chance
-        direct = sum(1 for i in range(1, len(cells)) if any({l.a, l.b} == {0, i} for l in links)) / max(len(cells) - 1, 1) if hall is not None else 0.0
-        score = direct - 0.4 * (hall.area / f.area if hall is not None else 0.0) + rng.uniform(-0.15, 0.15)
-        return score, cells, types, links
+        faults = _faults(cells, types, links, f_ops, e, hall is not None, style)
+        return faults + rng.uniform(0.0, 0.6), cells, types, links  # (some chance: houses are not all the one best shape)
 
-    variants = ["stem"] + (["side"] if _Maker(f, f_ops, (e.x, e.y) if e is not None else None, rng, style).side_fits() else [])
-    _, cells, types, links = max((build(v) for v in variants), key=lambda t: t[0])
+    kinds = ["stem", "vestibule", "none"]
+    if _Maker(f, f_ops, (e.x, e.y) if e is not None else None, rng, style).side_fits():
+        kinds.append("side")
+    best = None
+    for n, v in ((n, v) for n in range(TRIES) for v in kinds):
+        got = build(v, n)
+        if best is None or got[0] < best[0]:
+            best = got
+        if best[0] < GOOD_FAULTS:
+            break
+    _, cells, types, links = best
 
     walls: list[Wall] = []
     for i in range(len(cells)):
