@@ -681,6 +681,9 @@ All random choices are seeded with `sha256("<parcel id>:detail:<purpose>")` (ver
 identical files. `uv run python -m drycastle_pipeline.preview.detail --parcel P-0637 ` draws the detail of
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
+**Floor plans** of hollow houses (`buildings/floorplan.py`, ADR 0041) are worked out by the same module (`floorplan.rs`,
+`floor_plans`), so `export` needs it built too.
+
 **Rust engine** (`pipeline/rust/detail`, `detail/rust.py`). The Python stage takes about 250 s on the full village map (the big
 ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
 point); the Rust engine does the same work on all cores in 7 to 8 s (26 s on one core) and writes the same four files

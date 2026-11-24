@@ -10,6 +10,7 @@ mod dike;
 mod emit;
 mod engine;
 mod field;
+mod floorplan;
 mod garden;
 mod geom;
 mod index;
@@ -31,6 +32,12 @@ mod wet;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+
+/// ``floor_plans(houses_json) -> plans_json``: the floor plans of hollow houses, each in its entry frame (floorplan.rs).
+#[pyfunction]
+fn floor_plans(py: Python<'_>, houses: &str) -> PyResult<String> {
+    py.detach(|| floorplan::run(houses)).map_err(PyRuntimeError::new_err)
+}
 
 /// ``run(input_json, heights, valid, image, image_size, out_dir, threads, only, write) -> stats json``.
 ///
@@ -254,6 +261,7 @@ fn detect_trees<'py>(
 #[pymodule]
 fn drycastle_detail(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(run, m)?)?;
+    m.add_function(wrap_pyfunction!(floor_plans, m)?)?;
     m.add_function(wrap_pyfunction!(drape, m)?)?;
     m.add_function(wrap_pyfunction!(detect_trees, m)?)?;
     m.add_function(wrap_pyfunction!(drape_roads, m)?)?;

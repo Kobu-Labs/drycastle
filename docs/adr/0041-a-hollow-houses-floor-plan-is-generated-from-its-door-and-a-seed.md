@@ -28,4 +28,4 @@ Consequences:
 - A house whose walls are mostly window (the first test house, P-0110) gets fewer cuts across it and some partitions on window posts.
 - Merged rooms can be large (a bedroom of 30 to 40 m²), and a house can still end without a bathroom when no room is of a size to become one.
 - A building with more than 350 m² inside its walls is no house (P-0675, the culture house): no plan, one open space, until it has a programme of its own. A long house under that still gets too many rooms (P-0492).
-- Planning costs seconds per house (was a fraction of a second).
+- The search is Rust (`rust/detail/src/floorplan.rs`, on the same GEOS as shapely, with Python's random numbers), houses and the candidates of one house on all cores; `floorplan.py` only turns a house into its frame and back. The export needs the built engine.

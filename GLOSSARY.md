@@ -497,7 +497,7 @@ The generated division of a hollow house (ADR 0041, `buildings/floorplan.py`): a
 _Avoid_: layout, room layout
 
 **Programme**:
-The rooms a hollow house is to have, by room type, with the size each should get, listed from the front door inward (ADR 0042, `roomtypes.programme`). It comes before the walls: the floor plan is cut to fit it.
+The rooms a hollow house is to have, by room type, with the size each should get, listed from the front door inward (ADR 0042, `programme` in `floorplan.rs`). It comes before the walls: the floor plan is cut to fit it.
 
 **Room type**:
 What a room of a floor plan is for: hall, living, kitchen, living_kitchen, dining, bedroom, bathroom, storage or study. It is the `type` of the room in `interiors.json`; furniture is chosen by it.

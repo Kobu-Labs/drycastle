@@ -10,6 +10,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 /// Python's `random.Random(n)` for a 64-bit `n`.
+#[derive(Clone)]
 pub struct PyRandom {
     mt: [u32; 624],
     at: usize,
@@ -17,13 +18,17 @@ pub struct PyRandom {
 
 impl PyRandom {
     pub fn new(seed: u64) -> PyRandom {
+        let (lo, hi) = (seed as u32, (seed >> 32) as u32);
+        PyRandom::from_key(&if hi != 0 { vec![lo, hi] } else { vec![lo] })
+    }
+
+    /// CPython's `init_by_array`.
+    fn from_key(key: &[u32]) -> PyRandom {
         let mut r = PyRandom { mt: [0; 624], at: 624 };
         r.mt[0] = 19650218;
         for i in 1..624 {
             r.mt[i] = 1812433253u32.wrapping_mul(r.mt[i - 1] ^ (r.mt[i - 1] >> 30)).wrapping_add(i as u32);
         }
-        let (lo, hi) = (seed as u32, (seed >> 32) as u32);
-        let key: Vec<u32> = if hi != 0 { vec![lo, hi] } else { vec![lo] };
         let (mut i, mut j) = (1usize, 0usize);
         for _ in 0..624.max(key.len()) {
             r.mt[i] = (r.mt[i] ^ (r.mt[i - 1] ^ (r.mt[i - 1] >> 30)).wrapping_mul(1664525)).wrapping_add(key[j]).wrapping_add(j as u32);
@@ -50,6 +55,18 @@ impl PyRandom {
     }
 
     /// `seeded(key)` of props.py: the first 8 bytes of sha256(key), big endian.
+    /// `random.Random(text)`: seeded with the text and its SHA-512, read as one big number.
+    pub fn from_text(text: &str) -> PyRandom {
+        let mut bytes = text.as_bytes().to_vec();
+        bytes.extend_from_slice(&sha2::Sha512::digest(text.as_bytes()));
+        // the number's 32-bit words, the least significant first (leading zero words dropped)
+        let mut key: Vec<u32> = bytes.rchunks(4).map(|c| c.iter().fold(0u32, |n, &b| n << 8 | b as u32)).collect();
+        while key.len() > 1 && key.last() == Some(&0) {
+            key.pop();
+        }
+        PyRandom::from_key(&key)
+    }
+
     pub fn keyed(key: &str) -> PyRandom {
         let d = Sha256::digest(key.as_bytes());
         PyRandom::new(u64::from_be_bytes(d[..8].try_into().unwrap()))

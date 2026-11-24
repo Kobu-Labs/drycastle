@@ -340,6 +340,8 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
 
 def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: dict) -> None:
     """``scene.parcels``: the buildings of each parcel as one visual and one collision mesh, standing on the terrain."""
+    used = {bid for p in parcels_doc["parcels"] for bid in p["buildings"]}
+    interior.prepare_plans([(buildings[i], details[i]) for i in sorted(used) if i in buildings and i in details and not buildings[i].get("model")])
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         ids = sorted(bid for bid in p["buildings"] if bid in buildings)
         if not ids:

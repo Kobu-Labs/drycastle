@@ -1,6 +1,6 @@
 # The rooms' types come first: a programme, then the walls
 
-Step 3 of ADR 0040. `buildings/roomtypes.py`. Each room type is to be furnished with its own assets (step 4, when the owner provides them).
+Step 3 of ADR 0040. `programme` in `pipeline/rust/detail/src/floorplan.rs`. Each room type is to be furnished with its own assets (step 4, when the owner provides them).
 
 A first version typed the rooms after the plan had been cut into equal pieces; the owner rejected the result on 2026-11-24 (ADR 0041). Now the programme comes before the walls, and the floor plan is cut to fit it.
 

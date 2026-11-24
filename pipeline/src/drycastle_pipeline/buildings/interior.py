@@ -104,6 +104,15 @@ def plan_of(b: dict, d, ins: Inside | None = None):
     return floorplan.make_plan(b, d, ins, WALL_M) if ins is not None else None
 
 
+def prepare_plans(houses: list[tuple]) -> None:
+    """Works out the plans of many ``(building, detail)`` houses at once, on all cores; plan_of then has them at hand."""
+    from drycastle_pipeline.buildings import floorplan
+
+    hollow = [(b, d, ins, WALL_M) for b, d in houses if (ins := inside_of(b, d)) is not None]
+    if hollow:
+        floorplan.make_plans(hollow)
+
+
 def add_partitions(out, plan, ins: Inside, colour=INNER_WALL) -> None:
     """The partitions of the plan: a slab per wall from floor to ceiling, left out where a doorway is, with the piece of
     wall over a door or an archway."""

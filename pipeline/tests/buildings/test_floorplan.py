@@ -7,9 +7,10 @@ from shapely.geometry import LineString, Point
 from shapely.ops import unary_union
 
 from drycastle_pipeline.buildings import floorplan, interior
-from drycastle_pipeline.buildings import roomtypes as rt
 from drycastle_pipeline.buildings.openings import build_detail, parse_detail
 from tests.buildings.test_building_detail import house
+
+pytest.importorskip("drycastle_detail", reason="build the Rust engine: make detail-rust-build")
 
 DOOR = {"id": "d", "kind": "door", "edge": 0, "at_m": 8.0, "width_m": 0.95, "height_m": 2.05, "sill_m": 0.3, "steps": 2}
 WINDOWS = [
@@ -52,7 +53,7 @@ def test_rooms_fill_the_house_and_every_one_is_reached(style):
     assert reached == set(range(len(p.rooms)))
     assert all(r.polygon.area >= floorplan.MIN_ROOM_M2 for r in p.rooms)
     assert sorted(w for r in p.rooms for w in r.windows) == sorted(w["id"] for w in WINDOWS)
-    assert all(r.type in rt.TYPES for r in p.rooms) and [r.type == "hall" for r in p.rooms] == [r.kind == "hall" for r in p.rooms]
+    assert all(r.type in floorplan.TYPES for r in p.rooms) and [r.type == "hall" for r in p.rooms] == [r.kind == "hall" for r in p.rooms]
 
 
 @pytest.mark.parametrize("style", ["closed", "mixed", "open"])

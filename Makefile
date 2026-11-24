@@ -42,7 +42,7 @@ detail: detail-rust-build
 detail-rust-build:
 	cd pipeline && uv pip install --quiet maturin && uv run maturin develop --release --manifest-path rust/detail/Cargo.toml
 
-export:
+export: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline export
 
 # PARCEL=P-0412 [GROUP=G-0001] [OUT=file.json] [GLB=file.glb]: fences and trees of one parcel as JSON
