@@ -21,7 +21,7 @@ public partial class NetClient
     void UpdateViewmodel()
     {
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
-        var id = ThrowHeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
+        var id = _thrower.HeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
         _viewmodel.Show(id);
         _viewmodel.Visible = Mode.ShowsViewmodel && !_flings.OwnFlung && Ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
@@ -41,10 +41,10 @@ public partial class NetClient
             // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
             Ctx.Me.ZoomFov = 0f; Ctx.Me.IronSightZoom = false;
             _viewmodel.Aiming = false;
-            LowerBinoculars();
+            _binoculars.Lower();
             return;
         }
-        if (TickBinoculars()) return; // raised binoculars are the zoom: no scope, no iron sights
+        if (_binoculars.Tick()) return; // raised binoculars are the zoom: no scope, no iron sights
         var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
         var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
         var on = zoom > 0 && !Dead && !_pounce.Pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
@@ -92,14 +92,14 @@ public partial class NetClient
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _blips.Add(sh.Shooter, sh.Weapon, sh.Origin);
-                if (!_guns.OnDoorGunShot(sh)) OnShot(sh); // a door gun's round leaves its muzzle on the model
+                if (!_guns.OnDoorGunShot(sh)) _shots.OnShot(sh); // a door gun's round leaves its muzzle on the model
                 break;
             case EventKind.PelletFan when WeaponCodec.DecodePelletFan(payload) is { } pf:
                 _blips.Add(pf.Shooter, pf.Weapon, pf.Origin);
-                OnPelletFan(pf);
+                _shots.OnPelletFan(pf);
                 break;
             case EventKind.Launch when WeaponCodec.DecodeLaunch(payload) is { } l:
-                OnLaunch(l);
+                _rockets.OnLaunch(l);
                 break;
             case EventKind.HuntShot when HuntShot.Decode(payload) is { } hs:
                 _hunts.OnShot(hs);
@@ -119,7 +119,7 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.Explosion when WeaponCodec.DecodeExplosion(payload) is { } ex:
-                OnExplosion(ex);
+                _rockets.OnExplosion(ex);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
                 OnVehicleExplosion(vx);
@@ -131,13 +131,13 @@ public partial class NetClient
                 _missile.OnBlast(mb);
                 break;
             case EventKind.GunshipShots when GunshipFxCodec.DecodeShots(payload) is { } gs:
-                OnGunshipShots(gs);
+                _shots.OnGunshipShots(gs);
                 break;
             case EventKind.GunshipImpacts when GunshipFxCodec.DecodeImpacts(payload) is { } gi:
-                OnGunshipImpacts(gi);
+                _shots.OnGunshipImpacts(gi);
                 break;
             case EventKind.GunshipBlasts when GunshipFxCodec.DecodeBlasts(payload) is { } gb:
-                OnGunshipBlasts(gb);
+                _shots.OnGunshipBlasts(gb);
                 break;
             case EventKind.ImpactFx when ImpactCodec.Decode(payload) is { } imp:
                 _impacts.OnImpact(imp);

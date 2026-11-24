@@ -40,7 +40,7 @@ public partial class NetClient
     void HudWelcome()
     {
         if (!ShotFx.Enabled || Ctx.Hud != null) return; // headless runs have no HUD
-        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = CrosshairSpread };
+        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars.Up, Binoculars = _binoculars.View, Aim = () => _viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = CrosshairSpread };
         AddChild(Ctx.Hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         Ctx.Hud.TacticalMapTeleport = _screens.OnMapTeleport;
         Sandbox.ShowOnHud(); // the SANDBOX badge (#156)

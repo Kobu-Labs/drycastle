@@ -113,6 +113,11 @@ public partial class NetClient : Node
     BigfootFx _bigfootFx = null!;
     /// <summary>bigfoot.json: set by the host.</summary>
     public BigfootFile BigfootData = new();
+    BinocularsClient _binoculars = null!;
+    LockOnClient _lockOn = null!;
+    RocketsClient _rockets = null!;
+    ThrowClient _thrower = null!;
+    ShotsClient _shots = null!;
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -253,7 +258,6 @@ public partial class NetClient : Node
         Ctx.View.MassSeated = () => _mass.Seated;
         _citizens = new CitizensClient(Ctx, HolyMassData, _mass);
         _status = new StatusClient(Ctx, Plantation);
-        Ctx.Remotes.Appeared += (id, r) => r.Binoculars = _binocularsBy.GetValueOrDefault(id);
         Ctx.Remotes.Appeared += (id, _) => _status.SyncFx(id);
         High = new HighClient(Ctx, _status, Plantation, () => Mode, () => OwnSpawned);
         Squads = new SquadsClient(Ctx);
@@ -274,8 +278,8 @@ public partial class NetClient : Node
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), _session.FlightCorrection);
         _hulls = new VehicleHulls(Ctx, _flight, _driveClient, id => _bigfoot.CarThrown(id), GlassData);
-        _aim = new OwnAim(Ctx, Loadouts, () => _binoculars);
-        _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => LockComplete, () => _flings.OwnFlung);
+        _aim = new OwnAim(Ctx, Loadouts, () => _binoculars.Up);
+        _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => _lockOn.Complete, () => _flings.OwnFlung);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
@@ -300,15 +304,22 @@ public partial class NetClient : Node
         _bigfootFx = new BigfootFx(Ctx, BigfootData, _bigfoot);
         _thieves = new ThievesClient(Ctx, ThievesData, ItemData);
         _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
+        _binoculars = new BinocularsClient(Ctx, Items, ItemData, _hulls, _animals, () => _pounce.Pinned);
+        Ctx.Remotes.Appeared += _binoculars.OnAppeared;
         _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
-        _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, HomingKillShown);
+        _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, at => _rockets.HomingKillShown(at));
         EventReceived += _aircraftClient.OnEvent;
         _flocks = new FlocksClient(Ctx, WildlifeData, _aircraftClient);
-        InitLockOn();
+        _lockOn = new LockOnClient(Ctx, _aircraftClient);
+        EventReceived += _lockOn.OnEvent;
+        _rockets = new RocketsClient(Ctx, _weapon, _blastDust, _lockOn);
+        EventReceived += _rockets.OnEvent;
         EventReceived += _guns.OnEvent;
         EventReceived += _seats.OnEvent;
         _scud = new ScudClient(Ctx, Scud, _blastDust);
+        _thrower = new ThrowClient(Ctx, _binoculars, _aircraftClient, _scud, _flings);
+        _shots = new ShotsClient(Ctx, _weapon, _hulls, _water, _guns, _aircraftClient, _impacts);
         _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
         InitMatchEdges();
@@ -480,8 +491,8 @@ public partial class NetClient : Node
 
     void RenderProjectiles(double delta)
     {
-        RenderRockets();
-        RenderLockOn();
+        _rockets.Render(delta);
+        _lockOn.Render();
         _weapon.ShowLoaded();
         _missile.RenderMissiles();
         _missile.RenderPov();
@@ -493,7 +504,7 @@ public partial class NetClient : Node
     {
         _water.Render();
         UpdateViewmodel();
-        UpdateThrowArc();
+        _thrower.UpdateArc();
         _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
@@ -589,7 +600,7 @@ public partial class NetClient : Node
     {
         Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); Ctx.Snapshots.Forget(l.PlayerId);
         Ctx.Remotes.Remove(l.PlayerId);
-        Items.Forget(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
+        Items.Forget(l.PlayerId); _binoculars.Forget(l.PlayerId); _headLamps.Forget(l.PlayerId);
         _status.Forget(l.PlayerId);
     }
 
@@ -601,7 +612,7 @@ public partial class NetClient : Node
         Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
         Items.OnEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
-        OnBinocularsEvent(kind, payload); // the others' raised binoculars
+        _binoculars.OnEvent(kind, payload); // the others' raised binoculars
         _headLamps.OnEvent(kind, payload); // the head lamps switched on and off
         Companions.OnEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
@@ -697,7 +708,7 @@ public partial class NetClient : Node
         foreach (var (id, rec) in Ctx.Snapshots.States)
         {
             if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
-            if (rec.Type == EntityType.Projectile) { OnRocketState(id, rec); continue; }
+            if (rec.Type == EntityType.Projectile) { _rockets.OnState(id, rec); continue; }
             if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Seats) { _seats.OnRecord(rec); continue; }
             if (rec.Type == EntityType.Turret) { _guns.OnRecord(rec, h.Tick); continue; }
@@ -738,7 +749,7 @@ public partial class NetClient : Node
         if (!Bot) { ReadSlotKeys(); ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
-        ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
+        _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _weapon.AimHeld = mi.Has(MoveButtons.Aim);
         if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         _aim.Tick(mi);
@@ -786,7 +797,7 @@ public partial class NetClient : Node
         if (_scud.HandleInput(e)) return; // the Scud screen's keys (open, confirm, abort, lock, the wheel's zoom)
         if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
         if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
-        if (HandleBinocularsInput(e)) return; // B: the binoculars from the bag
+        if (_binoculars.HandleInput(e)) return; // B: the binoculars from the bag
         if (Bot || Weapons == null || Dead || _loot.ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
