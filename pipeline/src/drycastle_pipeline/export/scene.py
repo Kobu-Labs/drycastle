@@ -330,6 +330,7 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
                     "floor_z": round(dz + ins.floor, 3), "ceiling_z": round(dz + ins.ceiling, 3), "wall_m": interior.WALL_M,
                     **(floorplan.plan_doc(plan) if (plan := interior.plan_of(b, details[bid], ins)) else {}),
                     "doorways": [{**w, "at": [w["at"][0], w["at"][1], round(w["at"][2] + dz, 3)]} for w in interior.doorways(b, details[bid], ins)],
+                    "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, details[bid], ins)],
                 })  # fmt: skip
     elif b.get("model"):
         m = _landmark_mesh(scene, p, bid, b, dz, visual)

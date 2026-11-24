@@ -18,6 +18,7 @@ from shapely.geometry.polygon import orient
 from shapely.ops import unary_union
 
 from drycastle_pipeline.buildings.footprint import footprint_polygon
+from drycastle_pipeline.core.geometry import bearing_deg
 from drycastle_pipeline.core.mesh import Mesh, triangulate
 from drycastle_pipeline.core.mesh import solid_polygons as _polygons
 
@@ -36,10 +37,14 @@ class Inside:
     ceiling: float
 
     def through(self, o) -> bool:
-        """Does opening ``o`` go through the wall into the room?"""
-        if o.kind not in ("window", "door") or o.parent is not None:
+        """Does opening ``o`` go through the wall into the room? A garage door may start below the floor (the ground)."""
+        if o.kind not in ("window", "door", "garage_door") or o.parent is not None:
             return False
-        return o.sill_m >= self.floor - MIN_FLOOR_M - 0.01 and o.sill_m + o.height_m <= self.ceiling - HEAD_CLEAR_M
+        if o.sill_m + o.height_m > self.ceiling - HEAD_CLEAR_M:
+            return False
+        if o.kind == "garage_door":
+            return o.sill_m + o.height_m > self.floor + 1.5
+        return o.sill_m >= self.floor - MIN_FLOOR_M - 0.01
 
 
 def inside_of(b: dict, d) -> Inside | None:
@@ -84,6 +89,9 @@ def add_inner_wall(out, to3, ring: list, i: int, ops, ins: Inside, colour=INNER_
     if holes:
         face = face.difference(unary_union(holes))
     _face(out, to3, face, WALL_M, colour, inward=True)
+    for o in ops:  # under a garage door that starts below the floor, the floor's edge closes the bottom of the hole
+        if o.kind == "garage_door" and ins.through(o) and o.sill_m < ins.floor - 0.005:
+            _face(out, to3, box(o.at_m, o.sill_m, o.at_m + o.width_m, ins.floor), WALL_M, colour, inward=False)
 
 
 def add_floor_ceiling(out, poly: Polygon, ins: Inside, floor=FLOOR, ceiling=CEILING) -> None:
@@ -160,6 +168,28 @@ def doorways(b: dict, d, ins: Inside) -> list[dict]:
         s = o.at_m + o.width_m / 2
         out.append({"id": o.id, "at": [round(p[0] + ux * s, 3), round(p[1] + uy * s, 3), round(o.sill_m, 3)],
                     "normal": [round(uy, 4), round(-ux, 4)], "width_m": o.width_m, "height_m": o.height_m})  # fmt: skip
+    return out
+
+
+def leaves(b: dict, d, ins: Inside) -> list[dict]:
+    """The doors the game hangs and players open (``interiors.json`` ``doors``), one per door or garage door that goes
+    through: ``pos`` the middle of the bottom of the opening, in the middle of the wall; ``yaw`` the compass bearing out of
+    the house, degrees; the size and the leaf's colour."""
+    from drycastle_pipeline.buildings.openings import DEFAULT_PANEL
+
+    ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
+    out = []
+    for o in d.openings:
+        if o.kind not in ("door", "garage_door") or not ins.through(o):
+            continue
+        p, q = ring[o.edge], ring[(o.edge + 1) % len(ring)]
+        length = math.dist(p, q)
+        ux, uy = (q[0] - p[0]) / length, (q[1] - p[1]) / length
+        s, deep = o.at_m + o.width_m / 2, WALL_M / 2
+        out.append({"id": o.id, "kind": "garage" if o.kind == "garage_door" else "hinged",
+                    "pos": [round(p[0] + ux * s - uy * deep, 3), round(p[1] + uy * s + ux * deep, 3), round(o.sill_m, 3)],
+                    "yaw": bearing_deg(uy, -ux), "width": o.width_m, "height": o.height_m,
+                    "colour": o.colour or DEFAULT_PANEL[o.kind]})  # fmt: skip
     return out
 
 

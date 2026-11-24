@@ -50,7 +50,23 @@ def test_room_is_between_the_door_sill_and_the_eave():
 def test_what_goes_through():
     ins = interior.inside_of(house(), detail(WINDOW, DOOR, HIGH))
     by = {o.id: ins.through(o) for o in detail(WINDOW, DOOR, HIGH, {**DOOR, "id": "g", "kind": "garage_door", "at_m": 8.0, "steps": 0}).openings}
-    assert by == {"a": True, "d": True, "h": False, "g": False}
+    assert by == {"a": True, "d": True, "h": False, "g": True}
+
+
+def test_leaves_are_the_doors_the_game_hangs():
+    d = detail(WINDOW, DOOR, {**DOOR, "id": "g", "kind": "garage_door", "at_m": 8.0, "steps": 0, "sill_m": 0.0, "width_m": 1.5, "height_m": 2.4})
+    ins = interior.inside_of(house(), d)
+    by = {w["id"]: w for w in interior.leaves(house(), d, ins)}
+    assert {i: w["kind"] for i, w in by.items()} == {"d": "hinged", "g": "garage"}
+    assert by["d"]["pos"] == [6.475, interior.WALL_M / 2, 0.6] and by["d"]["yaw"] == 180.0  # in the middle of the south wall, out is south
+    assert by["g"]["pos"][2] == 0.0 and by["g"]["width"] == 1.5
+
+
+def test_a_garage_door_below_the_floor_has_the_floors_edge_in_it(no_plan):
+    garage = {**DOOR, "id": "g", "kind": "garage_door", "at_m": 8.0, "steps": 0, "sill_m": 0.0, "width_m": 1.5, "height_m": 2.4}
+    col = interior.collision(house(), detail(DOOR, garage))
+    assert _hit(col, (8.7, -2.0, 0.3), (0, 1, 0)) == pytest.approx(2.0 + interior.WALL_M)  # the edge under the floor
+    assert _hit(col, (8.7, -2.0, 1.5), (0, 1, 0)) > 7.0  # through the doorway
 
 
 def test_collision_lets_a_body_in_at_the_door_and_stops_it_at_the_wall(no_plan):

@@ -9,9 +9,9 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Client.Village;
 
 /// <summary>
-/// The village doors the server opens and closes: the church doors (ADR 0019), the Obecny Urad's door and the bus garage's doors. The server's state sets the box and swings
-/// the leaves; a joiner sees an open door swing open once. For the garage a player on foot at the doorway sees the prompt; nothing is sent, the server sees the interact key
-/// in the inputs and decides (<c>NetServer.GarageUse</c>).
+/// The village doors the server opens and closes: the church doors (ADR 0019), the Obecny Urad's door, the bus garage's doors and the hollow houses' (ADR 0044). The server's state sets the box and swings
+/// the leaves; a joiner sees an open door swing open once. At a door players work, a player on foot sees the prompt; nothing is sent, the server sees the interact key
+/// in the inputs and decides (<c>InputServer</c>).
 /// </summary>
 public sealed class DoorsClient
 {
@@ -32,15 +32,23 @@ public sealed class DoorsClient
             case EventKind.GarageDoor when GarageDoorCodec.Decode(payload) is { } garage:
                 GarageDoorNode.Current?.SetOpen(garage, animate: true);
                 break;
+            case EventKind.HouseDoor when HouseDoorCodec.Decode(payload) is { } house:
+                HouseDoorsNode.Current?.Show(house.Door, house.Open, animate: true);
+                break;
         }
     }
 
-    /// <summary>On foot at the garage doorway: the interact key works the doors (it goes before a vehicle in reach, as on the server).</summary>
-    public string? GarageDoorPrompt(bool driving)
+    /// <summary>On foot at a doorway a player works (the bus garage's, a hollow house's): the interact key moves the door (it goes before a vehicle in reach, as on the server).</summary>
+    public string? DoorPrompt(bool driving)
     {
-        if (driving || _ctx.Dead || _ctx.Me is not { } me || GarageDoorNode.Current is not { } doors) return null;
+        if (driving || _ctx.Dead || _ctx.Me is not { } me) return null;
         var p = me.GlobalPosition;
-        if (!doors.Garage.InReach(new NVec3(p.X, p.Y, p.Z))) return null;
-        return Strings.F(doors.IsOpen ? "hud.garage.close" : "hud.garage.open", InputBindings.Name("interact"));
+        var at = new NVec3(p.X, p.Y, p.Z);
+        if (GarageDoorNode.Current is { } bus && bus.Garage.InReach(at))
+            return Strings.F(bus.IsOpen ? "hud.garage.close" : "hud.garage.open", InputBindings.Name("interact"));
+        if (HouseDoorsNode.Current is not { } houses || houses.Doors.Nearest(at) is var door && door < 0) return null;
+        var open = houses.IsOpen(door);
+        var key = houses.Doors.All[door].Kind == HouseDoorKind.Garage ? open ? "hud.housegarage.close" : "hud.housegarage.open" : open ? "hud.door.close" : "hud.door.open";
+        return Strings.F(key, InputBindings.Name("interact"));
     }
 }

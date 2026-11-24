@@ -169,6 +169,8 @@ public enum EventKind : byte
     UradDoor = 188,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the bus garage's doors opened (1) or closed (0), one byte (<see cref="GarageDoorCodec"/>). A player on foot works them with the interact key; the server sees the key in the inputs, so there is no request message.</summary>
     GarageDoor = 245,
+    /// <summary>Server to everyone, and to a joiner for each open one: a door or garage door of a hollow house opened or closed, its index and state (<see cref="HouseDoorCodec"/>). A player on foot works it with the interact key; the server sees the key in the inputs, so there is no request message.</summary>
+    HouseDoor = 239,
     /// <summary>Server to everyone, and to a joiner: the events announced now (<see cref="IntelBoard"/>, <see cref="IntelCodec"/>), and which one is being announced this moment. The intel screen draws it.</summary>
     IntelSync = 185,
     /// <summary>Client to server: take the item at a position of a corpse's list (u16 corpse id, u8 index, <see cref="ItemEvents"/>). Kinds 190-199 belong to items and equipment.</summary>
@@ -415,7 +417,8 @@ public static class Wire
     //   v83 shootable road sign plates (ADR 0039): events 252 SignPlateState and 253 SignPlateSync
     //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
-    public const byte ProtocolVersion = 85;
+    //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
+    public const byte ProtocolVersion = 86;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

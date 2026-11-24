@@ -264,7 +264,7 @@ def _write_interior_docs(scene, out_dir: Path, files: dict) -> None:
     # church_interior.church_info: seats and routes, spots, demon anchors, shelter rooms
     # office_interior.urad_info: entrance, rooms, worker seats, dictation desk
     # garage.garage_info: the doorway of its swinging doors, the bay, the parking place
-    # buildings/interior.py: the houses that are hollow, each with its room (a shelter volume, as a bunker's) and its doorways
+    # buildings/interior.py: the houses that are hollow, each with its room (a shelter volume, as a bunker's), its doorways and the doors players open
     interiors = {"version": 1, "axes": INTERIOR_AXES, "houses": sorted(scene.interiors, key=lambda h: h["id"])} if scene.interiors else None
     write_optional(out_dir, "interiors.json", interiors, files, "interiors")
     for name, info in (("church", scene.church), ("urad", scene.urad), ("garage", scene.garage)):

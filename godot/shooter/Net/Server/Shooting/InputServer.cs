@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.BusGarage;
+using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.Parish;
@@ -35,6 +36,7 @@ internal sealed class InputServer
     readonly SandboxServer _sandbox;
     readonly MassServer _mass;
     readonly GarageServer _garage;
+    readonly HouseDoorServer _houses;
     readonly CarSeats _seats;
     readonly VehicleGuns _guns;
     readonly ShotServer _shots;
@@ -46,9 +48,9 @@ internal sealed class InputServer
     /// <param name="plantationUse">The use key is fed to the plantation's key competition (the high a player is getting).</param>
     /// <param name="scudUseKey">Beside a Scud truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket); true when the key's usual action runs now.</param>
     public InputServer(ServerContext ctx, StreakServer streaks, RozhlasServer rozhlas, ThievesServer thieves, ItemsServer gear, Sitters sitters, PounceServer pounce, SandboxServer sandbox, MassServer mass,
-        GarageServer garage, CarSeats seats, VehicleGuns guns, ShotServer shots, SmokeStats smoke, Action<ServerClient, bool> plantationUse, Func<ServerClient, bool, bool, float, bool> scudUseKey, float killY)
+        GarageServer garage, HouseDoorServer houses, CarSeats seats, VehicleGuns guns, ShotServer shots, SmokeStats smoke, Action<ServerClient, bool> plantationUse, Func<ServerClient, bool, bool, float, bool> scudUseKey, float killY)
     {
-        _ctx = ctx; _streaks = streaks; _rozhlas = rozhlas; _thieves = thieves; _gear = gear; _sitters = sitters; _pounce = pounce; _sandbox = sandbox; _mass = mass; _garage = garage; _seats = seats; _guns = guns;
+        _ctx = ctx; _streaks = streaks; _rozhlas = rozhlas; _thieves = thieves; _gear = gear; _sitters = sitters; _pounce = pounce; _sandbox = sandbox; _mass = mass; _garage = garage; _houses = houses; _seats = seats; _guns = guns;
         _shots = shots; _smoke = smoke; _plantationUse = plantationUse; _scudUseKey = scudUseKey; _killY = killY;
     }
 
@@ -98,7 +100,7 @@ internal sealed class InputServer
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
         var useAct = _scudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-        if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat
+        if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat
         WalkAndFire(c, i, dt, throwStep);
     }
 

@@ -45,7 +45,12 @@ public abstract partial class DoorNode : Node3D
         _body = new StaticBody3D { CollisionLayer = CollisionLayers.World, Position = new Vector3(0, h / 2, 0) };
         _body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(w, h, Doorway.Depth) } });
         AddChild(_body);
-        if (!_draw) return;
+        if (_draw) BuildLeaves(w, h);
+    }
+
+    /// <summary>The leaves of a doorway <paramref name="w"/> by <paramref name="h"/>, shut (clients only): two on hinges unless a door of its own says otherwise.</summary>
+    protected virtual void BuildLeaves(float w, float h)
+    {
         var wood = new StandardMaterial3D { AlbedoColor = new Color(_style.Panel), Roughness = 0.9f, Metallic = _style.Metallic };
         var seam = new StandardMaterial3D { AlbedoColor = new Color(_style.Seam), Roughness = 1f };
         var iron = new StandardMaterial3D { AlbedoColor = new Color(_style.Iron), Roughness = 0.6f, Metallic = 0.6f };
@@ -100,7 +105,7 @@ public abstract partial class DoorNode : Node3D
     }
 
     /// <summary>Swung inward: the right leaf turns towards +Z (inside), the left one the other way; outward (<see cref="DoorStyle.SwingsOut"/>) the other way round. Eased so it starts and ends gently.</summary>
-    void Pose()
+    protected virtual void Pose()
     {
         if (_left == null || _right == null) return;
         var a = Mathf.DegToRad(_style.OpenAngleDeg) * Mathf.SmoothStep(0, 1, Angle) * (_style.SwingsOut ? -1 : 1);
