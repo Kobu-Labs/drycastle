@@ -11,9 +11,9 @@ public class InteractTests
         for (var i = 0; i < 32; i++)
         {
             bool crate = (i & 1) != 0, ground = (i & 2) != 0, nearest = (i & 4) != 0, corpse = (i & 8) != 0, chooser = (i & 16) != 0;
-            // NetClient.GroundItems.cs: GroundItemOwnsKey
+            // InteractTargets.Owner (ground item)
             var groundOwns = ground && nearest && !crate && !chooser;
-            // NetClient.Corpses.cs TickCorpses: near = crate or ground owns the key ? null : _near
+            // CorpseLoot.Tick: near = crate or ground owns the key ? null : _near
             var corpseNear = crate || groundOwns ? false : corpse;
             var owner = InteractArbiter.Owner(crate, ground, nearest, corpse, chooser);
             Assert.Equal(groundOwns, owner == InteractOwner.GroundItem);
@@ -54,7 +54,7 @@ public class InteractTests
         }
     }
 
-    /// <summary>NetClient.CarePackages.cs TickCarePackages before the extraction.</summary>
+    /// <summary>CarePackagesClient.Tick before the extraction.</summary>
     sealed class OldCrate
     {
         public double Held; public bool Sent; public int Sends;

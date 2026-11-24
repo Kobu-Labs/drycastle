@@ -12,6 +12,9 @@ internal sealed record SeatView(ushort CarId, ushort[] Occupants, int Mine);
 /// </summary>
 internal sealed class ClientCars
 {
+    /// <summary>The yaw the vehicle the local player rides is drawn at: where the chase camera ends when they get out.</summary>
+    public float DrivenYaw;
+
     readonly ClientContext _ctx;
     readonly Dictionary<ushort, CarView> _byId = new();
 

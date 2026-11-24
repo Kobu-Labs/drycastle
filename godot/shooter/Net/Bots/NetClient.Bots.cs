@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Bots;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;
 
@@ -74,10 +75,10 @@ public partial class NetClient : IBotHost
     BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
     IEnumerable<BotRemote> IBotHost.Remotes => Ctx.Remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
     int IBotHost.RocketCount => Ctx.Rockets.Count;
-    VehiclesFile? IBotHost.Vehicles => Vehicles;
+    VehiclesFile? IBotHost.Vehicles => Ctx.Vehicles;
     int IBotHost.Snaps => _snaps;
     int IBotHost.Recon => Ctx.Reconciles;
-    float IBotHost.MaxErr => _maxErr;
+    float IBotHost.MaxErr => _reconcile.MaxErr;
     uint IBotHost.LastTick => Ctx.LastTick;
     double IBotHost.LastArrival => _lastArrival;
     ushort IBotHost.Seq => _seq;
@@ -88,19 +89,16 @@ public partial class NetClient : IBotHost
     int IBotHost.DriveCorrections => _driveClient.Corrections;
 
     (double Received, double Sent) IBotHost.PopTraffic() =>
-        (_conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _conn.PopStatistic(ENetConnection.HostStatistic.SentData));
+        (_server.Conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _server.Conn.PopStatistic(ENetConnection.HostStatistic.SentData));
 
     void IBotHost.Leave() => _link.Enter(LinkPhase.Left);
     void IBotHost.Quit(bool ok) => GetTree().Quit(ok ? 0 : 2);
 
-    void IBotHost.SendMic(byte[] packet) => SendMic(packet);
+    void IBotHost.SendMic(byte[] packet) => _server.SendMic(packet);
     void IBotHost.SendChat(string text) => Chat.Send(text);
     bool IBotHost.SandboxGranted => Sandbox.Granted;
+    AmmoMsg? IBotHost.Ammo => Ctx.Ammo;
 
-    void SendMic(byte[] packet)
-    {
-        if (_peer != null) Tx(_peer, Wire.ChanRozhlasFeed, packet, 0);
-    }
 
     BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, _driveClient.DefOf(v) != null);
 }

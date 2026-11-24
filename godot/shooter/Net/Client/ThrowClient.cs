@@ -11,8 +11,19 @@ namespace Drycastle.Shooter.Net.Client;
 /// the aim key with it to put it away. The arc is <see cref="GrenadeArc"/>, the server's own flight rule, so it shows where the grenade goes. The key is sent as
 /// <see cref="MoveButtons.Throw"/>; the server runs the same <see cref="GrenadeThrower"/> and throws on the release.
 /// </summary>
-public partial class NetClient
+internal sealed class ThrowClient
 {
+    readonly ClientContext _ctx;
+    readonly BinocularsClient _binoculars;
+    readonly AircraftClient _aircraft;
+    readonly ScudClient _scud;
+    readonly BodyFlings _flings;
+
+    public ThrowClient(ClientContext ctx, BinocularsClient binoculars, AircraftClient aircraft, ScudClient scud, BodyFlings flings)
+    {
+        _ctx = ctx; _binoculars = binoculars; _aircraft = aircraft; _scud = scud; _flings = flings;
+    }
+
     readonly GrenadeThrower _grenadeKey = new();
     MeshInstance3D? _arcRibbon, _arcMark;
     ImmediateMesh? _arcMesh;
@@ -20,40 +31,40 @@ public partial class NetClient
     /// <summary>The weapons.json index of the hotbar's grenade, or -1.</summary>
     int GrenadeWeapon()
     {
-        if (Weapons == null) return -1;
-        foreach (var i in Ctx.Hotbar.Slots) if (i >= 0 && i < Weapons.Weapons.Count && Weapons.Weapons[i].Grenade != null) return i;
+        if (_ctx.Weapons == null) return -1;
+        foreach (var i in _ctx.Hotbar.Slots) if (i >= 0 && i < _ctx.Weapons.Weapons.Count && _ctx.Weapons.Weapons[i].Grenade != null) return i;
         return -1;
     }
 
     /// <summary>Runs the throw key for this input: aims on a press where G is the grenade's, and keeps the key (and the trigger, the hidden weapon's) out of the input where it is not.</summary>
-    void ThrowFilterInput(ref MoveInput mi)
+    public void FilterInput(ref MoveInput mi)
     {
         var gi = GrenadeWeapon();
-        var hasRound = gi >= 0 && Ammo is { } a && gi < a.Slots.Count && a.Slots[gi].Mag > 0;
-        var onFoot = Ctx.Me != null && !Bot && Mode.ShowsViewmodel && !Ctx.Driving && !OwnBodyFlung && !_aircraftClient.AtTurret && Input.MouseMode == Input.MouseModeEnum.Captured;
-        var canAim = GrenadeThrower.CanAim(onFoot, !_binoculars, Ctx.Me?.State.OnLadder ?? false, hasRound, _scud.ScreenOn);
+        var hasRound = gi >= 0 && _ctx.Ammo is { } a && gi < a.Slots.Count && a.Slots[gi].Mag > 0;
+        var onFoot = _ctx.Me != null && !_ctx.Bot && _ctx.View.Mode.ShowsViewmodel && !_ctx.Driving && !_flings.OwnFlung && !_aircraft.AtTurret && Input.MouseMode == Input.MouseModeEnum.Captured;
+        var canAim = GrenadeThrower.CanAim(onFoot, !_binoculars.Up, _ctx.Me?.State.OnLadder ?? false, hasRound, _scud.ScreenOn);
         _grenadeKey.Tick(mi.Has(MoveButtons.Throw), mi.Has(MoveButtons.Aim), canAim);
         if (!canAim) mi.Buttons &= ~MoveButtons.Throw;
         if (_grenadeKey.Aiming) mi.Buttons &= ~MoveButtons.Fire; // the weapon is out of sight: the trigger does nothing
     }
 
     /// <summary>The weapon id to show in the hand while the throw key is held (the grenade), or null.</summary>
-    string? ThrowHeldId() => _grenadeKey.Aiming && GrenadeWeapon() is var gi and >= 0 ? Weapons!.Weapons[gi].Id : null;
+    public string? HeldId() => _grenadeKey.Aiming && GrenadeWeapon() is var gi and >= 0 ? _ctx.Weapons!.Weapons[gi].Id : null;
 
     /// <summary>Every frame: draws the arc while aiming, hides it otherwise.</summary>
-    void UpdateThrowArc()
+    public void UpdateArc()
     {
-        if (!_grenadeKey.Aiming || Ctx.Me == null || Weapons == null || GrenadeWeapon() is not (var gi and >= 0) || Weapons.Weapons[gi] is not { Grenade: { } g } w)
+        if (!_grenadeKey.Aiming || _ctx.Me == null || _ctx.Weapons == null || GrenadeWeapon() is not (var gi and >= 0) || _ctx.Weapons.Weapons[gi] is not { Grenade: { } g } w)
         {
             if (_arcRibbon != null) { _arcRibbon.Visible = false; _arcMark!.Visible = false; }
             return;
         }
         if (_arcRibbon == null) MakeArc();
-        var cam = Ctx.Me.Camera;
+        var cam = _ctx.Me.Camera;
         var from = cam.GlobalPosition;
         var fwd = -cam.GlobalTransform.Basis.Z;
-        var space = World.GetWorld3D().DirectSpaceState;
-        var self = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
+        var space = _ctx.World.GetWorld3D().DirectSpaceState;
+        var self = new Godot.Collections.Array<Rid> { _ctx.Me.GetRid() };
         var trace = GrenadeArc.Fly(g, new NVec3(from.X, from.Y, from.Z), new NVec3(fwd.X, fwd.Y, fwd.Z) * w.ProjectileSpeed, (a, dir, len) =>
         {
             var o = new Vector3(a.X, a.Y, a.Z); var d = new Vector3(dir.X, dir.Y, dir.Z);
@@ -107,7 +118,8 @@ public partial class NetClient
             },
             CastShadow = GeometryInstance3D.ShadowCastingSetting.Off, TopLevel = true,
         };
-        Ctx.Owned.AddChild(_arcRibbon);
-        Ctx.Owned.AddChild(_arcMark);
+        _ctx.Owned.AddChild(_arcRibbon);
+        _ctx.Owned.AddChild(_arcMark);
     }
+
 }

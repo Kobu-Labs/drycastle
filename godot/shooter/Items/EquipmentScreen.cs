@@ -102,14 +102,14 @@ public sealed partial class EquipmentScreen : Control
         _companionGrid = new GridContainer { Columns = EquipmentNav.BagColumns, MouseFilter = MouseFilterEnum.Ignore };
         right.AddChild(_companionGrid);
         RefreshCompanions();
-        _client.ItemsChanged += OnItemsChanged;
+        _client.Items.ItemsChanged += OnItemsChanged;
         _client.Companions.Changed += OnCompanionsChanged;
     }
 
     ItemCell MakeCell(CellRef at, Glyph.Kind? ghost)
     {
         var cell = new ItemCell { Ref = at, Draggable = true, Ghost = ghost };
-        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.BagIsFull, Plain), c);
+        cell.Activated += c => Perform(EquipmentWishes.Activate(c.Ref, SlotOf, _client.Items.BagIsFull, Plain), c);
         cell.DropPressed += c => Perform(EquipmentWishes.Drop(c.Ref, SlotOf), c);
         cell.Moved += OnMoved;
         cell.FocusChanged += (_, _) => QueueFraming();
@@ -154,9 +154,9 @@ public sealed partial class EquipmentScreen : Control
     // ---- what it shows ----
 
     /// <summary>A cell that holds a bag-only item (no slot): it cannot be put on.</summary>
-    bool Plain(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.BagOnly == true;
+    bool Plain(CellRef at) => (at.Home == CellHome.Worn ? _client.Items.Worn((EquipSlot)at.Index) : _client.Items.InBag(at.Index))?.Def.BagOnly == true;
 
-    EquipSlot? SlotOf(CellRef at) => (at.Home == CellHome.Worn ? _client.Worn((EquipSlot)at.Index) : _client.InBag(at.Index))?.Def.Slot;
+    EquipSlot? SlotOf(CellRef at) => (at.Home == CellHome.Worn ? _client.Items.Worn((EquipSlot)at.Index) : _client.Items.InBag(at.Index))?.Def.Slot;
 
     ItemCell CellAt(CellRef at) => at.Home switch { CellHome.Worn => _slots[at.Index], CellHome.Companion => _companions[at.Index], _ => _bag[at.Index] };
 
@@ -164,11 +164,11 @@ public sealed partial class EquipmentScreen : Control
     {
         for (var s = 0; s < _slots.Length; s++)
         {
-            var held = _client.Worn((EquipSlot)s);
+            var held = _client.Items.Worn((EquipSlot)s);
             Fill(_slots[s], held);
             _avatar.ShowWorn((EquipSlot)s, held?.Def);
         }
-        for (var c = 0; c < _bag.Length; c++) Fill(_bag[c], _client.InBag(c));
+        for (var c = 0; c < _bag.Length; c++) Fill(_bag[c], _client.Items.InBag(c));
         RefreshCompanions();
     }
 
@@ -244,7 +244,7 @@ public sealed partial class EquipmentScreen : Control
     }
 
     void Fill(ItemCell cell, HeldItem? held) =>
-        cell.SetItem(held, held is { } h ? _client.ItemIcon(h.Def) : null, held is { } n ? _client.ItemName(n.Def) : "");
+        cell.SetItem(held, held is { } h ? _client.Items.ItemIcon(h.Def) : null, held is { } n ? _client.Items.ItemName(n.Def) : "");
 
     void OnItemsChanged()
     {
@@ -327,10 +327,10 @@ public sealed partial class EquipmentScreen : Control
         if (_wait.Active || !_open) return;
         switch (wish.Kind)
         {
-            case WishKind.Equip: _client.RequestEquip(wish.Index); break;
-            case WishKind.Unequip: _client.RequestUnequip((EquipSlot)wish.Index); break;
-            case WishKind.DropWorn: _client.RequestDropWorn((EquipSlot)wish.Index); break;
-            case WishKind.DropBagged: _client.RequestDropBagged(wish.Index); break;
+            case WishKind.Equip: _client.Items.RequestEquip(wish.Index); break;
+            case WishKind.Unequip: _client.Items.RequestUnequip((EquipSlot)wish.Index); break;
+            case WishKind.DropWorn: _client.Items.RequestDropWorn((EquipSlot)wish.Index); break;
+            case WishKind.DropBagged: _client.Items.RequestDropBagged(wish.Index); break;
             case WishKind.BagFull:
                 // the server would refuse it with this very toast; saying it here lets the cell answer at once
                 at?.Refuse();
@@ -431,7 +431,7 @@ public sealed partial class EquipmentScreen : Control
 
     public override void _ExitTree()
     {
-        _client.ItemsChanged -= OnItemsChanged;
+        _client.Items.ItemsChanged -= OnItemsChanged;
         _client.Companions.Changed -= OnCompanionsChanged;
     }
 }

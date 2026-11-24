@@ -48,7 +48,7 @@ public sealed class ClientContext
     /// <summary>The rockets and thrown grenades in the air, by entity id.</summary>
     internal Dictionary<ushort, RocketView> Rockets { get; } = new();
     /// <summary>The other players and target dummies being drawn, by entity id.</summary>
-    public Dictionary<ushort, RemotePlayer> Remotes { get; } = new();
+    public RemotePlayers Remotes { get; }
     public Node3D World = null!;
     /// <summary>The loaded map (set by the host).</summary>
     public Drycastle.MapLoader.MapLoader? Map;
@@ -101,6 +101,7 @@ public sealed class ClientContext
         Viewmodel = new OwnViewmodel(this);
         Sound = new ClientSound(this);
         Cars = new ClientCars(this);
+        Remotes = new RemotePlayers(this);
     }
 
     public double Now => Time.GetTicksMsec() / 1000.0;
@@ -110,6 +111,8 @@ public sealed class ClientContext
     /// <summary>Where a player stands: the local one at the camera's body, another at their drawn node; null when not known.</summary>
     public Vector3? PositionOf(ushort id) => id == MyId ? Me?.GlobalPosition : Remotes.TryGetValue(id, out var r) ? r.Node.GlobalPosition : null;
     public bool MenuIsOpen => MenuOpen?.Invoke() == true;
+    /// <summary>The interact key is held (not while the mouse is released for a menu).</summary>
+    public bool InteractHeld => Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
 
     /// <summary>
     /// The node under <see cref="World"/> that holds everything this client adds to the persistent world (effects, pools, corpses, crates, turrets, aircraft, missiles,
