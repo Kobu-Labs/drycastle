@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Client;
 using Drycastle.Shooter.Net.Server;

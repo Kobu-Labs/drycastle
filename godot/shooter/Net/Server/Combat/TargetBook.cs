@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Weapons;
 

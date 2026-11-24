@@ -1,11 +1,9 @@
-using Godot;
-using Drycastle.Shooter.Vehicles;
-using Drycastle.ShooterCore.Net;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Drycastle.ShooterCore.Net;
 
-namespace Drycastle.Shooter.Net.Server;
+namespace Drycastle.Shooter.Net.Server.Diagnostics;
 
 /// <summary>
 /// Network audit for the perf harness (<c>--perf-out DIR</c> only; null and free otherwise). Every 10 s one block is appended to
@@ -105,19 +103,5 @@ public sealed class PerfAudit
         System.IO.File.AppendAllText(_path, sb.ToString());
         _bytes.Clear(); Array.Clear(_subUs); _types.Clear(); _typeNear.Clear(); _typePairs.Clear(); Array.Clear(_playerNear);
         _playerPairs = _ticks = _clientTicks = 0;
-    }
-}
-
-public partial class NetServer
-{
-    PerfAudit? _audit;
-    readonly List<System.Numerics.Vector3> _auditViewers = new();
-
-    void AuditTick(IReadOnlyList<WorldEntry> world)
-    {
-        if (_audit == null) return;
-        _auditViewers.Clear();
-        foreach (var c in _byId.Values) _auditViewers.Add(c.Body.GlobalPosition.ToNumerics());
-        _audit.Tick(world, _auditViewers, _clients.Values.Count(c => c.Joined), _elapsed);
     }
 }

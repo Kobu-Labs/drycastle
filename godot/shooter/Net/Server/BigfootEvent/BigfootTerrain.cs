@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Waters;

@@ -3,16 +3,21 @@ using System.Text;
 using Godot;
 using Drycastle.ShooterCore.Diagnostics;
 
-namespace Drycastle.Shooter.Net.Server;
+namespace Drycastle.Shooter.Net.Server.Diagnostics;
 
 /// <summary>
-/// The "server: prof" log lines, printed with the stats line every <see cref="ReportSeconds"/> seconds (always on; docs/shooter-server.md, "Performance log"):
+/// The "server: prof" log lines, printed with the stats line every <see cref="ServerHealth.ReportSeconds"/> seconds (always on; docs/shooter-server.md, "Performance log"):
 /// the scoped timers of <see cref="Prof"/>, the slowest tick of the period with its phases and scopes, the navigation worker, the CPU of every
 /// thread of the process and its memory. All <c>key=value</c>, so a log shipper can read them. The lines about the tick are only printed while
 /// somebody plays; the memory line always (it is what shows a leak on an empty server).
 /// </summary>
-public partial class NetServer
+internal sealed class ProfLines
 {
+    readonly ServerContext _ctx;
+    readonly TickPhases _phases;
+    readonly MetricsOut _metrics;
+    int _profReports;
+
     /// <summary>The slowest tick of the period: its length, its number and the microseconds of each of its phases.</summary>
     double _profWorstMs;
     uint _profWorstTick;
@@ -27,40 +32,42 @@ public partial class NetServer
     int _gcTicks;
     double _worstNoGcMs;
 
-    void ProfTickBegin()
+    public ProfLines(ServerContext ctx, TickPhases phases, MetricsOut metrics) { _ctx = ctx; _phases = phases; _metrics = metrics; }
+
+    /// <summary>Start of a tick: the collector's counters, for what falls in this tick.</summary>
+    public void TickBegin()
     {
         _tickGc0 = GC.CollectionCount(0); _tickGc1 = GC.CollectionCount(1); _tickGc2 = GC.CollectionCount(2);
         _tickPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds;
     }
-    int _profReports;
 
     /// <summary>End of a tick that took <paramref name="ms"/>: remembered when it is the slowest of the period.</summary>
-    void ProfTickEnd(double ms)
+    public void TickEnd(double ms)
     {
         var gc0 = GC.CollectionCount(0) - _tickGc0;
         if (gc0 > 0) _gcTicks++;
         else if (ms > _worstNoGcMs) _worstNoGcMs = ms;
         if (!Prof.TickEnd(ms)) return;
-        _profWorstMs = ms; _profWorstTick = _tick;
+        _profWorstMs = ms; _profWorstTick = _ctx.Tick;
         _worstGc0 = gc0; _worstGc1 = GC.CollectionCount(1) - _tickGc1; _worstGc2 = GC.CollectionCount(2) - _tickGc2;
         _worstPauseMs = GC.GetTotalPauseDuration().TotalMilliseconds - _tickPauseMs;
         for (var i = 0; i < _profWorstPhaseUs.Length; i++)
-            _profWorstPhaseUs[i] = i == (int)ServerPerf.Ph.Telemetry || _phaseUs[i].Count == 0 ? 0 : _phaseUs[i][^1]; // the telemetry phase of this tick is not over yet
+            _profWorstPhaseUs[i] = i == (int)ServerPerf.Ph.Telemetry || _phases.Us[i].Count == 0 ? 0 : _phases.Us[i][^1]; // the telemetry phase of this tick is not over yet
     }
 
     /// <summary>The period's lines, then the next period starts.</summary>
-    void ProfReport(double seconds)
+    public void Report(double seconds)
     {
         var inv = CultureInfo.InvariantCulture;
-        var active = _byId.Count > 0;
+        var active = _ctx.Players.Count > 0;
         var nav = Prof.Nav(seconds); // read (and cleared) every period
         var threads = ThreadCpu(seconds); // likewise: the baseline moves every period
         if (active)
         {
             var scopes = Prof.Scopes(seconds);
             GD.Print("server: prof scopes ms/s|calls/s|kb/s " + scopes);
-            Metrics?.Tagged("drycastle_scope", "scope", scopes, "ms_s", "calls_s", "kb_s");
-            Metrics?.Begin("drycastle_worst_tick").Field("ms", _profWorstMs).Field("gc_pause_ms", _worstPauseMs).Field("ticks_with_gc", _gcTicks).Field("without_gc_ms", _worstNoGcMs).End();
+            _metrics.Batch?.Tagged("drycastle_scope", "scope", scopes, "ms_s", "calls_s", "kb_s");
+            _metrics.Batch?.Begin("drycastle_worst_tick").Field("ms", _profWorstMs).Field("gc_pause_ms", _worstPauseMs).Field("ticks_with_gc", _gcTicks).Field("without_gc_ms", _worstNoGcMs).End();
             var sb = new StringBuilder();
             for (var i = 0; i < _profWorstPhaseUs.Length; i++)
             {
@@ -70,29 +77,28 @@ public partial class NetServer
             GD.Print($"server: prof worst tick={_profWorstTick} ms={_profWorstMs.ToString("F2", inv)} gc0={_worstGc0} gc1={_worstGc1} gc2={_worstGc2} gc_pause_ms={_worstPauseMs.ToString("F1", inv)}" +
                 $" ticks_with_gc={_gcTicks} worst_without_gc_ms={_worstNoGcMs.ToString("F2", inv)} phases_us{sb} | scopes_us {Prof.Worst()}");
             var al = new StringBuilder();
-            for (var i = 0; i < _phaseAlloc.Length; i++)
+            for (var i = 0; i < _phases.Alloc.Length; i++)
             {
-                var kb = _phaseAlloc[i] / 1000.0 / Math.Max(seconds, 1e-3);
+                var kb = _phases.Alloc[i] / 1000.0 / Math.Max(seconds, 1e-3);
                 if (kb < 1) continue;
                 al.Append(' ').Append(((ServerPerf.Ph)i).ToString().ToLowerInvariant()).Append('=').Append(kb.ToString("F0", inv));
             }
             GD.Print("server: prof alloc kb/s" + al);
             GD.Print("server: prof nav ms/s|calls/s " + nav);
-            Metrics?.Tagged("drycastle_phase", "phase", al.ToString(), "alloc_kb_s");
-            Metrics?.Tagged("drycastle_nav", "what", nav, "ms_s", "calls_s");
+            _metrics.Batch?.Tagged("drycastle_phase", "phase", al.ToString(), "alloc_kb_s");
+            _metrics.Batch?.Tagged("drycastle_nav", "what", nav, "ms_s", "calls_s");
         }
         if (threads.Length > 0 && (active || _profReports % 6 == 0)) GD.Print("server: prof threads cpu_pct " + threads);
         var mem = MemoryLine(seconds); var gc = GcLine();
         GD.Print("server: prof mem " + mem);
         GD.Print("server: prof gc " + gc);
-        if (threads.Length > 0) Metrics?.Tagged("drycastle_thread", "thread", threads, "cpu_pct");
-        Metrics?.Fields("drycastle_mem", mem);
-        Metrics?.Fields("drycastle_gc", gc);
-        MetricsFlush();
+        if (threads.Length > 0) _metrics.Batch?.Tagged("drycastle_thread", "thread", threads, "cpu_pct");
+        _metrics.Batch?.Fields("drycastle_mem", mem);
+        _metrics.Batch?.Fields("drycastle_gc", gc);
+        _metrics.Flush(_profReports);
         _profReports++;
         Prof.Reset();
         _profWorstMs = 0; _gcTicks = 0; _worstNoGcMs = 0;
-        Array.Clear(_phaseAlloc);
     }
 
     /// <summary>

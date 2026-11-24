@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Bunkers;
@@ -536,7 +537,7 @@ public partial class NetClient : Node
         World.AddChild(Ctx.Me);
         _viewmodel.Create();
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
-        if (WeaponsBot != "" || CarBot != "" || _fxDemo.Mode.StartsWith("vehicle:")) NetServer.AddArenaColliders(World);
+        if (WeaponsBot != "" || CarBot != "" || _fxDemo.Mode.StartsWith("vehicle:")) SmokeArena.AddColliders(World);
         if (Bot) Ctx.Me.InputOverride = new MoveInput { SpeedScale = 1 };
         HudWelcome();
         OnWelcomed?.Invoke();

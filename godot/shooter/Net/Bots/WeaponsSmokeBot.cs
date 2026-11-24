@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.ShooterCore.Match;
@@ -35,7 +36,7 @@ public sealed class WeaponsSmokeBot : ArenaBot
 
     protected override IEnumerable<int> Alice()
     {
-        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        var c = new NVec3(SmokeArena.X, 0, SmokeArena.Z);
         foreach (var x in WaitFor(() => Ctx.Match.Rows.Any(r => r.Name == "bob"), 15, "bob to join")) yield return x;
         BobId = Ctx.Match.Rows.First(r => r.Name == "bob").Id;
         foreach (var x in WaitBobAlive()) yield return x;

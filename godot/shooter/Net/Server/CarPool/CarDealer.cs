@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Flight;
 using Drycastle.Shooter.Net.Server.BusGarage;
@@ -50,7 +51,7 @@ internal sealed class CarDealer
     void AddSmokeArenaSpots(List<(NVec3 Pos, float Yaw, int Kind)> spots)
     {
         var kind = _vehicles.Vehicles.FindIndex(v => v.Id == _smokeKind);
-        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        var c = new NVec3(SmokeArena.X, 0, SmokeArena.Z);
         if (_blastSmoke)
         {
             // car 0 is shot to pieces, car 1 stands 6 m beside it (chain damage, survives), car 2 is far away (rocket target, never in a blast)

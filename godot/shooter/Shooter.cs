@@ -486,7 +486,7 @@ public partial class Shooter : Node3D
         _progression = Drycastle.ShooterServer.Persistence.ProgressionStores.Open(dbPath, s => GD.PrintErr(s), _data.Levels.Curve);
         GD.Print($"server: progression db {Drycastle.ShooterServer.Persistence.ProgressionStores.Describe(dbPath)}");
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
-        var server = new NetServer
+        var config = new ServerConfig
         {
             World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
@@ -506,20 +506,21 @@ public partial class Shooter : Node3D
             AllowSandbox = cfg.Flag("allow-sandbox"),
             AdminAll = cfg.Flag("admin-all"),
             AdminTokens = new HashSet<string>(cfg.Str("admin-token").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.OrdinalIgnoreCase),
-            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, NetServer.MaxBots) : 0,
+            Bots = int.TryParse(cfg.Str("bots", "0"), out var bots) ? Math.Clamp(bots, 0, ServerConfig.MaxBots) : 0,
             ClusterSpawns = cfg.Flag("cluster-spawns"),
             PerfOut = cfg.Str("perf-out"), PerfLagComp = cfg.Flag("perf-lagcomp"), NoLagComp = cfg.Flag("no-lagcomp"),
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
-        if (server.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
-        if (server.AdminTokens.Count > 0) GD.Print($"server: {server.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
-        if (server.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
-        if (server.Bots > 0) GD.Print($"server: {server.Bots} bots join while a player is in the match (--bots, #214)");
-        if (server.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
-        if (server.Sim != null) GD.Print($"server: net-sim {server.Sim}");
+        var server = new NetServer { Config = config };
+        if (config.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
+        if (config.AdminTokens.Count > 0) GD.Print($"server: {config.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
+        if (config.AllowSandbox) GD.Print("server: sandbox mode allowed (--allow-sandbox, #156)");
+        if (config.Bots > 0) GD.Print($"server: {config.Bots} bots join while a player is in the match (--bots, #214)");
+        if (config.UnlockAll) GD.Print("server: dev mode, every unlock on (not saved to the database)");
+        if (config.Sim != null) GD.Print($"server: net-sim {config.Sim}");
         // The dedicated server idles at the tick rate instead of spinning a core; the test modes release delayed packets at frame rate.
-        Engine.MaxFps = server.LossTest > 0 || server.Sim != null ? 200 : 60;
+        Engine.MaxFps = config.LossTest > 0 || config.Sim != null ? 200 : 60;
         Engine.MaxPhysicsStepsPerFrame = 2; // a slow tick drops simulation time instead of spiralling
         AddChild(server);
     }

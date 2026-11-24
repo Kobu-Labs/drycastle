@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.ShooterCore.Movement;
@@ -35,7 +36,7 @@ public sealed class BlastSmokeBot : ArenaBot
 
     protected override IEnumerable<int> Alice()
     {
-        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        var c = new NVec3(SmokeArena.X, 0, SmokeArena.Z);
         var car0 = VehicleRecord.FirstId; var car1 = (ushort)(car0 + 1); var car2 = (ushort)(car0 + 2);
         foreach (var x in WaitFor(() => Ctx.Match.Rows.Any(r => r.Name == "bob") && Host.Cars.Count() >= 3, 15, "bob to join and the cars to appear")) yield return x;
         BobId = Ctx.Match.Rows.First(r => r.Name == "bob").Id;

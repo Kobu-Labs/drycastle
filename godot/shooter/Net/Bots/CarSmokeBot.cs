@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Diagnostics;
 using Godot;
 using Drycastle.Shooter.Net.Server;
 using Drycastle.ShooterCore.Match;
@@ -64,7 +65,7 @@ public sealed class CarSmokeBot : SmokeBot
 
     IEnumerable<int> Alice()
     {
-        var c = new NVec3(NetServer.ArenaX, 0, NetServer.ArenaZ);
+        var c = new NVec3(SmokeArena.X, 0, SmokeArena.Z);
         var carId = VehicleRecord.FirstId;
         foreach (var x in WaitFor(() => Ctx.Match.Rows.Any(r => r.Name == "bob") && Host.Cars.Count() >= 3, 15, "bob to join and the cars to appear")) yield return x;
         Check(Host.Cars.Count() == 3 && Host.Cars.Select(v => v.Node).Distinct().Count() == 3, "three vehicle entities in the snapshots");
