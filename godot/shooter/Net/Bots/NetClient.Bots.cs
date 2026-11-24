@@ -89,20 +89,16 @@ public partial class NetClient : IBotHost
     int IBotHost.DriveCorrections => _driveClient.Corrections;
 
     (double Received, double Sent) IBotHost.PopTraffic() =>
-        (_conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _conn.PopStatistic(ENetConnection.HostStatistic.SentData));
+        (_server.Conn.PopStatistic(ENetConnection.HostStatistic.ReceivedData), _server.Conn.PopStatistic(ENetConnection.HostStatistic.SentData));
 
     void IBotHost.Leave() => _link.Enter(LinkPhase.Left);
     void IBotHost.Quit(bool ok) => GetTree().Quit(ok ? 0 : 2);
 
-    void IBotHost.SendMic(byte[] packet) => SendMic(packet);
+    void IBotHost.SendMic(byte[] packet) => _server.SendMic(packet);
     void IBotHost.SendChat(string text) => Chat.Send(text);
     bool IBotHost.SandboxGranted => Sandbox.Granted;
     AmmoMsg? IBotHost.Ammo => Ctx.Ammo;
 
-    void SendMic(byte[] packet)
-    {
-        if (_peer != null) Tx(_peer, Wire.ChanRozhlasFeed, packet, 0);
-    }
 
     BotCar AsBotCar(CarView v) => new(v.Id, v.Kind, v.Driver, v.Pos, v.Kmh, v.Stage, v.Destroyed, v.Exploded, v.Node, _driveClient.DefOf(v) != null);
 }

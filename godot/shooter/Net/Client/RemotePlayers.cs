@@ -30,12 +30,13 @@ public sealed class RemotePlayers : IEnumerable<KeyValuePair<ushort, RemotePlaye
     public Func<ushort, string, string> NameTag = (_, name) => name;
 
     public int Count => _byId.Count;
-    public IEnumerable<RemotePlayer> Values => _byId.Values;
+    public Dictionary<ushort, RemotePlayer>.ValueCollection Values => _byId.Values;
     public bool TryGetValue(ushort id, out RemotePlayer player) => _byId.TryGetValue(id, out player!);
     public bool ContainsKey(ushort id) => _byId.ContainsKey(id);
 
-    public IEnumerator<KeyValuePair<ushort, RemotePlayer>> GetEnumerator() => _byId.GetEnumerator();
-    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+    public Dictionary<ushort, RemotePlayer>.Enumerator GetEnumerator() => _byId.GetEnumerator();
+    IEnumerator<KeyValuePair<ushort, RemotePlayer>> IEnumerable<KeyValuePair<ushort, RemotePlayer>>.GetEnumerator() => _byId.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => _byId.GetEnumerator();
 
     /// <summary>One player's record of the newest snapshot: the figure is made when it is the first, then its state and position are taken.</summary>
     public void OnRecord(ushort id, EntityRecord rec, uint tick)

@@ -61,7 +61,7 @@ public partial class NetClient : Node
     string? _rejectReason;
     public bool Bot { get => Ctx.Bot; set => Ctx.Bot = value; }
     /// <summary>Network impairment for the loss and latency test (--net-sim); null = none.</summary>
-    public NetSim? Sim;
+    public NetSim? Sim { get => _server.Sim; set => _server.Sim = value; }
     public bool Headless;
     public float KillY = float.NegativeInfinity;
     /// <summary>The map's water (water.json), shared with the prediction so swimming matches the server.</summary>
@@ -87,8 +87,7 @@ public partial class NetClient : Node
     /// <summary>Dev aid (<c>--fx-demo</c>, set by the host): see <see cref="FxDemoClient"/>.</summary>
     public string FxDemo { get => _fxDemo.Mode; set => _fxDemo.Mode = value; }
 
-    readonly ENetConnection _conn = new();
-    ENetPacketPeer? _peer;
+    readonly ServerLink _server = new();
     /// <summary>The link to the server (Client.Link): connecting, welcomed, spawned (own snapshot applied), failed, left. Replaces the old welcomed/gotSelf/done flags.</summary>
     readonly StateMachine<LinkPhase> _link = new(ConnectionPhases.Link);
     /// <summary>A welcome was received at some point (it stays true after a failure or a leave: the perf and telemetry output still flush, and Fail tells the menu whether the match was joined).</summary>
@@ -229,7 +228,7 @@ public partial class NetClient : Node
 
     public NetClient()
     {
-        Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
+        Ctx = new ClientContext(this) { Send = _server.Send, Connected = () => _server.Peer != null, SendJoined = m => _welcomed && _server.SendNow(m) };
         Ctx.View.OnTurret = () => _aircraftClient.AtTurret;
         Ctx.View.ScudScreen = () => _scud.ScreenOn;
         Ctx.View.Controlling = () => _missile.Controlling;
@@ -243,14 +242,14 @@ public partial class NetClient : Node
         _markers = new EnemyChestPoints(Ctx);
         Sandbox = new SandboxClient(Ctx);
         Ctx.Remotes.NameTag = Sandbox.NameTag;
-        Report = new ReportClient(Ctx, _conn, () => !Bot && !LinkEnded && _welcomed, () => _peer, () => _elapsed);
+        Report = new ReportClient(Ctx, _server.Conn, () => !Bot && !LinkEnded && _welcomed, () => _server.Peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
         _poop = new PoopClient(Ctx);
         _headLamps = new HeadLampClient(Ctx);
-        _rozhlas = new RozhlasClient(Ctx, SendMic);
+        _rozhlas = new RozhlasClient(Ctx, _server.SendMic);
         _blastDust = new BlastDustClient(Ctx);
         _impacts = new ImpactsClient(Ctx);
         _targets = new TargetsClient(Ctx, Sandbox, _blastDust);
@@ -278,8 +277,8 @@ public partial class NetClient : Node
         _streaks.Ended += id => _missile.OnStreakEnded(id);
         _streaks.OwnerDied += () => { _missile.OnOwnerDied(); _uav.Ended(); };
         _streaks.Gunner.HintsChanged += () => _aircraftClient.MarkDirty();
-        _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _peer);
-        _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _peer, Ctx.Snapshots);
+        _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _server.Peer);
+        _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _server.Peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
         _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
         _tow = new TowClient(Ctx, _driveClient);
@@ -339,17 +338,14 @@ public partial class NetClient : Node
         _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
         Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); _harvester.RoundRestart(); };
-        var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
-        if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
-        _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
-        if (_peer == null) { Fail("ConnectToHost failed"); return; }
+        if (_server.Connect(Host, Port) is { } failure) { Fail(failure); return; }
         GD.Print($"client: connecting to {Host}:{Port} as {PlayerName}");
     }
 
     public override void _ExitTree()
     {
         _session.Close();
-        _conn.Destroy();
+        _server.Destroy();
         FreeOwned(); // also when the client leaves without Teardown
     }
 
@@ -366,7 +362,7 @@ public partial class NetClient : Node
         foreach (var r in Ctx.Rockets.Values) r.Snd?.Release();
         Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
-        if (_peer != null) { _peer.PeerDisconnect(); _conn.Flush(); _peer = null; }
+        _server.Disconnect();
         Ctx.Remotes.Clear();
         foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
         Ctx.Rockets.Clear();
@@ -425,37 +421,15 @@ public partial class NetClient : Node
         GetTree().Quit(2);
     }
 
-    /// <summary>Sends one reliable event to the server (<see cref="ClientContext.Send"/>).</summary>
-    void SendEvent(EventKind kind, byte[] payload)
-    {
-        if (_peer == null) return;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)kind, payload)), (int)ENetPacketPeer.FlagReliable);
-    }
-
-    void Tx(ENetPacketPeer peer, int chan, byte[] data, int flags)
-    {
-        if (Sim != null) Sim.Send(peer, chan, data, flags); else peer.Send(chan, data, flags);
-    }
-
-    /// <summary>Sends a reliable message at once, flushed; false when not connected or no welcome has come.</summary>
-    bool SendNow(ReliableMsg m)
-    {
-        if (_peer == null || !_welcomed) return false;
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(m), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
-        return true;
-    }
-
     /// <summary>
     /// The player's own Respawn (#284): the server kills them as a suicide and the normal respawn applies the loadout. <paramref name="slot"/> is selected
     /// first (null keeps the active one); unsent loadout edits go out ahead of it, so "apply now" uses what is on screen.
     /// </summary>
     public void Redeploy(int? slot)
     {
-        if (_peer == null || !_welcomed || Dead) return;
+        if (_server.Peer == null || !_welcomed || Dead) return;
         Loadouts.FlushAutosave();
-        Tx(_peer, Wire.ChanReliable, Wire.Encode(new EventMsg((byte)EventKind.Redeploy, Drycastle.ShooterCore.Match.Redeploy.Encode(slot))), (int)ENetPacketPeer.FlagReliable);
-        _conn.Flush();
+        _server.SendNow(new EventMsg((byte)EventKind.Redeploy, Drycastle.ShooterCore.Match.Redeploy.Encode(slot)));
     }
 
     public override void _Process(double delta)
@@ -463,12 +437,12 @@ public partial class NetClient : Node
         _session.Frame(delta);
         _perf.Frame(delta);
         Report.Frame(delta);
-        if (Sim != null && Sim.Pump()) _conn.Flush(); // delayed packets go out at frame rate, not only on physics ticks
+        _server.Pump();
         if (LinkEnded) return;
         _screens.UpdateMapCursor();
         if (_volumes.On) _volumes.Update();
         var t = ClientProf.Begin();
-        Poll();
+        _server.Poll(() => new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, Sandbox.Requested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0), OnServerGone, OnPacket);
         t = ClientProf.Lap(ClientProf.S.Net, t);
         if (_link.Is(LinkPhase.Connecting))
         {
@@ -561,28 +535,9 @@ public partial class NetClient : Node
         FadeOwnCorrection(delta);
     }
 
-    void Poll()
+    void OnServerGone()
     {
-        for (var guard = 0; guard < 10000; guard++)
-        {
-            var r = _conn.Service(0);
-            var ev = (ENetConnection.EventType)(long)r[0];
-            if (ev is ENetConnection.EventType.None or ENetConnection.EventType.Error) break;
-            var peer = (ENetPacketPeer)r[1].AsGodotObject();
-            switch (ev)
-            {
-                case ENetConnection.EventType.Connect:
-                    Tx(peer, Wire.ChanReliable, Wire.Encode(new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, Sandbox.Requested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0)), (int)ENetPacketPeer.FlagReliable);
-                    _conn.Flush();
-                    break;
-                case ENetConnection.EventType.Disconnect:
-                    if (!LinkEnded) Fail(_rejectReason ?? "server disconnected");
-                    return;
-                case ENetConnection.EventType.Receive:
-                    while (peer.GetAvailablePacketCount() > 0) OnPacket(peer.GetPacket());
-                    break;
-            }
-        }
+        if (!LinkEnded) Fail(_rejectReason ?? "server disconnected");
     }
 
     void OnPacket(byte[] d)
@@ -722,7 +677,7 @@ public partial class NetClient : Node
 
     public override void _PhysicsProcess(double delta)
     {
-        if (LinkEnded || !_welcomed || Ctx.Me == null || _peer == null) return;
+        if (LinkEnded || !_welcomed || Ctx.Me == null || _server.Peer == null) return;
         _elapsed += delta;
         _rozhlasTest?.Tick();
         if (_bot != null && _elapsed >= BotSeconds && _bot.TimedOut()) return;
@@ -780,8 +735,7 @@ public partial class NetClient : Node
     /// <summary>Sends the newest three inputs (loss cover); they name the entity and world ticks they follow (the server's delta baselines).</summary>
     void SendInputs()
     {
-        Tx(_peer!, Wire.ChanData, Wire.EncodeInputs(_prediction.Recent(3), Ctx.Snapshots.AckTick, WorldEntities.AckTick), 0);
-        _conn.Flush();
+        _server.SendInputs(Wire.EncodeInputs(_prediction.Recent(3), Ctx.Snapshots.AckTick, WorldEntities.AckTick));
     }
 
     public override void _UnhandledInput(InputEvent e)
