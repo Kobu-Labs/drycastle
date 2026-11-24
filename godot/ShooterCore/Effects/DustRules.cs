@@ -14,7 +14,7 @@ public readonly record struct DustBlast(Vector3 At, float Radius, double Born, f
 /// rises and thins), and a large one (<see cref="HasFront"/>) also sends a Blast wave along the ground: a wall of dust that slows down
 /// as it runs out to <see cref="FrontReach"/>. Everything is a function of the blast (centre, radius, start) and the time, so every
 /// client that got the blast event shows the same cloud and no net state is added. The particles (<c>DustFx</c>), the screen veil
-/// (<c>Hud.Dust</c>) and the late sound and shake (<c>NetClient.Dust</c>) all read these numbers, so they cannot drift apart.
+/// (<c>DustVeil</c>) and the late sound and shake (<c>NetClient.Dust</c>) all read these numbers, so they cannot drift apart.
 /// Visual only: no shot, blast or bot's sight is stopped by dust.
 /// The tuning is the constants at the top.
 /// </summary>

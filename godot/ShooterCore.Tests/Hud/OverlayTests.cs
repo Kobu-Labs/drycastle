@@ -45,7 +45,7 @@ public class OverlayTests
     public void Screen_taken_is_the_old_MapBlocked(int i)
     {
         var c = Ctx(i);
-        Assert.Equal(c.Dead || c.Ending || c.ControlMode, OverlayArbiter.ScreenTaken(c)); // Hud.TacticalMap.cs MapBlocked
+        Assert.Equal(c.Dead || c.Ending || c.ControlMode, OverlayArbiter.ScreenTaken(c)); // OverlayScreens.Tick
     }
 
     [Theory, MemberData(nameof(Contexts))]

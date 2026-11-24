@@ -563,7 +563,7 @@ items, ADR 0018 (#267, protocol 31).
   keeps it on the player (the round's corpses and ground items, and any item on them, go); a reconnect starts bare.
 - **HUD.** Nothing on the HUD shows Items (the "Headgear / name" chip beside the health bar is gone): what is worn and carried is the Equipment screen's.
 - **The Equipment screen (#268).** F (rebindable action `inventory`, default F, saved with the other controls) opens it; F and Esc close it. A non-pausing
-  overlay in the HUD like the tactical map (`EquipmentScreen`, `Hud.Equipment.cs`): the mouse is released, the movement keys still work
+  overlay in the HUD like the tactical map (`EquipmentScreen`, `OverlayScreens.cs`): the mouse is released, the movement keys still work
   (`Player.MoveWithFreeMouse`: move, jump, sprint, crouch, prone), firing and the other keys do not. It opens on foot and in a vehicle seat, never in a turret or
   missile view, and closes on death, at the end of the match and when a menu or the corpse chooser opens. No title, labels, buttons or explanation text.
   The figure (`CamoPreview`, the player's Camouflage, worn Items drawn) is in the middle, the headgear slot above its head (an empty slot shows the ghost

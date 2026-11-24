@@ -24,7 +24,7 @@ public static class HudShots
             var vp = new SubViewport { Size = size, OwnWorld3D = true, RenderTargetUpdateMode = SubViewport.UpdateMode.Always };
             host.AddChild(vp);
             Backdrop(vp);
-            var hud = new Hud { MyId = 1, MouseModeOverride = Input.MouseModeEnum.Captured, Spread = () => 2.5f };
+            var hud = new Hud { MyId = 1, Spread = () => 2.5f };
             vp.AddChild(hud);
             await Frames(host, 3);
             foreach (var state in new[] { "play", "protected", "respawn", "roundend" })
