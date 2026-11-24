@@ -17,61 +17,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>Weapons: the slot keys, the scope, the viewmodel and the weapon events (ammo, shots, launches, explosions, hits).</summary>
 public partial class NetClient
 {
-    /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
-    void UpdateViewmodel()
-    {
-        var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
-        var id = _thrower.HeldId() ?? (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
-        _viewmodel.Show(id);
-        _viewmodel.Visible = Mode.ShowsViewmodel && !_flings.OwnFlung && Ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
-    }
-
-    /// <summary>Movement speed multiplier of the weapon in <paramref name="slot"/> (0: none, 1.0), times the run speed of <see cref="Perks"/>. The server applies the same value.</summary>
-    float SpeedFor(byte slot) =>
-        (Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].MoveSpeedMultiplier : 1f) * Loadouts.Perks.RunSpeed;
-
-    /// <summary>This player's perk values, mirroring the server's copy for prediction. Neutral until the loadout ticket sets them.</summary>
-
-    /// <summary>Holding zoom with a scoped weapon (sniper) narrows the camera; never while dead or with the mouse released.</summary>
-    void ApplyScope()
-    {
-        if (Ctx.Me == null || _aircraftClient.AtTurret || _scud.ScreenOn) return; // at a turret the zoom is the gunship's; on a Scud screen it is the screen's
-        if (Mode.ScopeSuppressed)
-        {
-            // seated (roof/door gun, turret, any seat) or steering a missile: the held weapon's scope and iron-sight zoom stay off (#241)
-            Ctx.Me.ZoomFov = 0f; Ctx.Me.IronSightZoom = false;
-            _viewmodel.Aiming = false;
-            _binoculars.Lower();
-            return;
-        }
-        if (_binoculars.Tick()) return; // raised binoculars are the zoom: no scope, no iron sights
-        var slot = Ammo?.Slot ?? Ctx.Hotbar.Want;
-        var zoom = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].ZoomFov : 0f;
-        var on = zoom > 0 && !Dead && !_pounce.Pinned && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        Ctx.Me.ZoomFov = on ? zoom : 0f;
-        // iron sights: any non-scoped, non-melee weapon while zoom is held
-        var kind = Weapons != null && slot >= 1 && slot <= Weapons.Weapons.Count ? Weapons.Weapons[slot - 1].Kind : WeaponKind.Melee;
-        _viewmodel.Aiming = zoom <= 0 && kind != WeaponKind.Melee && !Dead && (!Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle || Ctx.View.InArmedSeat)
-                && Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("zoom");
-        Ctx.Me.IronSightZoom = _viewmodel.Aiming;
-    }
-
-    /// <summary>At a turret the slot sent is the key held (1-5, 0 none), not the body's hotbar weapon: the turret reads it as its weapon number (the AC-130's 1-3).</summary>
-    byte TurretKey()
-    {
-        if (Dead || Input.MouseMode != Input.MouseModeEnum.Captured) return 0;
-        for (var k = 0; k < 5; k++)
-            if (Input.IsActionPressed($"slot_{k + 1}")) return (byte)(k + 1);
-        return 0;
-    }
-
-    void ReadSlotKeys()
-    {
-        if (!Mode.HotbarKeysLive || Input.MouseMode != Input.MouseModeEnum.Captured || _loot.ChooserOpen) return; // seated, the number keys are the seats' (HandleSeatInput)
-        for (var k = 0; k < Math.Min(5, Ctx.Hotbar.Slots.Length); k++)
-            if (Input.IsActionPressed($"slot_{k + 1}")) Ctx.Hotbar.Want = Ctx.Hotbar.Slots[k] + 1;
-    }
-
     /// <summary>One reliable event, to the weapon features: the fire and its answers first, then the blasts and the other effects (a kind is only one of them).</summary>
     void OnWeaponEvent(EventKind kind, byte[] payload)
     {
@@ -88,7 +33,7 @@ public partial class NetClient
                 Ctx.Ammo = a;
                 _weapon.OnAmmo(a);
                 Ctx.Sound.Ammo(a, _weapon.ReloadUntil);
-                HudAmmo();
+                _hud.Ammo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
                 _blips.Add(sh.Shooter, sh.Weapon, sh.Origin);
@@ -107,7 +52,7 @@ public partial class NetClient
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
                 Ctx.Logs?.Hits.Add((Ctx.Now, h));
                 Ctx.Sound.Hit(h);
-                HudHit(h);
+                _hud.OnHit(h);
                 break;
         }
     }
@@ -122,7 +67,7 @@ public partial class NetClient
                 _rockets.OnExplosion(ex);
                 break;
             case EventKind.VehicleExplosion when WeaponCodec.DecodeVehicleExplosion(payload) is { } vx:
-                OnVehicleExplosion(vx);
+                _vehicles.OnExplosion(vx);
                 break;
             case EventKind.Moab when MoabEvents.Decode(payload) is { } mo:
                 _moab.OnMoab(mo);

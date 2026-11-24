@@ -74,10 +74,10 @@ public partial class NetClient : IBotHost
     BotCar? IBotHost.Car(ushort id) => Ctx.Cars.TryGet(id, out var v) ? AsBotCar(v) : null;
     IEnumerable<BotRemote> IBotHost.Remotes => Ctx.Remotes.Values.Select(r => new BotRemote(r.State, r.LastPos));
     int IBotHost.RocketCount => Ctx.Rockets.Count;
-    VehiclesFile? IBotHost.Vehicles => Vehicles;
+    VehiclesFile? IBotHost.Vehicles => Ctx.Vehicles;
     int IBotHost.Snaps => _snaps;
     int IBotHost.Recon => Ctx.Reconciles;
-    float IBotHost.MaxErr => _maxErr;
+    float IBotHost.MaxErr => _reconcile.MaxErr;
     uint IBotHost.LastTick => Ctx.LastTick;
     double IBotHost.LastArrival => _lastArrival;
     ushort IBotHost.Seq => _seq;

@@ -1,12 +1,9 @@
 using Godot;
-using Drycastle.Shooter.Characters;
-using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Match;
-using Drycastle.ShooterCore.Waters;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -17,8 +14,16 @@ namespace Drycastle.Shooter.Net.Client;
 /// (<see cref="Hud.SetBlood"/>, <see cref="Hud.SetRespawnScrim"/>). The camera goes through one composer (<see cref="ComposedCamera"/>) with the demon's pounce camera: a death while pinned
 /// starts from the pounce camera's pose of that frame, so nothing snaps. The own corpse (a server entity, drawn on this client too) is hidden while the camera lies where it fell.
 /// </summary>
-public partial class NetClient
+internal sealed class DeathView
 {
+    readonly ClientContext _ctx;
+    readonly PounceClient _pounce;
+    readonly CorpsesClient _corpses;
+    /// <summary>How many times the local player died on this connection (the blood on the screen is a different one each time).</summary>
+    int _count;
+
+    public DeathView(ClientContext ctx, PounceClient pounce, CorpsesClient corpses) { _ctx = ctx; _pounce = pounce; _corpses = corpses; }
+
     readonly DeathPresentation _death = new();
     /// <summary>The camera's pose at the first frame of a fall (the pounce camera's, when pinned) and the ground height below it; null until that frame.</summary>
     Transform3D? _deathFrom;
@@ -29,38 +34,39 @@ public partial class NetClient
     Quaternion? _deathLook;
 
     /// <summary>The death of the local player: choose how it looks from what the player was doing until now, and start it.</summary>
-    void BeginDeathView(float respawnDelay, DeathFlight flight = DeathFlight.None)
+    public void Begin(float respawnDelay, DeathFlight flight = DeathFlight.None)
     {
-        var before = (Mode with { Dead = false }).Resolve();
+        _count++;
+        var before = (_ctx.View.Mode with { Dead = false }).Resolve();
         var underwater = false;
-        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me) && Water.Bodies.Count > 0)
+        if (_ctx.Me != null && GodotObject.IsInstanceValid(_ctx.Me) && _ctx.Water.Bodies.Count > 0)
         {
-            var eye = Ctx.Me.Camera.GlobalPosition;
-            underwater = Water.DepthAt(new NVec3(eye.X, eye.Y, eye.Z)) > 0f;
+            var eye = _ctx.Me.Camera.GlobalPosition;
+            underwater = _ctx.Water.DepthAt(new NVec3(eye.X, eye.Y, eye.Z)) > 0f;
         }
-        _death.Begin(DeathPresentation.Plan(before, underwater, drowned: false, GameSettings.Current.ReduceMotion, respawnDelay, _deaths, flight));
+        _death.Begin(DeathPresentation.Plan(before, underwater, drowned: false, GameSettings.Current.ReduceMotion, respawnDelay, _count, flight));
         _deathFrom = null;
         _deathLook = null;
     }
 
     /// <summary>The spawn: the death screen is over, the camera, the corpse and the overlays go back at once (the HUD hides its scrim itself).</summary>
-    void EndDeathView()
+    public void End()
     {
         _death.End();
         _deathFrom = null;
         _deathLook = null;
-        Ctx.Hud?.SetBlood(0);
+        _ctx.Hud?.SetBlood(0);
     }
 
     /// <summary>Every frame: the clock, the overlays, the own corpse. Runs before <see cref="UpdatePounce"/>.</summary>
-    void UpdateDeath(double delta)
+    public void Update(double delta)
     {
-        if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.CutCamera ??= ComposedCamera;
+        if (_ctx.Me != null && GodotObject.IsInstanceValid(_ctx.Me)) _ctx.Me.CutCamera ??= ComposedCamera;
         _death.Tick((float)delta);
         if (_death.Active)
         {
-            Ctx.Hud?.SetBlood(_death.BloodNow, _deaths);
-            Ctx.Hud?.SetRespawnScrim(_death.ScrimNow);
+            _ctx.Hud?.SetBlood(_death.BloodNow, _count);
+            _ctx.Hud?.SetRespawnScrim(_death.ScrimNow);
         }
         var hide = _death.HidesOwnCorpse;
         if (_deathHidesCorpse.Update(hide) || hide) _corpses.ShowOwn(!hide);
@@ -105,12 +111,12 @@ public partial class NetClient
             from = pose;
             var back = from.Basis.Z; // the view looks along -Z: +Z is behind it
             var room = 1f;
-            if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me) && Ctx.Me.IsInsideTree())
+            if (_ctx.Me != null && GodotObject.IsInstanceValid(_ctx.Me) && _ctx.Me.IsInsideTree())
             {
                 var q = PhysicsRayQueryParameters3D.Create(from.Origin, from.Origin + back * (DeathPresentation.ThrownBackM + 0.3f));
                 q.CollisionMask = CollisionLayers.OnFoot;
-                q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
-                var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+                q.Exclude = new Godot.Collections.Array<Rid> { _ctx.Me.GetRid() };
+                var hit = _ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
                 if (hit.Count > 0) room = Mathf.Clamp((from.Origin.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.ThrownBackM, 0f, 1f);
             }
             from.Origin += back * (DeathPresentation.ThrownBackM * room) + Vector3.Up * DeathPresentation.ThrownUpM * room;
@@ -124,7 +130,7 @@ public partial class NetClient
             var yawNow = look.GetEuler(EulerOrder.Yxz).Y;
             var (yaw, pitch) = DeathPresentation.ThrownAim(dir.X, dir.Y, dir.Z, yawNow); // never LookingAt: a body straight above is collinear with Up
             var aim = Quaternion.FromEuler(new Vector3(pitch, yaw, 0));
-            look = look.Slerp(aim, DeathPresentation.PanBlend((float)GetProcessDeltaTime(), look.AngleTo(aim)));
+            look = look.Slerp(aim, DeathPresentation.PanBlend((float)_ctx.Root.GetProcessDeltaTime(), look.AngleTo(aim)));
         }
         _deathLook = look;
         return new Transform3D(new Basis(look), from.Origin);
@@ -133,12 +139,12 @@ public partial class NetClient
     /// <summary>How much of a fall's travel (forward or back) fits before a wall: 0..1 (a body that falls against a wall does not push the view into it).</summary>
     float PushRoom(Vector3 from, Vector3 forward, FallKind kind)
     {
-        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me) || !Ctx.Me.IsInsideTree()) return 1f;
+        if (_ctx.Me == null || !GodotObject.IsInstanceValid(_ctx.Me) || !_ctx.Me.IsInsideTree()) return 1f;
         var dir = kind == FallKind.Backward ? -forward : forward;
         var q = PhysicsRayQueryParameters3D.Create(from, from + dir * (DeathPresentation.MaxPushM + 0.3f));
         q.CollisionMask = CollisionLayers.OnFoot;
-        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
-        var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        q.Exclude = new Godot.Collections.Array<Rid> { _ctx.Me.GetRid() };
+        var hit = _ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
         if (hit.Count == 0) return 1f;
         return Mathf.Clamp((from.DistanceTo(hit["position"].AsVector3()) - 0.3f) / DeathPresentation.MaxPushM, 0f, 1f);
     }
@@ -146,11 +152,11 @@ public partial class NetClient
     /// <summary>The height of the ground (or a vehicle's roof) below <paramref name="from"/>: a ray down, so the camera never ends inside the floor. Without a hit, an eye's height lower.</summary>
     float GroundBelow(Vector3 from)
     {
-        if (Ctx.Me == null || !GodotObject.IsInstanceValid(Ctx.Me) || !Ctx.Me.IsInsideTree()) return from.Y - 1.5f;
+        if (_ctx.Me == null || !GodotObject.IsInstanceValid(_ctx.Me) || !_ctx.Me.IsInsideTree()) return from.Y - 1.5f;
         var q = PhysicsRayQueryParameters3D.Create(from, from + Vector3.Down * 6f);
         q.CollisionMask = CollisionLayers.OnFoot;
-        q.Exclude = new Godot.Collections.Array<Rid> { Ctx.Me.GetRid() };
-        var hit = Ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
+        q.Exclude = new Godot.Collections.Array<Rid> { _ctx.Me.GetRid() };
+        var hit = _ctx.Me.GetWorld3D().DirectSpaceState.IntersectRay(q);
         return hit.Count > 0 ? hit["position"].AsVector3().Y : from.Y - 1.5f;
     }
 }

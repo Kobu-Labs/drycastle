@@ -3,6 +3,7 @@ using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Bunkers;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Glass;
+using Drycastle.Shooter.HeadsUp;
 using Drycastle.Shooter.Loudspeaker;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Server;
@@ -30,6 +31,7 @@ using Drycastle.ShooterCore.RozhlasFeed;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
@@ -117,7 +119,13 @@ public partial class NetClient : Node
     LockOnClient _lockOn = null!;
     RocketsClient _rockets = null!;
     ThrowClient _thrower = null!;
+    HeldWeapon _held = null!;
     ShotsClient _shots = null!;
+    OwnReconcile _reconcile = null!;
+    DeathView _death = null!;
+    VehiclesClient _vehicles = null!;
+    HudClient _hud = null!;
+    PoseDemoClient? _poseDemo;
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
@@ -218,6 +226,10 @@ public partial class NetClient : Node
     public ItemsFile ItemData = new();
     /// <summary>What the local player wears and carries, and what the corpses carry (the Equipment screen reads and asks here).</summary>
     public ItemsClient Items { get; private set; } = null!;
+    /// <summary>vehicles.json (set by the host): the type per snapshot record, visuals and the smoke's expected run-over damage.</summary>
+    public VehiclesFile? Vehicles { get => Ctx.Vehicles; set => Ctx.Vehicles = value; }
+    /// <summary>Set by the host from <c>--pose-demo</c>.</summary>
+    public bool PoseDemo;
 
     public NetClient()
     {
@@ -228,7 +240,7 @@ public partial class NetClient : Node
         Ctx.View.Pinned = () => _pounce.Pinned;
         Ctx.View.Rising = () => _pounce.Rising;
         Ctx.Viewmodel.StepAcc = () => Ctx.Sound.StepAcc;
-        _prediction = new OwnPrediction(Ctx, SpeedFor);
+        _prediction = new OwnPrediction(Ctx, slot => _held.SpeedFor(slot));
         _flings = new BodyFlings(Ctx);
         _fxDemo = new FxDemoClient(Ctx);
         _water = new WaterClient(Ctx);
@@ -288,6 +300,8 @@ public partial class NetClient : Node
         Ctx.Remotes.Dressing += Items.DressPlayer;
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
         _bot = MakeBot();
+        _reconcile = new OwnReconcile(Ctx, _prediction, _link, _perf, _session, Report, _bot);
+        _poseDemo = PoseDemo ? new PoseDemoClient(Ctx, Camo) : null;
         _bales = new BaleCorpses(Ctx, Camo);
         _corpses = new CorpsesClient(Ctx, Items, Camo, _bales, BigfootData, _interact);
         _loot = new CorpseLoot(Ctx, Items, _corpses, _interact);
@@ -306,6 +320,7 @@ public partial class NetClient : Node
         _pounce = new PounceClient(Ctx, _prediction, DemonData, () => _demon.FirstView());
         _binoculars = new BinocularsClient(Ctx, Items, ItemData, _hulls, _animals, () => _pounce.Pinned);
         Ctx.Remotes.Appeared += _binoculars.OnAppeared;
+        _death = new DeathView(Ctx, _pounce, _corpses);
         _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, at => _rockets.HomingKillShown(at));
@@ -319,10 +334,14 @@ public partial class NetClient : Node
         EventReceived += _seats.OnEvent;
         _scud = new ScudClient(Ctx, Scud, _blastDust);
         _thrower = new ThrowClient(Ctx, _binoculars, _aircraftClient, _scud, _flings);
+        _held = new HeldWeapon(Ctx, _aim, Loadouts, _binoculars, _thrower, _flings, _aircraftClient, _scud, _pounce, _interact);
+        _vehicles = new VehiclesClient(Ctx, _tow, _glass, _hulls, _flight, _driveClient, _rider, _guns, _seats, _aircraftClient, _water, _scud, _blastDust) { PromptLine = PromptLine };
+        _hud = new HudClient(Ctx, _weapon, _driveClient, _aircraftClient, _thieves, _bigfoot, _screens, _uav, new MinimapFeed(Ctx, _missile, _aircraftClient, _intel), _interact, () => _snaps);
         _shots = new ShotsClient(Ctx, _weapon, _hulls, _water, _guns, _aircraftClient, _impacts);
         _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
-        InitMatchEdges();
+        Match.PhaseChanged += OnPhaseChanged;
+        Match.RoundRestarted += () => { Ctx.Hud?.ClearKills(); _harvester.RoundRestart(); };
         var err = _conn.CreateHost(1, Wire.Channels, 0, 0);
         if (err != Error.Ok) { Fail($"CreateHost failed: {err}"); return; }
         _peer = _conn.ConnectToHost(Host, Port, Wire.Channels, 0);
@@ -374,6 +393,30 @@ public partial class NetClient : Node
 
     /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
     void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); Items.DressPlayer(view, Ctx.MyId); }
+
+    /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
+    string? PromptLine(string? ride) =>
+        _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
+        ?? _crates.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt();
+
+    void HudWelcome()
+    {
+        if (!ShotFx.Enabled || Ctx.Hud != null) return; // headless runs have no HUD
+        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars.Up, Binoculars = _binoculars.View, Aim = () => _viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = _hud.CrosshairSpread };
+        AddChild(Ctx.Hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
+        Ctx.Hud.TacticalMapTeleport = _screens.OnMapTeleport;
+        Sandbox.ShowOnHud(); // the SANDBOX badge (#156)
+        Loadouts.WireHud(Ctx.Hud);
+        Ctx.Hud.AttachEquipment(this); // F (#268)
+        Ctx.Hud.AttachHuntersLog(_hunts.Environment()); // J (#336)
+        Ctx.Hud.AttachMineralLog(); // N
+        _hunts.Data.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
+        Ctx.Hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
+        Ctx.Hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
+    }
+
+    /// <summary>The loaded map (set by the host): the minimap's texture source.</summary>
+    public Drycastle.MapLoader.MapLoader? Map { get => Ctx.Map; set => Ctx.Map = value; }
 
     void Fail(string why)
     {
@@ -441,7 +484,7 @@ public partial class NetClient : Node
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderCreatures(delta);
         t = ClientProf.Lap(ClientProf.S.Creatures, t);
-        UpdateDeath(delta);
+        _death.Update(delta);
         _pounce.Update(delta);
         t = ClientProf.Lap(ClientProf.S.View, t);
         RenderVehicles(delta);
@@ -450,7 +493,7 @@ public partial class NetClient : Node
         t = ClientProf.Lap(ClientProf.S.Projectiles, t);
         UpdateView(delta);
         t = ClientProf.Lap(ClientProf.S.View, t);
-        UpdateHud();
+        _hud.Update();
         _rozhlas.MicFrame(); // the set holder's mic and the ON AIR cue
         _rozhlasTest?.MicTick(_rozhlas.HoldsSet);
         ClientProf.End(ClientProf.S.Hud, t);
@@ -461,7 +504,7 @@ public partial class NetClient : Node
     {
         _remotes.Render(delta);
         _headLamps.Render();
-        if (PoseDemo && !_poseDemoDone && Ctx.Me != null) SpawnPoseDemo();
+        _poseDemo?.Tick();
         _corpses.Render(delta);
         _groundItems.Render();
         _crates.Render();
@@ -484,7 +527,7 @@ public partial class NetClient : Node
 
     void RenderVehicles(double delta)
     {
-        RenderCars();
+        _vehicles.Render(delta);
         _harvester.Render((float)delta);
         _aircraftClient.Render(delta);
     }
@@ -500,10 +543,19 @@ public partial class NetClient : Node
     }
 
     /// <summary>The own view: water, the viewmodel, the camera's shakes and sways, in the order that composes the camera.</summary>
+    /// <summary>Fades the drawn part of the last on-foot correction, once per frame, at the same rate as the vehicles' corrections.</summary>
+    void FadeOwnCorrection(double delta)
+    {
+        if (Ctx.Me == null) return;
+        _prediction.FadeCorrection(delta);
+        Ctx.Me.ViewOffset = _prediction.ViewFix + _bigfoot.HeldSwing; // in the Bigfoot's hand the eye swings with the hand (#264)
+        Ctx.Me.ViewRoll = _bigfoot.HeldRoll + High.Roll;
+    }
+
     void UpdateView(double delta)
     {
         _water.Render();
-        UpdateViewmodel();
+        _held.ShowViewmodel();
         _thrower.UpdateArc();
         _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
@@ -677,7 +729,7 @@ public partial class NetClient : Node
                     Ctx.Hotbar.Want = Ctx.Hotbar.Start;
                     Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _prediction.ClearInputs(); _prediction.ClearViewFix(); // the next snapshot carries the spawn position
                     _bot?.OnSpawn(sp.Protection);
-                    EndDeathView(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _weapon.OnSpawn();
+                    _death.End(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _weapon.OnSpawn();
                 }
                 break;
             case EventKind.Death:
@@ -685,7 +737,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 Ctx.Sound.Death(d);
                 _corpses.NoteDeath(d);
-                if (d.Victim == Ctx.MyId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; _weapon.ClearReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
+                if (d.Victim == Ctx.MyId) { _bot?.OnOwnDeath(); _death.Begin(d.RespawnDelay, d.Flight); Ctx.Dead = true; _weapon.ClearReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
                 break;
         }
     }
@@ -707,9 +759,9 @@ public partial class NetClient : Node
         foreach (var id in Ctx.Snapshots.Removed) { Ctx.Remotes.Remove(id); if (Ctx.Cars.Remove(id)) { _flight.Remove(id); _driveClient.Remove(id); } }
         foreach (var (id, rec) in Ctx.Snapshots.States)
         {
-            if (id == Ctx.MyId) { OnSelf(rec, h.Ack); continue; }
+            if (id == Ctx.MyId) { _reconcile.OnState(rec, h.Ack); continue; }
             if (rec.Type == EntityType.Projectile) { _rockets.OnState(id, rec); continue; }
-            if (rec.Type == EntityType.Vehicle) { OnVehicleState(id, rec, h.Tick); continue; }
+            if (rec.Type == EntityType.Vehicle) { _vehicles.OnState(id, rec, h.Tick); continue; }
             if (rec.Type == EntityType.Seats) { _seats.OnRecord(rec); continue; }
             if (rec.Type == EntityType.Turret) { _guns.OnRecord(rec, h.Tick); continue; }
             if (rec.Type == EntityType.Flight) { _flight.OnState(rec, h.Tick); continue; }
@@ -746,7 +798,7 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
-        if (!Bot) { ReadSlotKeys(); ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
+        if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
@@ -771,9 +823,9 @@ public partial class NetClient : Node
         if (!_aircraftClient.AtTurret) _weapon.PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = _aircraftClient.GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (!_aircraftClient.AtTurret) Ctx.Me!.Yaw = mi.Yaw;
-        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_aircraftClient.AtTurret ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), _aircraftClient.GunnerAim);
+        var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_aircraftClient.AtTurret ? _held.TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), _aircraftClient.GunnerAim);
         // C-03: a dead body does not move on the server (its input is zero and it is skipped), so it is not predicted either; else each snapshot snapped it back
-        if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(SpeedFor(ni.Slot)), dt); Ctx.Sound.OwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
+        if (Mode.BodyIsPredicted) { if (!Dead) Ctx.Me!.Simulate(ni.ToMove(_held.SpeedFor(ni.Slot)), dt); Ctx.Sound.OwnMovement(dt); } // a steered missile or a gunship: the body stands still; a turret's body moves
         _flight.Predict(ni, dt); // the pilot of a helicopter steps it with the input the server will step it with
         _driveClient.Predict(ni, dt);  // and so does the driver of an amphibious transport
         _prediction.Add(ni, Ctx.Me!.State);
@@ -798,12 +850,7 @@ public partial class NetClient : Node
         if (_seats.HandleInput(e)) return; // a number key while seated takes that seat
         if (_rider.HandleInput(e)) return; // the vehicle view key while driving: chase camera or cockpit
         if (_binoculars.HandleInput(e)) return; // B: the binoculars from the bag
-        if (Bot || Weapons == null || Dead || _loot.ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
-        if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
-        {
-            if (_aim.DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
-            Ctx.Hotbar.Want = Ctx.Hotbar.Cycle(Ctx.Hotbar.Want, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
-        }
+        _held.HandleInput(e);
     }
 
 }
