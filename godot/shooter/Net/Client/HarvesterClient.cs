@@ -78,7 +78,7 @@ internal sealed class HarvesterClient
         if (!ShotFx.Enabled || _ctx.Vehicles == null) return;
         _dropped.Fade();
         _ctx.Cars.Sounds.Step();
-        _crush.Stamp(); // after RenderCars: from the drawn poses
+        _crush.Stamp(); // after VehiclesClient.Render: from the drawn poses
         _crush.Flush();
         foreach (var v in _ctx.Cars.All)
         {

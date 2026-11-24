@@ -51,7 +51,7 @@ vehicles are thrown; a launched player's fall damage is replaced by 2-5; the dev
 Open:
 - **An area with `event spawn: bigfoot`** must be drawn (the village has none): until then every start is the fallback.
 - **Intel board:** `IntelServer.Announce` / `Withdraw` is not called by the Bigfoot (the ticket says no announcement). It is one call each at start and end.
-- **Sounds:** no roar, no stomp, no throw sound exists; `NetClient.Bigfoot.cs` `BigfootSounds` reuses the closest ones.
+- **Sounds:** no roar, no stomp, no throw sound exists; `BigfootFx.cs` `BigfootSounds` reuses the closest ones.
 - **A boss bar or any HUD** for the hit count or the phase: none (the hit marker and the roar are the feedback).
 - **The model and animations** are the project's own since #286 (`scripts/models/make_bigfoot_model.py`, `drycastle-generated-models/bigfoot.glb`); the Quaternius placeholder is gone. It stops and roars at a new phase and at the enrage (act `Roar`), and the chase is steadier (#285). Not yet seen in the game.
 - **Launched player's client** does not know the launch velocity (it reconciles to the server, as for a blast's knockback); a better hand-off would send it in `BigfootFx`.

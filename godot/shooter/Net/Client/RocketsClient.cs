@@ -121,7 +121,7 @@ internal sealed class RocketsClient
         _blastDust.BlastFelt(exAt, exR, SoundRules.Event("explosion", _ctx.Sound.WeaponId(ex.Weapon)), ex.WaveSpeed);
     }
 
-    /// <summary>A homing missile leaves a launcher: drawn from the launch, flown by <see cref="RenderRockets"/> after its Aircraft, ended by the Explosion with its id.</summary>
+    /// <summary>A homing missile leaves a launcher: drawn from the launch, flown by <see cref="Render"/> after its Aircraft, ended by the Explosion with its id.</summary>
     void OnHomingLaunch(HomingLaunchMsg l)
     {
         if (_ctx.Remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = _ctx.Now + 0.45;

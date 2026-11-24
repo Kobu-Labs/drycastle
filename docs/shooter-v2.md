@@ -71,7 +71,7 @@ Mechanics added in v2:
   `scripts/art/make_animal_shapes.py`: the outline per pose in 5 cm cells, the eating pose by time), else its body box
   (`hit_box`, `hit_box_ahead`); no longer the scaled capsule. The diagram draws that same shape.
 - Binoculars: a bag item (`binoculars` in items.json, `/give binoculars`), key B. Zoom and a distance readout measured on
-  the client (`NetClient.Binoculars.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
+  the client (`BinocularsClient.cs`). Only up/down travels (events 26 `RaiseBinoculars`, 27 `BinocularsRaised`), so
   the others see the pair held at the face (`ArmsReadyPose.Binoculars`, `CharacterView.SetBinoculars`).
 - Iron sights (hold zoom) ease the gun to centre and fade the crosshair; the sniper keeps its scope (commit bda2271).
 - Bullet holes (64-decal ring buffer, fade after 15 s) and sparks oriented along the surface normal on hitscan hits (commit 189b6bf).
@@ -553,7 +553,7 @@ items, ADR 0018 (#267, protocol 31).
   `ItemRules` (pure, `ShooterCore/Items/Equipment.cs`) holds the rules and `BagTests` the tests.
 - **Ground items.** A dropped item lands at the terrain height under the player's feet (no throw), or under the vehicle they ride, any seat, a
   helicopter in the air too. It is a world entity (type 2, `GroundItem`: state byte = item, hp byte = pickups) drawn as the item's own model
-  (`NetClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
+  (`GroundItemsClient.MakeGroundItemVisual`: `items.json` `model`, laid on the ground by its lowest point; an item with no model keeps a small gold placeholder block). Tap the interact key within reach: "E  Pick up X". It goes into its empty
   slot, else the bag; with both full nothing is taken or counted ("Your bag is full"). Each take counts one pickup (the dropper's too); an item at its
   limit crumbles. It expires after 120 s and shares the corpse cap.
 - **The pickup limit.** The Bigfoot head has `pickup_limit` 3. Every take counts on the item, which keeps its count when it drops again on the next
@@ -603,7 +603,7 @@ items, ADR 0018 (#267, protocol 31).
 ## 7c. Events and the Bigfoot (#264)
 
 An **Event** (GLOSSARY) is a short happening with a challenge and a reward. The lifecycle is `EventRun` / `EventBook` (`ShooterCore/Events/EventRun.cs`): active, then won or
-despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `Net/Server/BigfootEvent/` (`BigfootServer.cs`); client: `NetClient.Bigfoot.cs`; the fight itself is
+despawned, one at a time, no scheduler. The first Event is the Bigfoot. Server: `Net/Server/BigfootEvent/` (`BigfootServer.cs`); client: `BigfootClient.cs`, `BigfootFx.cs`; the fight itself is
 `ShooterCore/Events/Bigfoot.cs` (a plain class, tested with a fake world in `BigfootTests`). Every number is in `data/bigfoot.json` (`BigfootFile`).
 
 - **Starting and ending.** An admin's `/event bigfoot` spawns it at a random baked point of an area with `event spawn: bigfoot` (`PickEventSpawn`, #263). A map with no such

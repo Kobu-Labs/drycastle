@@ -42,7 +42,7 @@ Questions:
 - Verdict: build it, defer it, or never; with the latency/speed threshold at which the answer flips.
 
 ### C. Players: movement, prediction and reconciliation
-Scope: `Player.cs`, `Movement.cs`, `NetClient.Predict.cs`, `Interpolator.cs`, ADRs 0006 and 0010.
+Scope: `Player.cs`, `Movement.cs`, `OwnWeapon.cs`, `OwnPrediction.cs`, `Interpolator.cs`, ADRs 0006 and 0010.
 Questions:
 - Is the shared `Player.Simulate` step truly deterministic on both sides (same layers, same collision, same float inputs)? Where can client and server disagree (the vehicle-box bug in `docs/vehicle-collision-and-entering.md` was one)? Cost of reconciliation: why 2205 reconciliations on a *clean* link in the loss test?
 - Cost per tick of `MoveAndSlide` per player, per bot, per vehicle on the server; what scales with player count.

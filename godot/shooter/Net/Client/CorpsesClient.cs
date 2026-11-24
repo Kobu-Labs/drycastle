@@ -68,14 +68,14 @@ internal sealed class CorpsesClient
     /// <summary>Where a corpse's feet are, from the last render.</summary>
     public Vector3? FeetOf(ushort corpse) => _corpses.TryGetValue(corpse, out var v) ? v.Feet : null;
 
-/// <summary>A look that arrives after the corpse of that player spawned goes on it (#203).</summary>
+    /// <summary>A look that arrives after the corpse of that player spawned goes on it (#203).</summary>
     public void DressCamo(ushort owner, CamoSpec look)
     {
         foreach (var (id, c) in _corpses)
             if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && e.State.Owner == owner) c.View?.SetCamo(look, _camo.Data);
     }
 
-/// <summary>
+    /// <summary>
     /// Settles whether a new corpse collapses. True once decided. A fresh kill (its death event within <see cref="CollapseWindowSeconds"/>) of a player on foot
     /// topples away from the killer; a thrown body flies, a rider's stays seated, an old one lies. Hidden until decided (at most <see cref="CollapseWaitSeconds"/>).
     /// </summary>
@@ -94,7 +94,7 @@ internal sealed class CorpsesClient
         return true;
     }
 
-/// <summary>The up of the ground under a body (the slope it lies on): a short ray from above its feet. Up when there is none.</summary>
+    /// <summary>The up of the ground under a body (the slope it lies on): a short ray from above its feet. Up when there is none.</summary>
     Vector3 GroundUpAt(Vector3 at)
     {
         var q = PhysicsRayQueryParameters3D.Create(at + Vector3.Up * 1f, at + Vector3.Down * 1.5f, CollisionRules.StaticMask(MoverKind.Drop));
@@ -102,7 +102,7 @@ internal sealed class CorpsesClient
         return hit.Count > 0 ? hit["normal"].AsVector3() : Vector3.Up;
     }
 
-void OnSpawned(WorldReplica.Entity e)
+    void OnSpawned(WorldReplica.Entity e)
     {
         if (e.Type != CorpseRules.TypeId) return;
         if (e.State.Owner == BigfootRules.TargetId) { _corpses[e.Id] = MakeGiantCorpse(e); return; }
@@ -113,7 +113,7 @@ void OnSpawned(WorldReplica.Entity e)
         view.Position = new Vector3(0, -RagdollTumble.Half, 0); // the node sits at the body's middle, so a thrown body spins about its centre
         node.AddChild(view);
         _ctx.Owned.AddChild(node);
-        node.Visible = false; // until RenderCorpses knows whether this body collapses (DecideCollapse)
+        node.Visible = false; // until Render knows whether this body collapses (DecideCollapse)
         _corpses[e.Id] = new CorpseView { Node = node, View = view, Born = _ctx.Now };
         Dress(e.Id); // the item the corpse carries, when its event came first (#266)
     }
@@ -125,7 +125,7 @@ void OnSpawned(WorldReplica.Entity e)
         if (_corpses.Remove(id, out var v)) v.Node.QueueFree();
     }
 
-/// <summary>Builds the corpse view of the giant: the model at its feet, the Death clip held at its last frame.</summary>
+    /// <summary>Builds the corpse view of the giant: the model at its feet, the Death clip held at its last frame.</summary>
     CorpseView MakeGiantCorpse(WorldReplica.Entity e)
     {
         var node = new Node3D { Name = $"Corpse{e.Id}" };
@@ -146,7 +146,7 @@ void OnSpawned(WorldReplica.Entity e)
         return new CorpseView { Node = node, View = null, Giant = true };
     }
 
-/// <summary>The giant's corpse with or without its head: the head is the Item it carries, so once that is taken the body lies there headless.</summary>
+    /// <summary>The giant's corpse with or without its head: the head is the Item it carries, so once that is taken the body lies there headless.</summary>
     void ShowGiantHead(ushort corpse)
     {
         if (!_corpses.TryGetValue(corpse, out var v) || !v.Giant) return;
@@ -156,7 +156,7 @@ void OnSpawned(WorldReplica.Entity e)
         sk.SetBonePoseScale(head, _items.CorpseItems(corpse).Count > 0 ? Vector3.One : Vector3.One * 0.001f); // the clip is paused: the pose stays as set
     }
 
-/// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
+    /// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
     void Dress(ushort corpse)
     {
         if (!_corpses.TryGetValue(corpse, out var v) || v.View == null) return; // the giant's corpse draws no worn item
@@ -169,7 +169,7 @@ void OnSpawned(WorldReplica.Entity e)
         }
     }
 
-/// <summary>Places the corpses (position, yaw, the weapon they carry) and finds the one in reach.</summary>
+    /// <summary>Places the corpses (position, yaw, the weapon they carry) and finds the one in reach.</summary>
     public void Render(double delta)
     {
         foreach (var (id, v) in _corpses)
@@ -235,7 +235,7 @@ void OnSpawned(WorldReplica.Entity e)
         return best;
     }
 
-/// <summary>The own corpses are shown or hidden: the death camera lies where the body fell, and the body would stand in its view.</summary>
+    /// <summary>The own corpses are shown or hidden: the death camera lies where the body fell, and the body would stand in its view.</summary>
     public void ShowOwn(bool visible)
     {
         foreach (var (id, v) in _corpses)
