@@ -114,7 +114,7 @@ public partial class Viewer
     string GroupOf(ObjectsCtx c, SortedDictionary<string, object?> o)
     {
         var (x, y) = ObjectEdits.Position(o);
-        return _map.ParcelAt((float)(x - c.Ox), (float)-(y - c.Oy))?.Id ?? Drycastle.MapLoader.PlacedObject.NoParcelGroup;
+        return _map.ParcelAt((float)(x - c.Ox), (float)-(y - c.Oy))?.Id ?? Drycastle.MapLoader.Objects.PlacedObject.NoParcelGroup;
     }
 
     // every object of the file has its node, where and how the file says; nothing else (but the seed's, which stands in parcel C and is never touched)
@@ -480,7 +480,7 @@ public partial class Viewer
     // ---- 14. an object belongs to no parcel: it can stand, move and go on ground that is none ----
     async Task ObjectOnNoParcel(ObjectsCtx c)
     {
-        const string NoGroup = Drycastle.MapLoader.PlacedObject.NoParcelGroup;
+        const string NoGroup = Drycastle.MapLoader.Objects.PlacedObject.NoParcelGroup;
         var idsBefore = ObjectEdits.All(EditsFile.Load(c.EditsPath)).Select(t => (string)t.obj["id"]!).ToHashSet();
         var runsOut = _watcher!.RunCount;
         Ed.Objects.ArmPlacement(c.SLAB);

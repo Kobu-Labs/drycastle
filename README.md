@@ -55,7 +55,7 @@ make netspike       # netcode spike, N=16/32/64, 60 s per variant (about 30 minu
 To build the C# projects without the editor:
 
 ```sh
-dotnet build godot/MapLoader/Core/MapLoader.csproj
+dotnet build godot/MapLoader/MapLoader.csproj
 dotnet build godot/viewer/viewer.csproj
 ```
 

@@ -7,8 +7,8 @@ using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
-using WaterPalettes = Drycastle.MapLoader.WaterPalettes;
-using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
+using WaterPalettes = Drycastle.MapLoader.Waters.WaterPalettes;
+using WaterSurfaces = Drycastle.MapLoader.Waters.WaterSurfaces;
 
 namespace Drycastle.Shooter.Net.Client;
 

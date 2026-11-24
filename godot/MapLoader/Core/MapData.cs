@@ -1,6 +1,6 @@
 using Godot;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Core;
 
 /// <summary>
 /// One ground type of the map as the last build wrote it (parcels.json `ground_types`): <paramref name="Colour"/> is its

@@ -1,5 +1,7 @@
 using System.Text.Json;
 using Godot;
+using Drycastle.MapLoader.Core;
+using Drycastle.MapLoader.Ground;
 
 namespace Drycastle.MapLoader;
 
@@ -13,9 +15,6 @@ namespace Drycastle.MapLoader;
 /// props / props_collision (items without a parcel, e.g. OSM trees).
 /// Independent of any mod. Axes: map x east, y north; Godot x east, y up, z = -north.
 /// </summary>
-/// <summary>A hand-drawn ground patch, for the minimap: its type's colour and ring in ground (x, z) metres.</summary>
-public sealed record PatchPaint(string Id, Color Colour, Vector2[] Ring, string Type = "");
-
 public sealed partial class MapLoader
 {
     readonly Dictionary<string, ParcelInfo> _parcels = new();

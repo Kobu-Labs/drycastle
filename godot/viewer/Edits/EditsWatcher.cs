@@ -75,7 +75,7 @@ public partial class EditsWatcher : Node
         Dictionary<string, List<string>> Members, Dictionary<string, string> Objects,
         Dictionary<string, string> Patches, Dictionary<string, (double X0, double Y0, double X1, double Y1)> PatchBoxes,
         Dictionary<string, string> PatchTypes, Dictionary<string, string> GroundTypes,
-        string CablesText, List<Drycastle.MapLoader.CableSpec> Cables);
+        string CablesText, List<Drycastle.MapLoader.Objects.CableSpec> Cables);
 
     sealed class Run
     {
@@ -239,13 +239,13 @@ public partial class EditsWatcher : Node
                 }
             if (doc.RootElement.TryGetProperty("ground_types", out var gtj) && gtj.ValueKind == JsonValueKind.Object)
                 foreach (var kv in gtj.EnumerateObject()) groundTypes[kv.Name] = Canon(kv.Value);
-            var cables = new List<Drycastle.MapLoader.CableSpec>();
+            var cables = new List<Drycastle.MapLoader.Objects.CableSpec>();
             if (doc.RootElement.TryGetProperty("cables", out var cb) && cb.ValueKind == JsonValueKind.Object)
                 foreach (var kv in cb.EnumerateObject().OrderBy(kv => kv.Name, StringComparer.Ordinal))
                     if (kv.Value.ValueKind == JsonValueKind.Object
                         && kv.Value.TryGetProperty("from", out var cf) && cf.ValueKind == JsonValueKind.String
                         && kv.Value.TryGetProperty("to", out var ct) && ct.ValueKind == JsonValueKind.String)
-                        cables.Add(new Drycastle.MapLoader.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
+                        cables.Add(new Drycastle.MapLoader.Objects.CableSpec(kv.Name, cf.GetString()!, ct.GetString()!));
             snap = new Snapshot(text, parcels, groups, members, objects, patches, boxes, patchTypes, groundTypes, CablesText(cables), cables);
             error = "";
             return true;
@@ -267,7 +267,7 @@ public partial class EditsWatcher : Node
                     foreach (var o in legacy.EnumerateArray()) yield return o;
     }
 
-    static string CablesText(IEnumerable<Drycastle.MapLoader.CableSpec> cables)
+    static string CablesText(IEnumerable<Drycastle.MapLoader.Objects.CableSpec> cables)
         => string.Join(";", cables.OrderBy(c => c.Id, StringComparer.Ordinal).Select(c => $"{c.Id}:{c.From}>{c.To}"));
 
     /// <summary>
@@ -411,7 +411,7 @@ public partial class EditsWatcher : Node
         var t0 = Stopwatch.StartNew();
         var (removed, changed) = ObjectDiff(_applied, snap);
         if (removed.Count == 0 && changed.Count == 0) { _seen = _parsedStat; _dirty = false; ApplyCables(snap); _applied = snap; return true; }
-        List<Drycastle.MapLoader.PlacedObject> objects;
+        List<Drycastle.MapLoader.Objects.PlacedObject> objects;
         // on failure _applied stays as it was and the caller falls through to the parcel-run path
         try { objects = ReadObjects(snap.Text, changed, origin); }
         catch (Exception e) { Fail($"reading the placed objects failed: {e.Message}"); return false; }
@@ -429,9 +429,9 @@ public partial class EditsWatcher : Node
     }
 
     /// <summary>The objects with the given ids as map-local PlacedObjects (S-JTSK minus the map origin).</summary>
-    List<Drycastle.MapLoader.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> ids, (double X, double Y) origin)
+    List<Drycastle.MapLoader.Objects.PlacedObject> ReadObjects(string text, IReadOnlyCollection<string> ids, (double X, double Y) origin)
     {
-        var list = new List<Drycastle.MapLoader.PlacedObject>();
+        var list = new List<Drycastle.MapLoader.Objects.PlacedObject>();
         var want = new HashSet<string>(ids);
         using var doc = JsonDocument.Parse(text);
         foreach (var o in EnumerateObjects(doc.RootElement))
@@ -440,7 +440,7 @@ public partial class EditsWatcher : Node
             var pos = o.GetProperty("position");
             var x = (float)Math.Round(pos[0].GetDouble() - origin.X, 3);
             var y = (float)Math.Round(pos[1].GetDouble() - origin.Y, 3);
-            list.Add(new Drycastle.MapLoader.PlacedObject
+            list.Add(new Drycastle.MapLoader.Objects.PlacedObject
             {
                 Id = id,
                 Asset = o.GetProperty("asset").GetString() ?? "",
@@ -449,7 +449,7 @@ public partial class EditsWatcher : Node
                 Z = o.TryGetProperty("z", out var z) && z.ValueKind == JsonValueKind.Number ? z.GetSingle() : null,
                 RotationDeg = o.TryGetProperty("rotation_deg", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetSingle() : 0f,
                 Scale = o.TryGetProperty("scale", out var sc) && sc.ValueKind == JsonValueKind.Number ? sc.GetSingle() : 1f,
-                SizeM = Drycastle.MapLoader.PlacedObject.ReadSizeM(o),
+                SizeM = Drycastle.MapLoader.Objects.PlacedObject.ReadSizeM(o),
                 Colour = o.TryGetProperty("colour", out var c) && c.ValueKind == JsonValueKind.String ? c.GetString() : null,
                 Solid = !(o.TryGetProperty("solid", out var so) && so.ValueKind == JsonValueKind.False),
                 Parcel = Map.ParcelAt(x, -y)?.Id,
@@ -600,8 +600,8 @@ public partial class EditsWatcher : Node
                 Fail($"{failedTool} failed for {string.Join(", ", run.Ids.Concat(run.PatchIds))} (exit {code}): {err.Trim()}");
                 return;
             }
-            Drycastle.MapLoader.FragmentResult result = new(Array.Empty<string>(), 0, 0);
-            Drycastle.MapLoader.PatchResult? patches = null;
+            Drycastle.MapLoader.Objects.FragmentResult result = new(Array.Empty<string>(), 0, 0);
+            Drycastle.MapLoader.Ground.PatchResult? patches = null;
             try
             {
                 // applied together or not at all: parse the patch result first (it changes nothing),

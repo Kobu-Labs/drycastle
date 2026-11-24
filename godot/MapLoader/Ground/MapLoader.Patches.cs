@@ -1,10 +1,8 @@
 using System.Text.Json;
 using Godot;
+using Drycastle.MapLoader.Ground;
 
 namespace Drycastle.MapLoader;
-
-/// <summary>Result of <see cref="MapLoader.ApplyPatches"/>: the patch IDs whose baked nodes were hidden and the new nodes added.</summary>
-public sealed record PatchResult(IReadOnlyList<string> Replaced, int Nodes);
 
 // Ground patches: hand-drawn ground (GLOSSARY "Ground patch"; nodes "patch_<ID>", visual only, no collision). Until the next
 // full map build a patch shows as paint in its type's first terrain colour. The exported chunk files hold one node per chunk

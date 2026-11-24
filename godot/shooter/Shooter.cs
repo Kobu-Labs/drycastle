@@ -25,7 +25,7 @@ using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Wildlife;
-using WaterSurfaces = Drycastle.MapLoader.WaterSurfaces;
+using WaterSurfaces = Drycastle.MapLoader.Waters.WaterSurfaces;
 
 namespace Drycastle.Shooter;
 

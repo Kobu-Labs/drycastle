@@ -1,7 +1,7 @@
 using System.Numerics;
 using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Trees;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. Tree cards (#362): beyond the pack tree radius a tree is drawn as three flat cards
 // (front, side, top) that show the very pack model it becomes near the player, so the swap changes almost nothing. The pictures are drawn here, on the CPU,

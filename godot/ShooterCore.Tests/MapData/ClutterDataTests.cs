@@ -1,4 +1,4 @@
-using Drycastle.MapLoader;
+using Drycastle.MapLoader.Vegetation;
 using Xunit;
 
 namespace Drycastle.ShooterCore.Tests.MapData;

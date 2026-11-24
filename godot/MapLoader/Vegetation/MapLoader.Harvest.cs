@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Godot;
+using Drycastle.MapLoader.Vegetation;
 
 namespace Drycastle.MapLoader;
 

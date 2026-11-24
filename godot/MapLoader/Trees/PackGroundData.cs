@@ -1,9 +1,10 @@
 using System.Numerics;
 using System.Text.Json;
+using Drycastle.MapLoader.Vegetation;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 
-namespace Drycastle.MapLoader;
+namespace Drycastle.MapLoader.Trees;
 
 // Pure (no Godot types): compiled into ShooterCore.Tests by a link. The forest ground of the pack trees (#287): ground objects (fallen logs are drawn only, #359; stumps,
 // boulders, root plates of ground_objects.json) as pack models in place of the baked ones, and client-only undergrowth. Both ride the tiles of

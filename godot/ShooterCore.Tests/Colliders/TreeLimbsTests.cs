@@ -1,5 +1,5 @@
 using System.Numerics;
-using Drycastle.MapLoader;
+using Drycastle.MapLoader.Trees;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 using Xunit;

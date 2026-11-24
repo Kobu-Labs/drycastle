@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Godot;
+using Drycastle.MapLoader.Vegetation;
 
 namespace Drycastle.MapLoader;
 
