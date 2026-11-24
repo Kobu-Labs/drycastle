@@ -125,6 +125,7 @@ public partial class NetClient : Node
     DeathView _death = null!;
     VehiclesClient _vehicles = null!;
     HudClient _hud = null!;
+    EffectEvents _effects = null!;
     PoseDemoClient? _poseDemo;
     OwnAim _aim = null!;
     OwnWeapon _weapon = null!;
@@ -338,6 +339,7 @@ public partial class NetClient : Node
         _vehicles = new VehiclesClient(Ctx, _tow, _glass, _hulls, _flight, _driveClient, _rider, _guns, _seats, _aircraftClient, _water, _scud, _blastDust) { PromptLine = PromptLine };
         _hud = new HudClient(Ctx, _weapon, _driveClient, _aircraftClient, _thieves, _bigfoot, _screens, _uav, new MinimapFeed(Ctx, _missile, _aircraftClient, _intel), _interact, () => _snaps);
         _shots = new ShotsClient(Ctx, _weapon, _hulls, _water, _guns, _aircraftClient, _impacts);
+        _effects = new EffectEvents(Ctx, _weapon, _hud, _blips, _guns, _shots, _rockets, _hunts, _moab, _missile, _impacts, _aircraftClient, _remotes, _vehicles, _glass);
         _volumes = new VolumesClient(Ctx, _animals, AnimalShapes, _citizens, _thieves, _demon, _hulls);
         EventReceived += _scud.OnEvent;
         Match.PhaseChanged += OnPhaseChanged;
@@ -679,8 +681,7 @@ public partial class NetClient : Node
         _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
-        OnWeaponEvent(kind, payload);
-        OnStreetEvent(kind, payload); // the street lamps and sign plates
+        _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
         OnMatchEvent(kind, payload);
         Loadouts.OnEvent(kind, payload);
         _streaks.OnEvent(kind, payload);

@@ -14,14 +14,39 @@ using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.Shooter.Net.Client;
 
-/// <summary>Weapons: the slot keys, the scope, the viewmodel and the weapon events (ammo, shots, launches, explosions, hits).</summary>
-public partial class NetClient
+/// <summary>
+/// The server's one-off effects, each to the feature that draws it: the ammo, shots, launches and hits, the blasts and what they do to vehicles and glass, the gunship's coalesced
+/// effects, a body thrown by a vehicle, and the street lamps and sign plates the server switches. It decodes and routes; the features do the drawing.
+/// </summary>
+internal sealed class EffectEvents
 {
-    /// <summary>One reliable event, to the weapon features: the fire and its answers first, then the blasts and the other effects (a kind is only one of them).</summary>
-    void OnWeaponEvent(EventKind kind, byte[] payload)
+    readonly ClientContext _ctx;
+    readonly OwnWeapon _weapon;
+    readonly HudClient _hud;
+    readonly BlipsClient _blips;
+    readonly VehicleGunsClient _guns;
+    readonly ShotsClient _shots;
+    readonly RocketsClient _rockets;
+    readonly HuntsClient _hunts;
+    readonly MoabClient _moab;
+    readonly MissileClient _missile;
+    readonly ImpactsClient _impacts;
+    readonly AircraftClient _aircraft;
+    readonly RemotesClient _remotes;
+    readonly VehiclesClient _vehicles;
+    readonly GlassClient _glass;
+
+    public EffectEvents(ClientContext ctx, OwnWeapon weapon, HudClient hud, BlipsClient blips, VehicleGunsClient guns, ShotsClient shots, RocketsClient rockets, HuntsClient hunts, MoabClient moab, MissileClient missile, ImpactsClient impacts, AircraftClient aircraft, RemotesClient remotes, VehiclesClient vehicles, GlassClient glass)
+    {
+        _ctx = ctx; _weapon = weapon; _hud = hud; _blips = blips; _guns = guns; _shots = shots; _rockets = rockets; _hunts = hunts; _moab = moab; _missile = missile; _impacts = impacts; _aircraft = aircraft; _remotes = remotes; _vehicles = vehicles; _glass = glass;
+    }
+
+    /// <summary>One reliable event, to the features that draw effects: the fire and its answers first, then the blasts and the other effects, then the street (a kind is only one of them).</summary>
+    public void OnEvent(EventKind kind, byte[] payload)
     {
         OnFireEvent(kind, payload);
         OnBlastEvent(kind, payload);
+        OnStreetEvent(kind, payload);
     }
 
     /// <summary>The ammo, the shots, the launches and the hits: the sounds, the HUD and the fire's own effects.</summary>
@@ -30,9 +55,9 @@ public partial class NetClient
         switch (kind)
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
-                Ctx.Ammo = a;
+                _ctx.Ammo = a;
                 _weapon.OnAmmo(a);
-                Ctx.Sound.Ammo(a, _weapon.ReloadUntil);
+                _ctx.Sound.Ammo(a, _weapon.ReloadUntil);
                 _hud.Ammo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
@@ -50,8 +75,8 @@ public partial class NetClient
                 _hunts.OnShot(hs);
                 break;
             case EventKind.Hit when WeaponCodec.DecodeHit(payload) is { } h:
-                Ctx.Logs?.Hits.Add((Ctx.Now, h));
-                Ctx.Sound.Hit(h);
+                _ctx.Logs?.Hits.Add((_ctx.Now, h));
+                _ctx.Sound.Hit(h);
                 _hud.OnHit(h);
                 break;
         }
@@ -88,13 +113,13 @@ public partial class NetClient
                 _impacts.OnImpact(imp);
                 break;
             case EventKind.HelperWarning when HelperWarningCodec.Decode(payload) is { } hw:
-                _aircraftClient.OnHelperWarning(hw);
+                _aircraft.OnHelperWarning(hw);
                 break;
             case EventKind.PlayerFlung when PlayerFlungCodec.Decode(payload) is { } flung:
                 _remotes.OnPlayerFlung(flung);
                 break;
             case EventKind.VehicleCrash when VehicleCrashCodec.Decode(payload) is { } crash:
-                Ctx.Cars.Sounds.OnCrash(crash.Car, crash.Sound);
+                _ctx.Cars.Sounds.OnCrash(crash.Car, crash.Sound);
                 break;
             case EventKind.GlassPane when GlassCodec.DecodePane(payload) is { } gp:
                 _glass.OnPane(gp);
