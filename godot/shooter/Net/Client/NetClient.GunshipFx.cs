@@ -24,15 +24,15 @@ public partial class NetClient
     {
         Ctx.Logs?.Shots.Add((Ctx.Now, sh));
         if (Ctx.Remotes.TryGetValue(sh.Shooter, out var shooter)) shooter.FireUntil = Ctx.Now + 0.45;
-        if (sh.Shooter == Ctx.MyId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _spread.Shot(Weapons.Weapons[sh.Weapon], Ctx.Now);
+        if (sh.Shooter == Ctx.MyId && Weapons != null && sh.Weapon < Weapons.Weapons.Count) _weapon.Spread.Shot(Weapons.Weapons[sh.Weapon], Ctx.Now);
         var melee = Weapons != null && sh.Weapon < Weapons.Weapons.Count && Weapons.Weapons[sh.Weapon].Kind == WeaponKind.Melee;
-        if (EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
+        if (_weapon.EchoOfPredicted(sh.Shooter)) return; // already played and drawn by prediction
         var endV = new Vector3(sh.End.X, sh.End.Y, sh.End.Z);
         Ctx.Sound.Shot(sh, melee);
         if (!melee && !exactMuzzle) { if (sh.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(sh.Shooter, out var flasher)) flasher.View?.Flash(); }
         var originV = new Vector3(sh.Origin.X, sh.Origin.Y, sh.Origin.Z);
         // a gunship's impact is its own message (OnGunshipImpacts), so its tracer does not draw one too: no 300 m cut-off for a long round
-        var muzzle = exactMuzzle ? originV : MuzzleOf(sh.Shooter, originV, endV);
+        var muzzle = exactMuzzle ? originV : _weapon.MuzzleOf(sh.Shooter, originV, endV);
         ShotFx.Spawn(Ctx.Owned, muzzle, endV, melee, impact: impact, speed: speed, length: length, width: width);
         if (!melee && !exactMuzzle && CasingKindOf(sh.Weapon) is { } ck) CasingFx.Eject(Ctx.Owned, muzzle, endV - muzzle, ck);
         var marks = !melee && (holes ?? !exactMuzzle);

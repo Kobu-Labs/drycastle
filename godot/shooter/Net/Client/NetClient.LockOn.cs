@@ -135,7 +135,7 @@ public partial class NetClient
     void OnHomingLaunch(HomingLaunchMsg l)
     {
         if (Ctx.Remotes.TryGetValue(l.Owner, out var launcher)) launcher.FireUntil = Ctx.Now + 0.45;
-        if (!EchoOfPredicted(l.Owner))
+        if (!_weapon.EchoOfPredicted(l.Owner))
         {
             if (Sfx.Enabled) { var snd = SoundRules.Event("launch", Ctx.Sound.WeaponId(l.Weapon)); if (l.Owner == Ctx.MyId) Sfx.Play2D(snd); else Sfx.Play3D(snd, G(l.Origin)); }
             if (l.Owner == Ctx.MyId) _viewmodel.Flash(0.5f); else if (Ctx.Remotes.TryGetValue(l.Owner, out var lf)) lf.View?.Flash(0.6f);

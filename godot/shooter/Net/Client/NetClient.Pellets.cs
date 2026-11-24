@@ -20,8 +20,8 @@ public partial class NetClient
         if (Weapons == null || pf.Weapon >= Weapons.Weapons.Count) return;
         var w = Weapons.Weapons[pf.Weapon];
         var range = w.Range > 0 ? w.Range : 300f;
-        var echo = EchoOfPredicted(pf.Shooter);
-        if (pf.Shooter == Ctx.MyId) _spread.Shot(w, Ctx.Now);
+        var echo = _weapon.EchoOfPredicted(pf.Shooter);
+        if (pf.Shooter == Ctx.MyId) _weapon.Spread.Shot(w, Ctx.Now);
         if (Ctx.Remotes.TryGetValue(pf.Shooter, out var shooter)) shooter.FireUntil = Ctx.Now + 0.45;
 
         var from = G(pf.Origin);
@@ -56,7 +56,7 @@ public partial class NetClient
             Ctx.Sound.Shot(new ShotMsg(pf.Shooter, pf.Weapon, pf.Origin, new NVec3(end.X, end.Y, end.Z)), false);
             if (pf.Shooter == Ctx.MyId) _viewmodel.Flash(0.4f); else if (Ctx.Remotes.TryGetValue(pf.Shooter, out var flasher)) flasher.View?.Flash();
         }
-        var muzzle = MuzzleOf(pf.Shooter, from, end);
+        var muzzle = _weapon.MuzzleOf(pf.Shooter, from, end);
         ShotFx.Spawn(Ctx.Owned, muzzle, end, false, impact: false);
         if (!echo) CasingFx.Eject(Ctx.Owned, muzzle, end - muzzle, CasingKind.Shotgun);
     }

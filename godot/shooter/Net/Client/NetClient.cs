@@ -97,6 +97,8 @@ public partial class NetClient : Node
     bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
     readonly OwnPrediction _prediction;
+    OwnAim _aim = null!;
+    OwnWeapon _weapon = null!;
     /// <summary>Replicated world entities (turrets, missiles, ...). Subscribe to Spawned/Despawned for visuals.</summary>
     public WorldReplica WorldEntities => Ctx.WorldEntities;
     double _lastArrival;
@@ -246,6 +248,8 @@ public partial class NetClient : Node
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, CarThrown, v => _hulls.PlaceSolid(v), _session.FlightCorrection);
         _hulls = new VehicleHulls(Ctx, _flight, _driveClient, CarThrown, GlassData);
+        _aim = new OwnAim(Ctx, Loadouts, () => _binoculars);
+        _weapon = new OwnWeapon(Ctx, _aim, _hulls, _fxDemo, () => LockComplete, () => OwnBodyFlung);
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
@@ -441,7 +445,7 @@ public partial class NetClient : Node
     {
         RenderRockets();
         RenderLockOn();
-        RenderLauncherLoaded();
+        _weapon.ShowLoaded();
         _missile.RenderMissiles();
         _missile.RenderPov();
         _scud.Render(delta);
@@ -623,7 +627,7 @@ public partial class NetClient : Node
                     Ctx.Hotbar.Want = Ctx.Hotbar.Start;
                     Ctx.Dead = false; _blastDust.ClearRinging(); if (OwnSpawned) _link.Enter(LinkPhase.Welcomed); _prediction.ClearInputs(); _prediction.ClearViewFix(); // the next snapshot carries the spawn position
                     _bot?.OnSpawn(sp.Protection);
-                    EndDeathView(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _spread.Reset(); _recoil = new RecoilState((ulong)Ctx.MyId); _breath = new BreathState((ulong)Ctx.MyId); _breathCues.Reset(); _zero.Reset(); ClearPredictedReload(); _pNextFire = 0;
+                    EndDeathView(); Ctx.Hud?.ClearTransients(); Ctx.Hud?.SetDead(false); Ctx.Hud?.SetProtection(sp.Protection); _weapon.OnSpawn();
                 }
                 break;
             case EventKind.Death:
@@ -631,7 +635,7 @@ public partial class NetClient : Node
                 GD.Print($"client {PlayerName}: death #{d.Victim} by #{d.Killer}, respawn in {d.RespawnDelay:F1}s");
                 Ctx.Sound.Death(d);
                 NoteDeath(d);
-                if (d.Victim == Ctx.MyId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; ClearPredictedReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
+                if (d.Victim == Ctx.MyId) { _deaths++; _bot?.OnOwnDeath(); BeginDeathView(d.RespawnDelay, d.Flight); Ctx.Dead = true; _weapon.ClearReload(); Ctx.Hud?.SetDead(true, d.Killer == d.Victim ? "" : Match.NameOf(d.Killer), d.RespawnDelay, fadeIn: true); Ctx.Hud?.SetProtection(0); _streaks.OnDeath(); }
                 break;
         }
     }
@@ -699,17 +703,16 @@ public partial class NetClient : Node
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         ThrowFilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
-        _aimHeld = mi.Has(MoveButtons.Aim);
+        _weapon.AimHeld = mi.Has(MoveButtons.Aim);
         if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
-        TickRecoil(mi);
-        TickBreath(mi);
+        _aim.Tick(mi);
         return mi;
     }
 
     /// <summary>Numbers the input and predicts it: the own body, and the helicopter or the amphibious transport the player steers. The input waits in <see cref="OwnPrediction"/> for the server's ack.</summary>
     void PredictTick(MoveInput mi, float dt)
     {
-        if (!_aircraftClient.AtTurret) PredictFire(mi); // rounds from a turret are the server's alone
+        if (!_aircraftClient.AtTurret) _weapon.PredictFire(mi); // rounds from a turret are the server's alone
         var sentPitch = _aircraftClient.GunnerLook(ref mi); // at the turret the aim is sent (ground-stabilised, #160), and the player's own look is left alone
         if (!_aircraftClient.AtTurret) Ctx.Me!.Yaw = mi.Yaw;
         var ni = NetInput.From(++_seq, mi, sentPitch, (byte)(_aircraftClient.AtTurret ? TurretKey() : Weapons != null ? Ctx.Hotbar.Want : 0), _aircraftClient.GunnerAim);
@@ -742,7 +745,7 @@ public partial class NetClient : Node
         if (Bot || Weapons == null || Dead || ChooserOpen || Input.MouseMode != Input.MouseModeEnum.Captured) return;
         if (e is InputEventMouseButton { Pressed: true } b && b.ButtonIndex is MouseButton.WheelUp or MouseButton.WheelDown)
         {
-            if (DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
+            if (_aim.DialZero(b.ButtonIndex == MouseButton.WheelUp ? 1 : -1)) return; // a scope with bullet drop is up: the wheel is its zero dial
             Ctx.Hotbar.Want = Ctx.Hotbar.Cycle(Ctx.Hotbar.Want, b.ButtonIndex == MouseButton.WheelDown ? 1 : -1);
         }
     }

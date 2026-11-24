@@ -16,10 +16,6 @@ namespace Drycastle.Shooter.Net.Client;
 /// <summary>Feeds the in-match <see cref="Hud"/> from client state: events push changes, the per-frame hook only forwards health.</summary>
 public partial class NetClient
 {
-    readonly SpreadEstimator _spread = new();
-    /// <summary>The aim button of the last input tick; the crosshair spread uses it as the server uses the input's Aim bit.</summary>
-    bool _aimHeld;
-
     /// <summary>
     /// The match's phase edges, detected once in <see cref="ClientMatchState"/> and handed to the views that react to them: the round sounds, and the kill feed
     /// that a restarted round (the end screen's end, or an admin's restart mid-round) empties.
@@ -35,16 +31,16 @@ public partial class NetClient
     float CrosshairSpread()
     {
         if (Ctx.CurrentWeapon is not { } w) return 0f;
-        var own = HitMath.OwnSpread(w, _spread.Degrees(w, Ctx.Now));
+        var own = HitMath.OwnSpread(w, _weapon.Spread.Degrees(w, Ctx.Now));
         // in an armed seat the vehicle's speed is what widens it (the server's rule for a shot from the seat)
-        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _aimHeld, SeatsClient.RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
-        return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _aimHeld) : own;
+        if (Ctx.View.InArmedSeat && Ctx.Cars.MySeat() is { } m) return SeatAimRules.ShotSpread(own, w, _weapon.AimHeld, SeatsClient.RideSpeed(m.Car, _driveClient.StateOf(m.Car)), m.Seat);
+        return Ctx.Me is { } me ? HitMath.ShotSpread(own, w, me.State, _weapon.AimHeld) : own;
     }
 
     void HudWelcome()
     {
         if (!ShotFx.Enabled || Ctx.Hud != null) return; // headless runs have no HUD
-        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel.AimAmount, Breath = BreathView, Scope = ScopeView, Spread = CrosshairSpread };
+        Ctx.Hud = new Hud { MyId = Ctx.MyId, KillWeaponName = id => Weapons != null && id < Weapons.Weapons.Count ? ClientText.WeaponName(Weapons.Weapons[id].Id) : null, Scoped = () => Ctx.Me is { ZoomFov: > 0 } && !_binoculars, Binoculars = BinocularsView, Aim = () => _viewmodel.AimAmount, Breath = _aim.BreathView, Scope = _aim.ScopeView, Spread = CrosshairSpread };
         AddChild(Ctx.Hud); // the hotbar names are set at each spawn (ApplySpawnLoadout)
         Ctx.Hud.TacticalMapTeleport = _screens.OnMapTeleport;
         Sandbox.ShowOnHud(); // the SANDBOX badge (#156)

@@ -74,7 +74,7 @@ public partial class NetClient
             var v = new NVec3(l.Velocity.X, l.Velocity.Y, l.Velocity.Z);
             Ctx.Rockets[l.Id] = new RocketView { Node = RocketFx.Make(Ctx.Owned, Ctx.Sound.WeaponId(l.Weapon)), Born = Ctx.Now, Pos = l.Origin, Dir = NVec3.Normalize(v), At = Ctx.Now, Speed = v.Length(), Gravity = GrenadeGravity(l.Weapon), Grenade = GrenadeGravity(l.Weapon) > 0 };
         }
-        if (!EchoOfPredicted(l.Owner))
+        if (!_weapon.EchoOfPredicted(l.Owner))
         {
             Ctx.Sound.Launch(l);
             if (GrenadeGravity(l.Weapon) > 0) { if (Ctx.Remotes.TryGetValue(l.Owner, out var thrower)) thrower.FireUntil = Ctx.Now + 0.45; return; } // a throw: no flash, no backblast

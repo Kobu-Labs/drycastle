@@ -86,8 +86,8 @@ public partial class NetClient
         {
             case EventKind.Ammo when WeaponCodec.DecodeAmmo(payload) is { } a:
                 Ctx.Ammo = a;
-                PredictOnAmmo(a);
-                Ctx.Sound.Ammo(a, _pReloadUntil);
+                _weapon.OnAmmo(a);
+                Ctx.Sound.Ammo(a, _weapon.ReloadUntil);
                 HudAmmo();
                 break;
             case EventKind.Shot when WeaponCodec.DecodeShot(payload) is { } sh:
