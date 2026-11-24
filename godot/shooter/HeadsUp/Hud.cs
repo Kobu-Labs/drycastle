@@ -2,27 +2,26 @@ using Godot;
 using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Maps;
 using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
+using Drycastle.ShooterCore.Progression;
+using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.HeadsUp;
 
 /// <summary>
-/// In-match HUD (issue #88). Every element is built once in <see cref="_Ready"/>; the setters change text, fill,
-/// visibility or modulate only when the value changed. <see cref="_Process"/> only advances time based items
-/// (timer second, countdowns, fades, kill feed expiry, Tab, mouse hint, crosshair) and compares before writing.
-/// Layout: all pieces sit on anchors with fixed-size cells (no shift when values change). The root is scaled by
-/// viewport height / 1080 (never under 0.8) times the UI scale setting (75-150 %).
+/// In-match HUD (issue #88): the root that builds one widget per feature, once, in draw order, and forwards the owner's calls to them; the widgets write only what changed.
+/// All pieces sit on anchors with fixed-size cells (no shift when values change). The root is scaled by viewport height / 1080 (never under 0.8) times the UI scale setting (75-150 %).
 /// </summary>
 public partial class Hud : CanvasLayer
 {
-    const int Slots = 4, FeedRows = HudLogic.FeedMax, BoardRows = 16, Indicators = 4;
-    const float CrossThick = 3, CrossLen = 12, CrossMinGap = 8;
-
-    public GameSettings Settings { get; private set; } = new();
+    // ---- what the owner feeds ----
     /// <summary>Id of the local player (scoreboard highlight, score line).</summary>
-    public ushort MyId { get; set; }
+    public ushort MyId { get => _state.MyId; set => _state.MyId = value; }
     /// <summary>Display name of a weapons.json index in a kill message (the killer's weapon, not the viewer's hotbar); null when unknown.</summary>
     public Func<byte, string?>? KillWeaponName { get; set; }
     /// <summary>Crosshair spread in degrees (set by the owner on shots and weapon changes; the crosshair reads it each frame).</summary>
@@ -35,970 +34,374 @@ public partial class Hud : CanvasLayer
     public Func<float>? Aim { get; set; }
     /// <summary>Sniper breath hold: whether the weapon has one and is scoped, the breath left (0..1) and the phase. Read each frame; the owner sets it.</summary>
     public Func<(bool Show, float Meter, BreathState.BreathPhase Phase)>? Breath { get; set; }
-    float _crossAlpha = 1;
-    ScopeOverlay _scope = null!;
-    Label _zero = null!;
-    (int Zero, int Mils) _zeroShown = (-1, -1);
-    Control _breath = null!;
-    Label _breathLabel = null!;
+    /// <summary>The binoculars: whether they are up, and the distance read, metres (null: nothing in range). Read each frame; the owner sets it.</summary>
+    public Func<(bool Up, int? RangeM, bool CanMark)>? Binoculars { get; set; }
+    /// <summary>Admin rights and spawnable vehicles for the chat's command hints (set by the owner; read when the text changes).</summary>
+    public Func<ChatContext>? ChatInfo { get; set; }
+    /// <summary>The player sent a chat line (a message, or a command starting with "/").</summary>
+    public Action<string>? ChatSubmit { get; set; }
+    /// <summary>Picks the slot the next spawn uses (the owner sends it to the server).</summary>
+    public Action<int>? PickSlot { get; set; }
+    /// <summary>Opens the loadout editor from the respawn screen.</summary>
+    public Action? EditLoadouts { get; set; }
+    /// <summary>False while a menu screen is open, so the number keys belong to that screen.</summary>
+    public Func<bool>? KeysFree { get; set; }
+    /// <summary>Screenshot mode freezes the clock so transient elements (hit marker, indicators, feed, countdowns) stay as set.</summary>
+    public static double? FrozenNow { get => HudUi.FrozenNow; set => HudUi.FrozenNow = value; }
 
+    // ---- state and widgets, in the order they are built (the order is the draw order) ----
+    readonly HudState _state = new();
+    /// <summary>What the minimap and the tactical map both show; the one place the match feeds (through <see cref="Minimap"/>'s setters).</summary>
+    readonly MapMarkers _mapMarkers = new();
     Control _root = null!;
-    // crosshair, hit marker, indicators
-    readonly ColorRect[] _arms = new ColorRect[4], _armsBack = new ColorRect[4];
-    float _gap = -1;
-    Control _hit = null!, _crossRoot = null!, _ammoBox = null!;
-    readonly Line2D[] _hitLines = new Line2D[4];
-    double _hitUntil, _hitFade;
-    readonly Control[] _ind = new Control[Indicators];
-    readonly Polygon2D[] _indTri = new Polygon2D[Indicators];
-    readonly double[] _indAt = new double[Indicators];
-    readonly object?[] _indKey = new object?[Indicators];
-    readonly Func<float?>?[] _indLive = new Func<float?>?[Indicators];
-    int _indNext;
-    // health
-    ProgressBar _hpBar = null!;
-    int _hp = -1;
-    // ammo
-    Label _wName = null!, _mag = null!, _reserve = null!, _speed = null!, _prompt = null!;
-    RadialProgress _radial = null!;
-    // top centre
-    Label _timer = null!, _scoreLine = null!;
-    float _timeLeft; double _timeAt; bool _timeRunning; int _timeShown = -1;
-    MatchPhase _phase = MatchPhase.Waiting;
-    // kill feed
-    Control _feedRoot = null!, _feedBox = null!;
-    readonly PanelContainer[] _feed = new PanelContainer[FeedRows];
-    readonly Label[] _feedKiller = new Label[FeedRows], _feedWeapon = new Label[FeedRows], _feedVictim = new Label[FeedRows];
-    readonly BlurText[] _feedBlur = new BlurText[FeedRows];
-    readonly List<FeedEntry> _kills = new();
-    readonly List<double> _killTimes = new();
-    (int, int) _feedShown = (-1, -1);
-    // respawn, protection, hints
-    Control _respawn = null!;
-    Label _respawnTitle = null!, _respawnBy = null!, _respawnIn = null!;
-    bool _respawnWaits;
-    double _respawnAt; bool _dead; int _respawnShown = -1;
-    Control _protChip = null!, _protOutline = null!;
-    Label _protText = null!;
-    double _protUntil; int _protShown = -1;
-    // scoreboard
-    Control _board = null!;
-    Label _boardTitle = null!, _boardFoot = null!;
-    /// <summary>One scoreboard table: optional team heading, column header, pre-built rows, empty line.</summary>
-    sealed class BoardCol
-    {
-        public VBoxContainer Root = null!;
-        public Label Head = null!, Empty = null!;
-        public readonly PanelContainer[] Row = new PanelContainer[BoardRows];
-        public readonly Label[][] Cells = new Label[BoardRows][];
-    }
-    /// <summary>Left table (everyone in free-for-all, own team in team deathmatch), right table (other team), and players without a team below.</summary>
-    readonly BoardCol[] _cols = { new(), new(), new() };
-    const float BoardWidth = 800, BoardWidthTeams = 2 * 640 + 2 * ShooterTheme.Space;
-    IReadOnlyList<ScoreRow> _rows = Array.Empty<ScoreRow>();
-    IReadOnlyList<ushort> _winners = Array.Empty<ushort>();
-    bool _boardShown, _boardDirty = true;
-    Func<ushort, string> _nameOf = id => Strings.F("player.unknown", id);
     Vector2 _lastSize;
-    Weapons4 _weapons = new();
-
-    sealed class Weapons4 { public string[] Names = new string[Slots]; public int Count; }
+    DustVeil _dust = null!;
+    SpawnProtection _protection = null!;
+    PounceWash _pounce = null!;
+    ScopeView _scope = null!;
+    Crosshair _crosshair = null!;
+    HitMarker _hit = null!;
+    DamageIndicators _indicators = null!;
+    BreathHint _breath = null!;
+    HuntShotCard _huntShot = null!;
+    BinocularsView _binoculars = null!;
+    HealthBar _health = null!;
+    StatusChips _status = null!;
+    RozhlasChips _rozhlas = null!;
+    SpeedReadout _speed = null!;
+    ContextPrompt _prompt = null!;
+    AmmoReadout _ammo = null!;
+    SeatPanel _seats = null!;
+    TopBar _top = null!;
+    KillFeed _feed = null!;
+    FpsCounter _fps = null!;
+    RespawnScreen _respawn = null!;
+    BloodVeil _blood = null!;
+    Scoreboard _scoreboard = null!;
+    XpPanel _xp = null!;
+    MinimapPanel _minimap = null!;
+    readonly SandboxBadge _sandbox = new(); // keeps its state until built, so the client may set it early
+    OverlayScreens _screens = null!;
+    ChatPanel _chat = null!;
+    VolumeLine _volumes = null!;
 
     public override void _Ready()
     {
         Strings.Register();
         Layer = 10;
-        Settings = GameSettings.Current;
         GameSettings.Changed += OnSettingsChanged;
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
-        BuildDust(); // first: the dust is behind every HUD element
-        BuildProtection();
-        BuildPounce();
-        _scope = new ScopeOverlay { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = false };
-        _scope.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _root.AddChild(_scope);
-        // the zero and what one dot is worth, inside the lower part of the scope's circle
-        _zero = Place(L("", "HudSmall", HorizontalAlignment.Center), 0.5f, 0.76f, -240, 0, 480, 24);
-        _zero.Visible = false;
-        _root.AddChild(_zero);
-        BuildCrosshair();
-        BuildBreath();
-        BuildHuntShot();
-        BuildBinoculars();
-        BuildHealth();
-        BuildStatus();
-        BuildRozhlas(); // the set holder's hint and ON AIR chip
-        BuildAmmo();
-        BuildSeats(); // the vehicle seat schematic above the vehicle readout
-        BuildTop();
-        BuildFeed();
-        BuildFps(); // after the feed: it moves the feed clear of the chip
-        BuildProtectionChip();
-        BuildRespawn();
-        BuildBlood(); // above the scrim
-        BuildBoard();
-        BuildXpPanel();
-        BuildMinimap();
-        BuildStreaks();
-        BuildUav();
-        BuildSandbox();
-        BuildTacticalMap();
-        BuildChat();
-        ApplyMinimapSettings();
+        _dust = new DustVeil(_root); // first: the dust is behind every HUD element
+        _protection = new SpawnProtection(_root);
+        _pounce = new PounceWash(_root);
+        _scope = new ScopeView(_root);
+        _crosshair = new Crosshair(_root, () => _scope.Up, () => _binoculars?.Up ?? false);
+        _hit = new HitMarker(_root);
+        _indicators = new DamageIndicators(_root);
+        _breath = new BreathHint(_root);
+        _huntShot = new HuntShotCard(_root);
+        _binoculars = new BinocularsView(_root, _crosshair.Apply);
+        _health = new HealthBar(_root);
+        _status = new StatusChips(_root);
+        _rozhlas = new RozhlasChips(_root); // the set holder's hint and ON AIR chip
+        _speed = new SpeedReadout(_root);
+        _prompt = new ContextPrompt(_root);
+        _ammo = new AmmoReadout(_root);
+        _seats = new SeatPanel(_root); // the vehicle seat schematic above the vehicle readout
+        _top = new TopBar(_root, _state);
+        _feed = new KillFeed(this, _root.Theme, _state, id => KillWeaponName?.Invoke(id)); // beside the panels root, not under it: a control session hides the panels and keeps the feed (ticket #154)
+        _fps = new FpsCounter(_root, _feed, _state); // after the feed: it moves the feed clear of the chip
+        _protection.AddChip(_root);
+        _respawn = new RespawnScreen(_root, () => KeysFree?.Invoke() ?? true, slot => PickSlot?.Invoke(slot), () => EditLoadouts?.Invoke());
+        _blood = new BloodVeil(_root); // above the scrim
+        _scoreboard = new Scoreboard(_root, _state);
+        _xp = new XpPanel(_root, _state);
+        _minimap = new MinimapPanel(_root, _mapMarkers);
+        _sandbox.Build(_root);
+        _screens = new OverlayScreens(_root, this, _minimap.Map, _mapMarkers, _sandbox, Overlays, _scoreboard.Panel, _xp.Panel);
+        _chat = new ChatPanel(_root, ChatState, text => ChatSubmit?.Invoke(text), _fps.Toggle);
+        _volumes = new VolumeLine(_root);
+        _minimap.Apply();
         Relayout();
         GetViewport().SizeChanged += Relayout;
         SetHealth(100);
         SetMatch(MatchPhase.Waiting, 0, null);
     }
 
+    public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
+
     /// <summary>The live settings changed (settings screen preview/apply): rescale, crosshair visibility and FOV, key hints.</summary>
     void OnSettingsChanged()
     {
-        Settings = GameSettings.Current;
         Relayout();
-        ApplyMinimapSettings();
-        _gap = -1;
-        _rozhlasHintStale = true; // the talk key may have been rebound
-        _seatsDef = null; // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
-        foreach (var tri in _indTri) tri.Color = ShooterTheme.Danger; // read at build time otherwise; the palette may have switched
-        ApplyCrosshairVisibility();
-        ApplyFps();
+        _minimap.Apply();
+        _crosshair.ResetGap();
+        _rozhlas.MarkStale(); // the talk key may have been rebound
+        _seats.Forget(); // the seat hint names the (maybe rebound) keys: rebuilt on the next frame
+        _indicators.Recolor(); // read at build time otherwise; the palette may have switched
+        _crosshair.Apply();
+        _fps.Apply();
     }
-
-    bool _crossCovered;
-    /// <summary>A panel stands in the middle of the screen (the corpse chooser): the crosshair would show through it, so it is hidden meanwhile.</summary>
-    public void CoverCrosshair(bool on)
-    {
-        if (_crossCovered == on) return;
-        _crossCovered = on;
-        ApplyCrosshairVisibility();
-    }
-
-    bool _crossUnarmed;
-    /// <summary>The local player sits where nothing can be fired (a driver's or an unarmed passenger's seat, #373): no crosshair and no weapon/ammo readout meanwhile.</summary>
-    public void SetUnarmedSeat(bool on)
-    {
-        if (_crossUnarmed == on) return;
-        _crossUnarmed = on;
-        if (_ammoBox != null) _ammoBox.Visible = !on;
-        ApplyCrosshairVisibility();
-    }
-
-    bool _crossLauncher;
-    /// <summary>The Lock-on launcher's sight is up (<see cref="LockOnOverlay"/>): it has its own aim pip, so the crosshair is hidden meanwhile.</summary>
-    public void SetLauncherHidesCrosshair(bool hide)
-    {
-        if (_crossLauncher == hide) return;
-        _crossLauncher = hide;
-        ApplyCrosshairVisibility();
-    }
-
-    /// <summary>The one writer of the crosshair's Visible: the setting, the cover, the scope, the binoculars and the pounce all go through <see cref="CrosshairRules"/>.</summary>
-    void ApplyCrosshairVisibility()
-    {
-        if (_crossRoot == null) return;
-        _crossRoot.Visible = CrosshairRules.Visible(Settings.ShowCrosshair, _crossCovered || _crossLauncher, _scope?.Visible ?? false, _bino?.Visible ?? false, _pounceHide || _flungHide, _crossUnarmed);
-    }
-
-    public override void _ExitTree() => GameSettings.Changed -= OnSettingsChanged;
-
-    // ---- layout helpers ----
-
-    /// <summary>Anchors the control at (ax, ay) of the screen and offsets it so a w x h box is aligned to that point (0 = left/top, 1 = right/bottom).</summary>
-    static T Place<T>(T c, float ax, float ay, float ox, float oy, float w, float h) where T : Control
-    {
-        c.AnchorLeft = c.AnchorRight = ax; c.AnchorTop = c.AnchorBottom = ay;
-        c.OffsetLeft = ox - w * ax; c.OffsetRight = ox + w * (1 - ax);
-        c.OffsetTop = oy - h * ay; c.OffsetBottom = oy + h * (1 - ay);
-        return c;
-    }
-
-    static Label L(string text, string? variation = null, HorizontalAlignment align = HorizontalAlignment.Left, float minW = 0)
-    {
-        var l = new Label { Text = text, HorizontalAlignment = align, MouseFilter = Control.MouseFilterEnum.Ignore, CustomMinimumSize = new Vector2(minW, 0) };
-        if (variation != null) l.ThemeTypeVariation = variation;
-        return l;
-    }
-
-    static PanelContainer P(string variation) => new() { ThemeTypeVariation = variation, MouseFilter = Control.MouseFilterEnum.Ignore };
-
-    static void Set(Label l, string text) { if (l.Text != text) l.Text = text; }
-
-    static void Fade(CanvasItem c, float a) { if (!Mathf.IsEqualApprox(c.Modulate.A, a)) c.Modulate = new Color(1, 1, 1, a); }
 
     /// <summary>Root size is the viewport divided by the scale, so anchored children fill the real screen at any size and aspect.</summary>
     void Relayout()
     {
         var vp = GetViewport().GetVisibleRect().Size;
-        if (vp == _lastSize && Mathf.IsEqualApprox(_root.Scale.X, UiFactor())) return;
-        _lastSize = vp; _boardDirty = true; // the board's width is capped to the screen
-        var s = UiFactor();
-        _root.Scale = new Vector2(s, s);
+        if (vp == _lastSize && Mathf.IsEqualApprox(_root.Scale.X, HudUi.Scale(this))) return;
+        _lastSize = vp;
+        _scoreboard.MarkDirty(); // its width is capped to the screen
         _root.Position = Vector2.Zero;
-        _root.Size = vp / s;
-        FitOverlayRoots();
-        _gap = -1;
+        HudUi.Fit(_root);
+        HudUi.Fit(_feed.Root);
+        _screens.Fit();
+        _crosshair.ResetGap();
     }
 
-    /// <summary>The roots that sit beside _root (the kill feed, the Hunter's Log) follow the same resolution and UI scale themselves.</summary>
-    void FitOverlayRoots()
+    ChatContext ChatState() => ChatInfo?.Invoke() ?? new ChatContext(false, Array.Empty<string>());
+
+    public override void _Process(double delta)
     {
-        var vp = GetViewport().GetVisibleRect().Size;
-        var s = UiFactor();
-        _feedRoot.Scale = new Vector2(s, s);
-        _feedRoot.Size = vp / s;
-        if (_logRoot == null) return;
-        _logRoot.Scale = new Vector2(s, s);
-        _logRoot.Size = vp / s;
+        var now = HudUi.Now;
+        _top.Tick();
+        _respawn.Tick();
+        _protection.Tick(now);
+        _hit.Tick(now);
+        _huntShot.Tick(now);
+        _indicators.Tick(now);
+        _feed.Tick(now);
+        _fps.Tick(now);
+        UpdateSights();
+        _breath.Update(Breath?.Invoke() ?? (false, 0f, BreathState.BreathPhase.Ready));
+        _screens.Tick();
+        _scoreboard.Tick(ChatOpen);
     }
 
-    float UiFactor() => HudLogic.ScreenScale(GetViewport().GetVisibleRect().Size.Y, Settings.UiScale);
-
-    // ---- build ----
-
-    void BuildProtection()
+    /// <summary>What the player looks through: the binoculars, else the scope, else the crosshair with its gap.</summary>
+    void UpdateSights()
     {
-        _protOutline = P("HudProtection");
-        _protOutline.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _root.AddChild(_protOutline);
-        _protOutline.Modulate = new Color(1, 1, 1, 0);
-    }
-
-    void BuildCrosshair()
-    {
-        var c = _crossRoot = Place(new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Visible = Settings.ShowCrosshair }, 0.5f, 0.5f, 0, 0, 0, 0);
-        _root.AddChild(c);
-        for (var i = 0; i < 4; i++)
+        if (_crosshair.Pinned) return;
+        if (_binoculars.Update(Binoculars?.Invoke() ?? (false, null, false)))
         {
-            _armsBack[i] = new ColorRect { Color = ShooterTheme.Outline, MouseFilter = Control.MouseFilterEnum.Ignore };
-            _arms[i] = new ColorRect { Color = ShooterTheme.Text, MouseFilter = Control.MouseFilterEnum.Ignore };
-            c.AddChild(_armsBack[i]); c.AddChild(_arms[i]);
+            // the binoculars are up: their own view, no crosshair, and no scope left over from the moment they were raised
+            _scope.Hide();
+            _scope.Update((0f, 0f));
+            return;
         }
-        // hit marker: four diagonal ticks around the centre
-        _hit = Place(new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Modulate = new Color(1, 1, 1, 0) }, 0.5f, 0.5f, 0, 0, 0, 0);
-        _root.AddChild(_hit);
-        for (var i = 0; i < 4; i++)
-        {
-            var dir = new Vector2(i % 2 == 0 ? 1 : -1, i < 2 ? 1 : -1).Normalized();
-            var l = new Line2D { Width = 3, DefaultColor = ShooterTheme.Text, Points = new[] { dir * 12, dir * 24 } };
-            _hit.AddChild(l); _hitLines[i] = l;
-        }
-        // damage indicators: chevrons on a ring, rotated around the centre
-        for (var i = 0; i < Indicators; i++)
-        {
-            var pivot = Place(new Control { MouseFilter = Control.MouseFilterEnum.Ignore, Modulate = new Color(1, 1, 1, 0) }, 0.5f, 0.5f, 0, 0, 0, 0);
-            var back = new Polygon2D { Color = ShooterTheme.Outline, Polygon = new[] { new Vector2(0, -216), new Vector2(-28, -176), new Vector2(28, -176) } };
-            var tri = new Polygon2D { Color = ShooterTheme.Danger, Polygon = new[] { new Vector2(0, -208), new Vector2(-20, -180), new Vector2(20, -180) } };
-            pivot.AddChild(back); pivot.AddChild(tri);
-            _root.AddChild(pivot); _ind[i] = pivot; _indTri[i] = tri;
-        }
+        var scoped = Scoped?.Invoke() ?? false;
+        if (_scope.SetUp(scoped)) _crosshair.Apply();
+        _scope.Update(scoped ? Scope?.Invoke() ?? (0f, 0f) : (0f, 0f));
+        if (scoped) return;
+        _crosshair.Update(Aim?.Invoke() ?? 0f, Spread?.Invoke() ?? 0f);
     }
 
-    /// <summary>Health: one bar, no panel, no text. It turns the danger colour when low.</summary>
-    void BuildHealth()
-    {
-        _hpBar = Place(new ProgressBar { MaxValue = 100, Value = 100, ShowPercentage = false, ThemeTypeVariation = "HealthBar", MouseFilter = Control.MouseFilterEnum.Ignore }, 0, 1, ShooterTheme.Margin, -ShooterTheme.Margin, 320, 16);
-        _root.AddChild(_hpBar);
-    }
-
-    void BuildAmmo()
-    {
-        _speed = Place(L("", "HudBig", HorizontalAlignment.Right), 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin - 104, 320, 40);
-        _speed.Visible = false; // vehicle speed readout hook: SetVehicleSpeed
-        _root.AddChild(_speed);
-        _prompt = Place(L("", "HudHead", HorizontalAlignment.Center), 0.5f, 0.7f, -200, 0, 400, 32); // context prompt (enter / exit a vehicle)
-        _prompt.Visible = false;
-        _root.AddChild(_prompt);
-        // the hold ring (care package open, #151) sits just above the prompt line, its label under the ring
-        _radial = new RadialProgress { Text = Strings.T("hud.crate.opening"), Visible = false };
-        _radial.AnchorLeft = _radial.AnchorRight = 0.5f;
-        _radial.AnchorTop = _radial.AnchorBottom = 0.7f;
-        _radial.OffsetLeft = -RadialProgress.Width / 2;
-        _radial.OffsetRight = RadialProgress.Width / 2;
-        _radial.OffsetBottom = -ShooterTheme.Space * 4;
-        _radial.OffsetTop = _radial.OffsetBottom - RadialProgress.Height;
-        _root.AddChild(_radial);
-        // weapon name and ammo only: no panel, no border
-        var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 1, -ShooterTheme.Margin, -ShooterTheme.Margin, 320, 88);
-        _ammoBox = v;
-        v.AddThemeConstantOverride("separation", 0);
-        _root.AddChild(v);
-        _wName = L("", "HudHead", HorizontalAlignment.Right); v.AddChild(_wName);
-        var row = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End, MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddChild(row);
-        _mag = L("", "HudDisplay", HorizontalAlignment.Right, 96);
-        _reserve = L("", "HudHead", HorizontalAlignment.Left, 88); _reserve.ThemeTypeVariation = "HudDim";
-        row.AddChild(_mag); row.AddChild(_reserve);
-    }
-
-    void BuildTop()
-    {
-        var p = Place(P("HudPanel"), 0.5f, 0, 0, ShooterTheme.Margin, 224, 64);
-        _root.AddChild(p);
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        v.AddThemeConstantOverride("separation", 0);
-        p.AddChild(v);
-        _timer = L("", "HudHead", HorizontalAlignment.Center); v.AddChild(_timer);
-        _scoreLine = L("", "HudSmall", HorizontalAlignment.Center); _scoreLine.ClipText = true; v.AddChild(_scoreLine);
-    }
-
-    void BuildFeed()
-    {
-        // the feed sits beside the panels root, not under it, so a control session can hide the panels and keep the feed (ticket #154)
-        _feedRoot = new Control { Theme = _root.Theme, MouseFilter = Control.MouseFilterEnum.Ignore };
-        AddChild(_feedRoot);
-        var v = Place(new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore }, 1, 0, -ShooterTheme.Margin, ShooterTheme.Margin, 480, FeedRows * 40 + (FeedRows - 1) * 4);
-        v.PivotOffset = new Vector2(480, 0); // the compact feed shrinks towards the top right corner
-        v.AddThemeConstantOverride("separation", 4);
-        _feedRoot.AddChild(v);
-        _feedBox = v;
-        for (var i = 0; i < FeedRows; i++)
-        {
-            var row = P("HudRow"); row.CustomMinimumSize = new Vector2(0, 40); row.Visible = false;
-            var h = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.End, MouseFilter = Control.MouseFilterEnum.Ignore };
-            h.AddThemeConstantOverride("separation", ShooterTheme.Space);
-            row.AddChild(h);
-            _feedKiller[i] = L("");
-            _feedWeapon[i] = L("", "HudDim");
-            _feedVictim[i] = L("");
-            _feedBlur[i] = new BlurText(Strings.T("hunt.hidden.name")) { Visible = false }; // a hunt line's Mystery creature the viewer has not caught
-            h.AddChild(_feedKiller[i]); h.AddChild(_feedWeapon[i]); h.AddChild(_feedBlur[i]); h.AddChild(_feedVictim[i]);
-            v.AddChild(row); _feed[i] = row;
-        }
-    }
-
-    void BuildProtectionChip()
-    {
-        // spawn protection chip, bottom centre (reserved space, faded in and out)
-        var chip = Place(P("HudPanel"), 0.5f, 1, 0, -ShooterTheme.Margin, 320, 48);
-        var h = new HBoxContainer { Alignment = BoxContainer.AlignmentMode.Center, MouseFilter = Control.MouseFilterEnum.Ignore };
-        h.AddThemeConstantOverride("separation", ShooterTheme.Space);
-        chip.AddChild(h);
-        h.AddChild(new ShieldIcon { CustomMinimumSize = new Vector2(24, 24), MouseFilter = Control.MouseFilterEnum.Ignore });
-        _protText = L("", "HudAccent"); h.AddChild(_protText);
-        _root.AddChild(chip); _protChip = chip;
-        chip.Modulate = new Color(1, 1, 1, 0);
-    }
-
-    void BuildRespawn()
-    {
-        _respawn = P("HudScrim");
-        _respawn.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-        _respawn.Visible = false;
-        _root.AddChild(_respawn);
-        var c = new CenterContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _respawn.AddChild(c);
-        var v = new VBoxContainer { CustomMinimumSize = new Vector2(640, 0), MouseFilter = Control.MouseFilterEnum.Ignore };
-        c.AddChild(v);
-        _respawnTitle = L(Strings.T("hud.respawn.title"), "HudHead", HorizontalAlignment.Center); v.AddChild(_respawnTitle);
-        _respawnBy = L("", "HudBig", HorizontalAlignment.Center); _respawnBy.ThemeTypeVariation = "HudDanger"; _respawnBy.ClipText = true; v.AddChild(_respawnBy);
-        _respawnIn = L("", "HudDisplay", HorizontalAlignment.Center); v.AddChild(_respawnIn);
-        BuildRespawnLoadouts(v);
-    }
-
-    void BuildBoard()
-    {
-        _board = Place(P("HudPanel"), 0.5f, 0.5f, 0, 0, 800, 0);
-        _board.Visible = false;
-        _root.AddChild(_board);
-        // grow from the centre in both directions
-        _board.GrowHorizontal = Control.GrowDirection.Both; _board.GrowVertical = Control.GrowDirection.Both;
-        var v = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        _board.AddChild(v);
-        _boardTitle = L("", "HudBig", HorizontalAlignment.Center); _boardTitle.ClipText = true; v.AddChild(_boardTitle);
-        var tables = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        tables.AddThemeConstantOverride("separation", 2 * ShooterTheme.Space);
-        v.AddChild(tables);
-        tables.AddChild(BoardTable(_cols[0])); tables.AddChild(BoardTable(_cols[1]));
-        v.AddChild(BoardTable(_cols[2]));
-        _boardFoot = L("", "HudSmall", HorizontalAlignment.Center); v.AddChild(_boardFoot);
-    }
-
-    VBoxContainer BoardTable(BoardCol col)
-    {
-        var v = col.Root = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore, SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
-        col.Head = L("", "HudHead", HorizontalAlignment.Center); col.Head.ClipText = true; v.AddChild(col.Head);
-        v.AddChild(BoardRow(null, out _, true));
-        for (var i = 0; i < BoardRows; i++)
-        {
-            col.Row[i] = BoardRow(i, out col.Cells[i], false);
-            v.AddChild(col.Row[i]);
-        }
-        col.Empty = L(Strings.T("score.empty"), "HudDim", HorizontalAlignment.Center); v.AddChild(col.Empty);
-        return v;
-    }
-
-    PanelContainer BoardRow(int? index, out Label[] cells, bool header)
-    {
-        var p = P(header ? "HudBare" : "HudRow"); p.CustomMinimumSize = new Vector2(0, 32);
-        var h = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
-        p.AddChild(h);
-        cells = new[]
-        {
-            L(header ? Strings.T("score.col.player") : "", header ? "HudSmall" : null), L(header ? Strings.T("score.col.kills") : "", header ? "HudSmall" : null, HorizontalAlignment.Right, 80),
-            L(header ? Strings.T("score.col.deaths") : "", header ? "HudSmall" : null, HorizontalAlignment.Right, 80), L(header ? Strings.T("score.col.ping") : "", header ? "HudSmall" : null, HorizontalAlignment.Right, 112),
-        };
-        cells[0].SizeFlagsHorizontal = Control.SizeFlags.ExpandFill; cells[0].ClipText = true;
-        foreach (var c in cells) h.AddChild(c);
-        if (index != null) p.Visible = false;
-        return p;
-    }
-
-    // ---- setters (call on change) ----
-
-    public void SetHealth(int hp)
-    {
-        hp = Math.Clamp(hp, 0, 100);
-        if (hp == _hp) return;
-        _hp = hp;
-        _hpBar.Value = hp;
-        _hpBar.ThemeTypeVariation = hp <= HudLogic.LowHealth ? "HealthBarLow" : "HealthBar";
-    }
-
-    /// <summary>Display names in slot order (the selected one is named beside the ammo).</summary>
-    public void SetWeapons(IReadOnlyList<string> names)
-    {
-        for (var i = 0; i < Slots; i++) _weaponNames[i] = i < names.Count ? names[i] : "";
-        Set(_wName, _weaponNames[_slotShown]);
-    }
-
-    readonly string[] _weaponNames = { "", "", "", "" };
-    int _slotShown;
-
-    /// <summary>Selected slot (1-based) and its mag/reserve (mag &lt; 0: no ammo, melee). The per-slot list and reload fields are kept for the callers.</summary>
-    public void SetAmmo(int slot, int mag, int reserve, IReadOnlyList<(int Mag, int Reserve, bool Melee)> all, float reloadLeft, float reloadTotal)
-    {
-        _slotShown = Math.Clamp(slot, 1, Slots) - 1;
-        Set(_wName, _weaponNames[_slotShown]);
-        Set(_mag, mag < 0 ? Strings.T("hud.ammo.none") : mag.ToString());
-        Set(_reserve, mag < 0 ? "" : Strings.F("hud.ammo.reserve", reserve));
-        _mag.ThemeTypeVariation = mag == 0 && reserve == 0 && mag >= 0 ? "HudDisplayDanger" : "HudDisplay";
-    }
-
-    /// <summary>Phase, seconds left (null: unchanged clock) and the winner/ending state.</summary>
+    // ---- match ----
     /// <summary>Team deathmatch: the client's match state, read for teams and team scores. Call before <see cref="SetMatch"/>; null or free-for-all hides every team cue.</summary>
-    public void SetTeams(ClientMatchState? match) { _team = match; _boardDirty = true; _feedShown = (-1, -1); Minimap.TeamColours = TeamMode; }
-    ClientMatchState? _team;
-    bool TeamMode => _team is { IsTeamMode: true };
-    byte TeamOf(ushort id) => _team?.TeamOf(id) ?? Teams.None;
-    byte MyTeam => TeamOf(MyId);
-
-    /// <summary>Friend or enemy colour of <paramref name="team"/> as seen by the local player (the HUD text colour when neutral).</summary>
-    Color? RelationColor(byte team) => HudLogic.RelationOf(MyTeam, team) switch
+    public void SetTeams(ClientMatchState? match)
     {
-        HudLogic.Relation.Friend => ShooterTheme.Friend,
-        HudLogic.Relation.Enemy => ShooterTheme.Enemy,
-        _ => null,
-    };
+        _state.Team = match;
+        _scoreboard.MarkDirty();
+        _feed.Invalidate();
+        _minimap.Map.TeamColours = _state.TeamMode;
+    }
 
-    /// <summary>A name with its team tag in team deathmatch (so the team is readable without colour), plain otherwise.</summary>
-    string Tagged(string name, byte team) => TeamMode && team != Teams.None ? Strings.F("score.team.tag", Teams.Tag(team), name) : name;
-
-    /// <summary>The label's text colour for a team relation; null restores the theme colour.</summary>
-    static void Tint(Label l, Color? c) { if (c is { } col) l.AddThemeColorOverride("font_color", col); else l.RemoveThemeColorOverride("font_color"); }
-
+    /// <summary>Phase, seconds left (the clock runs on from there while the match is running) and the rows, winners and names (null: unchanged).</summary>
     public void SetMatch(MatchPhase phase, float timeRemaining, IReadOnlyList<ScoreRow>? rows, IReadOnlyList<ushort>? winners = null, Func<ushort, string>? nameOf = null)
     {
-        _phase = phase;
-        _timeLeft = timeRemaining; _timeAt = Now; _timeRunning = phase == MatchPhase.Running; _timeShown = -1;
-        if (rows != null) { _rows = rows; _boardDirty = true; }
-        if (winners != null) { _winners = winners; _boardDirty = true; }
-        if (nameOf != null) _nameOf = nameOf;
-        var line = HudLogic.Score(_rows, MyId);
-        Set(_scoreLine, phase switch
-        {
-            MatchPhase.Waiting => Strings.T("hud.phase.waiting"),
-            MatchPhase.Ending => Strings.T("hud.phase.ending"),
-            _ when TeamMode => TeamScoreText(),
-            _ => line.IAmLeader ? Strings.F("hud.score.leading", line.MyKills) : Strings.F("hud.score.behind", line.MyKills, line.LeaderName, line.LeaderKills),
-        });
-        UpdateTimer();
-        RefreshXpPanel();
+        _state.Phase = phase;
+        if (rows != null) { _state.Rows = rows; _scoreboard.MarkDirty(); }
+        if (winners != null) { _state.Winners = winners; _scoreboard.MarkDirty(); }
+        if (nameOf != null) _state.NameOf = nameOf;
+        _top.Set(timeRemaining);
+        _xp.Refresh();
     }
 
-    string TeamScoreText()
-    {
-        var (mine, theirs, team) = HudLogic.TeamScores(MyTeam, _team!.ScoreA, _team.ScoreB);
-        return Strings.F("hud.score.team", Teams.Tag(team), mine, theirs);
-    }
+    public void AddKill(KillMsg k, string killer, string victim) => _feed.AddKill(k, killer, victim);
 
-    void UpdateTimer()
-    {
-        var left = _timeRunning ? Math.Max(0f, _timeLeft - (float)(Now - _timeAt)) : _timeLeft;
-        var shown = HudLogic.CeilSeconds(left);
-        if (shown == _timeShown) return;
-        _timeShown = shown;
-        Set(_timer, _phase == MatchPhase.Waiting ? Strings.T("hud.timer.waiting") : HudLogic.TimeText(left));
-    }
+    /// <summary>A server-wide Hunter's Log announcement (a record or a first) as a line of the kill feed.</summary>
+    public void AddHuntLine(HuntFeedLine line) => _feed.AddHuntLine(line);
 
-    public void AddKill(KillMsg k, string killer, string victim)
-    {
-        _kills.Add(new FeedEntry(k, killer, victim)); _killTimes.Add(Now);
-        if (_kills.Count > 64) { _kills.RemoveRange(0, 32); _killTimes.RemoveRange(0, 32); }
-        AddOwnKill(k, killer, victim);
-        _feedShown = (-1, -1);
-    }
+    public void ClearKills() => _feed.Clear();
 
-    /// <summary>A server-wide Hunter's Log announcement (a record or a first) as a line of the kill feed; the owner's own are kept for the compact feed of a control session too.</summary>
-    public void AddHuntLine(HuntFeedLine line)
-    {
-        var e = new FeedEntry(new KillMsg(0, 0, 0), "", "", line); // a hunt line has no kill: the message is a placeholder the feed never reads
-        _kills.Add(e); _killTimes.Add(Now);
-        if (_kills.Count > 64) { _kills.RemoveRange(0, 32); _killTimes.RemoveRange(0, 32); }
-        if (line.Mine) AddOwnEntry(e);
-        _feedShown = (-1, -1);
-    }
+    /// <summary>The round's XP summary from the server; shown in the ending phase.</summary>
+    public void SetXpSummary(XpSummaryInfo? summary) => _xp.Set(summary);
 
-    public void ClearKills() { _kills.Clear(); _killTimes.Clear(); _mineKills.Clear(); _mineTimes.Clear(); _feedShown = (-1, -1); }
+    // ---- the player ----
+    public void SetHealth(int hp) => _health.Set(hp);
+
+    /// <summary>Display names in slot order (the selected one is named beside the ammo).</summary>
+    public void SetWeapons(IReadOnlyList<string> names) => _ammo.SetWeapons(names);
+
+    /// <summary>Selected slot (1-based) and its mag/reserve (mag &lt; 0: no ammo, melee). The per-slot list and reload fields are kept for the callers.</summary>
+    public void SetAmmo(int slot, int mag, int reserve, IReadOnlyList<(int Mag, int Reserve, bool Melee)> all, float reloadLeft, float reloadTotal) => _ammo.Set(slot, mag, reserve);
+
+    /// <summary>Context prompt under the crosshair, e.g. "E  Enter car"; null hides it.</summary>
+    public void SetPrompt(string? text) => _prompt.SetPrompt(text);
+
+    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
+    public void SetRadial(float? fraction) => _prompt.SetRing(fraction);
+
+    /// <summary>Vehicle speed readout (km/h); null hides it.</summary>
+    public void SetVehicleSpeed(float? kmh) => _speed.SetSpeed(kmh);
+
+    /// <summary>The vehicle readout as text (the flak gunner's ammo or a reload word) in the place of the speed; null hides it. A change of text only.</summary>
+    public void SetVehicleReadout(string? text) => _speed.SetText(text);
+
+    /// <summary>The seats of the vehicle the local player sits in, or null to hide the panel (not seated).</summary>
+    public void SetSeats((VehicleDef Def, ushort[] Occupants, int Mine)? seats) => _seats.Set(seats);
+
+    /// <summary>Shows which of the local player's statuses are on: the blessing and the curse (the mask), and burning.</summary>
+    public void SetStatus(byte mask, bool burning) => _status.Set(mask, burning);
+
+    /// <summary>The golden screen flash of a blessing that saved the player. Reduce motion: no flash.</summary>
+    public void FlashBlessing() => _status.FlashBlessing();
+
+    /// <summary>Spawn protection seconds remaining (0 hides the chip and the outline).</summary>
+    public void SetProtection(float seconds) => _protection.Set(seconds);
+
+    /// <summary>Shows the hold-the-set hint while <paramref name="holder"/>, and ON AIR while <paramref name="talking"/>.</summary>
+    public void SetRozhlas(bool holder, bool talking) => _rozhlas.Set(holder, talking);
+
+    /// <summary>Seconds left on the owner's UAV; zero or less hides the indicator.</summary>
+    public void SetUavSeconds(float seconds) => _minimap.Uav.SetSeconds(seconds);
+
+    /// <summary>The kills this life and the killstreak slots. <paramref name="alive"/> is unused by the row and kept for the callers.</summary>
+    public void RefreshStreaks(KillstreakTracker? tracker, bool alive) => _minimap.Streaks.Refresh(tracker);
+
+    /// <summary>Shows or hides the sandbox badge; <paramref name="held"/> is the held killstreak id ("" = none).</summary>
+    public void SetSandbox(bool on, string held, bool takesDamage = false) => _sandbox.Set(on, held, takesDamage);
+
+    /// <summary>The mode line of the F3 bounding-volume overlay, or null to hide it.</summary>
+    public void SetVolumeMode(string? text) => _volumes.Set(text);
+
+    /// <summary>The running count of server snapshots received (the FPS card's TPS line is its rate).</summary>
+    public void SetSnapshotCount(long count) => _fps.SetSnapshotCount(count);
 
     /// <summary>Direction of a damage source relative to the view (radians, 0 = ahead, clockwise). Fixed: it does not follow anything.</summary>
-    public void Damage(float angle) => Show(null, angle, null);
+    public void Damage(float angle) => _indicators.Add(angle);
 
-    /// <summary>
-    /// A damage source that is tracked: <paramref name="live"/> gives its current angle every frame (null = lost, the chevron keeps its last angle).
-    /// A new hit from the same <paramref name="key"/> refreshes its chevron instead of taking another (#424).
-    /// </summary>
-    public void Damage(object key, Func<float?> live)
-    {
-        if (live() is { } a) Show(key, a, live);
-    }
-
-    void Show(object? key, float angle, Func<float?>? live)
-    {
-        var i = -1;
-        if (key != null) for (var k = 0; k < Indicators; k++) if (_indAt[k] > 0 && key.Equals(_indKey[k])) { i = k; break; }
-        if (i < 0) i = _indNext++ % Indicators;
-        _indKey[i] = key; _indLive[i] = live;
-        _ind[i].Rotation = angle;
-        _indAt[i] = Now;
-        Fade(_ind[i], 1);
-    }
+    /// <summary>A tracked damage source: <paramref name="live"/> gives its angle every frame; a new hit from the same <paramref name="key"/> refreshes its chevron (#424).</summary>
+    public void Damage(object key, Func<float?> live) => _indicators.Track(key, live);
 
     /// <summary>Hit marker on a successful hit; kill and headshot get a larger, stronger mark (shape, not colour only).</summary>
-    public void Hit(bool headshot, bool kill)
-    {
-        var big = kill ? 1.6f : headshot ? 1.25f : 1f;
-        _hit.Scale = new Vector2(big, big);
-        foreach (var l in _hitLines) { l.Width = kill || headshot ? 4 : 3; l.DefaultColor = kill ? ShooterTheme.Danger : headshot ? ShooterTheme.Warn : ShooterTheme.Text; }
-        _hitFade = Settings.ReduceMotion ? 0 : 0.25; _hitUntil = Now + (Settings.ReduceMotion ? 0.2 : 0.15) + _hitFade;
-        Fade(_hit, 1);
-    }
+    public void Hit(bool headshot, bool kill) => _hit.Show(headshot, kill);
 
     /// <summary>Drops hit marker and damage indicators at once (used on spawn and by the screenshot mode).</summary>
     public void ClearTransients()
     {
-        _hitUntil = 0; Fade(_hit, 0);
-        ClearHuntShot();
-        for (var i = 0; i < Indicators; i++) { _indAt[i] = 0; _indKey[i] = null; _indLive[i] = null; Fade(_ind[i], 0); }
+        _hit.Clear();
+        _huntShot.Clear();
+        _indicators.Clear();
     }
 
-    /// <summary>
-    /// Respawn screen: show with the killer and seconds left; <paramref name="killer"/> empty = no killer line. <paramref name="fadeIn"/>: the scrim starts clear and the caller fades it in
-    /// with <see cref="SetRespawnScrim"/> (the death screen, #283); the countdown runs from now either way, and the respawn keys work while it is still clear.
-    /// </summary>
-    public void SetDead(bool dead, string killer = "", float secondsLeft = 0, bool fadeIn = false)
-    {
-        _dead = dead;
-        _respawn.Visible = dead;
-        _respawn.Modulate = new Color(1, 1, 1, dead && fadeIn ? 0f : 1f);
-        if (!dead) return;
-        _respawnWaits = secondsLeft < 0; // an admin took the player out of the round (#312): no countdown
-        Set(_respawnTitle, Strings.T(_respawnWaits ? "hud.respawn.out" : "hud.respawn.title"));
-        if (_respawnWaits) { Set(_respawnBy, ""); Set(_respawnIn, Strings.T("hud.respawn.waits")); return; }
-        _respawnAt = Now + secondsLeft; _respawnShown = -1;
-        Set(_respawnBy, killer == "" ? Strings.T("hud.respawn.self") : Strings.F("hud.respawn.by", killer));
-        UpdateRespawn();
-    }
+    /// <summary>The hit diagram after a sniper kill of a wild animal.</summary>
+    public void ShowHuntShot(string species, AnimalArt art, float along, float height, string line) => _huntShot.Show(species, art, along, height, line);
+
+    /// <summary>The red wash of the demon's pounce: its opacity (0 off).</summary>
+    public void SetPounceWash(float alpha) => _pounce.Set(alpha);
+
+    /// <summary>The blood's intensity, 0 (off) to 1 (the death screen's full spatter); <paramref name="seed"/> picks the pattern.</summary>
+    public void SetBlood(float intensity, int seed = 0) => _blood?.Set(intensity, seed);
+
+    /// <summary>How much of the view the dust takes, 0 (off) to 1; <paramref name="night"/> is the night factor, 0 at full day.</summary>
+    public void SetDust(float intensity, float night) => _dust.Set(intensity, night);
+
+    /// <summary>Respawn screen with the killer ("" = none) and seconds left; <paramref name="fadeIn"/>: the scrim starts clear and the caller fades it in with <see cref="SetRespawnScrim"/> (#283).</summary>
+    public void SetDead(bool dead, string killer = "", float secondsLeft = 0, bool fadeIn = false) => _respawn.SetDead(dead, killer, secondsLeft, fadeIn);
 
     /// <summary>The respawn scrim's opacity 0..1 (its text, the countdown and the loadout fade with it); only while dead.</summary>
-    public void SetRespawnScrim(float alpha)
+    public void SetRespawnScrim(float alpha) => _respawn.SetScrim(alpha);
+
+    /// <summary>The five loadout rows (text and whether active); redrawn when the server sends a new profile, never per frame.</summary>
+    public void SetLoadoutRows(IReadOnlyList<(string Text, bool Active)> rows) => _respawn.SetLoadoutRows(rows);
+
+    /// <summary>A panel stands in the middle of the screen (the corpse chooser): the crosshair is hidden meanwhile.</summary>
+    public void CoverCrosshair(bool on) => _crosshair?.Cover(on);
+
+    /// <summary>The local player sits where nothing can be fired (#373): no crosshair and no weapon/ammo readout meanwhile.</summary>
+    public void SetUnarmedSeat(bool on)
     {
-        if (_dead) _respawn.Modulate = new Color(1, 1, 1, Mathf.Clamp(alpha, 0f, 1f));
+        if (_crosshair == null) return;
+        _ammo.Visible = !on;
+        _crosshair.SetUnarmed(on);
     }
 
-    void UpdateRespawn()
-    {
-        if (_respawnWaits) return;
-        var s = HudLogic.CeilSeconds(_respawnAt - Now);
-        if (s == _respawnShown) return;
-        _respawnShown = s;
-        Set(_respawnIn, Strings.F("hud.respawn.in", s));
-    }
+    /// <summary>The Lock-on launcher's sight is up (<see cref="LockOnOverlay"/>): it has its own aim pip, so the crosshair is hidden meanwhile.</summary>
+    public void SetLauncherHidesCrosshair(bool hide) => _crosshair?.SetLauncher(hide);
 
-    /// <summary>Spawn protection seconds remaining (0 hides the chip and the outline).</summary>
-    public void SetProtection(float seconds)
-    {
-        _protUntil = seconds > 0 ? Now + seconds : 0;
-        _protShown = -1;
-        if (seconds <= 0) { Fade(_protChip, 0); Fade(_protOutline, 0); }
-        else UpdateProtection();
-    }
+    /// <summary>The crosshair is hidden while the player lies pinned under the demon.</summary>
+    public void SetPounceHidesCrosshair(bool hide) => _crosshair?.SetPounce(hide);
 
-    void UpdateProtection()
-    {
-        var tenths = (int)Math.Ceiling(Math.Max(0, _protUntil - Now) * 10);
-        if (tenths == _protShown) return;
-        _protShown = tenths;
-        Set(_protText, Strings.F("hud.protection", $"{tenths / 10.0:0.0}s"));
-        Fade(_protChip, 1); Fade(_protOutline, 1);
-    }
+    /// <summary>The crosshair is hidden while the Bigfoot holds the player and while they fly from its throw (#360).</summary>
+    public void SetFlungHidesCrosshair(bool hide) => _crosshair?.SetFlung(hide);
 
-    /// <summary>Context prompt under the crosshair, e.g. "E  Enter car"; null hides it.</summary>
-    public void SetPrompt(string? text)
-    {
-        _prompt.Visible = text != null;
-        if (text != null) Set(_prompt, text);
-    }
-
-    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
-    public void SetRadial(float? fraction)
-    {
-        _radial.Visible = fraction != null;
-        if (fraction is { } f) _radial.Value = f;
-    }
-
-    /// <summary>Vehicle speed readout (km/h); null hides it. Hook for the vehicles issue, unused by the match HUD today.</summary>
-    public void SetVehicleSpeed(float? kmh)
-    {
-        _speed.Visible = kmh != null;
-        if (kmh != null) Set(_speed, Strings.F("hud.vehicle.speed", (int)Math.Round(kmh.Value)));
-    }
-
-    /// <summary>The vehicle readout as text (the flak gunner's ammo or a reload word) in the place of the speed; null hides it. A change of text only.</summary>
-    public void SetVehicleReadout(string? text)
-    {
-        _speed.Visible = text != null;
-        if (text != null) Set(_speed, text);
-    }
-
-    // ---- per frame (cheap, change-gated) ----
-
-    /// <summary>Screenshot mode freezes the clock so transient elements (hit marker, indicators, feed, countdowns) stay as set.</summary>
-    public static double? FrozenNow { get; set; }
-    /// <summary>Screenshot mode: pretend the mouse is captured (or not) for the control hint.</summary>
-    public Input.MouseModeEnum? MouseModeOverride { get; set; }
-
-    static double Now => FrozenNow ?? Time.GetTicksMsec() / 1000.0;
-
-    public override void _Process(double delta)
-    {
-        var now = Now;
-        if (_timeRunning) UpdateTimer();
-        if (_dead) { UpdateRespawn(); PollRespawnKeys(); }
-        if (_protUntil > 0)
-        {
-            if (now >= _protUntil) SetProtection(0); else UpdateProtection();
-        }
-        if (_hitUntil > 0) UpdateHit(now);
-        if (_huntUntil > 0) UpdateHuntShot(now);
-        for (var i = 0; i < Indicators; i++) UpdateIndicator(i, now);
-        UpdateFeed(now);
-        UpdateFps(now);
-        UpdateCrosshair();
-        UpdateBreath();
-        UpdateTacticalMap();
-        UpdateEquipment();
-        UpdateHuntersLog();
-        UpdateMineralLog();
-        var want = (Input.IsActionPressed("scoreboard") && !ChatOpen) || _phase == MatchPhase.Ending; // Tab completes in the chat box
-        if (want != _boardShown || (want && _boardDirty)) UpdateBoard(want);
-    }
-
-    void UpdateHit(double now)
-    {
-        if (now >= _hitUntil) { _hitUntil = 0; Fade(_hit, 0); return; }
-        Fade(_hit, _hitFade > 0 ? (float)Math.Clamp((_hitUntil - now) / _hitFade, 0, 1) : 1f);
-    }
-
-    void UpdateIndicator(int i, double now)
-    {
-        if (_indAt[i] <= 0) return;
-        var age = now - _indAt[i];
-        const double life = 1.2;
-        if (age >= life) { _indAt[i] = 0; _indKey[i] = null; _indLive[i] = null; Fade(_ind[i], 0); return; }
-        if (_indLive[i]?.Invoke() is { } a) _ind[i].Rotation = a;
-        Fade(_ind[i], Settings.ReduceMotion ? 1f : (float)Math.Clamp((life - age) / 0.6, 0, 1));
-    }
-
-    void UpdateFeed(double now)
-    {
-        // a control session shows only the owner's kills, compactly (ticket #154); the rows and their text are the same
-        var compact = ControlMode;
-        var w = compact ? HudLogic.FeedWindow(_mineTimes, now, ShooterTheme.FeedCompactRows) : HudLogic.FeedWindow(_killTimes, now);
-        if (w == _feedShown) return;
-        _feedShown = w;
-        var list = compact ? _mineKills : _kills;
-        for (var i = 0; i < FeedRows; i++)
-        {
-            if (i >= w.Count) { _feed[i].Visible = false; continue; }
-            var (k, killer, victim, hunt) = list[w.Start + i];
-            if (hunt != null) { ShowHuntFeedRow(i, hunt); continue; }
-            ResetFeedRow(i);
-            var mine = k.Killer == MyId || k.Victim == MyId;
-            var suicide = k.Killer == k.Victim;
-            _feed[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            // your own rows say so in words as well as colour (as the scoreboard does)
-            var killerTeam = TeamOf(k.Killer); var victimTeam = TeamOf(k.Victim);
-            Set(_feedKiller[i], Tagged(WithYou(suicide ? victim : killer, k.Killer == MyId), killerTeam));
-            Set(_feedWeapon[i], $"[{(k.Cause == KillCause.Roadkill ? Strings.T("feed.roadkill") : WeaponName(k.Weapon))}]");
-            Set(_feedVictim[i], suicide ? "" : Tagged(WithYou(victim, k.Victim == MyId), victimTeam));
-            Tint(_feedKiller[i], RelationColor(killerTeam)); Tint(_feedVictim[i], RelationColor(victimTeam));
-            _feed[i].Visible = true;
-        }
-    }
-
-    /// <summary>A hunt line: the tag in its colour (and words), then the sentence; a Mystery creature the viewer has not caught is the blurred placeholder between its two halves.</summary>
-    void ShowHuntFeedRow(int i, HuntFeedLine l)
-    {
-        _feed[i].ThemeTypeVariation = l.Mine ? "HudRowMine" : "HudRow";
-        Set(_feedKiller[i], l.Tag);
-        Tint(_feedKiller[i], l.Record ? ShooterTheme.Warn : ShooterTheme.Good);
-        _feedWeapon[i].ThemeTypeVariation = "Label";
-        Set(_feedWeapon[i], l.Hidden ? l.Before : l.Before + l.Species + l.After);
-        Tint(_feedWeapon[i], null);
-        _feedBlur[i].Visible = l.Hidden;
-        Set(_feedVictim[i], l.Hidden ? l.After : "");
-        Tint(_feedVictim[i], null);
-        // a sentence is longer than a kill: the part after the tag wraps inside the feed's width instead of widening it past the screen's edge
-        Wrap(_feedWeapon[i], !l.Hidden);
-        Wrap(_feedVictim[i], l.Hidden);
-        _feed[i].Visible = true;
-    }
-
-    static void Wrap(Label l, bool on)
-    {
-        l.AutowrapMode = on ? TextServer.AutowrapMode.WordSmart : TextServer.AutowrapMode.Off;
-        l.SizeFlagsHorizontal = on ? Control.SizeFlags.ExpandFill : Control.SizeFlags.Fill;
-    }
-
-    /// <summary>A kill row after a hunt row used it: the dim weapon tag, no blur, no wrapping.</summary>
-    void ResetFeedRow(int i)
-    {
-        Wrap(_feedWeapon[i], false); Wrap(_feedVictim[i], false);
-        if (_feedWeapon[i].ThemeTypeVariation != "HudDim") _feedWeapon[i].ThemeTypeVariation = "HudDim";
-        if (_feedBlur[i].Visible) _feedBlur[i].Visible = false;
-    }
-
-    static string WithYou(string name, bool mine) => mine ? Strings.F("score.you", name) : name;
-
-    string WeaponName(byte id)
-    {
-        return id switch { SpecialWeapons.Fall => Strings.T("weapon.fall"), SpecialWeapons.Bigfoot => Strings.T("weapon.bigfoot"), SpecialWeapons.Gang => Strings.T("weapon.gang"), SpecialWeapons.Void => Strings.T("weapon.void"), SpecialWeapons.Debug => Strings.T("weapon.debug"), SpecialWeapons.Redeploy => Strings.T("weapon.redeploy"), SpecialWeapons.Harvester => Strings.T("weapon.harvester"), SpecialWeapons.Vehicle => Strings.T("weapon.vehicle"), SpecialWeapons.VehicleGun => Strings.T("weapon.vehicle_gun"), SpecialWeapons.Flak => Strings.T("weapon.flak"), SpecialWeapons.Burn => Strings.T("weapon.burn"), SpecialWeapons.Moab => Strings.T("weapon.moab"), SpecialWeapons.Scud => Strings.T("weapon.scud"), SpecialWeapons.Missile => Strings.T("weapon.attack_missile"), SpecialWeapons.Turret => Strings.T("weapon.turret"), SpecialWeapons.AttackHelicopter => Strings.T("heli.weapon"), SpecialWeapons.Ac130 => Strings.T("ac130.kill"), SpecialWeapons.Helper => Strings.T("helper.weapon"), _ => KillWeaponName?.Invoke(id) ?? Strings.T("weapon.unknown") };
-    }
-
-    /// <summary>The mil-dots and the zero of a scope with bullet drop: the dots follow the scope's FOV, the words change only with the zero or the dot spacing.</summary>
-    void UpdateScope(bool scoped)
-    {
-        (float FovDeg, float ZeroM) sc = scoped ? Scope?.Invoke() ?? (0f, 0f) : (0f, 0f);
-        var on = sc.ZeroM > 0 && sc.FovDeg > 0;
-        if (_zero.Visible != on) _zero.Visible = on;
-        _scope.SetMils(on ? sc.FovDeg : 0f);
-        if (!on) return;
-        var shown = ((int)MathF.Round(sc.ZeroM), _scope.DotMils);
-        if (shown == _zeroShown) return;
-        _zeroShown = shown;
-        Set(_zero, Strings.F("hud.scope.zero", shown.Item1, shown.Item2));
-    }
+    // ---- control mode ----
+    /// <summary>True while the regular HUD is hidden for a control session.</summary>
+    public bool ControlMode => _state.ControlMode;
 
     /// <summary>
-    /// Black outside a centred circle with a thin cross, drawn over the zoomed view. A scope with bullet drop has mil-dots on the cross: a dot every
-    /// <see cref="DotMils"/> mils (1 mil = 1 m at 1000 m), spaced from the FOV so they are true angles on the world: a target of a known height that
-    /// spans n mils is height x 1000 / n metres away, and a dot under the centre is the hold-over for a target beyond the zero.
+    /// The control-mode switch (ticket #152): while the owner flies a streak's point of view (a gunship turret, the attack missile) the HUD panels are hidden; the kill feed stays,
+    /// compact, with only the owner's kills (ticket #154). Idempotent and cheap to call every frame.
     /// </summary>
-    sealed partial class ScopeOverlay : Control
+    public void SetControlMode(bool on)
     {
-        /// <summary>The dot spacings tried, mils: the first that puts the dots at least <see cref="MinDotPx"/> apart.</summary>
-        static readonly int[] Steps = { 1, 2, 5, 10, 20 };
-        const float MinDotPx = 10f, DotRadius = 2f;
-        const int MaxDots = 10;
-        float _fov;
-
-        /// <summary>Mils between two dots at the current FOV and size (0: no dots).</summary>
-        public int DotMils { get; private set; }
-
-        /// <summary>Screen pixels one mil spans at a vertical FOV, for a view this high.</summary>
-        float PxPerMil(float fovDeg) => Size.Y / 2f / Mathf.Tan(Mathf.DegToRad(fovDeg) / 2f) / 1000f;
-
-        public void SetMils(float fovDeg)
-        {
-            if (Mathf.IsEqualApprox(fovDeg, _fov)) return;
-            _fov = fovDeg;
-            Respace();
-            QueueRedraw();
-        }
-
-        void Respace()
-        {
-            DotMils = 0;
-            if (_fov <= 0 || Size.Y <= 0) return;
-            var px = PxPerMil(_fov);
-            DotMils = Steps[^1];
-            foreach (var step in Steps) if (step * px >= MinDotPx) { DotMils = step; break; }
-        }
-
-        public override void _Draw()
-        {
-            var s = Size; var c = s / 2; var r = Mathf.Min(s.X, s.Y) * 0.46f;
-            var outer = c.Length();
-            var w = outer - r + 4;
-            DrawArc(c, r + w / 2, 0, Mathf.Tau, 128, Colors.Black, w);
-            DrawArc(c, r, 0, Mathf.Tau, 128, new Color(0, 0, 0, 0.9f), 3);
-            var line = new Color(0, 0, 0, 0.85f);
-            DrawLine(new Vector2(c.X - r, c.Y), new Vector2(c.X + r, c.Y), line, 1.5f);
-            DrawLine(new Vector2(c.X, c.Y - r), new Vector2(c.X, c.Y + r), line, 1.5f);
-            if (DotMils > 0)
-            {
-                var gap = DotMils * PxPerMil(_fov);
-                for (var i = 1; i <= MaxDots && i * gap < r * 0.9f; i++)
-                {
-                    DrawCircle(new Vector2(c.X, c.Y + i * gap), DotRadius, Colors.Black);
-                    DrawCircle(new Vector2(c.X, c.Y - i * gap), DotRadius, Colors.Black);
-                    DrawCircle(new Vector2(c.X + i * gap, c.Y), DotRadius, Colors.Black);
-                    DrawCircle(new Vector2(c.X - i * gap, c.Y), DotRadius, Colors.Black);
-                }
-            }
-            DrawCircle(c, 2f, new Color(0.9f, 0.1f, 0.1f));
-        }
-
-        public override void _Notification(int what) { if (what == NotificationResized) { Respace(); QueueRedraw(); } }
+        if (_state.ControlMode == on) return;
+        _state.ControlMode = on;
+        _root.Visible = !on;
+        _fps.Apply();
+        _feed.SetCompact(on);
     }
 
-    /// <summary>
-    /// The breath hold has no meter (the heartbeat and the exhale say how much is left, see <see cref="BreathCues"/>): the HUD only names the key,
-    /// under the crosshair, while scoped with a full breath that is not being held.
-    /// </summary>
-    void BuildBreath()
+    // ---- chat ----
+    public bool ChatOpen => _chat?.IsOpen ?? false;
+
+    /// <summary>Opens the chat box. The Hunter's Log closes first: it sits on the top layer, so it would cover the box and take its Q / E keys.</summary>
+    public void OpenChat(string prefill = "")
     {
-        const float w = 240;
-        _breathLabel = L("", "HudSmall", HorizontalAlignment.Center);
-        _breath = Place(_breathLabel, 0.5f, 0.5f, -w / 2, 40, w, 24);
-        _breath.Visible = false;
-        _root.AddChild(_breath);
+        _screens.CloseHuntersLog();
+        _screens.CloseMineralLog();
+        _chat.Open(prefill);
     }
 
-    void UpdateBreath()
-    {
-        var b = Breath?.Invoke() ?? (false, 0f, BreathState.BreathPhase.Ready);
-        var show = b.Show && b.Phase == BreathState.BreathPhase.Ready && b.Meter >= 0.999f;
-        if (_breath.Visible != show) _breath.Visible = show;
-        if (!show) return;
-        // the words depend only on the bound key: text is built when it changes (#173, T3-032)
-        var key = InputBindings.Name("sprint");
-        if (key == _breathKey) return;
-        _breathKey = key;
-        Set(_breathLabel, Strings.F("hud.breath.ready", key));
-    }
+    /// <summary>Closes the chat box. True when it was open.</summary>
+    public bool CloseChat() => _chat.Close();
 
-    string? _breathKey;
+    public void AddChatLine(ChatLine line) => _chat.AddLine(line);
 
-    void UpdateCrosshair()
-    {
-        if (_pounceHide || _flungHide) return; // lying under the demon, or in the Bigfoot's fist or flying from it: no crosshair
-        if (UpdateBinoculars())
-        {
-            // the binoculars are up: their own view, no crosshair, and no scope left over from the moment they were raised
-            if (_scope.Visible) _scope.Visible = false;
-            UpdateScope(false);
-            return;
-        }
-        var scoped = Scoped?.Invoke() ?? false;
-        if (_scope.Visible != scoped) { _scope.Visible = scoped; _scope.QueueRedraw(); ApplyCrosshairVisibility(); }
-        UpdateScope(scoped);
-        if (scoped) return;
-        var alpha = 1f - Math.Clamp(Aim?.Invoke() ?? 0f, 0f, 1f);
-        if (Math.Abs(alpha - _crossAlpha) > 0.004f) { _crossAlpha = alpha; _crossRoot.Modulate = new Color(1, 1, 1, alpha); }
-        var deg = Spread?.Invoke() ?? 0f;
-        var gap = HudLogic.CrosshairGap(deg, Settings.Fov, GetViewport().GetVisibleRect().Size.Y, CrossMinGap * UiFactor()) / UiFactor();
-        if (Math.Abs(gap - _gap) < 0.25f) return;
-        _gap = gap;
-        const float o = 1; // outline width
-        var arms = new (float X, float Y, float W, float H)[]
-        {
-            (-CrossThick / 2, -gap - CrossLen, CrossThick, CrossLen), (-CrossThick / 2, gap, CrossThick, CrossLen),
-            (-gap - CrossLen, -CrossThick / 2, CrossLen, CrossThick), (gap, -CrossThick / 2, CrossLen, CrossThick),
-        };
-        for (var i = 0; i < 4; i++)
-        {
-            var a = arms[i];
-            _arms[i].Position = new Vector2(a.X, a.Y); _arms[i].Size = new Vector2(a.W, a.H);
-            _armsBack[i].Position = new Vector2(a.X - o, a.Y - o); _armsBack[i].Size = new Vector2(a.W + 2 * o, a.H + 2 * o);
-        }
-    }
+    // ---- the minimap and the overlay screens ----
+    /// <summary>The HUD's minimap: build it with the map, set the player each frame, feed enemy pings. The tactical map shares its data.</summary>
+    public Minimap Minimap => _minimap.Map;
+    /// <summary>The Scud strikes the maps show (<see cref="MapStrikes"/>).</summary>
+    public MapStrikes Strikes => _mapMarkers.Strikes;
+    /// <summary>The search areas of announced events (the Scud event) the tactical map draws.</summary>
+    public MapSearchAreas SearchAreas => _mapMarkers.SearchAreas;
 
-    void UpdateBoard(bool show)
-    {
-        _boardShown = show; _boardDirty = false;
-        _board.Visible = show;
-        if (!show) return;
-        var ending = _phase == MatchPhase.Ending;
-        if (ending)
-        {
-            var names = string.Join(", ", _winners.Select(_nameOf));
-            if (TeamMode && _winners.Count > 0) Set(_boardTitle, Strings.F("score.ending.team", Teams.Tag(TeamOf(_winners[0]))));
-            else Set(_boardTitle, names == "" ? Strings.T("hud.phase.ending") : Strings.F(_winners.Count > 1 ? "score.ending.tie" : "score.ending", names));
-        }
-        else Set(_boardTitle, Strings.T("score.title"));
-        Set(_boardFoot, Strings.T(ending ? "score.hint.next" : "score.hint.hold"));
-        // two tables side by side in team deathmatch: own team left, so the sides never swap with the lead
-        var w = Math.Min(TeamMode ? BoardWidthTeams : BoardWidth, _root.Size.X - 2 * ShooterTheme.Margin);
-        _board.OffsetLeft = -w / 2; _board.OffsetRight = w / 2;
-        if (!TeamMode)
-        {
-            FillTable(_cols[0], HudLogic.Sort(_rows), Teams.None);
-            _cols[1].Root.Visible = _cols[2].Root.Visible = false;
-            return;
-        }
-        var split = HudLogic.SplitTeams(_rows, MyTeam);
-        FillTable(_cols[0], split.Left, split.LeftTeam);
-        FillTable(_cols[1], split.Right, Teams.Other(split.LeftTeam));
-        _cols[2].Root.Visible = split.NoTeam.Count > 0;
-        if (split.NoTeam.Count > 0) FillTable(_cols[2], split.NoTeam, Teams.None);
-    }
+    /// <summary>What <see cref="OverlayArbiter"/> needs: the HUD knows the chat box, death, the end of the match and the control mode; the caller adds the menu and the chooser.</summary>
+    public OverlayContext Overlays(bool menuOpen = false, bool chooserOpen = false) => new(ChatOpen, _respawn?.Dead ?? false, _state.Phase == MatchPhase.Ending, _state.ControlMode, menuOpen, chooserOpen);
 
-    /// <summary>Fills one table with already sorted rows; <paramref name="team"/> names its heading (free-for-all has none).</summary>
-    void FillTable(BoardCol col, List<ScoreRow> sorted, byte team)
-    {
-        col.Root.Visible = true;
-        col.Head.Visible = TeamMode;
-        if (TeamMode)
-        {
-            var key = HudLogic.RelationOf(MyTeam, team) switch { HudLogic.Relation.Friend => "score.team.mine", HudLogic.Relation.Enemy => "score.team.enemy", _ => "score.team.other" };
-            Set(col.Head, team == Teams.None ? Strings.T("score.team.none") : Strings.F(key, Teams.Tag(team), team == Teams.A ? _team!.ScoreA : _team!.ScoreB));
-            Tint(col.Head, RelationColor(team));
-        }
-        col.Empty.Visible = sorted.Count == 0;
-        // keep the local row visible even when the table exceeds the pre-built rows
-        if (sorted.Count > BoardRows)
-        {
-            var me = sorted.FindIndex(r => r.Id == MyId);
-            if (me >= BoardRows) sorted[BoardRows - 1] = sorted[me];
-        }
-        for (var i = 0; i < BoardRows; i++)
-        {
-            if (i >= sorted.Count) { col.Row[i].Visible = false; continue; }
-            var r = sorted[i];
-            var mine = r.Id == MyId;
-            col.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
-            var c = col.Cells[i];
-            var who = mine ? Strings.F("score.you", r.Name) : r.Name; // the team is the table's heading
-            if (r.Squad != 0 && _team?.SquadNameOf(r.Squad) is { Length: > 0 } squad) who = Strings.F("squad.tag", who, squad); // the squad's members sit together, the name says which
-            Set(c[0], who);
-            Tint(c[0], RelationColor(r.Team));
-            Set(c[1], r.Kills.ToString()); Set(c[2], r.Deaths.ToString()); Set(c[3], Strings.F("score.ping", r.Ping));
-            col.Row[i].Visible = true;
-        }
-    }
-}
+    public bool TacticalMapOpen => _screens.TacticalMapOpen;
+    public Action<Vector2>? TacticalMapTeleport { set => _screens.TacticalMapTeleport = value; }
+    public void PrewarmTacticalMap(Vector2 viewport) => _screens.PrewarmTacticalMap(viewport);
+    public bool ToggleTacticalMap(bool menuOpen = false) => _screens.ToggleTacticalMap(menuOpen);
+    public bool CloseTacticalMap() => _screens.CloseTacticalMap();
 
-/// <summary>Small shield icon for spawn protection, drawn once.</summary>
-public partial class ShieldIcon : Control
-{
-    public override void _Draw()
-    {
-        var w = Size.X; var h = Size.Y;
-        var pts = new[] { new Vector2(w * 0.5f, 0), new Vector2(w, h * 0.2f), new Vector2(w * 0.88f, h * 0.65f), new Vector2(w * 0.5f, h), new Vector2(w * 0.12f, h * 0.65f), new Vector2(0, h * 0.2f) };
-        DrawColoredPolygon(pts, ShooterTheme.Accent);
-        DrawPolyline(new[] { pts[0], pts[1], pts[2], pts[3], pts[4], pts[5], pts[0] }, ShooterTheme.Outline, 1.5f);
-    }
+    public bool EquipmentOpen => _screens?.EquipmentOpen ?? false;
+    public void AttachEquipment(NetClient client) => _screens.AttachEquipment(client);
+    public bool ToggleEquipment(bool menuOpen = false, bool chooserOpen = false) => _screens.ToggleEquipment(menuOpen, chooserOpen);
+    public bool CloseEquipment() => _screens.CloseEquipment();
+
+    public bool HuntersLogOpen => _screens?.HuntersLogOpen ?? false;
+    public void AttachHuntersLog(HuntLogEnv env) => _screens.AttachHuntersLog(env);
+    public bool ToggleHuntersLog(bool menuOpen = false, bool chooserOpen = false) => _screens.ToggleHuntersLog(menuOpen, chooserOpen);
+    public void OpenHuntersLog() => _screens.OpenHuntersLog();
+    public void CloseHuntersLog() => _screens.CloseHuntersLog();
+    public bool BackHuntersLog() => _screens.BackHuntersLog();
+
+    public bool MineralLogOpen => _screens?.MineralLogOpen ?? false;
+    public void AttachMineralLog() => _screens.AttachMineralLog();
+    public bool ToggleMineralLog(bool menuOpen = false, bool chooserOpen = false) => _screens.ToggleMineralLog(menuOpen, chooserOpen);
+    public void SetMineralFinds(IReadOnlyDictionary<string, int> ranks) => _screens.SetMineralFinds(ranks);
+    public void OpenMineralLog() => _screens.OpenMineralLog();
+    public void CloseMineralLog() => _screens.CloseMineralLog();
+    public bool BackMineralLog() => _screens.BackMineralLog();
 }
