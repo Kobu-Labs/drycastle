@@ -32,6 +32,10 @@ frames to `data/village/streetview/<building id>/<n>.jpg`. `index.json` records 
 date, distance, heading and copyright. Each downloaded image costs about $0.007; `--max-images`
 (default 100) caps a run and existing files are skipped.
 
+`--tiles N` asks for each view as N x N narrower frames and stitches them to N * 640 px (640 is the most one request
+gives; N * N requests are billed). A panorama holds about 40 px per degree, so 2 is enough for a 40 degree view and
+more adds nothing.
+
 ## Capturing a view for photo-to-building
 
 `streetview_follow --capture`: pressing **C** in the Street View tab saves its picture and camera under the building in the

@@ -42,6 +42,9 @@ OVERRIDE_FIELDS = (
 
     "roof_part",
     "rest_height_m",
+    "rest_roof",
+    "roof_fit",
+    "roof_lead",
 )
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
@@ -147,6 +150,12 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
                 isinstance(value, list) and len(value) >= 3 and all(isinstance(p, list) and len(p) == 2 for p in value)
             ):
                 raise RulesError(f"overrides: {key}: roof_part must be a polygon [[x, y], ...] in map metres")
+            if name == "roof_lead" and not (isinstance(value, list) and len(value) == 2 and all(isinstance(p, list) and len(p) == 2 for p in value)):
+                raise RulesError(f"overrides: {key}: roof_lead must be a wall [[x, y], [x, y]] in map metres")
+            if name == "roof_fit" and not isinstance(value, bool):
+                raise RulesError(f"overrides: {key}: roof_fit must be true or false")
+            if name == "rest_roof" and value not in ("flat", "lean_to", "auto"):
+                raise RulesError(f"overrides: {key}: rest_roof must be flat, lean_to or auto")
             if name == "rest_height_m" and not (isinstance(value, int | float) and value > 0):
                 raise RulesError(f"overrides: {key}: rest_height_m must be a positive number")
             if name.endswith("_colour") and not _COLOUR.match(str(value)):
@@ -272,13 +281,16 @@ def derive_building(
         else {}
     )
     part = (
-        {"roof_part": [[float(x), float(y)] for x, y in ov["roof_part"]], "rest_height_m": float(ov.get("rest_height_m", 2.8))}
+        {"roof_part": [[float(x), float(y)] for x, y in ov["roof_part"]], "rest_height_m": float(ov.get("rest_height_m", 2.8)),
+         **({"rest_roof": ov["rest_roof"]} if ov.get("rest_roof") in ("lean_to", "auto") else {})}
         if ov.get("roof_part")
         else {}
     )
     return {
         **landmark,
         **part,
+        **({"roof_fit": True} if ov.get("roof_fit") and not ov.get("roof_part") else {}),
+        **({"roof_lead": [[float(x), float(y)] for x, y in ov["roof_lead"]]} if ov.get("roof_fit") and ov.get("roof_lead") else {}),
         "id": building_id,
         "parcel": parcel_id,
         "footprint": {"exterior": exterior, "holes": holes},
