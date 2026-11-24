@@ -361,7 +361,9 @@ def _derived(bid: str, ov: dict) -> dict:
     feats = json.loads((WORK / "normalised" / "buildings.geojson").read_text())
     feats = feats["features"] if isinstance(feats, dict) else feats
     f = next(f for f in feats if f["properties"]["osm_id"] == bid)
-    return derive_building(bid, b["parcel"], shape(f["geometry"]), f["properties"].get("tags", {}), load_building_rules(), ov)
+    # the footprint as the rules stage left it (set right by the cadastre where that applies), not as traced
+    geom = shape({"type": "Polygon", "coordinates": [b["footprint"]["exterior"], *(b["footprint"].get("holes") or [])]})
+    return derive_building(bid, b["parcel"], geom, f["properties"].get("tags", {}), load_building_rules(), ov)
 
 
 def _hex(rgb) -> str:

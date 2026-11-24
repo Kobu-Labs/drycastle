@@ -1,6 +1,6 @@
 """A building from its Street View captures: the geometry is found by the computer, a model only names what it sees.
 
-    uv run python -m drycastle_pipeline.photos.facade_pipeline ends  w378920491 --out OUT
+    uv run python -m drycastle_pipeline.photos.facade_pipeline ends  w378920491 [--out OUT]   (default OUT: beside the capture, <photos>/<id>/run; walls/apply take OUT or the id)
     uv run python -m drycastle_pipeline.photos.facade_pipeline walls OUT            (reads OUT/ends.json)
     uv run python -m drycastle_pipeline.photos.facade_pipeline apply OUT [--dry] [--replace]   (reads OUT/names.json)
 
@@ -35,7 +35,7 @@ MAX_CAPTURES = 3
 MIN_WALL_M = 2.0
 MAX_OFF_SQUARE_DEG = 78.0
 ROOFS = ("gabled", "hipped", "flat")
-OPENING_KINDS = ("window", "door", "garage_door")
+OPENING_KINDS = ("window", "door", "glass_door", "garage_door")  # glass_door: a glazed door to the floor, built as a window from the ground
 ROOF_EDGES = ("eave", "gable")
 LINE_MERGE_PX = 10
 # A photo's colours are the light of that hour, not the paint: a cream wall in shade is grey-brown in pixels. What a
@@ -52,6 +52,7 @@ RENDER_GLASS = (58, 70, 84)  # panes in the pictures: a window by day is dark, n
 ROOF_COLOURS = {"anthracite": "#41424a", "grey": "#7e8088", "brown": "#704533", "red": "#a5442e", "orange": "#bf6a38", "green": "#4c6c50"}
 FRAME_COLOURS = {"white": "#f2f0ea", "brown": "#5a4030", "dark": "#3a3a3c", "wood": "#a87f55", "grey": "#9a9a9a"}
 FRAME_M = 0.06
+DOOR_MAX_W_M = 1.25  # an entrance door is not wider: a wider rectangle took in what stands beside the leaf
 
 
 # ---------------------------------------------------------------- shared helpers
@@ -129,6 +130,20 @@ def visible_walls(b: dict, others: list[dict], cam: dict) -> list[dict]:
     return walls
 
 
+def order_marks(cam: dict, ring, marks: dict) -> dict[int, float]:
+    """Corner marks (footprint corner -> picture column) with the two ends of a wall put right when they were marked
+    the wrong way round: a wall's ends lie in the picture in the order the map gives them, whatever the camera's exact
+    place."""
+    m = {int(k): float(x) for k, x in (marks or {}).items() if x is not None}
+    for i in sorted(m):
+        j = (i + 1) % len(ring)
+        if j in m:
+            px = project(cam, np.array([[ring[i][0], ring[i][1], 0.0], [ring[j][0], ring[j][1], 0.0]]))
+            if (px[0][0] - px[1][0]) * (m[i] - m[j]) < 0:
+                m[i], m[j] = m[j], m[i]
+    return m
+
+
 def move_camera(cam: dict, picks: list[tuple[tuple[float, float], float]]) -> dict:
     """The camera moved (heading kept) so each footprint corner falls on its picture column: least squares over all
     (corner, column) pairs. Needs two that are not in line with the camera."""
@@ -144,7 +159,7 @@ def move_camera(cam: dict, picks: list[tuple[tuple[float, float], float]]) -> di
 # ---------------------------------------------------------------- stage 1: ends
 
 
-def stage_ends(building: str, out: Path) -> None:
+def stage_ends(building: str, out: Path, use_marks: bool = True) -> None:
     import cv2
 
     from drycastle_pipeline.photos.landmark_tools import WORK
@@ -174,11 +189,16 @@ def stage_ends(building: str, out: Path) -> None:
         np.save(out / f"segs_c{n}.npy", segs)
         up = fr.classify(cam, segs, {"up": dirs[0], **{f"d{k}": d for k, d in enumerate(dirs[1:])}})
         walls = visible_walls(b, others, cam)
+        if not use_marks:  # (to compare: the wall ends picked from the computer's candidates instead)
+            c = {**c, "ends": {}}
+        hand_ends = order_marks(cam, ring, c.get("ends") or {})
+        if any(hand_ends[int(k)] != float(x) for k, x in (c.get("ends") or {}).items() if x is not None):
+            print(f"capture {n}: the two ends of a wall were marked the wrong way round: swapped")
         for w in walls:
             lo, hi = ring[w["left"]], ring[w["right"]]
             outline = project(cam, np.array([[*lo, 0.0], [*hi, 0.0], [*hi, 3.0], [*lo, 3.0]]))
             for end in ("left", "right"):
-                marked = (c.get("ends") or {}).get(str(w[end]))
+                marked = hand_ends.get(int(w[end]))
                 if marked is not None:  # marked by hand at capture (capture_guide): nothing to ask
                     w[end + "_marked_x"], w[end + "_candidates"] = float(marked), []
                     continue
@@ -277,6 +297,57 @@ def find_lines(cam: dict, segs: np.ndarray, kinds: list, h_inv, size, length: fl
              "s0": round(_s_of_col(ln["x0"]), 2), "s1": round(_s_of_col(ln["x1"]), 2)} for ln in lines]  # fmt: skip
 
 
+def gable_verges(flat, length: float) -> tuple[float, float] | None:
+    """On a gable wall made flat: the two sloping roof edges over it, as (the height at which they pass the wall's two
+    ends, the height where they meet). The roof's edge stands a little in front of the wall, which on the wall's plane
+    shifts it by centimetres. The uppermost pair of long straight edges that rise towards the wall's middle at the same
+    pitch and meet over it; None when there is no such pair (trees, a hipped end, another roof in front)."""
+    import cv2
+
+    edges_img = cv2.Canny(cv2.cvtColor(flat, cv2.COLOR_BGR2GRAY), 50, 150)
+    segs = cv2.HoughLinesP(edges_img, 1, np.pi / 360, 50, minLineLength=int(0.8 * fr.PX_PER_M), maxLineGap=12)
+    if segs is None:
+        return None
+    sides: dict[int, list[tuple[float, float, float]]] = {1: [], -1: []}  # rising to the right (left edge), falling: (slope, z at s=0, length)
+    for x0, y0, x1, y1 in np.asarray(segs, float).reshape(-1, 4):
+        s0, s1, z0, z1 = x0 / fr.PX_PER_M - fr.SIDE_M, x1 / fr.PX_PER_M - fr.SIDE_M, fr.Z_RANGE[1] - y0 / fr.PX_PER_M, fr.Z_RANGE[1] - y1 / fr.PX_PER_M
+        if abs(s1 - s0) < 0.3 or max(z0, z1) < 2.5:
+            continue
+        a = (z1 - z0) / (s1 - s0)
+        if not math.tan(math.radians(22)) <= abs(a) <= math.tan(math.radians(62)):
+            continue
+        mid = (s0 + s1) / 2
+        if (a > 0) != (mid < length / 2):  # each edge lies on its own half of the wall
+            continue
+        sides[1 if a > 0 else -1].append((a, z0 - a * s0, math.hypot(s1 - s0, z1 - z0)))
+
+    def lines(found: list[tuple[float, float, float]], at: float) -> list[tuple[float, float, float]]:
+        """Segments on one line are one edge: (slope, z at s=0, the length they cover together)."""
+        out: list[tuple[float, float, float]] = []
+        for a, b, n in sorted(found, key=lambda t: -t[2]):
+            hit = next((k for k, (a2, b2, _) in enumerate(out) if abs(a - a2) <= 0.06 and abs((a * at + b) - (a2 * at + b2)) <= 0.1), None)
+            if hit is None:
+                out.append((a, b, n))
+            else:
+                out[hit] = (out[hit][0], out[hit][1], out[hit][2] + n)
+        return [t for t in out if t[2] >= 1.5]
+
+    left, right = lines(sides[1], length / 4), lines(sides[-1], 3 * length / 4)
+    pairs = []
+    for al, bl, nl in left:
+        for ar, br, nr in right:
+            s_top = (br - bl) / (al - ar)
+            z_top = al * s_top + bl
+            z_ends = (bl, ar * length + br)
+            if abs(s_top - length / 2) <= max(0.4, 0.08 * length) and abs(al + ar) <= 0.12 and abs(z_ends[0] - z_ends[1]) <= 0.4 and min(z_ends) >= 2.2 and z_top - max(z_ends) >= 1.0 and (al - ar) / 2 >= math.tan(math.radians(27)):
+                pairs.append((nl + nr, sum(z_ends) / 2, z_top))
+    if not pairs:
+        return None
+    most = max(p[0] for p in pairs)
+    _, z_end, z_top = max((p for p in pairs if p[0] >= 0.6 * most), key=lambda p: p[1])  # the uppermost: the tiles' edge, not the board or its shadow under it
+    return float(z_end - 0.25), float(z_top - 0.15)  # the wall's top is under the roof's thickness, the ridge just under the tiles' edge
+
+
 def wall_colour_lab(flat, length: float) -> np.ndarray:
     """The wall's own colour (Lab): the commonest colour of the band where a wall is mostly bare. The commonest, not
     the middle one: windows, a fence and its pillars together can cover more than half of that band."""
@@ -304,7 +375,7 @@ def find_boxes(flat, length: float, tol: int = 8) -> list[dict]:
     x_lo, x_hi = _col(0.05), _col(length - 0.05)
     groups: list[dict] = []
     done: list[dict] = []
-    for y in range(_row(5.5), _row(-0.3)):
+    for y in range(_row(fr.Z_RANGE[1] - 0.4), _row(-0.3)):
         line = other[y, x_lo:x_hi]
         edges = np.flatnonzero(np.diff(np.concatenate([[0], line, [0]])))
         runs = [(x_lo + a, x_lo + b - 1) for a, b in zip(edges[::2], edges[1::2]) if b - a >= 30]
@@ -376,7 +447,7 @@ def find_frames(flat, length: float) -> list[dict]:
     out = []
     for y, xa, xb in level:
         w = (xb - xa) / fr.PX_PER_M
-        if not (0.4 <= w <= 5.0) or xa < _col(0) - near or xb > _col(length) + near or not (_row(5.0) < y < _row(0.8)):
+        if not (0.4 <= w <= 5.0) or xa < _col(0) - near or xb > _col(length) + near or not (_row(fr.Z_RANGE[1] - 0.4) < y < _row(0.8)):
             continue
         # an upright edge at each end, starting near the head (something leaning on the wall may hide its first part)
         reach = 0.45 * fr.PX_PER_M
@@ -542,9 +613,9 @@ def stage_walls(out: Path) -> None:
             print(f"capture {n} edge {w['edge']}: camera moved {cap['moved_m']} m, {cam['z']:.2f} m above the building's base; {len(lines)} level lines, {len(boxes)} rectangles")
     state["problems"] = problems
     (out / "state.json").write_text(json.dumps(state, indent=1))
-    template = {"what": "?", "roof": "?", "roof_colour": "?", "wall_colour": "?", "frame_colour": "?", "surround_colour": "?", "gable_colour": "?", "cornice": "?", "corner_strips": "?", "shutter_boxes": "?", "balcony": "?", "chimney": "?", "not_modelled": "?",
-                "walls": {k: {"wall_top": "?", "roof_edge": "?", "plinth_top": "?", "boxes": {str(r["number"]): "?" for r in next(w for c in state["captures"] for w in c["walls"] if f"c{c['n']}_e{w['edge']}" == k)["boxes"]},
-                              "missed": "?"} for k in ask}}  # fmt: skip
+    template = {"what": "?", "roof": "?", "roof_colour": "?", "wall_colour": "?", "frame_colour": "?", "surround_colour": "?", "gable_colour": "?", "cornice": "?", "corner_strips": "?", "shutter_boxes": "?", "canopy": "?", "balcony": "?", "chimney": "?", "not_modelled": "?",
+                "walls": {k: {"wall_top": "?", "roof_edge": "?", "roof_slope": "?", "plinth_top": "?", "boxes": {str(r["number"]): "?" for r in next(w for c in state["captures"] for w in c["walls"] if f"c{c['n']}_e{w['edge']}" == k)["boxes"]},
+                              "dormers_missed": "?", "missed": "?"} for k in ask}}  # fmt: skip
     photos = "\n".join(f"- `{c['photo']}`" for c in state["captures"])
     (out / "walls_ask.md").write_text(WALLS_ASK.format(pictures="\n".join(f"- `wall_{k}.png`" + (f" and `eave_{k}.png`" if (out / f"eave_{k}.png").exists() else "") for k in ask), photos=photos, template=json.dumps(template, indent=1)))
     for p in problems:
@@ -576,14 +647,23 @@ For each wall answer:
 - `roof_edge`: what the roof does above this wall. `"eave"`: the roof slopes down to this wall and its lower edge (with
   the gutter) runs level along the wall's top. `"gable"`: the wall goes up into a triangle between two slopes, the
   roof's edges run up along it. Cannot tell, or a flat roof: `"none"`.
+- `roof_slope`: only above an `"eave"` wall, from the PHOTO (not the flattened wall): the outline of the roof's slope
+  that comes down to this wall. `"whole"`: its top edge (the ridge) is level and about as long as the wall, the slope
+  is a rectangle or a parallelogram (at the roof's ends is a gable). `"part"`: its top edge is level but clearly
+  shorter than the wall, the slope is a trapezoid narrowing upwards (the roof's ends slope too: hips). `"point"`: the
+  slope is a triangle. Not an eave wall, or the roof's top is out of the picture: `"none"`.
 - `plinth_top`: if the foot of the wall is a band of another colour or material (a plinth, usually 20 to 60 cm
   high), the letter of the line at its upper edge. No plinth, or its edge has no line, or it is hidden: `"none"`.
-- `boxes`: for every number one of `"window"`, `"door"`, `"garage_door"`, `"dormer"`, `"no"`. `"dormer"`: the
+- `boxes`: for every number one of `"window"`, `"door"`, `"glass_door"`, `"garage_door"`, `"dormer"`, `"no"`. `"door"`: the
+  house's entrance door (a wall has at most one). `"glass_door"`: a glazed door or window that reaches down to the
+  floor (a terrace or balcony door, a French window). `"dormer"`: the
   rectangle frames the window of a dormer (a small roofed box with a window standing on the roof's slope above this
   wall); only above an `"eave"` wall. A rectangle is a window or door only
   if its frame is the opening itself: `"no"` for a fence pillar, a shadow, a sign, a shutter box, a plant, half of a
   window, or a frame that takes in more than the opening. One opening found as two rectangles: name the better one,
   `"no"` for the other. A window whose lower part is hidden by a fence is still a `"window"`.
+- `dormers_missed`: for every dormer above this wall whose window has NO rectangle you named `"dormer"`: the place of
+  the middle of its window read off the ruler at the bottom, in metres, e.g. `[5.9]`. None: `[]`.
 - `missed`: windows or doors of this wall that have no rectangle, in a few words (`""` if none).
 
 Then look at the photos themselves for the whole house:
@@ -606,6 +686,7 @@ Then look at the photos themselves for the whole house:
 - `cornice`: `"yes"` if a band of another colour or standing proud runs along the wall's top under the roof, else `"no"`.
 - `corner_strips`: `"yes"` if the house's corners carry an upright strip of another colour (pilasters, quoins), else `"no"`.
 - `shutter_boxes`: `"yes"` if the windows have a box over their head (roller shutters), else `"no"`.
+- `canopy`: `"yes"` if a small roof of its own hangs over the entrance door, else `"no"`.
 - `balcony`: `"yes"` if a balcony with a railing hangs on the wall that faces the camera, above the ground floor, else `"no"`.
 - `chimney`: where a chimney stands on this house's roof as the photo shows it: `"left"`, `"middle"`, `"right"`. No
   chimney to be seen: `"none"`.
@@ -923,6 +1004,15 @@ def dormer_from_box(sd: dict, eave: float, slope: float) -> dict | None:
     where the line of sight to the rectangle's lower edge meets the roof's slope, and its size grows with that
     distance. None when the sight line does not meet the roof."""
     r, d, cz, cs = sd["box"], sd["d"], sd["cam_z"], sd["cam_s"]
+    if r is None:  # no rectangle, only its place along the wall: as far up the roof and as large as the one that has one
+        like = sd.get("like")
+        t = like["_t"] if like else 1.2
+        k = (d + t) / d
+        mid = cs + (sd["s"] - cs) * k
+        win_w, win_h = like["window_m"] if like else (0.9, 1.0)
+        return {"edge": sd["edge"], "at_m": round(mid if sd["forward"] else sd["length"] - mid, 2), "bottom_m": round(eave + slope * t - 0.1, 2),
+                "width_m": round(win_w + 0.4, 2), "height_m": round(win_h + 0.3, 2), "rise_m": round(max(0.35, (win_w + 0.4) * 0.3), 2),
+                "window_m": [round(win_w, 2), round(win_h, 2)], "_t": t}  # fmt: skip
     climb = (r["z0"] - cz) / d  # how fast the sight line to the window's foot rises per metre of depth
     if r["z0"] <= eave or slope - climb < 0.05:
         return None
@@ -935,7 +1025,7 @@ def dormer_from_box(sd: dict, eave: float, slope: float) -> dict | None:
     win_w, win_h = (s1 - s0), (r["z1"] - r["z0"]) * k
     return {"edge": sd["edge"], "at_m": round(mid if sd["forward"] else sd["length"] - mid, 2), "bottom_m": round(eave + slope * t - 0.1, 2),
             "width_m": round(win_w + 0.4, 2), "height_m": round(win_h + 0.3, 2), "rise_m": round(max(0.35, (win_w + 0.4) * 0.3), 2),
-            "window_m": [round(win_w, 2), round(win_h, 2)]}  # fmt: skip
+            "window_m": [round(win_w, 2), round(win_h, 2)], "_t": t}  # fmt: skip
 
 
 def hand_marks(photo: str) -> dict:
@@ -1097,6 +1187,8 @@ def render_views(mesh, b: dict, cams: dict[int, dict], photos: dict[int, str], o
 def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None:
     import cv2
 
+    from drycastle_pipeline.buildings import house_rules as hr
+
     from drycastle_pipeline.buildings.openings import (
         DETAILS_DIR,
         DetailError,
@@ -1137,8 +1229,10 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     eaves, openings, wall_labs, plinths, overhangs, pipes, fascias, boards = [], [], [], [], [], [], [], []
     invented: list[str] = []
     roof_edges: list[tuple[float, str, int]] = []
+    gable_eaves: list[tuple[float, float, float, str]] = []  # (how much of itself the wall shows, eave, apex, wall) per gable wall
     fronts: list[tuple[float, int, int, int]] = []
     seen_dormers: list[dict] = []
+    slopes: list[tuple[float, str, int]] = []
     for cap in state["captures"]:
         n, cam = cap["n"], cap["camera_final"]
         for w in cap["walls"]:
@@ -1160,6 +1254,14 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             wall_lab = wall_colour_lab(flat, length)
             wall_labs.append(wall_lab)
             fronts.append((-w["length"] * math.cos(math.radians(w["off_square_deg"])), int(w["edge"]), w["left"], w["right"]))  # the wall that shows most of itself leads: long and square-on
+            show = -w["length"] * math.cos(math.radians(w["off_square_deg"]))
+            if str(said.get("roof_edge")).lower() == "eave" and str(said.get("roof_slope")).lower() in ("whole", "part", "point"):
+                slopes.append((show, str(said["roof_slope"]).lower(), int(w["edge"])))
+            lo_c, hi_c = np.asarray(ring[w["left"]], float), np.asarray(ring[w["right"]], float)
+            for s_mid in said.get("dormers_missed") or []:
+                if isinstance(s_mid, (int, float)) and 0.3 < s_mid < length - 0.3:
+                    seen_dormers.append({"edge": int(w["edge"]), "forward": forward, "length": length, "box": None, "s": float(s_mid), "cam_z": cam["z"], "_off": w["off_square_deg"],
+                                         "cam_s": float((np.array([cam["x"], cam["y"]]) - lo_c) @ (hi_c - lo_c) / length), "d": _wall_distance(cam, lo_c, hi_c)})  # fmt: skip
             if str(said.get("roof_edge")).lower() in ROOF_EDGES:
                 roof_edges.append((-w["length"] * math.cos(math.radians(w["off_square_deg"])), str(said["roof_edge"]).lower(), int(w["edge"])))
             hand_top = wall_top_from_mark(cam, hand["top"], ring[w["left"]], ring[w["right"]]) if hand.get("top") else None
@@ -1205,6 +1307,22 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             foot = _letters_z(w["lines"], said.get("plinth_top"))
             if foot is not None and 0.05 <= foot <= 1.5:
                 plinths.append((foot, band_colour_lab(flat, length, 0.03, foot - 0.03), wall_lab))
+            box_said = {str(r["number"]): str(said.get("boxes", {}).get(str(r["number"]), "no")).lower() for r in w["boxes"]}
+            # a rectangle named "no" that is a named window's like (its size, its foot and head on the same lines) and
+            # covers no named opening is that window again: the answer passed it over (it was drawn twice, or half hidden)
+            named_any = [r for r in w["boxes"] if box_said[str(r["number"])] in (*OPENING_KINDS, "dormer")]
+            likes = [r for r in w["boxes"] if box_said[str(r["number"])] == "no"
+                     and any(box_said[str(g["number"])] == "window" and abs((g["s1"] - g["s0"]) - (r["s1"] - r["s0"])) <= 0.15 and abs(g["z0"] - r["z0"]) <= 0.15 and abs(g["z1"] - r["z1"]) <= 0.15 for g in w["boxes"])
+                     and not any(min(g["s1"], r["s1"]) - max(g["s0"], r["s0"]) > 0.1 and min(g["z1"], r["z1"]) - max(g["z0"], r["z0"]) > 0.1 for g in named_any)]  # fmt: skip
+            for r in likes if guess else ():
+                if not any(box_said[str(g["number"])] == "window" and g is not r and min(g["s1"], r["s1"]) - max(g["s0"], r["s0"]) > 0.1 and min(g["z1"], r["z1"]) - max(g["z0"], r["z0"]) > 0.1 for g in w["boxes"]):
+                    box_said[str(r["number"])] = "window"
+                    invented.append(f"rectangle {r['number']} on edge {w['edge']} taken as a window though named none: it is the like of a named window of that wall")
+            said = {**said, "boxes": box_said}
+            if str(said.get("roof_edge")).lower() == "gable" and roof == "gabled":
+                verge = gable_verges(flat, length)
+                if verge is not None:
+                    gable_eaves.append((show, verge[0], verge[1], key))
             named_w = [grow_to_frame(flat, r, wall_lab) for r in w["boxes"] if str(said.get("boxes", {}).get(str(r["number"]), "no")).lower() == "window"]
             twins = find_twins(flat, [r for r in named_w if r["z0"] < 2.2], length) if guess else []
             if twins:
@@ -1223,8 +1341,11 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                 sill = 0.0 if kind != "window" else max(0.0, r["z0"])
                 if kind == "door" and r["z1"] > 2.3:  # a door is not higher than that: the rectangle took in what is above it
                     r = {**r, "z1": 2.1}
-                posts = window_posts(flat, r) if kind == "window" else []
-                rails = window_rails(flat, r) if kind == "window" else []
+                if kind == "door" and r["s1"] - r["s0"] > DOOR_MAX_W_M:  # nor wider: the rectangle took in what is beside it
+                    mid_s = (r["s0"] + r["s1"]) / 2
+                    r = {**r, "s0": mid_s - 0.5, "s1": mid_s + 0.5}
+                posts = window_posts(flat, r) if kind in ("window", "glass_door") else []
+                rails = window_rails(flat, r) if kind in ("window", "glass_door") else []
                 if not forward:
                     posts = sorted(round(1 - f, 2) for f in posts)
                 openings.append({"kind": kind, "edge": int(w["edge"]), "at_m": round(along(r["s0"], r["s1"]), 2), "width_m": round(r["s1"] - r["s0"], 2),
@@ -1270,22 +1391,61 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     joined: list[dict] = []
     for o in kept:
         k = joined[-1] if joined else None
-        if (k is not None and k["kind"] == o["kind"] == "window" and k["edge"] == o["edge"] and o["at_m"] - (k["at_m"] + k["width_m"]) < 0.2
-                and abs(k["sill_m"] - o["sill_m"]) <= 0.25 and abs(k["sill_m"] + k["height_m"] - o["sill_m"] - o["height_m"]) <= 0.25):  # fmt: skip
+        # (one of the two may be a sash read short, its foot or head hidden: they stand at one height when the shorter
+        # one's span lies mostly inside the taller one's)
+        both = (min(k["sill_m"] + k["height_m"], o["sill_m"] + o["height_m"]) - max(k["sill_m"], o["sill_m"])) if k is not None else 0.0
+        if (k is not None and k["kind"] == o["kind"] == "window" and k["edge"] == o["edge"] and o["at_m"] - (k["at_m"] + k["width_m"]) < 0.3
+                and both >= 0.7 * min(k["height_m"], o["height_m"])):  # fmt: skip
             end = max(k["at_m"] + k["width_m"], o["at_m"] + o["width_m"])
             seam = ((k["at_m"] + k["width_m"] + o["at_m"]) / 2 - k["at_m"]) / (end - k["at_m"])
             old = [f * k["width_m"] / (end - k["at_m"]) for f in k.get("posts", [])]
-            k.update({"width_m": round(end - k["at_m"], 2), "posts": sorted(round(f, 2) for f in [*old, seam] if 0.1 < f < 0.9), "_off": min(k["_off"], o["_off"])})
+            foot, head = min(k["sill_m"], o["sill_m"]), max(k["sill_m"] + k["height_m"], o["sill_m"] + o["height_m"])
+            k.update({"width_m": round(end - k["at_m"], 2), "posts": sorted(round(f, 2) for f in [*old, seam] if 0.1 < f < 0.9), "_off": min(k["_off"], o["_off"]),
+                      "sill_m": round(foot, 2), "height_m": round(head - foot, 2), "_pair": True})  # fmt: skip
             if o["confidence"] != "low":
                 k["confidence"] = o["confidence"]
             continue
         joined.append(o)
-    kept = joined
+    paired = hr.pair_sashes(joined, {e["i"]: e["length"] for e in edges})
+    if paired != joined:
+        invented.append("a window of which one sash was boxed made a whole two-sash window, like the one beside it")
+    kept = hr.even_row(paired)
+    if kept != paired:
+        invented.append("one kind of window per wall: sashes joined, the windows of a wall brought to its one size")
     seen = sorted({w["edge"] for cap in state["captures"] for w in cap["walls"]})
     for o in kept:
         del o["_off"]
         o.pop("_row", None)
+        o.pop("_pair", None)
 
+    # the outline of the slope over the wall that shows most of itself says more than a name for the whole roof: a
+    # gabled and a hipped roof both come down to the street wall, but one as a rectangle and the other as a trapezoid
+    hip_along = None
+    if roof != "flat" and slopes:
+        _, shape_seen, i_s = min(slopes)
+        was = roof
+        roof = {"whole": "gabled", "part": "hipped"}.get(shape_seen, roof)
+        if roof != was:
+            invented.append(f"the roof taken as {roof}, not {was} as named: the slope over edge {i_s} is {'as long as the wall at its top' if roof == 'gabled' else 'shorter at its top than the wall'}")
+        if roof == "hipped" and shape_seen == "part":
+            hip_along = i_s
+            # a hipped roof's ridge is shorter than the house by the house's depth: on a house about as deep as this
+            # wall is long it all but comes to a point. A level top edge was seen, so the slopes at the ends are not
+            # full hips (a gable seen from the side, or a half-hip): a gabled roof along this wall
+            from shapely.geometry import Polygon as _HipPoly
+
+            from drycastle_pipeline.buildings import roof_fit as _hip_fit
+
+            e_s = next(x for x in edges if x["i"] == i_s)
+            from shapely.geometry.polygon import orient as _hip_orient
+
+            sq = _hip_fit.squared(_hip_fit.smooth(_hip_orient(_HipPoly(ring), 1.0)))  # the walls made square, as the roof's own search does
+            stand = _hip_fit._on_wall(sq, *_hip_fit._same_wall(sq, e_s["p"], e_s["q"]))
+            if stand is not None and e_s["length"] - stand.d < 0.4 * e_s["length"]:
+                roof, hip_along = "gabled", None
+                if not any(k == "eave" and i == i_s for _, k, i in roof_edges):
+                    roof_edges.append((min(slopes)[0], "eave", i_s))
+                invented.append(f"the roof taken as gabled along edge {i_s}, not hipped as named: the house is {stand.d:.1f} m deep behind a {e_s['length']:.1f} m wall, where a hipped roof has all but no level top edge, and one was seen")
     lead = None
     if roof == "gabled" and roof_edges:
         # a gabled roof's eaves run along its ridge: a "wall top" read on a wall that runs across the ridge (beside the
@@ -1314,8 +1474,13 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         gen_file = out / "generated_eave.json"
         if not heads and not gen_file.exists():
             gen_file.write_text(json.dumps(float(b0.get("eave_height_m") or 3.0)))
-        eave = max(2.8, max(heads) + 0.45) if heads else float(json.loads(gen_file.read_text()))
-        problems.append(f"NO WALL TOP MEASURED: the eave is put at {eave:.2f} m" + (" (over the heads of the ground floor's openings)" if heads else " (as generated)"))
+        if gable_eaves:  # no eave wall was seen, a gable wall was: its two sloping roof edges come down to the eave at the wall's ends
+            _, eave, _, gkey = min(gable_eaves)
+            eave = round(eave, 2)
+            invented.append(f"the eave's height ({eave:.2f} m) read off the sloping roof edges of the gable wall {gkey}, where they pass its ends")
+        else:
+            eave = max(2.8, max(heads) + 0.45) if heads else float(json.loads(gen_file.read_text()))
+            problems.append(f"NO WALL TOP MEASURED: the eave is put at {eave:.2f} m" + (" (over the heads of the ground floor's openings)" if heads else " (as generated)"))
 
     # which way the ridge runs, from the wall seen most square-on that was named an eave or a gable wall. Without it the
     # generator runs the ridge along the footprint's long side, which a rear wing can turn the wrong way.
@@ -1327,13 +1492,20 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         ridge_dir = round((along_wall if what_edge == "eave" else along_wall + math.pi / 2) % math.pi, 4)
         if what_edge == "eave" and not guess:
             part = main_part(ring, edges, i)
+    elif roof == "hipped" and hip_along is not None:  # a hipped roof's ridge runs along the wall whose slope is a trapezoid
+        e = next(x for x in edges if x["i"] == hip_along)
+        ridge_dir = round(math.atan2(e["q"][1] - e["p"][1], e["q"][0] - e["p"][0]) % math.pi, 4)
     top = eave
     fitted = None
     if roof != "flat":
         middle, half = roof_middle(ring)
         if part is not None:
             middle, half = part["middle"], part["half"]
-        if guess:  # the roof is fitted to the whole footprint: its main part gives the ridge's place and the half-width
+        from shapely.geometry import Polygon as _Plain
+
+        # all but a rectangle (a shallow jog, a porch's step): one plain roof over it, as such a house has, not a part per jog
+        plain = _Plain(ring).area >= 0.9 * _Plain(ring).minimum_rotated_rectangle.area
+        if guess and not plain:  # the roof is fitted to the whole footprint: its main part gives the ridge's place and the half-width
             from shapely.geometry import Polygon as _FitPoly
             from shapely.geometry.polygon import orient as _fit_orient
 
@@ -1361,6 +1533,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                 found.append(h)
         if marked_ridges:  # a ridge marked by hand is believed over one read off the sky's outline
             found = marked_ridges
+        elif not found and gable_eaves and not eaves:  # the sky's outline gave none: where the gable's two roof edges meet
+            found = [min(gable_eaves)[2]]
         if found and not eaves and lead is not None:
             # no eave was seen, the gable wall was: its upper windows stand under the roof, so the roof's slopes pass
             # over their corners and meet the wall's ends no lower than that
@@ -1373,6 +1547,12 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                     problems.append(f"the eave is raised from {eave:.2f} m to {need:.2f} m: the roof must pass over the upper window(s) of the gable wall")
                     eave = round(need, 2)
         rise = (float(np.median(found)) - eave) if found else None
+        steepest = math.tan(math.radians(60 if roof == "gabled" else 52)) * half
+        if rise is not None and steepest < rise <= 1.5 * steepest:
+            # a little too steep to be true (the outline took in a dormer's top or a chimney), yet it does say the roof
+            # is steep: the steepest roof that is believed, not the 30 degrees of a roof nothing is known about
+            problems.append(f"the roof's outline gives a rise of {rise:.2f} m over a half-width of {half:.1f} m, steeper than a roof is: built as steep as is believed ({steepest:.2f} m rise)")
+            rise = steepest
         if rise is None or not (math.tan(math.radians(25)) * half <= rise <= math.tan(math.radians(60 if roof == "gabled" else 52)) * half):
             guess_rise = math.tan(math.radians(30)) * half
             problems.append(("NO RIDGE MEASURED" if rise is None else f"the roof's outline gives a rise of {rise:.2f} m over a half-width of {half:.1f} m, not a believable roof")
@@ -1467,6 +1647,19 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         kept += made
         if made:
             invented.append(f"{sum(o['kind'] == 'window' for o in made)} window(s) and {sum(o['kind'] == 'door' for o in made)} door(s) on walls no capture saw (edges {sorted({o['edge'] for o in made})})")
+    # one door for people per wall: the first kept (a measured one before a made-up one, the one seen most square-on first)
+    doors: set[int] = set()
+    for o in list(kept):
+        if o["kind"] != "door":
+            continue
+        if o["edge"] in doors:
+            o["kind"] = "glass_door"
+            invented.append(f"door on edge {o['edge']} at {o['at_m']} m built as a glazed door: a wall has one entrance door, and edge {o['edge']} already has one")
+        doors.add(o["edge"])
+    tidied = hr.tidy_walls(kept, {e["i"]: e["length"] for e in edges}, set(seen))
+    if tidied != kept:
+        invented.append("measured walls: openings centred on their wall, doors at least " + f"{hr.DOOR_MIN_W_M} m wide")
+    kept = tidied
     openings = sorted(kept, key=lambda o: (o["edge"], o["at_m"]))
     counts: dict[str, int] = {}
     for o in openings:
@@ -1487,10 +1680,11 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             if o["kind"] == "window":
                 o["surround_m"] = hr.SURROUND_M
     plinth_m = round(min(min(plinths, key=lambda t: t[0])[0], 0.6), 2) if plinths else 0.0
+    base = hr.base_style(bid)
     made_plinth = False
     if not plinths and guess and front is not None and str(names.get("wall_colour")).lower() not in hr.PLAIN_WALLS and hr.chance(bid, "plinth") < 0.75:
         # no plinth was seen (a fence, a hedge or the kerb hides most): a plastered house mostly has one
-        plinth_m, made_plinth = round(0.3 + 0.2 * hr.chance(bid, "plinth height"), 2), True
+        plinth_m, made_plinth = base["plinth_m"], True
         if any(o["sill_m"] < plinth_m + 0.1 and o["kind"] == "window" for o in openings):
             plinth_m, made_plinth = 0.0, False
     if guess and front is not None:
@@ -1501,6 +1695,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                              WALL_COLOURS.get(gable_name) if gable_name != wall_name else None, roof, eave,
                              [o["sill_m"] + o["height_m"] + o.get("surround_m", 0.0) for o in openings if roles[o["edge"]]["main"] and o["sill_m"] < eave - 0.5], plinth_m)  # fmt: skip
         detail["trim_colour"] = trim["trim_colour"]
+        # a band runs clear of every opening: one that would cross a window (a tall window, a wall measured too high) is left out
+        trim["bands"] = [bd for bd in trim["bands"] if not any(o["sill_m"] < bd["top_m"] and o["sill_m"] + o["height_m"] > bd["top_m"] - bd["height_m"] for o in openings)]
         if trim["bands"]:
             detail["bands"] = trim["bands"]
         if trim["corners"]:
@@ -1511,7 +1707,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             if o["kind"] == "window" and trim["lintel_m"] and o["sill_m"] + o["height_m"] + trim["lintel_m"] <= (eave if roles[o["edge"]]["main"] else rest_low) - 0.05 and o["sill_m"] < eave - 0.5:
                 o["lintel_m"] = trim["lintel_m"]
             if o["kind"] in ("door", "garage_door"):
-                openings[k] = hr.dress_door(o, roles[o["edge"]], eave if roles[o["edge"]]["main"] else rest_low, out_m, plinth_m, o["confidence"] == "low")
+                openings[k] = hr.dress_door(o, roles[o["edge"]], eave if roles[o["edge"]]["main"] else rest_low, out_m, plinth_m, o["confidence"] == "low",
+                                            {"yes": True, "no": False}.get(str(names.get("canopy")).lower()))
         invented += trim["made"]
         invented.append("door panels, steps and canopies")
         if roof != "flat":
@@ -1523,11 +1720,14 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         colour = _lab_hex(muted(lab)) if lab is not None and lab[0] >= 70 else "#77726c"
         detail["plinth"] = {"height_m": round(min(foot, 0.6), 2), "colour": colour}  # higher than 0.6 m is not a plinth: a line of the fence or the ground
     elif made_plinth:
-        detail["plinth"] = {"height_m": plinth_m, "colour": darker(ov.get("wall_colour", "#b0a090"), 0.6, 0.4)}
-        invented.append(f"a plinth {plinth_m} m high (none was seen)")
+        painted = darker(ov.get("wall_colour", "#b0a090"), 0.6, 0.4)
+        plinth_hex = {"paint": painted, "stone": varied(hr.PLINTH_STONE, bid + ":plinth"), "brick": varied(hr.PLINTH_BRICK, bid + ":plinth")}[base["plinth"]]
+        detail["plinth"] = {"height_m": plinth_m, "colour": plinth_hex}
+        invented.append(f"a plinth {plinth_m} m high ({base['plinth']}; none was seen)")
     if guess and front is not None:
-        detail["apron"] = {"width_m": 0.6, "colour": "#8f8c85"}
-        invented.append("the paved strip round the foot of the house")
+        strip_hex = varied(hr.STRIP_COLOURS[base["strip"]], bid + ":strip") if base["strip"] != "footing" else detail["plinth"]["colour"] if "plinth" in detail else darker(ov.get("wall_colour", "#b0a090"), 0.55, 0.5)
+        detail["apron"] = {"width_m": base["width_m"], "colour": strip_hex, **({"joints_m": base["joints_m"]} if "joints_m" in base else {})}
+        invented.append(f"the strip round the foot of the house ({base['strip']}, {base['width_m']} m)")
         if roof != "flat":
             detail["roof_tiles"] = True
     pipe_c = _lab_hex(muted(np.median(np.array([dp["_lab"] for dp in pipes], float), axis=0))) if pipes else (roof_hex or "#4a4a4a")
@@ -1544,6 +1744,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     pipes = [dp for dp in pipes if not any(o["edge"] == dp["edge"] and o["at_m"] - 0.3 <= dp["at_m"] <= o["at_m"] + o["width_m"] + 0.3 for o in openings)]
     if guess and front is not None:
         ruled = hr.invent_downpipes(roles, openings, roof)
+        edge_len = {e["i"]: e["length"] for e in edges}  # (a role's length is the whole straight wall's, which may be several edges)
+        ruled = [{**dp, "at_m": round(min(dp["at_m"], edge_len[dp["edge"]] - 0.1), 2)} for dp in ruled if edge_len[dp["edge"]] >= 0.5]
         pipes = []
         if ruled:
             detail["downpipes"] = [{**dp, "colour": pipe_c, "bends": True} for dp in ruled]
@@ -1555,7 +1757,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             from shapely.geometry import Polygon as _Poly
 
             ch = hr.invent_chimney(bid, str(names.get("chimney") or "unknown").lower(), roof, middle, ridge_way, ridge_len, top,
-                                   np.subtract(ring[front[2]], ring[front[3]]), roles[front[1]]["normal"], _Poly(ring).area)  # fmt: skip
+                                   np.subtract(ring[front[2]], ring[front[3]]), roles[front[1]]["normal"], _Poly(ring).area, half)  # fmt: skip
             if ch is not None:
                 detail["chimneys"] = [{**ch, "cap": True}]
                 invented.append("the chimney's place and size" + ("" if str(names.get("chimney") or "unknown").lower() in ("left", "middle", "right") else " (none was seen: made up)"))
@@ -1565,17 +1767,33 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             if not any(k["edge"] == dp["edge"] and abs(k["at_m"] - dp["at_m"]) < 0.4 for k in seen_at):
                 seen_at.append({"edge": dp["edge"], "at_m": dp["at_m"], "colour": pipe_c})
         detail["downpipes"] = seen_at
+    for o in openings:  # a glazed door is built as a window standing on the floor (glass, breakable), with no sill under it
+        if o["kind"] == "glass_door":
+            o["kind"] = "window"
+            o.pop("sill", None)
     detail["openings"] = openings
     if seen_dormers and roof != "flat":
-        slope = (top - eave) / (part["half"] if part is not None else roof_middle(ring)[1])
+        slope = (top - eave) / half  # of the roof as it is built: the fitted main part's when the roof is fitted
         made_d: list[dict] = []
-        for sd in sorted(seen_dormers, key=lambda s: s["_off"]):
+        for sd in sorted(seen_dormers, key=lambda s: (s["box"] is None, s["_off"])):  # those with a rectangle first: the others take their size
+            if sd["box"] is None:
+                sd["like"] = next((m for m in made_d if m["edge"] == sd["edge"]), made_d[0] if made_d else None)
             dm = dormer_from_box(sd, eave, slope)
             if dm is None or dm["at_m"] - dm["width_m"] / 2 < 0.3 or dm["at_m"] + dm["width_m"] / 2 > sd["length"] - 0.3:
-                problems.append(f"a dormer above edge {sd['edge']} (seen {sd['_off']:.0f} degrees off square) could not be placed on the roof, left out")
+                why = "the sight line to it does not meet the roof" if dm is None else f"it would stand at {dm['at_m']} m, {dm['width_m']} m wide, past the end of the {sd['length']:.1f} m wall"
+                problems.append(f"a dormer above edge {sd['edge']} (seen {sd['_off']:.0f} degrees off square) could not be placed on the roof, left out: {why}")
             elif not any(k["edge"] == dm["edge"] and abs(k["at_m"] - dm["at_m"]) < (k["width_m"] + dm["width_m"]) / 2 for k in made_d):
                 made_d.append(dm)
+        if len(made_d) > 1:  # one kind of dormer per roof, as one kind of window per wall
+            for key in ("bottom_m", "width_m", "height_m", "rise_m"):
+                mid_v = round(float(np.median([m[key] for m in made_d])), 2)
+                for m in made_d:
+                    m[key] = mid_v
+            win = [round(float(np.median([m["window_m"][a] for m in made_d])), 2) for a in (0, 1)]
+            for m in made_d:
+                m["window_m"] = win
         for k, dm in enumerate(sorted(made_d, key=lambda m: (m["edge"], m["at_m"]))):
+            dm.pop("_t", None)
             dm["id"] = f"dm{k + 1}"
             dm["colour"] = ov.get("wall_colour", "#b0a090")
         if made_d:
@@ -1664,22 +1882,45 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     print(f"look at {out}/compare_<n>.png (the photo beside the model from the same place) and {out}/overlay_<n>.png (the model's outline in magenta over the photo)")
 
 
+def _run_dir(arg: str) -> Path:
+    """A run folder as given, or a building id's saved run beside its captures."""
+    p = Path(arg)
+    if p.is_dir() or "/" in arg:
+        return p
+    from drycastle_pipeline.photos.photo_capture import PHOTOS_DIR
+    return PHOTOS_DIR / arg / "run"
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     e = sub.add_parser("ends")
     e.add_argument("building")
-    e.add_argument("--out", type=Path, required=True)
+    e.add_argument("--out", type=Path, help="run folder (default: beside the capture, data/.../photos/<id>/run)")
+    e.add_argument("--no-marks", action="store_true", help="ignore the wall ends marked by hand at capture: ask for them among the computer's candidates")
     w = sub.add_parser("walls")
-    w.add_argument("out", type=Path)
+    w.add_argument("out", type=_run_dir, help="run folder, or a building id for its saved run")
     a = sub.add_parser("apply")
-    a.add_argument("out", type=Path)
+    a.add_argument("out", type=_run_dir, help="run folder, or a building id for its saved run")
     a.add_argument("--dry", action="store_true", help="measure and draw, write nothing under config/")
     a.add_argument("--replace", action="store_true", help="overwrite the building's entry in overrides.yaml")
     a.add_argument("--no-guess", action="store_true", help="leave walls no capture saw blank instead of giving them windows like the measured ones")
+    r = sub.add_parser("read", help="answer the open question of each run folder by one API call (needs ANTHROPIC_API_KEY)")
+    r.add_argument("outs", type=_run_dir, nargs="+", help="run folders or building ids")
+    r.add_argument("--again", action="store_true", help="ask the last question again though it is answered")
+    n = sub.add_parser("answers", help="put an agent's reply ({folder or id: answer}) into the run folders")
+    n.add_argument("reply", type=Path)
+    n.add_argument("--again", action="store_true", help="overwrite the answer of the last question")
     args = ap.parse_args(argv)
-    if args.cmd == "ends":
-        stage_ends(args.building, args.out)
+    if args.cmd in ("read", "answers"):
+        from drycastle_pipeline.photos import facade_reader
+
+        if args.cmd == "read":
+            facade_reader.stage_read(args.outs, args.again)
+        else:
+            facade_reader.stage_answers(args.reply, args.again, _run_dir)
+    elif args.cmd == "ends":
+        stage_ends(args.building, args.out or _run_dir(args.building), not args.no_marks)
     elif args.cmd == "walls":
         stage_walls(args.out)
     else:

@@ -1,0 +1,20 @@
+# P-0266: semi-detached bungalow, white render, red tiled roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.60 m, roof top 5.82 m. Walls seen: edges [1]. Not modelled: satellite dishes, pink plinth, attached neighbouring house.
+id: w378900352
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#f2f0ea'
+surround_colour: '#e9dcc0'
+trim_colour: '#e9dcc0'
+ridge_caps: true
+plinth: {height_m: 0.5, colour: '#b9aaa2'}
+apron: {width_m: 0.74, colour: '#8a8980'}
+roof_tiles: true
+eaves: {colour: '#d0cbc2', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 5.03, colour: '#d0cbc2', bends: true}
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 0.75, width_m: 0.91, height_m: 1.16, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
+  - {id: w2, kind: window, edge: 1, at_m: 2.29, width_m: 0.91, height_m: 1.16, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
+  - {id: d1, kind: door, edge: 1, at_m: 3.68, width_m: 0.85, height_m: 2.12, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}

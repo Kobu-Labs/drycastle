@@ -158,3 +158,32 @@ def test_a_balcony_seen_on_a_gable_wall_lies_over_the_ground_floor():
     assert hr.invent_balcony("no", 0, role, 3.7, 7.6, ops) is None
     assert hr.invent_balcony("yes", 0, {**role, "roof_edge": "eave"}, 3.7, 7.6, ops) is None
     assert hr.invent_balcony("yes", 0, role, 3.7, 5.0, ops) is None  # no attic under so low a roof
+
+
+def test_measured_openings_are_centred_on_their_wall_and_a_door_is_not_a_slit():
+    win = {"kind": "window", "edge": 0, "width_m": 1.2, "height_m": 1.3, "sill_m": 0.9}
+    row = hr.tidy_walls([{**win, "at_m": 2.6}, {**win, "at_m": 5.6}, {**win, "at_m": 8.6}, {**win, "edge": 1, "at_m": 0.3}], {0: 10.0, 1: 10.0}, {0})
+    assert [o["at_m"] for o in row] == [1.4, 4.4, 7.4, 0.3]  # 1.4 m of wall at both ends; the unseen wall is left
+    door = {"kind": "door", "edge": 0, "at_m": 8.9, "width_m": 0.5, "height_m": 2.0, "sill_m": 0.0}
+    out = hr.tidy_walls([{**win, "at_m": 1.0}, {**win, "at_m": 7.45}, door], {0: 10.0}, {0})
+    d = out[-1]
+    assert d["width_m"] == hr.DOOR_MIN_W_M
+    assert out[1]["at_m"] + 1.2 <= d["at_m"] - 0.1 and d["at_m"] + d["width_m"] <= 10.0 - 0.1
+    assert out[0]["at_m"] == pytest.approx(10.0 - d["at_m"] - d["width_m"], abs=0.02)
+    attic = {**win, "at_m": 4.4, "sill_m": 4.5}  # under the ridge: a door at the wall's end below does not move it
+    assert hr.tidy_walls([attic, {**door, "at_m": 8.0, "width_m": 0.9}], {0: 10.0}, {0})[0]["at_m"] == 4.4
+    roomy = hr.tidy_walls([{**win, "at_m": 1.0}, {**win, "at_m": 4.0}], {0: 10.0}, {0})  # wall at both ends: a lopsided row is the house's
+    assert [o["at_m"] for o in roomy] == [1.0, 4.0]
+
+
+def test_one_boxed_sash_beside_a_two_sash_window_is_a_whole_window():
+    win = {"kind": "window", "edge": 0, "height_m": 1.5, "sill_m": 1.0}
+    out = hr.pair_sashes([{**win, "at_m": 2.4, "width_m": 1.6, "_pair": True}, {**win, "at_m": 7.5, "width_m": 0.8}, {**win, "at_m": 10.0, "width_m": 1.5}], {0: 12.0})
+    assert (out[1]["at_m"], out[1]["width_m"], out[1]["posts"]) == (7.1, 1.6, [0.5])
+    assert out[2]["width_m"] == 1.5  # a window of another size is left
+
+
+def test_the_foot_of_the_house_differs_from_house_to_house_and_stays_for_one():
+    styles = [hr.base_style(f"w{k}") for k in range(60)]
+    assert {s["strip"] for s in styles} == {"footing", "gravel", "concrete", "slabs"} and {s["plinth"] for s in styles} == {"paint", "stone", "brick"}
+    assert hr.base_style("w7") == hr.base_style("w7") and all(0.2 <= s["width_m"] <= 1.05 and 0.2 <= s["plinth_m"] <= 0.6 for s in styles)

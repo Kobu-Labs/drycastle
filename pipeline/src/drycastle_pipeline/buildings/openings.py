@@ -57,6 +57,9 @@ Optional whole-building parts (all absent = the plain look)::
 
 More optional parts (the trim; all absent = none)::
 
+    interior: true                               # the house is hollow (buildings/interior.py, ADR 0040): walls 0.3 m thick
+                                                 # inward of the footprint, a floor at the lowest door's sill, a ceiling
+                                                 # a storey above; windows and doors between them go through the wall
     trim_colour: "#f2f0ea"                       # bands and corner strips (default the frame default)
     bands:                                       # level bands round every wall, 0.04 m proud, cut by openings they
       - {top_m: 3.2, height_m: 0.18}             # cross and by the wall's own top: a cornice under the eave, a string
@@ -76,7 +79,7 @@ More optional parts (the trim; all absent = none)::
                                                  # above and a shade apart (slopes flatter than 10 degrees stay plain)
     bargeboard_colour: "#5a4030"                 # needs eaves: the boards along a gable's sloping edges in this colour,
                                                  # 0.22 m high (default: the eaves colour, as high as the fascia)
-    apron: {width_m: 0.6, colour: "#8f8c85"}     # a paved strip round the foot of the walls, 4 cm above the ground; its
+    apron: {width_m: 0.6, colour: "#8f8c85", joints_m: 0.5}  # (joints_m optional: slabs, a dark joint every so much) a paved strip round the foot of the walls, 4 cm above the ground; its
                                                  # outer face goes 0.8 m down, a kerb where the ground falls away
 
 Openings take, besides the above: ``lintel_m`` (0..0.4: a box this high over the head, 0.05 m proud, in frame_colour:
@@ -141,6 +144,7 @@ RAFTER_W_M, RAFTER_H_M, RAFTER_STEP_M = 0.08, 0.12, 0.9  # rafter tails under an
 TILE_COURSE_M, TILE_LIFT_M, TILE_MIN_SLOPE = 0.34, 0.03, 0.18  # a roof's courses: width along the slope, step, least slope
 BARGE_M = 0.22  # a bargeboard's height
 APRON_TOP_M, APRON_DEEP_M = 0.04, 0.8
+APRON_JOINT_LIFT_M = 0.008
 GUTTER_LEVEL_M = 0.06  # an eave may be this far off level end to end and still carry a gutter
 PIPE_M, PIPE_OFF_M = 0.09, 0.02
 CHIMNEY_BELOW_M = 0.3
@@ -284,7 +288,8 @@ class Detail:
     balconies: list[Balcony] = field(default_factory=list)
     roof_tiles: bool = False  # the roof laid in courses: each a step proud of the one above, a shade apart
     bargeboard_colour: str | None = None  # the boards along a gable's sloping edges in this colour, wider than the fascia
-    apron: tuple[float, str] | None = None  # (width_m, colour): a paved strip round the foot of the house, its edge a kerb
+    apron: tuple[float, str, float] | None = None  # (width_m, colour, joints_m): a strip round the foot of the house, its edge a kerb
+    interior: bool = False  # the house is hollow: walls with a width, floor, ceiling, openings that go through (buildings/interior.py)
 
 
 @dataclass
@@ -347,7 +352,7 @@ def parse_detail(raw: dict, where: str = "detail") -> Detail:
         raise DetailError(f"{where}: needs a mapping with an `id`")
     known = {"id", "source", "overhang_m", "frame_colour", "surround_colour", "openings", "dormers", "plinth", "eaves", "downpipes", "chimneys",
              "trim_colour", "bands", "corners", "gable_colour", "gable_from_m", "ridge_caps", "skylights", "balconies",
-             "roof_tiles", "bargeboard_colour", "apron"}  # fmt: skip
+             "roof_tiles", "bargeboard_colour", "apron", "interior"}  # fmt: skip
     extra = set(raw) - known
     if extra:
         raise DetailError(f"{where}: unknown field(s) {sorted(extra)}")
@@ -360,6 +365,9 @@ def parse_detail(raw: dict, where: str = "detail") -> Detail:
     )
     if not 0.0 <= d.overhang_m <= 2.0:
         raise DetailError(f"{where}: overhang_m must be 0..2")
+    if not isinstance(raw.get("interior", False), bool):
+        raise DetailError(f"{where}: interior must be true or false")
+    d.interior = raw.get("interior", False)
     d.trim_colour = _hex(raw.get("trim_colour", DEFAULT_FRAME), where)
     for i, raw_b in enumerate(raw.get("bands") or []):
         w = _block(raw_b, where, f"bands[{i}]", Band, ("top_m",))
@@ -386,9 +394,11 @@ def parse_detail(raw: dict, where: str = "detail") -> Detail:
         d.bargeboard_colour = _hex(raw["bargeboard_colour"], where)
     if raw.get("apron") is not None:
         ap = raw["apron"]
-        if not isinstance(ap, dict) or set(ap) - {"width_m", "colour"}:
-            raise DetailError(f"{where}: apron takes width_m and colour")
-        d.apron = (_num(ap.get("width_m", 0.6), where, "apron width_m"), _hex(ap.get("colour", "#8d8a84"), where))
+        if not isinstance(ap, dict) or set(ap) - {"width_m", "colour", "joints_m"}:
+            raise DetailError(f"{where}: apron takes width_m, colour and joints_m")
+        d.apron = (_num(ap.get("width_m", 0.6), where, "apron width_m"), _hex(ap.get("colour", "#8d8a84"), where), _num(ap.get("joints_m", 0.0), where, "apron joints_m"))
+        if d.apron[2] and not 0.2 <= d.apron[2] <= 2.0:
+            raise DetailError(f"{where}: apron joints_m must be 0.2..2")
         if not 0.2 <= d.apron[0] <= 2.0:
             raise DetailError(f"{where}: apron width_m must be 0.2..2")
     for i, raw_b in enumerate(raw.get("balconies") or []):
@@ -656,6 +666,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
     if b.get("roof_part"):
         from drycastle_pipeline.buildings.meshes import split_parts
 
+        if d.interior:
+            raise DetailError(f"{d.id}: interior: not yet for a building cut in parts (roof_part)")
         ring = list(orient(footprint_polygon(b["footprint"]), 1.0).exterior.coords)[:-1]
         parts = split_parts(b)
         subs = [_on_part(d, ring, list(orient(footprint_polygon(p["footprint"]), 1.0).exterior.coords)[:-1], k == 0) for k, p in enumerate(parts)]
@@ -724,6 +736,9 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             unary_union([r.exterior for r in regions]), angle, origin=(0, 0), use_radians=True
         )
 
+    from drycastle_pipeline.buildings import interior
+
+    inside = interior.inside_of(b, d)
     out = _Tris()
     windows: list[WindowTag] = []
     ring = list(poly.exterior.coords)[:-1]
@@ -809,13 +824,15 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             x0, x1 = o.at_m, o.at_m + o.width_m
             z0, z1 = o.sill_m, o.sill_m + o.height_m
             r = base + o.recess_m
-            mid = to3((x0 + x1) / 2, (z0 + z1) / 2, (base + r) / 2)
+            thru = inside is not None and inside.through(o)  # a hole through the whole wall: its reveals reach the room
+            deep = max(r, interior.WALL_M) if thru else r
+            mid = to3((x0 + x1) / 2, (z0 + z1) / 2, (base + deep) / 2)
             frame = hex_to_rgb(d.frame_colour)
             for (sa_, za_), (sb_, zb_) in (
                 ((x0, z0), (x1, z0)), ((x1, z0), (x1, z1)), ((x1, z1), (x0, z1)), ((x0, z1), (x0, z0))
             ):
                 out.quad(
-                    [to3(sa_, za_, base), to3(sb_, zb_, base), to3(sb_, zb_, r), to3(sa_, za_, r)],
+                    [to3(sa_, za_, base), to3(sb_, zb_, base), to3(sb_, zb_, deep), to3(sa_, za_, deep)],
                     hex_to_rgb(o.colour or DEFAULT_PANEL["recess"]) if o.kind == "recess" else frame,
                     mid,
                 )
@@ -834,7 +851,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                 )
             if o.lintel_m:  # a box over the head
                 out.cuboid(to3, (x0 - 0.04, x1 + 0.04), (z1, z1 + o.lintel_m), (base - LINTEL_PROUD_M, base), frame, ("d0", "s0", "s1", "z0", "z1"))
-            if o.panels:  # raised panels on the leaf: two beside each other on a door, one across on a garage door
+            if o.panels and not thru:  # raised panels on the leaf: two beside each other on a door, one across on a garage door
                 leaf = tuple(int(c * 0.82) for c in hex_to_rgb(o.colour or DEFAULT_PANEL[o.kind]))
                 m, gap, cols_n = o.frame_m + 0.07, 0.07, 2 if o.kind == "door" else 1
                 pw, ph = (o.width_m - 2 * m - (cols_n - 1) * gap) / cols_n, (o.height_m - 2 * m - (o.panels - 1) * gap) / o.panels
@@ -865,6 +882,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             if o.kind == "window":
                 pane = _Tris()
                 pane.quad([to3(x0, z0, r), to3(x1, z0, r), to3(x1, z1, r), to3(x0, z1, r)], GLASS, outside)
+                if thru:  # seen from the room too
+                    pane.quad([to3(x0, z0, r), to3(x1, z0, r), to3(x1, z1, r), to3(x0, z1, r)], GLASS, to3((x0 + x1) / 2, (z0 + z1) / 2, r + 1.0))
                 centre = to3((x0 + x1) / 2, (z0 + z1) / 2, r)
                 meta = {
                     "building": d.id,
@@ -880,7 +899,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                     "normal": [round(out_n[0], 4), round(out_n[1], 4)],
                 }
                 windows.append(WindowTag(d.id, o.id, pane.mesh(), meta))
-            else:
+            elif not thru:  # (a door that goes through is an open doorway)
                 colour = hex_to_rgb(o.colour or DEFAULT_PANEL[o.kind])
                 back = Polygon(
                     [(x0, z0), (x1, z0), (x1, z1), (x0, z1)],
@@ -899,6 +918,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         for o in edge_ops:
             if o.parent is None:
                 emit(o, 0.0)
+        if inside is not None:
+            interior.add_inner_wall(out, to3, ring, i, edge_ops, inside)
         for bal in d.balconies:
             if bal.edge == i:
                 if bal.at_m + bal.width_m > length + 0.01:
@@ -994,17 +1015,21 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         area = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0])
         order = (a0, a1, a2) if area < 0 else (a0, a2, a1)
         out.add([(x, y, 0.0) for x, y in order], wall_c)
+    if inside is not None:
+        interior.add_floor_ceiling(out, poly, inside)
+        interior.add_partitions(out, interior.plan_of(b, d, inside), inside)
     if d.apron is not None:
         _add_apron(out, poly, d.apron)
     return out.mesh(), windows
 
 
-def _add_apron(out: _Tris, poly: Polygon, apron: tuple[float, str]) -> None:
+def _add_apron(out: _Tris, poly: Polygon, apron: tuple[float, str, float]) -> None:
     """A paved strip round the foot of the walls; its outer face goes well into the ground, so on a slope the house stands
     on a kerb and not in the air."""
     width, apron_c = apron[0], hex_to_rgb(apron[1])
     outer = orient(poly.buffer(width, join_style=2, mitre_limit=2.0), 1.0)
     x0, y0, x1, y1 = outer.bounds
+    ring_area = outer.difference(poly)
     for half in (box(x0 - 1, y0 - 1, (x0 + x1) / 2, y1 + 1), box((x0 + x1) / 2, y0 - 1, x1 + 1, y1 + 1)):  # cut in two: no piece has a hole
         for piece in _polygons(outer.difference(poly).intersection(half)):
             for tri in triangulate(piece):
@@ -1014,6 +1039,21 @@ def _add_apron(out: _Tris, poly: Polygon, apron: tuple[float, str]) -> None:
     for p, q in pairwise(list(outer.exterior.coords)):
         face = [(*p, -APRON_DEEP_M), (*q, -APRON_DEEP_M), (*q, APRON_TOP_M), (*p, APRON_TOP_M)]
         out.quad(face, tuple(int(v * 0.8) for v in apron_c), ((p[0] + q[0]) / 2 + (q[1] - p[1]), (p[1] + q[1]) / 2 - (q[0] - p[0]), 0.0))
+        step, run = apron[2], math.dist(p, q)
+        if step and run > step:  # slabs: a dark joint across the strip every joints_m, and one along its middle
+            ux, uy = (q[0] - p[0]) / run, (q[1] - p[1]) / run
+            nx, ny = -uy, ux  # into the strip: the outer ring runs counter-clockwise
+            joint_c, z = tuple(int(v * 0.68) for v in apron_c), APRON_TOP_M + APRON_JOINT_LIFT_M
+            n = max(1, round(run / step))
+            for k in range(1, n):
+                s = run * k / n
+                a, b = (p[0] + ux * (s - 0.012), p[1] + uy * (s - 0.012)), (p[0] + ux * (s + 0.012), p[1] + uy * (s + 0.012))
+                piece = Polygon([a, b, (b[0] + nx * width, b[1] + ny * width), (a[0] + nx * width, a[1] + ny * width)]).intersection(ring_area)
+                for part in _polygons(piece):
+                    for tri in triangulate(part):
+                        v3 = [(x, y, z) for x, y in tri]
+                        nn = np.cross(np.subtract(v3[1], v3[0]), np.subtract(v3[2], v3[0]))
+                        out.add(v3 if nn[2] >= 0 else [v3[0], v3[2], v3[1]], joint_c)
 
 
 def _unit(p, q) -> tuple[float, float]:

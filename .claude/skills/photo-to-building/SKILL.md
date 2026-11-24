@@ -20,9 +20,25 @@ Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`O
   `SHEET.md` in this folder. Lean-to or split roofs, two buildings that are one, an interior: stop and say it needs
   `LANDMARK.md` (same folder). Do not read either file otherwise.
 
+## Who answers (cheapest first)
+
+The two answers (`ends.json`, `names.json`) can be given three ways; the questions and files are the same.
+
+1. **One API call per question, no agent** (about 9k tokens a house instead of about 30k). Needs `ANTHROPIC_API_KEY`
+   (repo `.env`) and `uv sync --extra reader`:
+
+       uv run python -m drycastle_pipeline.photos.facade_pipeline read <id> <id> ...
+
+   It answers each folder's open question (ends first, then walls), checks the reply against the template and writes
+   the file. Run it after `ends` and again after `walls`.
+2. **The `facade-reader` agent, several houses at once** (no key; sonnet, effort medium). Give it up to 5 run
+   folders with their ask file; it reads only and replies one JSON object `{folder: answer}`. Save the reply to a
+   file and run `facade_pipeline answers REPLY.json`: it checks each answer and writes it into its folder.
+3. Answer yourself, as steps 1 and 2 below describe.
+
 ## 1. Wall ends
 
-    uv run python -m drycastle_pipeline.photos.facade_pipeline ends <building id> --out OUT
+    uv run python -m drycastle_pipeline.photos.facade_pipeline ends <building id>   # OUT defaults to data/village/photos/<id>/run; walls/apply take OUT or the id
 
 Wall ends marked by hand at capture are not asked ("every wall end was marked by hand": `ends.json` is already
 written, go to step 2). It prints which walls each capture can measure. "NO wall ... measurable" for every capture: stop and report; the

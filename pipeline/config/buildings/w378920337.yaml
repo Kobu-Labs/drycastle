@@ -9,7 +9,7 @@ gable_colour: '#f1ecdf'
 gable_from_m: 3.12
 ridge_caps: true
 plinth: {height_m: 0.53, colour: '#504d4f'}
-apron: {width_m: 0.6, colour: '#8f8c85'}
+apron: {width_m: 0.32, colour: '#aaa69a'}
 roof_tiles: true
 eaves: {colour: '#9a9997', fascia_m: 0.18, gutter: true}
 bargeboard_colour: '#f2f0ea'
@@ -19,14 +19,14 @@ downpipes:
 - {edge: 3, at_m: 12.15, colour: '#9a9997', bends: true}
 - {edge: 3, at_m: 0.16, colour: '#9a9997', bends: true}
 chimneys:
-- {x: -16.21, y: 31.21, top_m: 5.36, width_m: 0.5, depth_m: 0.5, cap: true}
+- {x: -16.16, y: 31.2, top_m: 5.36, width_m: 0.5, depth_m: 0.5, cap: true}
 openings:
   - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.53, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3}
-  - {id: w1, kind: window, edge: 1, at_m: 2.33, width_m: 0.95, height_m: 1.36, sill_m: 1.11, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w2, kind: window, edge: 1, at_m: 5.61, width_m: 0.95, height_m: 1.36, sill_m: 1.11, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 1, at_m: 8.89, width_m: 0.95, height_m: 1.36, sill_m: 1.11, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w4, kind: window, edge: 2, at_m: 1.24, width_m: 0.95, height_m: 1.36, sill_m: 1.11, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 2, at_m: 3.44, width_m: 0.95, height_m: 1.36, sill_m: 1.11, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w6, kind: window, edge: 3, at_m: 2.45, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.17], rails: [0.17], sill: true}
-  - {id: w7, kind: window, edge: 3, at_m: 6.02, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.17], sill: true, rails: [0.17]}
-  - {id: w8, kind: window, edge: 3, at_m: 9.7, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.17], rails: [0.17], sill: true}
+  - {id: w1, kind: window, edge: 1, at_m: 2.33, width_m: 0.95, height_m: 1.36, sill_m: 1.11, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 5.61, width_m: 0.95, height_m: 1.36, sill_m: 1.11, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 8.89, width_m: 0.95, height_m: 1.36, sill_m: 1.11, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 2, at_m: 1.24, width_m: 0.95, height_m: 1.36, sill_m: 1.11, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 3.44, width_m: 0.95, height_m: 1.36, sill_m: 1.11, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 3, at_m: 2.1, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w7, kind: window, edge: 3, at_m: 5.73, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w8, kind: window, edge: 3, at_m: 9.35, width_m: 0.95, height_m: 1.36, sill_m: 1.11, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}

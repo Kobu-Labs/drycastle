@@ -16,6 +16,9 @@ dependencies = [
     "opencv-python-headless>=5.1.0.95",
 ]
 
+[project.optional-dependencies]
+reader = ["anthropic"]
+
 [dependency-groups]
 dev = [
     "matplotlib>=3.11.2",

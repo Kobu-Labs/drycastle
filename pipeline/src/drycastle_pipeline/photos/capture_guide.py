@@ -6,7 +6,9 @@ the middle of the view a capture from here can measure, and, after the capture k
 Look: the building's walls are outlined on the panorama as the map has them (a metre or two off, a capture's own place
 being that rough). A solid outline with a tick is a wall this view measures well (both ends in view, at most
 ``GOOD_OFF_DEG`` off square); dashed with a triangle is usable but steep; dotted with a cross is not usable, with the
-reason in the panel. Capture (C): the view is held, and for each corner in view a blue line follows the mouse (or the
+reason in the panel. With ``--tour`` the tab is put on the street in front of each house that has no capture yet, one after
+the other: saving a capture moves on to the next, N leaves a house out, B goes back one. Every house nearby that already has a capture carries a green "✓ captured" mark above it, and
+the panel says whether the one in the middle has. Capture (C): the view is held, and for each corner in view a blue line follows the mouse (or the
 arrow keys): put it where the wall itself ends and click. The outline is then refitted to the marks and shown: Enter
 saves the picture, its camera and the marks (``ends`` in the sidecar: corner number to picture column), which
 ``facade_pipeline`` uses instead of asking a model where the walls end.
@@ -32,7 +34,10 @@ MAX_OFF_DEG = 78.0
 MIN_WALL_M = 2.0
 WALL_TOP_M = 3.0  # how high the outline is drawn: about a storey
 MAX_MOVE_M = 6.0
-OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab holding an older guide reloads itself to get this one
+TOUR_STAND_M = (4.0, 30.0)  # a house is toured when a street passes this near its walls
+TOUR_STREETS = {"residential", "living_street", "unclassified", "tertiary", "secondary", "primary", "service"}
+DONE_NEAR_M = 70.0  # houses nearer than this get their "captured" mark in the view
+OVERLAY_JS = r"""(() => { const V = 5;  // raise with every change here: a tab holding an older guide reloads itself to get this one
   if (window.__dc && window.__dc.v === V) return 1;
   if (window.__dc) { location.reload(); return 0; }
   // tokens: every colour, size and spacing of the guide (docs/standards/ui-ux.md section 4)
@@ -68,11 +73,13 @@ OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab h
     const g = dc.mode === 'look' ? dc.guide : dc.frozen, kids = [];
     const chip = el('span', 'float:right;font-size:' + T.small + ';border:1px solid ' + T.accent + ';color:' + T.accent + ';border-radius:4px;padding:0 6px', { look: 'LOOK', mark: 'MARK', confirm: 'DISCARD?' }[dc.mode]);
     const head = row('Capture guide', T.ink, 700); head.style.fontSize = T.title; head.prepend(chip); kids.push(head);
+    if (g && g.tour) { kids.push(row('Tour: house ' + g.tour.i + ' of ' + g.tour.n + ' (' + g.tour.building + ')', T.accent, 600)); kids.push(row(g.tour.note, T.dim)); kids.push(el('div', 'border-top:1px solid ' + T.line + ';margin:' + T.gap + ' 0')); }
     if (!g) kids.push(row('Starting...', T.dim));
     else if (g.message) kids.push(row(g.message, T.poor));
     else {
       kids.push(row('Building ' + g.building + (g.parcel ? ' (' + g.parcel + ')' : '')));
-      kids.push(row('Saved captures: ' + g.captures, T.dim));
+      kids.push(g.captures ? row(GLYPH.good + ' Already captured (' + g.captures + ')', T.good, 600) : row('Not captured yet', T.dim));
+      kids.push(row('Houses with a capture: ' + g.captured, T.dim));
       kids.push(el('div', 'border-top:1px solid ' + T.line + ';margin:' + T.gap + ' 0'));
       if (!g.walls.length) kids.push(row('No wall of it faces you from here', T.poor));
       for (const w of g.walls) {
@@ -99,6 +106,9 @@ OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab h
       kids.push(svgEl('polygon', { points: pts, fill: c, 'fill-opacity': on ? .16 : .07, stroke: c, 'stroke-width': on ? 5 : w.status === 'good' ? 3 : 2, 'stroke-dasharray': w.status === 'good' ? '' : w.status === 'poor' ? '12 7' : '3 6' }));
       text((w.quad[2][0] + w.quad[3][0]) / 2, Math.min(w.quad[2][1], w.quad[3][1]) - 10, c, GLYPH[w.status] + ' wall ' + w.edge, 'middle');
     }
+    if (dc.show && dc.mode === 'look' && g && g.done) for (const d of g.done) {  // houses that already have a capture
+      kids.push(svgEl('circle', { cx: d.x, cy: d.y, r: 13, fill: T.bg, stroke: T.good, 'stroke-width': 3 }));
+      text(d.x, d.y + 6, T.good, GLYPH.good, 'middle'); text(d.x + 20, d.y + 6, T.good, 'captured' + (d.n > 1 ? ' ×' + d.n : '')); }
     const H = innerHeight, W = innerWidth, vline = (x, c, dash, label, top) => { seg({ x: x, y: 0 }, { x: x, y: H }, c, dash); text(x + 8, top, c, label); };
     if (dc.mode !== 'look') {
       dc.steps.forEach((t, k) => { const v = dc.vals[k]; if (v == null || k === dc.i) return;
@@ -117,7 +127,7 @@ OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab h
     shield.style.pointerEvents = dc.mode === 'look' ? 'none' : 'auto';
     prompt.style.display = dc.mode === 'look' ? 'none' : 'block';
     const s = cur(), undo = [['Backspace', 'step back'], ['Esc', 'discard capture']];
-    if (dc.mode === 'look') setHint([['C', 'capture this view'], ['H', dc.show ? 'hide the outlines' : 'show the outlines']]);
+    if (dc.mode === 'look') setHint([['C', 'capture this view'], ['H', dc.show ? 'hide the outlines and marks' : 'show the outlines and marks'], ...(dc.guide && dc.guide.tour ? [['N', 'next house'], ['B', 'house before']] : [])]);
     else if (dc.mode === 'confirm') { prompt.textContent = 'Discard this capture and everything marked on it? Nothing has been saved yet.'; setHint([['Enter', 'discard'], ['Esc', 'keep marking']]); }
     else { const n = 'Step ' + (dc.i + 1) + ' of ' + dc.steps.length + (dc.fit ? '' : '+') + ': ';
       if (s.kind === 'corner') { prompt.textContent = n + 'put the blue line on the ' + s.name + ', where the wall itself ends (not the roof edge)';
@@ -176,6 +186,7 @@ OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab h
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key, big = e.shiftKey ? 10 : 1;
     if (dc.mode === 'look') {
       if (k === 'h') { dc.show = !dc.show; refresh(); }
+      else if ((k === 'n' || k === 'b') && dc.guide && dc.guide.tour) { dc.events.push({ type: 'tour', step: k === 'n' ? 1 : -1 }); say(k === 'n' ? 'Going to the next house...' : 'Going back one house...', true); }
       else if (k === 'c' && !dc.busy) {
         if (!dc.guide || dc.guide.message) { say(dc.guide ? dc.guide.message : 'The guide is still starting', false); return; }
         if (!dc.guide.full && !(dc.guide.corners || []).length) { say('No wall is usable from here: stand in front of the street wall with both its ends in view', false); return; }
@@ -221,7 +232,7 @@ OVERLAY_JS = r"""(() => { const V = 3;  // raise with every change here: a tab h
     if (s.kind === 'corner' || s.kind === 'top' || s.kind === 'ridge') place(); });
   for (const ev of ['mousedown', 'mouseup', 'wheel', 'dblclick', 'contextmenu']) shield.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
   dc.pull = () => ({ events: dc.events.splice(0), w: innerWidth, h: innerHeight, mode: dc.mode });
-  dc.setGuide = g => { dc.guide = g; if (dc.mode === 'look') { drawPanel(); draw(); } };
+  dc.setGuide = g => { dc.guide = g; if (dc.mode === 'look') refresh(); };
   dc.shot = on => { root.style.display = on ? 'none' : ''; return new Promise(r => requestAnimationFrame(() => requestAnimationFrame(() => r(1)))); };
   dc.setFit = r => { if (dc.mode !== 'look' && cur() && cur().kind === 'fit') { dc.fit = r; refresh(); } };
   dc.saved = (m, ok) => { dc.busy = false; leave(); say(m, ok); };
@@ -303,7 +314,8 @@ class Guide:
     """Keeps the guide of every Street View tab of one Chrome up to date and files its captures; ``poll()`` once per
     look at the tabs."""
 
-    def __init__(self, port: int, photos: Path = PHOTOS_DIR, full: bool = False) -> None:
+    def __init__(self, port: int, photos: Path = PHOTOS_DIR, full: bool = False, tour: bool = False) -> None:
+        self.tour, self.stops, self.at, self.going = tour, None, 0, None  # the tour: its stops, the one stood at, the address sent
         self.full = full  # also ask for each wall's roof edge and top, the ridge and the house's colours
         from drycastle_pipeline.photos.landmark_tools import WORK
 
@@ -319,6 +331,72 @@ class Guide:
             self.terrain, self.elevations = None, {}
         self.pending: dict[str, dict] = {}
         self.sent: dict[str, str] = {}
+
+    def tour_stops(self, start: tuple[float, float] | None) -> list[dict]:
+        """The houses still without a capture that a street passes, each with the place on the street nearest to it and
+        the compass heading from there to the house: [{building, x, y, heading}], ordered as a walk (always the nearest
+        next), starting nearest to ``start``."""
+        from shapely.geometry import MultiLineString, Polygon, shape
+        from shapely.ops import nearest_points
+
+        from drycastle_pipeline.photos.landmark_tools import WORK
+
+        feats = json.loads((WORK / "normalised" / "highways.geojson").read_text())["features"]
+        streets = MultiLineString([shape(f["geometry"]) for f in feats if f["properties"].get("highway") in TOUR_STREETS and f["geometry"]["type"] == "LineString"])
+        from shapely.geometry import LineString
+        from shapely.strtree import STRtree
+
+        have, todo = self.captured(), []
+        bodies = {b["id"]: Polygon(b["footprint"]["exterior"]) for b in self.buildings.values()}
+        ids = list(bodies)
+        tree = STRtree([bodies[i] for i in ids])
+        for b in self.buildings.values():
+            body = bodies[b["id"]]
+            if b["id"] in have or body.area < 30 or not TOUR_STAND_M[0] <= body.distance(streets) <= TOUR_STAND_M[1]:
+                continue
+            stand, wall = nearest_points(streets, body)
+            sight = LineString([stand, wall])
+            if any(ids[k] != b["id"] and bodies[ids[k]].intersects(sight) for k in tree.query(sight)):
+                continue  # another building stands between that street and the house: not to be seen from there
+            c = body.centroid
+            todo.append({"building": b["id"], "x": stand.x, "y": stand.y, "heading": math.degrees(math.atan2(c.x - stand.x, c.y - stand.y)) % 360})
+        out, here = [], start or (0.0, 0.0)
+        while todo:
+            nxt = min(todo, key=lambda s: math.dist(here, (s["x"], s["y"])))
+            todo.remove(nxt)
+            out.append(nxt)
+            here = (nxt["x"], nxt["y"])
+        return out
+
+    def tour_go(self, cdp: Cdp, step: int = 0) -> None:
+        """Put the tab in front of the tour's house (``step``: 1 the next one, -1 the one before)."""
+        from drycastle_pipeline.photos.streetview_follow import _TO_JTSK
+
+        if not self.stops:
+            return
+        self.at = max(0, min(len(self.stops) - 1, self.at + step))
+        have, way = self.captured(), (-1 if step < 0 else 1)
+        while self.stops[self.at]["building"] in have and 0 <= self.at + way < len(self.stops):
+            self.at += way  # captured since the tour was laid out (from another house's stop): passed over
+        if self.stops[self.at]["building"] in have:
+            print("capture guide: the tour is done, every house on it has a capture", flush=True)
+            return
+        self.aimed = False
+        s = self.stops[self.at]
+        lon, lat = _TO_JTSK.transform(s["x"] + self.origin[0], s["y"] + self.origin[1], direction="INVERSE")
+        # Google's documented address for opening Street View at a place (Maps URLs): it takes the nearest panorama
+        self.going = f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat:.7f},{lon:.7f}&heading={s['heading']:.0f}&pitch=5&fov=75"
+        cdp.call("Page.navigate", {"url": self.going})
+        self.sent.clear()
+        print(f"capture guide: tour {self.at + 1}/{len(self.stops)}: {s['building']}", flush=True)
+
+    def tour_note(self, guide: dict) -> dict | None:
+        if not self.tour or not self.stops:
+            return None
+        s = self.stops[self.at]
+        seen = guide.get("building")
+        note = "This is it: capture it (C), or N to leave it" if seen == s["building"] else f"The middle of the view is on {seen or 'no house'}: turn to {s['building']}, or N to leave it"
+        return {"i": self.at + 1, "n": len(self.stops), "building": s["building"], "note": note}
 
     def camera(self, view: dict, w: int, h: int, bid: str | None) -> dict:
         from drycastle_pipeline.photos.streetview_follow import _TO_JTSK
@@ -339,13 +417,44 @@ class Guide:
         flat = self.camera(view, w, h, None)
         bid, _, _ = guess_building(flat["x"], flat["y"], view["heading"])
         if bid is None:
-            return {"message": "No building in the middle of the view: aim at a house"}
+            ground = float(self.terrain.surface(np.array([flat["x"]]), np.array([flat["y"]]))[0]) if self.terrain is not None else 0.0
+            return {"message": "No building in the middle of the view: aim at a house", "done": self.done_marks({**flat, "z": 2.5}, ground, self.captured())}
         b = self.buildings[bid]
         cam = self.camera(view, w, h, bid)
         near = [o for o in self.buildings.values() if o["id"] != bid and math.dist(o["footprint"]["exterior"][0], b["footprint"]["exterior"][0]) < 80]
         walls = wall_status(b, near, cam)
-        return {"building": bid, "parcel": b.get("parcel"), "captures": len(list((self.photos / bid).glob("*.json"))), "walls": walls,
+        counts = self.captured()
+        return {"building": bid, "parcel": b.get("parcel"), "captures": counts.get(bid, 0), "walls": walls, "captured": len(counts), "done": self.done_marks(cam, float(self.elevations.get(bid, 0.0)), counts),
                 "corners": corners_to_mark(walls, only_good=not self.full), "cam": cam, "house": self.house(bid), "options": house_options(), "full": self.full}  # fmt: skip
+
+    def captured(self) -> dict[str, int]:
+        """How many captures each building has: {building id: n}, only those with at least one."""
+        if not self.photos.is_dir():
+            return {}
+        got = {d.name: len(list(d.glob("*.json"))) for d in self.photos.iterdir() if d.is_dir() and d.name in self.buildings}
+        return {k: n for k, n in got.items() if n}
+
+    def done_marks(self, cam: dict, base: float, counts: dict[str, int]) -> list[dict]:
+        """Where to mark, in the view, the houses that already have a capture: [{building, n, x, y}] in page pixels, a
+        little above each one's wall top, for those within DONE_NEAR_M that no other building hides. ``base``: the height the camera's z is counted from."""
+        from shapely.geometry import LineString, Polygon
+
+        out = []
+        for oid, n in counts.items():
+            ring = self.buildings[oid]["footprint"]["exterior"]
+            c = Polygon(ring).centroid
+            if math.dist((c.x, c.y), (cam["x"], cam["y"])) > DONE_NEAR_M:
+                continue
+            z = float(self.elevations.get(oid, base)) - base + WALL_TOP_M + 1.0
+            px = project(cam, np.array([[c.x, c.y, z]]))[0]
+            if not np.isfinite(px).all() or not (0 <= px[0] <= cam["w"] and 0 <= px[1] <= cam["h"]):
+                continue
+            sight = LineString([(cam["x"], cam["y"]), (c.x, c.y)])
+            if any(o["id"] != oid and math.dist(o["footprint"]["exterior"][0], (cam["x"], cam["y"])) < DONE_NEAR_M + 40
+                   and sight.intersects(Polygon(o["footprint"]["exterior"])) for o in self.buildings.values()):  # fmt: skip
+                continue
+            out.append({"building": oid, "n": n, "x": round(float(px[0]), 1), "y": round(float(px[1]), 1)})
+        return out
 
     def house(self, bid: str) -> dict:
         """What was last said of the whole house (roof form and colours) at a capture of it."""
@@ -362,7 +471,9 @@ class Guide:
         g = held["guide"]
         b, cam = self.buildings[g["building"]], g["cam"]
         ring = b["footprint"]["exterior"]
-        picks = [(tuple(ring[int(k)]), float(x)) for k, x in marks.items() if x is not None]
+        from drycastle_pipeline.photos.facade_pipeline import order_marks
+
+        picks = [(tuple(ring[k]), x) for k, x in order_marks(cam, ring, marks).items()]
         near = [o for o in self.buildings.values() if o["id"] != b["id"] and math.dist(o["footprint"]["exterior"][0], ring[0]) < 80]
         if len(picks) < 2:
             return self._fitted(b, g["walls"], cam, "fewer than two corners are marked, so the outline stays where the map put it. Heights marked next will be rougher")
@@ -402,6 +513,27 @@ class Guide:
         return cdp.call("Runtime.evaluate", {"expression": expr, "returnByValue": True, "awaitPromise": wait})["result"].get("value")
 
     def _tab(self, cdp: Cdp, tab: str, url: str) -> None:
+        if self.tour and self.stops is None:  # the tour starts where the tab stands
+            view = parse_view(url)
+            start = None
+            if view is not None:
+                flat = self.camera(view, 1600, 900, None)
+                start = (flat["x"], flat["y"])
+            self.stops = self.tour_stops(start)
+            print(f"capture guide: tour of {len(self.stops)} house(s) without a capture", flush=True)
+            self.tour_go(cdp)
+            return
+        if self.tour and self.stops and "!1e1" in url and ("panoid%26" in url or "panoid&" in url):
+            # Street View opened with no panorama (the address names none): this street was never photographed, and the
+            # tab shows black. Seen on three polls running (not a page still loading), the tour moves on by itself
+            self.blank = getattr(self, "blank", 0) + 1
+            if self.blank >= 3 and self.at + 1 < len(self.stops):
+                self.blank = 0
+                print(f"capture guide: no Street View at {self.stops[self.at]['building']}: passed over", flush=True)
+                self.tour_go(cdp, 1)
+                return
+        else:
+            self.blank = 0
         self._eval(cdp, OVERLAY_JS)
         st = self._eval(cdp, "window.__dc.pull()")
         if not st:
@@ -423,8 +555,32 @@ class Guide:
                 self._save(cdp, tab, ev["marks"])
             elif ev["type"] == "discard":
                 self.pending.pop(tab, None)
+            elif ev["type"] == "tour" and self.tour:
+                self.tour_go(cdp, int(ev["step"]))
+                return
         if st["mode"] == "look":
             guide = self.look(url, w, h)
+            if self.tour and self.stops and not getattr(self, "aimed", True) and guide.get("cam"):
+                # Google puts the tab on the nearest panorama, which can stand metres from the place asked for: the view
+                # is turned once, from where the camera really is, to the middle of the tour's house
+                s, cam = self.stops[self.at], guide["cam"]
+                if math.dist((cam["x"], cam["y"]), (s["x"], s["y"])) < 40:
+                    self.aimed = True
+                    if guide.get("building") != s["building"]:
+                        from shapely.geometry import Polygon
+
+                        from drycastle_pipeline.photos.streetview_follow import _TO_JTSK
+
+                        c = Polygon(self.buildings[s["building"]]["footprint"]["exterior"]).centroid
+                        heading = math.degrees(math.atan2(c.x - cam["x"], c.y - cam["y"])) % 360
+                        lon, lat = _TO_JTSK.transform(cam["x"] + self.origin[0], cam["y"] + self.origin[1], direction="INVERSE")
+                        self.going = f"https://www.google.com/maps/@?api=1&map_action=pano&viewpoint={lat:.7f},{lon:.7f}&heading={heading:.0f}&pitch=5&fov=75"
+                        cdp.call("Page.navigate", {"url": self.going})
+                        self.sent.clear()
+                        return
+            tour = self.tour_note(guide)
+            if tour:
+                guide["tour"] = tour
             doc = json.dumps({**{k: v for k, v in guide.items() if k != "cam"}, "walls": _plain(guide.get("walls", []))})
             if self.sent.get(tab) != doc:
                 self._eval(cdp, f"window.__dc.setGuide({doc})")
@@ -464,6 +620,8 @@ class Guide:
         print(f"capture guide: {text}", flush=True)
         self._eval(cdp, f"window.__dc.saved({json.dumps(text)}, {'true' if doc.get('building') else 'false'})")
         self.sent.pop(tab, None)
+        if self.tour and self.stops and doc.get("building") == self.stops[self.at]["building"]:
+            self.tour_go(cdp, 1)  # the house is done: on to the next one without a capture
 
 
 def house_options() -> dict:

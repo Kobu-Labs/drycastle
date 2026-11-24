@@ -1,0 +1,129 @@
+"""The model's part of facade_pipeline, done cheaply: the questions of a run folder answered by one API call
+(pictures + the ask file, no agent around it), or answers an agent replied with put into their folders.
+
+    uv run python -m drycastle_pipeline.photos.facade_pipeline read  w378900371 w378900208 ...   (needs ANTHROPIC_API_KEY)
+    uv run python -m drycastle_pipeline.photos.facade_pipeline answers REPLY.json                 ({"<run folder or id>": {...}, ...})
+
+Which question a folder is waiting on: ``ends_ask.md`` without ``ends.json``, else ``walls_ask.md`` without
+``names.json``. A folder with nothing open is skipped (``--again`` asks its last question once more).
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import re
+from pathlib import Path
+
+MODEL = "claude-sonnet-5-5"
+EFFORT = "medium"
+STAGES = (("ends_ask.md", "ends.json"), ("walls_ask.md", "names.json"))
+
+
+def pending(out: Path, again: bool = False) -> tuple[str, str] | None:
+    """(ask file, answer file) the folder waits on; with ``again`` the last one that has an ask file."""
+    have = [(a, g) for a, g in STAGES if (out / a).exists()]
+    if again:
+        return have[-1] if have else None
+    return next(((a, g) for a, g in have if not (out / g).exists()), None)
+
+
+def pictures(out: Path, ask: str) -> list[Path]:
+    """The picture files the ask file names, in its order (names with no file, like ``wall_...png``, are prose)."""
+    seen: list[Path] = []
+    for name in re.findall(r"`([^`]+\.png)`", ask):
+        p = Path(name) if name.startswith("/") else out / name
+        if p.is_file() and p not in seen:
+            seen.append(p)
+    return seen
+
+
+def template(ask: str) -> dict:
+    return json.loads(ask[ask.rindex("\n{") :])
+
+
+def check(answer: dict, ask: str) -> None:
+    """The answer has the template's keys (and, per wall, the template's) and no ``"?"`` left."""
+    want = template(ask)
+    if set(answer) != set(want):
+        raise ValueError(f"keys differ from the template: missing {sorted(set(want) - set(answer))}, extra {sorted(set(answer) - set(want))}")
+    for wall, w in want.get("walls", {}).items() if isinstance(want.get("walls"), dict) else ():
+        got = answer["walls"].get(wall)
+        if not isinstance(got, dict) or set(got) != set(w) or set(got["boxes"]) != set(w["boxes"]):
+            raise ValueError(f"wall {wall}: keys differ from the template")
+    if '"?"' in json.dumps(answer):
+        raise ValueError('a "?" was left unanswered')
+
+
+def save(out: Path, answer: dict, again: bool = False) -> Path:
+    stage = pending(out, again)
+    if stage is None:
+        raise ValueError(f"{out}: no question open")
+    check(answer, (out / stage[0]).read_text())
+    (out / stage[1]).write_text(json.dumps(answer, indent=1) + "\n")
+    return out / stage[1]
+
+
+def stage_answers(reply: Path, again: bool, run_dir) -> None:
+    """Put an agent's reply ({folder or id: answer}) into the folders; a bad answer is reported and left out."""
+    text = reply.read_text()
+    data = json.loads(text[text.index("{") : text.rindex("}") + 1])
+    for key, answer in data.items():
+        out = run_dir(key)
+        try:
+            print(f"written: {save(out, answer, again)}")
+        except (ValueError, KeyError, TypeError) as e:
+            print(f"PROBLEM: {out}: {e}: not written")
+
+
+def read_one(client, out: Path, again: bool) -> dict | None:
+    """One API call for the folder's open question. Returns the token usage, or None if nothing was open."""
+    import anthropic
+
+    stage = pending(out, again)
+    if stage is None:
+        print(f"{out}: no question open")
+        return None
+    ask = (out / stage[0]).read_text()
+    content: list[dict] = []
+    for p in pictures(out, ask):
+        content.append({"type": "text", "text": f"Picture `{p.name if p.parent == out else p}`:"})
+        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(p.read_bytes()).decode()}})
+    content.append({"type": "text", "text": ask + "\nReply with the JSON object only, nothing before or after it."})
+    try:
+        r = client.beta.messages.create(
+            model=MODEL,
+            max_tokens=16000,
+            output_config={"effort": EFFORT},
+            betas=["server-side-fallback-2026-07-01"],
+            fallbacks="default",
+            messages=[{"role": "user", "content": content}],
+        )
+    except anthropic.RateLimitError as e:
+        raise SystemExit(f"{out}: rate limited after the SDK's retries: {e}") from e
+    except anthropic.APIStatusError as e:
+        raise SystemExit(f"{out}: the API answered {e.status_code}: {e.message}") from e
+    except anthropic.APIConnectionError as e:
+        raise SystemExit(f"{out}: no connection to the API: {e}") from e
+    usage = {"in": r.usage.input_tokens, "out": r.usage.output_tokens}
+    if r.stop_reason != "end_turn":
+        print(f"PROBLEM: {out}: the model stopped with {r.stop_reason}: not written")
+        return usage
+    text = "".join(b.text for b in r.content if b.type == "text")
+    try:
+        print(f"written: {save(out, json.loads(text[text.index('{') : text.rindex('}') + 1]), again)}  ({usage['in']} in, {usage['out']} out)")
+    except (ValueError, KeyError, TypeError) as e:
+        print(f"PROBLEM: {out}: {e}: not written")
+    return usage
+
+
+def stage_read(outs: list[Path], again: bool) -> None:
+    import anthropic  # the pipeline runs without it; only this command needs it (uv sync --extra reader)
+
+    client = anthropic.Anthropic()
+    total = {"in": 0, "out": 0}
+    for out in outs:
+        u = read_one(client, out, again)
+        if u:
+            total = {k: total[k] + u[k] for k in total}
+    print(f"tokens: {total['in']} in, {total['out']} out over {len(outs)} folder(s)")

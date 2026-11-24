@@ -1,0 +1,13 @@
+# P-0556: small flat-roofed outbuilding, grey render, salmon double door. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.31 m, roof top 3.31 m. Walls seen: edges [1, 2]. Not modelled: neighbouring house behind with chimney and dormer is not part of it.
+id: w378900268
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+plinth: {height_m: 0.26, colour: '#676664'}
+apron: {width_m: 0.35, colour: '#bcb1a0'}
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.51, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 4.21, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: g1, kind: garage_door, edge: 2, at_m: 2.7, width_m: 1.09, height_m: 2.5, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 4}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.26, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}

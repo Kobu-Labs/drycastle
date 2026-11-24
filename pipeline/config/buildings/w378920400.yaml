@@ -1,0 +1,25 @@
+# P-0021: small house, grey-white rough render, brown scale-tiled hipped roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.99 m, roof top 5.69 m. Walls seen: edges [2]. Not modelled: chimney, roof vents, downpipe, utility box.
+id: w378920400
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.12
+frame_colour: '#3a3a3c'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.1, colour: '#4e565b'}
+apron: {width_m: 0.2, colour: '#4e565b'}
+roof_tiles: true
+eaves: {colour: '#585b5c', fascia_m: 0.18, gutter: true}
+downpipes:
+- {edge: 2, at_m: 8.59, colour: '#585b5c', bends: true}
+- {edge: 0, at_m: 8.35, colour: '#585b5c', bends: true}
+chimneys:
+- {x: -101.48, y: 144.39, top_m: 6.19, width_m: 0.5, depth_m: 0.5, cap: true}
+openings:
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 5.23, width_m: 1.52, height_m: 1.49, sill_m: 0.6, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 0.93, width_m: 1.52, height_m: 1.49, sill_m: 0.6, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 3.37, width_m: 1.52, height_m: 1.49, sill_m: 0.6, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 2, at_m: 2.08, width_m: 1.52, height_m: 1.49, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 5.24, width_m: 1.52, height_m: 1.49, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w6, kind: window, edge: 3, at_m: 1.71, width_m: 1.52, height_m: 1.49, sill_m: 0.6, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

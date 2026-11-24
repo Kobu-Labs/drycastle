@@ -200,6 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--capture", action="store_true", help="pressing the capture key in the Street View tab saves its picture and camera (photos/photo_capture.py)")
     ap.add_argument("--capture-key", default="c", help="the capture key without the guide (default c)")
     ap.add_argument("--full-marks", action="store_true", help="with the guide: after the corners also mark each wall's roof edge and top, the ridge and the house's colours")
+    ap.add_argument("--tour", action="store_true", help="with the guide: stand in front of each house that has no capture yet, one after the other (a saved capture moves on; N next, B back)")
     ap.add_argument("--no-guide", action="store_true", help="capture without the guide drawn in the tab: the key saves the picture at once, no wall ends are marked")
     ap.add_argument("--launch", action="store_true", help="start a Chrome with its own profile on the village")
     ap.add_argument("--start", default="48.4024653,16.8607311", help="lat,lon the launched Chrome opens at")
@@ -220,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             from drycastle_pipeline.photos.capture_guide import Guide
 
-            capturer = Guide(args.port, full=args.full_marks)
+            capturer = Guide(args.port, full=args.full_marks, tour=args.tour)
             args.interval = min(args.interval, 0.2)  # the outlines follow the view
             print(f"capture guide: the walls of the building in the middle of the view are outlined in the Street View tab; C captures, then mark the wall ends; pictures go to {PHOTOS_DIR}")
     try:

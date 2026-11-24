@@ -59,7 +59,8 @@ def wall_roles(ring, edges: list[dict], others: list[dict], roof: str, ridge_dir
 
 def window_like(openings: list[dict]) -> dict | None:
     """The house's usual window, from the measured ones of the ground floor: middle width, height and sill."""
-    wins = [o for o in openings if o["kind"] == "window" and o["sill_m"] < 2.0 and o.get("confidence") != "low"]
+    ground = [o for o in openings if o["kind"] == "window" and o["sill_m"] < 2.0]
+    wins = [o for o in ground if o.get("confidence") != "low"] or ground  # roughly measured windows are still this house's
     if not wins:
         return None
     w, h, sill = (round(float(np.median([o[k] for o in wins])), 2) for k in ("width_m", "height_m", "sill_m"))
@@ -102,6 +103,149 @@ def to_house_window(o: dict, win: dict) -> dict:
         if win.get(key):
             out[key] = list(win[key])
     return out
+
+
+DOOR_MIN_W_M = 0.85  # a house door is not narrower: a narrower rectangle is the leaf seen half hidden or at an angle
+WALL_END_M = 0.15  # an opening keeps at least this much wall to the corner
+MERGE_GAP_M = 0.45  # boxes nearer than this, side by side, are sashes of one window
+SAME_KIND = 0.4  # a window with at least this share of the wall's largest window's area is that kind of window
+EVEN_M = 0.35  # gaps of a row, or its two ends' wall, that differ by less are meant to be the same
+CORNER_M = 0.5  # a row with less wall than this at one end is pushed into the corner: the wall's end was measured off
+
+
+def even_row(openings: list[dict]) -> list[dict]:
+    """One kind of window per wall. A wall of a house is built with one window, repeated; what the boxes give instead
+    (a sash here, a whole window there, one read short behind a bush) is the measuring's. So on each wall:
+
+    * boxes side by side at one height with under MERGE_GAP_M of wall between them are the sashes of one window;
+    * every window at least SAME_KIND of the largest one's area takes the wall's one size (the middle width and
+      height of those), about its own middle, and the heads of one storey stand on one line;
+    * a clearly smaller window (an attic's, a bathroom's) is left as measured."""
+    rest = [dict(o) for o in openings if o["kind"] != "window"]
+    out: list[dict] = []
+    for edge in sorted({o["edge"] for o in openings if o["kind"] == "window"}):
+        wins = sorted((dict(o) for o in openings if o["kind"] == "window" and o["edge"] == edge), key=lambda o: o["at_m"])
+        merged: list[dict] = []
+        for o in wins:
+
+            def shared(k: dict) -> float:
+                return min(k["sill_m"] + k["height_m"], o["sill_m"] + o["height_m"]) - max(k["sill_m"], o["sill_m"])
+
+            # (the one beside it at its own height: a window of the floor above may lie between them in this order)
+            k = next((k for k in reversed(merged) if shared(k) >= 0.6 * min(k["height_m"], o["height_m"]) and o["at_m"] - (k["at_m"] + k["width_m"]) < MERGE_GAP_M), None)
+            if k is not None:
+                end = max(k["at_m"] + k["width_m"], o["at_m"] + o["width_m"])
+                foot, head = min(k["sill_m"], o["sill_m"]), max(k["sill_m"] + k["height_m"], o["sill_m"] + o["height_m"])
+                k.update({"width_m": round(end - k["at_m"], 2), "sill_m": round(foot, 2), "height_m": round(head - foot, 2), "posts": [0.5]})
+                k.pop("rails", None)
+                continue
+            merged.append(o)
+        big = max(o["width_m"] * o["height_m"] for o in merged)
+        kind = [o for o in merged if o["width_m"] * o["height_m"] >= SAME_KIND * big]
+        if len(kind) > 1:
+            w, h = (round(float(np.median([o[key] for o in kind])), 2) for key in ("width_m", "height_m"))
+            posts = next((list(o["posts"]) for o in kind if o.get("posts") and all(0.25 <= f <= 0.75 for f in o["posts"])), [0.5] if w >= 0.9 else [])
+            for o in kind:
+                heads = [k["sill_m"] + k["height_m"] for k in kind if abs(k["sill_m"] + k["height_m"] - o["sill_m"] - o["height_m"]) <= 0.4]
+                o["_head"] = float(np.median(heads))
+            for o in kind:
+                mid = o["at_m"] + o["width_m"] / 2
+                o.update({"at_m": round(mid - w / 2, 2), "width_m": w, "height_m": h, "sill_m": round(max(0.3, o.pop("_head") - h), 2)})
+                o.pop("rails", None)
+                if posts:
+                    o["posts"] = list(posts)
+                else:
+                    o.pop("posts", None)
+        out += merged
+    return rest + out
+
+
+def tidy_walls(openings: list[dict], lengths: dict[int, float], edges_seen: set[int]) -> list[dict]:
+    """The measured walls' openings set as a builder sets them. A door narrower than DOOR_MIN_W_M is widened about its
+    middle, and what stands beside it is pushed along to keep WALL_END_M of wall between them (the door stays as
+    measured when the wall has no room for that). A row of like windows spaced nearly evenly is spaced evenly. Then a storey's row that stands within CORNER_M of one
+    end of its wall, or is within EVEN_M of the middle already, is moved as one, so the wall left of its first
+    opening and right of its last is the same: the wall's ends are measured less well than the openings' places among
+    themselves, and a row pushed into a corner is that error, not the house. A row with room at both ends stays. Storeys are centred apart,
+    so a window in the gable stays under the ridge whatever stands below it."""
+    out = [dict(o) for o in openings]
+    for i in edges_seen:
+        if i not in lengths:
+            continue
+        length = lengths[i]
+        for row in ([o for o in out if o["edge"] == i and o["sill_m"] < 2.0], [o for o in out if o["edge"] == i and o["sill_m"] >= 2.0]):
+            if not row:
+                continue
+            row.sort(key=lambda o: o["at_m"])
+            was = [(o["at_m"], o["width_m"]) for o in row]
+            for o in row:
+                if o["kind"] == "door" and o["width_m"] < DOOR_MIN_W_M:
+                    o.update({"at_m": o["at_m"] + (o["width_m"] - DOOR_MIN_W_M) / 2, "width_m": DOOR_MIN_W_M})
+            for a, b in zip(row, row[1:]):
+                b["at_m"] = max(b["at_m"], a["at_m"] + a["width_m"] + WALL_END_M)
+            first, last = row[0]["at_m"], max(o["at_m"] + o["width_m"] for o in row)
+            if last - first > length - 2 * WALL_END_M:  # no room for the wider door: as measured
+                for o, (at, w) in zip(row, was):
+                    o.update({"at_m": at, "width_m": w})
+                first, last = row[0]["at_m"], max(o["at_m"] + o["width_m"] for o in row)
+            same = all(o["kind"] == "window" and abs(o["width_m"] - row[0]["width_m"]) <= 0.05 for o in row)
+            gaps = [b["at_m"] - a["at_m"] - a["width_m"] for a, b in zip(row, row[1:])]
+            if same and len(row) > 2 and max(gaps) - min(gaps) <= EVEN_M:  # nearly evenly spaced is evenly spaced
+                gap = sum(gaps) / len(gaps)
+                for k, o in enumerate(row):
+                    o["at_m"] = first + k * (row[0]["width_m"] + gap)
+            shift = (length - last - first) / 2
+            pushed, nearly = min(first, length - last) < CORNER_M, abs(shift) <= EVEN_M
+            if abs(shift) < 0.02 or last - first > length - 2 * WALL_END_M or not (pushed or nearly):
+                shift = 0.0
+            for o in row:
+                o["at_m"] = round(o["at_m"] + shift, 2)
+    return out
+
+
+def pair_sashes(openings: list[dict], lengths: dict[int, float]) -> list[dict]:
+    """A window of which only one sash was boxed is the whole window: when a wall has a two-sash window (two boxes that
+    were joined, marked _pair) and, in the same row, a window about half as wide, the narrow one is one sash of a window
+    like it. It is widened about its middle to the pair's width, with a post in the middle, where the wall and its
+    neighbours leave room."""
+    out = [dict(o) for o in openings]
+    for o in out:
+        if o["kind"] != "window" or o.get("_pair"):
+            continue
+        head = o["sill_m"] + o["height_m"]
+        pair = next((k for k in out if k.get("_pair") and k["edge"] == o["edge"] and abs(k["sill_m"] + k["height_m"] - head) <= 0.25
+                     and 0.35 <= o["width_m"] / k["width_m"] <= 0.65), None)  # fmt: skip
+        if pair is None or o["edge"] not in lengths:
+            continue
+        at = round(o["at_m"] + (o["width_m"] - pair["width_m"]) / 2, 2)
+        end = at + pair["width_m"]
+        if at < WALL_END_M or end > lengths[o["edge"]] - WALL_END_M or any(
+                k is not o and k["edge"] == o["edge"] and k["at_m"] < end + WALL_END_M and at < k["at_m"] + k["width_m"] + WALL_END_M
+                and k["sill_m"] < head and o["sill_m"] < k["sill_m"] + k["height_m"] for k in out):  # fmt: skip
+            continue
+        o.update({"at_m": at, "width_m": pair["width_m"], "height_m": pair["height_m"], "sill_m": pair["sill_m"], "posts": [0.5], "_pair": True})
+    return out
+
+
+STRIP_COLOURS = {"gravel": "#b5ae9f", "concrete": "#8f8c85", "slabs": "#a6a199"}  # a footing takes the plinth's colour
+PLINTH_STONE, PLINTH_BRICK = "#7c7a77", "#87594a"
+
+
+def base_style(building_id: str) -> dict:
+    """What a house stands on, different from house to house but always the same for one house: the strip round its
+    foot {strip: footing|gravel|concrete|slabs, width_m, joints_m} (a footing is the foundation's narrow ledge, no
+    paving: grass comes up to it) and what a plinth nobody saw is made of {plinth: paint|stone|brick, plinth_m}."""
+    r, w = chance(building_id, "strip"), chance(building_id, "strip width")
+    if r < 0.25:
+        strip = {"strip": "footing", "width_m": 0.2}
+    elif r < 0.5:
+        strip = {"strip": "gravel", "width_m": round(0.3 + 0.15 * w, 2)}
+    elif r < 0.8:
+        strip = {"strip": "concrete", "width_m": round(0.5 + 0.25 * w, 2)}
+    else:
+        strip = {"strip": "slabs", "width_m": round(0.8 + 0.25 * w, 2), "joints_m": 0.5}
+    p = chance(building_id, "plinth kind")
+    return {**strip, "plinth": "paint" if p < 0.5 else "stone" if p < 0.8 else "brick", "plinth_m": round(0.2 + 0.25 * chance(building_id, "plinth height"), 2)}
 
 
 def invent_openings(roles: dict[int, dict], seen: set[int], measured: list[dict], eave: float, top: float, rest_height: float, front_normal, building_id: str = "") -> list[dict]:
@@ -184,7 +328,8 @@ def eave_style(roof: str, pitch_deg: float, measured_overhang: float | None) -> 
     return {"overhang_m": round(out, 2), "level_soffit": roof == "hipped" and out >= 0.4, "rafters": roof == "gabled" and pitch_deg >= 35 and out <= 0.5}
 
 
-def invent_chimney(building_id: str, where: str | None, roof: str, middle, ridge_dir: float, ridge_len: float, top: float, left_dir, front_normal, area: float) -> dict | None:
+def invent_chimney(building_id: str, where: str | None, roof: str, middle, ridge_dir: float, ridge_len: float, top: float, left_dir, front_normal, area: float,
+                   half: float | None = None) -> dict | None:  # fmt: skip
     """A chimney just behind the ridge. ``where`` is what the front photo showed (left, middle, right, none); when it
     showed none, none is made; when nobody said, a house (not a shed) gets one a third along the ridge, the end taken
     from the building's id so it is the same on every run."""
@@ -195,6 +340,12 @@ def invent_chimney(building_id: str, where: str | None, roof: str, middle, ridge
             return None
         where = "left" if hashlib.sha256(building_id.encode()).digest()[0] % 2 else "right"
     u = np.array([math.cos(ridge_dir), math.sin(ridge_dir)])
+    lu = np.asarray(left_dir, float) / max(float(np.linalg.norm(left_dir)), 1e-9)
+    if half and abs(float(u @ lu)) < 0.5 and where != "middle":
+        # the ridge runs away from the camera (a gable wall was photographed): left and right are the two slopes, not
+        # the ridge's two ends. Half-way down that slope, behind the house's middle
+        at = np.asarray(middle, float) + lu * (half * 0.5 if where == "left" else -half * 0.5) - np.asarray(front_normal, float) * min(1.5, ridge_len / 4)
+        return {"x": round(float(at[0]), 2), "y": round(float(at[1]), 2), "top_m": round(top + 0.3, 2), "width_m": 0.5, "depth_m": 0.5}
     if float(u @ np.asarray(left_dir, float)) < 0:
         u = -u  # u now points to the photo's left
     along = {"left": ridge_len / 2 - max(0.8, ridge_len * 0.2), "middle": 0.0, "right": -(ridge_len / 2 - max(0.8, ridge_len * 0.2))}[where]
@@ -246,7 +397,7 @@ def trim_style(building_id: str, said: dict, wall_name: str | None, wall_light: 
     cornice = plaster and roof != "flat" and room >= CORNICE_M + 0.08 and want("cornice", 1.0, "a cornice band under the eave")
     if cornice:
         out["bands"].append({"top_m": round(eave, 2), "height_m": CORNICE_M})
-    if plaster and eave >= 4.6 and ground and (cornice or chance(building_id, "string") < 0.5):
+    if plaster and eave >= 4.6 and ground and upper and (cornice or chance(building_id, "string") < 0.5):
         z = max(ground) + (SHUTTER_BOX_M if box else 0.0) + 0.3  # between the floors, clear of the ground floor's heads
         if z + 0.4 < eave:
             out["bands"].append({"top_m": round(z, 2), "height_m": 0.12})
@@ -261,7 +412,7 @@ def trim_style(building_id: str, said: dict, wall_name: str | None, wall_light: 
     return out
 
 
-def dress_door(o: dict, role: dict, eave: float, overhang: float, plinth_m: float, invented: bool) -> dict:
+def dress_door(o: dict, role: dict, eave: float, overhang: float, plinth_m: float, invented: bool, canopy: bool | None = None) -> dict:
     """What a door has besides its leaf: panels; steps up to its sill (an invented door is lifted to the plinth's top, a
     measured one stays where it was seen and gets a doorstep); a small canopy where the roof does not already shelter
     it, i.e. on a gable wall or under an eave more than a metre above its head."""
@@ -272,6 +423,10 @@ def dress_door(o: dict, role: dict, eave: float, overhang: float, plinth_m: floa
         out["sill_m"] = round(plinth_m, 2)
     out["steps"] = max(1, math.ceil(out["sill_m"] / STEP_RISE_M))
     head = out["sill_m"] + out["height_m"]
+    if canopy is not None and not invented:  # a door that was seen has the canopy that was seen
+        if canopy and eave - head >= 0.3:
+            out["canopy_m"] = 0.7
+        return out
     if role["roof_edge"] == "gable" or eave - head >= 1.0 or overhang < 0.3:
         if eave - head >= 0.45 or role["roof_edge"] == "gable":
             out["canopy_m"] = 0.7

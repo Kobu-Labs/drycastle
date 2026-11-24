@@ -288,15 +288,25 @@ def choose(shape: Polygon, roof: str, ridge_dir: float | None, lead=None) -> lis
     if not cands:
         return []
     main = cands[0]
-    if roof == "gabled" and ridge_dir is not None:
+    if roof in ("gabled", "hipped") and ridge_dir is not None:
         # the house itself has its ridge along its length: a long narrow wing that the ridge would cross is not it
+        # (a hipped part's ridge always runs along its own length: one that is deeper than long cannot be the house)
         want = np.array([math.cos(ridge_dir), math.sin(ridge_dir)])
 
         def as_house(r: Rect) -> float:
             along, across = (r.w, r.d) if abs(float(want @ r.u)) > 0.7 else (r.d, r.w)
+            if roof == "hipped":
+                return r.w * r.d * (1.0 if along >= across else 0.2)
             return r.w * r.d * (1.0 if along >= 0.8 * across else 0.5)
 
         main = max((r for r in cands if _aligned(r, ridge_dir)), key=as_house, default=cands[0])
+        if roof == "hipped":
+            on_ridge_wall = [r for r in cands if _aligned(r, ridge_dir) and abs(float(want @ r.u)) > 0.7]
+            if not any(r.w >= r.d for r in on_ridge_wall) and on_ridge_wall:
+                # every rectangle on a wall along the ridge runs deeper than it is long (the house and what stands behind
+                # it are one block on the map): the house is the front of it, as deep as a ridge along that wall allows
+                r = max(on_ridge_wall, key=lambda r: r.w)
+                main = Rect(r.o, r.u, r.n, r.w, round(0.85 * r.w, 2))
     if roof == "gabled" and lead is not None:  # the house's roof stands on the gable wall that was seen: as wide as that wall
         main = _on_wall(square, *_same_wall(square, *lead)) or _on_wall(shape, *lead) or main
     def core(r: Rect) -> tuple[Rect, Polygon]:

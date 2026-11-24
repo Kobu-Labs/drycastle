@@ -1,0 +1,37 @@
+# P-0492: single-storey terraced house, pale green render, dark tiled roof with skylights. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.56 m, roof top 14.71 m. Walls seen: edges [9]. Not modelled: roof skylights, downpipe, flower boxes, white central wall strip.
+id: w378900198
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.72
+frame_colour: '#f2f0ea'
+surround_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.56, height_m: 0.1}
+ridge_caps: true
+apron: {width_m: 0.2, colour: '#5f6853'}
+roof_tiles: true
+eaves: {colour: '#939492', fascia_m: 0.15, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 6.29, colour: '#939492', bends: true}
+- {edge: 2, at_m: 11.75, colour: '#939492', bends: true}
+- {edge: 2, at_m: 0.16, colour: '#939492', bends: true}
+- {edge: 9, at_m: 9.17, colour: '#939492', bends: true}
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 2.07, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 2, at_m: 1.2, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 2, at_m: 4.8, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 2, at_m: 8.4, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 4, at_m: 1.05, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w6, kind: window, edge: 4, at_m: 4.49, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w7, kind: window, edge: 4, at_m: 5.9, width_m: 1.0, height_m: 1.0, sill_m: 3.96, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w8, kind: window, edge: 4, at_m: 7.94, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w9, kind: window, edge: 4, at_m: 11.38, width_m: 1.0, height_m: 1.0, sill_m: 3.96, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w10, kind: window, edge: 4, at_m: 11.39, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w11, kind: window, edge: 4, at_m: 14.83, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 7, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w12, kind: window, edge: 8, at_m: 2.11, width_m: 2.4, height_m: 1.7, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w13, kind: window, edge: 8, at_m: 2.81, width_m: 1.0, height_m: 1.0, sill_m: 3.96, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w14, kind: window, edge: 9, at_m: 1.0, width_m: 2.4, height_m: 1.7, sill_m: 1.32, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
+  - {id: w15, kind: window, edge: 9, at_m: 6.03, width_m: 2.4, height_m: 1.7, sill_m: 1.32, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}

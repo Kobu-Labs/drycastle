@@ -46,7 +46,7 @@ in `pipeline/config/overrides.yaml` (roof form, heights, colours). No code; the 
 
 | step | who | what | files |
 |---|---|---|---|
-| 1 | tool | `facade_pipeline ends <building> --out DIR`: per capture, heading and tilt from the straight lines in the picture; per wall it sees, the upright lines near each end, lettered | `ends_c<n>_e<edge>_left.png`, `..._right.png`, `ends_ask.md` |
+| 1 | tool | `facade_pipeline ends <building> [--out DIR]` (default DIR: `data/village/photos/<building>/run`, kept so `apply <building> --replace` re-runs without the model; `facade_pipeline read <building>...` answers the questions by one API call each, `answers REPLY.json` files an agent's batch reply): per capture, heading and tilt from the straight lines in the picture; per wall it sees, the upright lines near each end, lettered | `ends_c<n>_e<edge>_left.png`, `..._right.png`, `ends_ask.md` |
 | 2 | model | which letter is where each wall stops | `ends.json` |
 | 3 | tool | `facade_pipeline walls DIR`: the camera moved so the footprint's corners fall on the chosen lines, its height from the terrain; each wall flattened to a straight-on picture in metres, level lines lettered, rectangles numbered | `wall_c<n>_e<edge>.png`, `eave_...png`, `walls_ask.md` |
 | 4 | model | the line that is the wall's top, what each rectangle is, a plinth's upper line, the roof's form, the roof's, walls' and frames' colours by name | `names.json` |
