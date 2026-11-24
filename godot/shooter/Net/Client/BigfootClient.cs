@@ -2,7 +2,6 @@ using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Events;
-using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter.Net.Client;
@@ -66,7 +65,6 @@ internal sealed class BigfootClient
         _bigfoots[e.Id] = v;
     }
 
-
     void OnDespawned(ushort id, WorldDespawnReason why)
     {
         if (_bigfoots.Remove(id, out var v)) { TrackHold(v, BigfootAct.Dead, 0); v.Node.QueueFree(); } // the one in its hand drops
@@ -78,7 +76,6 @@ internal sealed class BigfootClient
         }
     }
 
-
     void SpawnTrunkView(WorldReplica.Entity e)
     {
         var node = BigfootModel.MakeLog();
@@ -89,7 +86,6 @@ internal sealed class BigfootClient
     }
 
     // ---- per frame ----
-
 
     public void Render(double delta)
     {
@@ -307,7 +303,6 @@ internal sealed class BigfootClient
         v.Pivot.Rotation = new Vector3(0, 0, roll);
         v.Pivot.Scale = new Vector3(1, rise, 1);
     }
-
 
     /// <summary>
     /// The Bigfoot standing at a roar's place plays the Roar clip: its arrival, and a phase that began while it stood. In a fight the server's Roar act

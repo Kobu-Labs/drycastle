@@ -1,5 +1,4 @@
 using Godot;
-using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Bunkers;
 using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Glass;
@@ -688,7 +687,6 @@ public partial class NetClient : Node
         _bot?.OnEvent(kind, payload);
         EventReceived?.Invoke(kind, payload);
     }
-
 
     /// <summary>Raised for every reliable event envelope (shot, hit, kill, ... handled by later issues).</summary>
     public event Action<EventKind, byte[]>? EventReceived;

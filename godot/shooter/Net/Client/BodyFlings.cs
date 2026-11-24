@@ -1,7 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Characters;
 using Drycastle.ShooterCore.Events;
-using Drycastle.ShooterCore.Hud;
 
 namespace Drycastle.Shooter.Net.Client;
 

@@ -47,7 +47,6 @@ internal sealed class BigfootFx
 
     // ---- events ----
 
-
     /// <summary>The Bigfoot's one-shot effects and its trail. Called for every event the client receives.</summary>
     public void OnEvent(EventKind kind, byte[] payload)
     {
@@ -90,7 +89,6 @@ internal sealed class BigfootFx
             case BigfootFxKind.Launch: Sfx.Play3D(BigfootSounds.Throw, at, 4f); break;
         }
     }
-
 
     /// <summary>The height of the shockwave's wall of dust at full size (the wave itself is hit below <see cref="BigfootStomp.WaveHeightM"/>: a jump clears it).</summary>
     const float WaveWallM = 1.5f;

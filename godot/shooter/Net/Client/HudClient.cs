@@ -2,7 +2,6 @@ using Godot;
 using Drycastle.Shooter.Loudspeaker;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Hud;
-using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;

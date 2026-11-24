@@ -126,8 +126,6 @@ internal sealed class DroppedBales
         if (fadeOnly) sw.Swath.FadeBales();
     }
 
-
-
     /// <summary>A new round: the server forgot every cut and bale.</summary>
     public void Restart()
     {

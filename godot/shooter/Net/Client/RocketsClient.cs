@@ -5,7 +5,6 @@ using Drycastle.Shooter.Vehicles;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Effects;
-using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
 using NVec3 = System.Numerics.Vector3;

@@ -1,4 +1,3 @@
-using Godot;
 using Drycastle.Shooter.Corpses;
 using Drycastle.Shooter.Menu;
 using Drycastle.ShooterCore.Corpses;

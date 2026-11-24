@@ -6,7 +6,6 @@ using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Movement;
-using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.Shooter.Net.Client;

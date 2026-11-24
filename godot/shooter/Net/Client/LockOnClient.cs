@@ -1,7 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.HeadsUp;
-using Drycastle.ShooterCore.Effects;
 using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;

@@ -1,6 +1,5 @@
 using Godot;
 using Drycastle.Shooter.Net.Bots;
-using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;

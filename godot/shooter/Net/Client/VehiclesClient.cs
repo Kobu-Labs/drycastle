@@ -3,7 +3,6 @@ using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.Shooter.Weapons;
-using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;

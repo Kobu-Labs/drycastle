@@ -1,7 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Weapons;
-using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Net;
 

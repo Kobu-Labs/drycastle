@@ -1,11 +1,10 @@
-using Godot;
 using Drycastle.Shooter.Scenery;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Glass;
-using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
 using Drycastle.ShooterCore.Killstreaks.Moab;
+using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Vehicles;
@@ -82,7 +81,6 @@ internal sealed class EffectEvents
         }
     }
 
-
     /// <summary>The blasts, the gunship's coalesced effects and the vehicles' and the world's reaction.</summary>
     void OnBlastEvent(EventKind kind, byte[] payload)
     {
@@ -129,7 +127,6 @@ internal sealed class EffectEvents
                 break;
         }
     }
-
 
     /// <summary>The street lamps and the sign plates the server switches (their full state at join, then each change).</summary>
     void OnStreetEvent(EventKind kind, byte[] payload)

@@ -38,7 +38,6 @@ internal sealed class MatchEvents
         else if (p == MatchPhase.Ending) Sfx.Play2D("round.end");
     }
 
-
     public void OnEvent(EventKind kind, byte[] payload)
     {
         if (!_ctx.Match.Apply(kind, payload, _ctx.Now)) return;
