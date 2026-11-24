@@ -125,6 +125,19 @@ def test_doorway_is_open_in_the_collision_and_the_partition_is_not():
     assert _hit(col, before(solid, 1.0), (-uy, ux, 0)) == pytest.approx(0.45, abs=0.01)  # the partition beside it
 
 
+def test_a_garage_door_gets_a_room_a_car_fits_in():
+    door = {"id": "g", "kind": "garage_door", "edge": 2, "at_m": 0.6, "width_m": 2.6, "height_m": 2.2, "sill_m": 0.0}
+    d = parse_detail({"id": "w1", "interior": True, "openings": [DOOR, door, *(w for w in WINDOWS if w["id"] != "w22")]})
+    p = interior.plan_of(big(id_of("closed")), d)
+    (i, garage), = [(i, r) for i, r in enumerate(p.rooms) if r.type == "garage"]
+    assert garage.garage_doors == ["g"] and garage.doors == []
+    x0, y0, x1, y1 = garage.polygon.bounds
+    assert x1 - x0 >= 2.4 and y1 - y0 >= 4.8  # in from the door, on the far long wall
+    assert sum(r.polygon.area for r in p.rooms) == pytest.approx((16 - 0.6) * (9 - 0.6), abs=0.05)
+    (link,) = [l for l in p.links if i in (l.a, l.b)]
+    assert link.kind == "door" and p.rooms[link.a if link.b == i else link.b].type != "garage"
+
+
 def test_plan_doc_names_rooms_and_links():
     doc = floorplan.plan_doc(plan("mixed")[1])
     assert {"openness", "style", "rooms", "partitions"} <= set(doc)

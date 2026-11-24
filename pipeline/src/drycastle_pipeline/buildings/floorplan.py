@@ -9,6 +9,8 @@ house into its entry frame and the answer back.
 How (all in the *entry frame*: square to the longest wall, x running inward from the front door, so every partition is
 parallel or square to the house's main walls):
 
+0. **Garage** (ADR 0043): behind each garage door a room a car fits in is taken off the floor first; the rest of the
+   house is planned beside it and has a door into it.
 1. **Openness**, 0..1 from the seed, picks the style: *closed* (a corridor, a door to every room), *mixed* (a shorter
    hall, the living room and the kitchen joined by an archway) or *open* (one space to live and cook in, a vestibule at
    most, the other rooms off that space).
@@ -46,7 +48,7 @@ DOOR_H_M, ARCH_H_M = 2.0, 2.2
 MIN_ROOM_M2 = 2.0
 CLEAR_LOOSE_M = 0.07  # a partition ends at least this far from a window's or a door's side (mirrors floorplan.rs)
 MAX_DWELLING_M2 = 350.0  # more floor than this is no house (a culture house, a farm hall): no plan, one open space
-TYPES = ("hall", "living", "kitchen", "living_kitchen", "dining", "bedroom", "bathroom", "storage", "study")
+TYPES = ("hall", "living", "kitchen", "living_kitchen", "dining", "bedroom", "bathroom", "storage", "study", "garage")
 
 
 @dataclass
@@ -77,6 +79,7 @@ class Room:
     windows: list[str] = field(default_factory=list)
     doors: list[str] = field(default_factory=list)  # doors to the outside
     type: str = ""  # what the room is for, one of TYPES
+    garage_doors: list[str] = field(default_factory=list)  # shut, nothing walks through them
 
 
 @dataclass
@@ -121,7 +124,7 @@ def _framed(b: dict, d, ins, wall_m: float) -> tuple[dict, float, float] | None:
     base = math.atan2(ring[(i + 1) % len(ring)][1] - ring[i][1], ring[(i + 1) % len(ring)][0] - ring[i][0])
     ops, entry, angle = [], None, base
     for o in d.openings:
-        if not ins.through(o) or not 0 <= o.edge < len(ring):
+        if not (ins.through(o) or o.kind == "garage_door") or not 0 <= o.edge < len(ring):
             continue
         p, q = ring[o.edge], ring[(o.edge + 1) % len(ring)]
         length = math.dist(p, q)
@@ -185,7 +188,7 @@ def _in_map(found: dict, framed: tuple[dict, float, float]) -> Plan:
 
     rooms = [
         Room(f"r{i}", "hall" if r["type"] == "hall" else "room", orient(to_map(Polygon(r["exterior"], r["holes"])), 1.0),
-             r["windows"], r["doors"], r["type"])
+             r["windows"], r["doors"], r["type"], r["garage_doors"])
         for i, r in enumerate(found["rooms"])
     ]  # fmt: skip
     walls = [Wall(at(p), at(q), [tuple(g) for g in gaps]) for p, q, gaps in found["walls"]]
@@ -204,7 +207,7 @@ def plan_doc(plan: Plan) -> dict:
         "style": plan.style,
         "rooms": [
             {"id": r.id, "kind": r.kind, "type": r.type, "area_m2": round(r.polygon.area, 2), "polygon": [pt(p) for p in list(r.polygon.exterior.coords)[:-1]],
-             "windows": r.windows, "doors": r.doors,
+             "windows": r.windows, "doors": r.doors, "garage_doors": r.garage_doors,
              "links": [{"to": plan.rooms[l.b if l.a == i else l.a].id, "kind": l.kind, "p": pt(l.p), "q": pt(l.q)} for l in plan.links if i in (l.a, l.b)]}
             for i, r in enumerate(plan.rooms)
         ],

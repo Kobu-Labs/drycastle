@@ -37,6 +37,11 @@ const HALL_SHARE: f64 = 0.12; // the floor a hall may take before it counts as w
 const HALL_FREE_M2: f64 = 4.0;
 const HALL_PER_DOOR_M2: f64 = 3.0;
 const MIN_PIECE_AREA: f64 = 1e-6;
+const CAR_M: (f64, f64) = (2.4, 4.8); // the floor a parked car needs, across and in from its garage door
+const GARAGE_W_M: [f64; 4] = [3.0, 3.3, 2.7, 3.8]; // widths and depths tried for a garage, the usual first
+const GARAGE_D_M: [f64; 5] = [5.5, 5.2, 6.0, 5.0, 100.0]; // (the last: the whole depth of the building)
+const GARAGE_MOST_M2: f64 = 18.0; // floor past this is taken from the house for nothing
+const MIN_HOUSE_M2: f64 = 14.0; // less than this left beside a garage is no house: the whole building is the garage
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Kind {
@@ -49,6 +54,7 @@ enum Kind {
     Storage,
     Study,
     Hall,
+    Garage,
 }
 use Kind::*;
 
@@ -64,6 +70,7 @@ impl Kind {
             Storage => "storage",
             Study => "study",
             Hall => "hall",
+            Garage => "garage",
         }
     }
     /// Rooms that keep their size however large the house is.
@@ -84,7 +91,7 @@ impl Kind {
             Study => 2.0,
             Bathroom => 1.5,
             Storage => 1.1,
-            Hall => 0.0,
+            Hall | Garage => 0.0,
         }
     }
     fn min_area(self) -> f64 {
@@ -96,7 +103,7 @@ impl Kind {
             Study => 6.0,
             Bathroom => 3.0,
             Storage => 1.5,
-            Hall => 0.0,
+            Hall | Garage => 0.0,
         }
     }
     fn most_area(self) -> f64 {
@@ -108,7 +115,7 @@ impl Kind {
             Study => 16.0,
             Bathroom => 9.0,
             Storage => 7.0,
-            Hall => f64::INFINITY,
+            Hall | Garage => f64::INFINITY,
         }
     }
     /// Who a room is entered from, best first (a hall: a corridor further in).
@@ -121,6 +128,7 @@ impl Kind {
             Storage => &[Hall, Kitchen, LivingKitchen, Bedroom, Living, Dining, Study],
             Bedroom | Study => &[Hall, LivingKitchen, Living, Dining],
             Hall => &[Hall, LivingKitchen, Living, Dining, Kitchen],
+            Garage => &[Hall, Kitchen, Storage, LivingKitchen, Living, Dining, Study, Bedroom],
         }
     }
 }
@@ -465,15 +473,25 @@ fn sliver_area(g: &G, side: f64) -> f64 {
 
 // --- the house in its entry frame -------------------------------------------------------------------------------
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Hole {
+    Window,
+    Door,
+    GarageDoor, // shut: nothing walks through it
+}
+
+#[derive(Clone)]
 struct Opening {
     id: String,
-    window: bool,
+    kind: Hole,
     seg: [Pt; 2],
     posts: Vec<Pt>,
 }
 
+#[derive(Clone)]
 struct House {
-    inner: PolyC,
+    inner: PolyC, // the floor to plan: what the garages leave of it
+    garages: Vec<PolyC>,
     ops: Vec<Opening>,
     entry: Option<Pt>,
     seed: u32,
@@ -563,6 +581,19 @@ impl<'a> Maker<'a> {
             }
         }
         true
+    }
+
+    /// Does a partition of this outline end in a door to the outside?
+    fn cuts_a_door(&self, cut: &G) -> bool {
+        let ends = geom::diff_exact(cut, &self.edge);
+        parts(&ends).into_iter().filter(|g| is_line(g) && geom::length(g) >= 0.05).any(|g| {
+            let cs = geom::coords(&g);
+            [cs[0], cs[cs.len() - 1]].iter().any(|end| {
+                let pt = geom::point(end[0], end[1]);
+                geom::distance(&self.outline, &pt) <= 0.02
+                    && self.house.ops.iter().zip(&self.segs).any(|(o, s)| o.kind == Hole::Door && geom::distance(s, &pt) < CLEAR_LOOSE_M)
+            })
+        })
     }
 
     /// How far the room goes from ``c`` in direction ``d``.
@@ -722,7 +753,7 @@ impl<'a> Maker<'a> {
                     continue;
                 }
                 let edge = geom::boundary(&got);
-                let windows = self.house.ops.iter().zip(&self.segs).filter(|(o, s)| o.window && near_middle(&edge, s)).count();
+                let windows = self.house.ops.iter().zip(&self.segs).filter(|(o, s)| o.kind == Hole::Window && near_middle(&edge, s)).count();
                 found.push(((!self.clear(&edge, false), windows, shift), got));
                 break;
             }
@@ -982,7 +1013,7 @@ impl<'a> Maker<'a> {
                             if strict {
                                 wanted.contains(&types[i])
                             } else {
-                                !types[i].small() && !(types[i].private() && types[j].private() && types[entered[i].unwrap_or(root)].private())
+                                !types[i].small() && types[i] != Garage && !(types[i].private() && types[j].private() && types[entered[i].unwrap_or(root)].private())
                             }
                         })
                         .collect();
@@ -1027,13 +1058,13 @@ impl<'a> Maker<'a> {
     /// What is wrong with a plan, in points: floor wasted on halls, rooms a house cannot do without, a front door into the
     /// wrong room, rooms too large or too thin, rooms without daylight, rooms walked through.
     fn faults(&self, cells: &[Rc<Cell>], types: &[Kind], links: &[Link], has_hall: bool) -> f64 {
-        let floor = py_sum(cells.iter().map(|c| c.area));
+        let floor = py_sum(cells.iter().zip(types).filter(|(_, &t)| t != Garage).map(|(c, _)| c.area));
         let windows: Vec<G> = self
             .house
             .ops
             .iter()
             .zip(&self.segs)
-            .filter(|(o, _)| o.window)
+            .filter(|(o, _)| o.kind == Hole::Window)
             .map(|(_, s)| {
                 let m = geom::interp_norm(s, 0.5);
                 geom::point(m[0], m[1])
@@ -1056,7 +1087,7 @@ impl<'a> Maker<'a> {
             score += if self.house.style == Style::Closed && !has_hall && floor >= 45.0 { 1.0 } else { 0.0 };
         }
         for (cell, &kind) in cells.iter().zip(types) {
-            if kind == Hall {
+            if kind == Hall || kind == Garage {
                 continue;
             }
             score += 0.2 * f64::max(0.0, cell.area - kind.most_area());
@@ -1249,6 +1280,11 @@ fn build(house: &House, variant: &str, attempt: usize) -> Option<Candidate> {
             }
         }
     }
+    for g in &house.garages {
+        let cell = mk.cell(geom::from_polyc(g));
+        cells.push(cell);
+        types.push(Garage);
+    }
     let mut links = vec![];
     for _ in 0..cells.len() {
         // a cell no doorway reaches still: it joins a neighbour (a room, not a closet), which keeps its use
@@ -1256,9 +1292,9 @@ fn build(house: &House, variant: &str, attempt: usize) -> Option<Candidate> {
         let state = rng.clone();
         let (got, lost) = mk.links(&cells, &mut types, root, &mut rng, false);
         links = got;
-        let Some(&j) = lost.first() else { break };
+        let Some(&j) = lost.iter().find(|&&j| types[j] != Garage) else { break };
         let together = |i: usize| py_sum(mk.shared(&cells[i], &cells[j]).iter().map(|s| dist(s.0, s.1)));
-        let host = first_max((0..cells.len()).filter(|&i| i != j && types[i] != Hall), |&i| {
+        let host = first_max((0..cells.len()).filter(|&i| i != j && !matches!(types[i], Hall | Garage)), |&i| {
             let t = together(i);
             (t > 0.5, !types[i].small(), types[i] == types[j], t)
         })?;
@@ -1308,9 +1344,146 @@ fn search(house: &House) -> Option<Candidate> {
     best
 }
 
+// --- the garages (ADR 0043) -------------------------------------------------------------------------------------
+
+/// The garage behind one garage door: the floor to give it, or None when no shape of it will do. A rectangle running
+/// square in from the door, grown over what would be left too narrow beside it. Best: a car fits, a house is left, no
+/// partition ends at a window or door, little floor and few windows taken.
+fn garage_behind(house: &House, floor: &G, door: &Opening) -> Option<(G, Option<G>)> {
+    let mk = Maker::new(house);
+    let [a, b] = door.seg;
+    let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
+    // (the outline runs counter-clockwise: inward is to the left of the door)
+    let (axis, inward) = if dy.abs() > dx.abs() { (0, if dy > 0.0 { -1.0 } else { 1.0 }) } else { (1, if dx > 0.0 { 1.0 } else { -1.0 }) };
+    let across = 1 - axis;
+    let wall = if inward > 0.0 { a[axis].min(b[axis]) } else { a[axis].max(b[axis]) };
+    let (lo, hi) = (a[across].min(b[across]), a[across].max(b[across]));
+    let middle = (lo + hi) / 2.0;
+    let boxed = |from: f64, to: f64, left: f64, right: f64| {
+        let (d0, d1) = (from.min(to), from.max(to));
+        if axis == 0 {
+            rect(d0, left, d1, right)
+        } else {
+            rect(left, d0, right, d1)
+        }
+    };
+    let at = geom::point((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0);
+    let entry = house.entry.map(|e| geom::point(e[0], e[1]));
+    let mut best: Option<((bool, bool, f64), (G, Option<G>))> = None;
+    // the floor just inside the other doors, which a garage may be notched around
+    let porches: Vec<G> = house
+        .ops
+        .iter()
+        .zip(&mk.segs)
+        .filter(|(o, _)| o.kind == Hole::Door)
+        .map(|(_, s)| s.buffer_with_style(1.2, 16, CapStyle::Square, JoinStyle::Mitre, 5.0).unwrap_or_else(|_| geom::empty()))
+        .collect();
+    for (depth, notched) in GARAGE_D_M.into_iter().flat_map(|d| [(d, false), (d, true)]) {
+        for width in GARAGE_W_M {
+            let width = width.max(hi - lo + 0.1);
+            for shift in [0.0, 0.25, -0.25, 0.5, -0.5, 0.9, -0.9] {
+                let (left, right) = (middle - width / 2.0 + shift, middle + width / 2.0 + shift);
+                if left > lo || right < hi {
+                    continue; // the door must open into it
+                }
+                // (from behind the door's wall, which may stand at a slant in the frame)
+                let mut strip = geom::inter(&boxed(wall - inward * 1.0, wall + inward * depth, left, right), floor);
+                if notched {
+                    let before = geom::area(&strip);
+                    for porch in &porches {
+                        strip = geom::diff_exact(&strip, porch);
+                    }
+                    if before - geom::area(&strip) < 0.01 {
+                        continue; // (nothing to notch: drawn already)
+                    }
+                }
+                let Some(mut g) = first_min(solid(&strip), |g| geom::distance(g, &at)) else { continue };
+                let mut rest = geom::diff_exact(floor, &g);
+                let mut crumbs: Vec<G> = solid(&rest).into_iter().filter(|r| geom::area(r) < MIN_PIECE_M2).collect();
+                crumbs.extend(slivers(&rest, 1.8));
+                if notched {
+                    // (the notch itself is narrow, and stays the house's)
+                    for porch in &porches {
+                        crumbs = crumbs.iter().flat_map(|c| solid(&geom::diff_exact(c, porch))).collect();
+                    }
+                }
+                if !crumbs.is_empty() {
+                    crumbs.insert(0, geom::dup(&g));
+                    let grown = buffered(&buffered(&geom::union_py(crumbs), 0.01, JoinStyle::Mitre), -0.01, JoinStyle::Mitre);
+                    let Some(got) = first_min(solid(&geom::inter(&grown, floor)), |g| geom::distance(g, &at)) else { continue };
+                    g = got;
+                    rest = geom::diff_exact(floor, &g);
+                }
+                // no hair of floor left along a wall: it would count as the house reaching past the garage
+                let trimmed = buffered(&buffered(&rest, -0.02, JoinStyle::Mitre), 0.02, JoinStyle::Mitre);
+                let trimmed = geom::inter(&trimmed, &rest);
+                rest = trimmed;
+                let Some(got) = first_min(solid(&geom::diff_exact(floor, &rest)), |g| geom::distance(g, &at)) else { continue };
+                g = got;
+                let mut left_over = solid(&rest);
+                if py_sum(left_over.iter().map(geom::area)) < MIN_HOUSE_M2 {
+                    g = geom::dup(floor);
+                    left_over.clear();
+                }
+                // what is left is one house, nowhere pinched to less than a doorway and a bit, and its front door opens into it
+                if left_over.len() > 1
+                    || left_over.first().is_some_and(|r| solid(&buffered(r, -0.55, JoinStyle::Mitre)).len() != 1)
+                    || left_over.first().is_some_and(|r| entry.as_ref().is_some_and(|e| geom::distance(r, e) > 0.05))
+                {
+                    continue;
+                }
+                let edge = geom::boundary(&g);
+                if !left_over.is_empty() && mk.cuts_a_door(&edge) {
+                    continue;
+                }
+                let arms = left_over.first().map_or(0.0, |r| sliver_area(r, 1.8));
+                let fits = [0.0, 0.3, -0.3, 0.6, -0.6].iter().any(|slide| {
+                    let car = boxed(wall + inward * 0.1, wall + inward * (0.1 + CAR_M.1), middle + slide - CAR_M.0 / 2.0, middle + slide + CAR_M.0 / 2.0);
+                    geom::area(&geom::inter(&car, &g)) >= 0.97 * CAR_M.0 * CAR_M.1
+                });
+                let windows = house.ops.iter().zip(&mk.segs).filter(|(o, s)| o.kind == Hole::Window && near_middle(&edge, s)).count();
+                let clear = mk.clear(&edge, false);
+                let cost = 0.15 * f64::max(0.0, geom::area(&g) - GARAGE_MOST_M2)
+                    + windows as f64
+                    + if clear { 0.0 } else if mk.clear(&edge, true) { 0.5 } else { 3.0 }
+                    + shift.abs() * 0.1
+                    + arms
+                    + if notched { 1.0 } else { 0.0 };
+                let key = (!fits, left_over.is_empty(), cost);
+                if best.as_ref().map_or(true, |(k, _)| key < *k) {
+                    best = Some((key, (g, left_over.into_iter().next())));
+                }
+            }
+        }
+    }
+    best.map(|b| b.1)
+}
+
+/// The house with its garages taken off the floor, and whether any floor is left to plan.
+fn with_garages(house: &House) -> (House, bool) {
+    let mut floor = geom::from_polyc(&house.inner);
+    let mut garages = vec![];
+    for door in house.ops.iter().filter(|o| o.kind == Hole::GarageDoor) {
+        let Some((g, left)) = garage_behind(house, &floor, door) else { continue };
+        garages.push(poly_of(&oriented(&g)));
+        match left {
+            Some(rest) => floor = oriented(&rest),
+            None => return (House { garages, ..house.clone() }, false),
+        }
+    }
+    (House { inner: poly_of(&floor), garages, ..house.clone() }, true)
+}
+
 /// The plan of one house in its entry frame: rooms, partitions with their gaps, links.
 fn plan(house: &House) -> Value {
-    let Some(best) = search(house) else { return Value::Null };
+    let (rest, planned) = with_garages(house);
+    let found = if planned {
+        search(&rest)
+    } else {
+        let n = rest.garages.len();
+        Some(Candidate { score: 0.0, cells: rest.garages.clone(), types: vec![Garage; n], links: vec![] })
+    };
+    let Some(best) = found else { return Value::Null };
     let mk = Maker::new(house);
     let cells: Vec<G> = best.cells.iter().map(geom::from_polyc).collect();
     let mut walls = vec![];
@@ -1337,10 +1510,11 @@ fn plan(house: &House) -> Value {
         .zip(&best.types)
         .map(|((ring, g), kind)| {
             let edge = geom::boundary(g);
-            let near = |window: bool| -> Vec<&str> {
-                mk.house.ops.iter().zip(&mk.segs).filter(|(o, s)| o.window == window && near_middle(&edge, s)).map(|(o, _)| o.id.as_str()).collect()
+            let near = |hole: Hole| -> Vec<&str> {
+                mk.house.ops.iter().zip(&mk.segs).filter(|(o, s)| o.kind == hole && near_middle(&edge, s)).map(|(o, _)| o.id.as_str()).collect()
             };
-            json!({"type": kind.name(), "exterior": ring.ext, "holes": ring.holes, "windows": near(true), "doors": near(false)})
+            json!({"type": kind.name(), "exterior": ring.ext, "holes": ring.holes,
+                   "windows": near(Hole::Window), "doors": near(Hole::Door), "garage_doors": near(Hole::GarageDoor)})
         })
         .collect();
     let links: Vec<Value> = best.links.iter().map(|l| json!([l.a, l.b, l.kind, l.p, l.q])).collect();
@@ -1358,13 +1532,18 @@ fn parse(v: &Value) -> Result<House, String> {
         .map(|o| {
             Ok::<_, String>(Opening {
                 id: o["id"].as_str().ok_or("floor plan: an opening without an id")?.to_string(),
-                window: o["kind"] == "window",
+                kind: match o["kind"].as_str() {
+                    Some("window") => Hole::Window,
+                    Some("garage_door") => Hole::GarageDoor,
+                    _ => Hole::Door,
+                },
                 seg: [pt(&o["seg"][0])?, pt(&o["seg"][1])?],
                 posts: ring(&o["posts"])?,
             })
         })
         .collect::<Result<_, _>>()?;
     Ok(House {
+        garages: vec![],
         inner: PolyC { ext: ring(&v["exterior"])?, holes: list(&v["holes"]).iter().map(ring).collect::<Result<_, _>>()? },
         ops,
         entry: if v["entry"].is_null() { None } else { Some(pt(&v["entry"])?) },
