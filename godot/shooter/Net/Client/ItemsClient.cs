@@ -22,19 +22,19 @@ public readonly record struct HeldItem(int Index, ItemDef Def, int Pickups)
 /// <see cref="WornItems"/>, <see cref="BagContents"/>, drawn by the Equipment screen; nothing on the HUD shows Items), the items each corpse carries
 /// (<see cref="EventKind.CorpseItems"/>: <see cref="CorpseItems"/>) and the notices (an item crumbles, the bag is full). The server decides
 /// everything; the client sends only wishes (the <c>Request...</c> methods), and what it shows is what the server last said. Screens read the state
-/// through the public members below and redraw on <see cref="ItemsChanged"/> and <see cref="CorpseItemsChanged"/>. The items on the ground are
-/// in the ground items partial.
+/// through the public members below and redraw on <see cref="ItemsChanged"/> and <see cref="CorpseItemsChanged"/>.
 /// </summary>
-public partial class NetClient
+public sealed class ItemsClient
 {
-    /// <summary>items.json: set by the host (an item is named on the wire by its position in this list).</summary>
-    public ItemsFile ItemData = new();
+    readonly ClientContext _ctx;
+    readonly ItemsFile _data;
+    readonly Func<CharacterView?> _selfView;
+
+    /// <param name="selfView">The own figure seated in a vehicle, or null: it is dressed with what the local player wears.</param>
+    public ItemsClient(ClientContext ctx, ItemsFile data, Func<CharacterView?> selfView) { _ctx = ctx; _data = data; _selfView = selfView; }
 
     /// <summary>Cells in the bag.</summary>
     public const int BagCells = Bag.Cells;
-
-    /// <summary>What the local player wears, one entry per <see cref="EquipSlot"/> (null for nothing). Replaced by each Equipment event.</summary>
-    ItemStack?[] _wornItems = new ItemStack?[Equipment.SlotCount];
 
     /// <summary>What the local player carries unworn, one entry per cell (null for an empty one). Replaced by each Equipment event.</summary>
     ItemStack?[] _bagItems = new ItemStack?[Bag.Cells];
@@ -79,18 +79,12 @@ public partial class NetClient
     /// <summary>The items a corpse carries, in the order the server keeps them (the index <see cref="RequestTakeCorpseItem"/> takes). Empty for a corpse that carries none or one that is gone.</summary>
     public IReadOnlyList<HeldItem> CorpseItems(ushort corpse) => _corpseItems.TryGetValue(corpse, out var list) ? list : Array.Empty<HeldItem>();
 
-    /// <summary>The corpse within reach from the last render (null when none, or the player cannot take from one): the one the corpse chooser is about.</summary>
-    public ushort? CorpseInReach => _near;
-
-    /// <summary>The item lying on the ground within reach from the last render (a world entity id for <see cref="RequestTakeGroundItem"/>), or null.</summary>
-    public ushort? GroundItemInReach => _groundNear;
-
     IconRegistry? _itemIcons;
 
     /// <summary>The icon of an item (<c>ui/icons/items/&lt;id&gt;.png</c>, else the generic item icon), for the cells of the Equipment screen and the corpse chooser.</summary>
     public Texture2D? ItemIcon(ItemDef def)
     {
-        _itemIcons ??= new IconRegistry(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), ItemData.Items.Select(i => i.Id));
+        _itemIcons ??= new IconRegistry(Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), Array.Empty<string>(), _data.Items.Select(i => i.Id));
         return ResourceLoader.Load<Texture2D>(_itemIcons.Resolve(IconKind.Item, def.Id, p => ResourceLoader.Exists(p)));
     }
 
@@ -105,42 +99,35 @@ public partial class NetClient
     // ---- what the screens ask for (wishes: the server decides, and tells the result with the next events) ----
 
     /// <summary>Put the item in bag cell <paramref name="cell"/> on. What was worn in its slot goes into that cell. Free.</summary>
-    public void RequestEquip(int cell) => Ctx.SendHuman(EventKind.EquipItem, ItemEvents.EncodeEquip(cell));
+    public void RequestEquip(int cell) => _ctx.SendHuman(EventKind.EquipItem, ItemEvents.EncodeEquip(cell));
 
     /// <summary>Take off what is worn in <paramref name="slot"/> into the bag. The server refuses it with a "bag is full" notice when no cell is free. Free.</summary>
-    public void RequestUnequip(EquipSlot slot) => Ctx.SendHuman(EventKind.UnequipItem, ItemEvents.EncodeUnequip(slot));
+    public void RequestUnequip(EquipSlot slot) => _ctx.SendHuman(EventKind.UnequipItem, ItemEvents.EncodeUnequip(slot));
 
     /// <summary>Drop what is worn in <paramref name="slot"/> on the ground (at the feet, or under the vehicle the player sits in).</summary>
-    public void RequestDropWorn(EquipSlot slot) => Ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Worn, (int)slot));
+    public void RequestDropWorn(EquipSlot slot) => _ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Worn, (int)slot));
 
     /// <summary>Drop what is in bag cell <paramref name="cell"/> on the ground (at the feet, or under the vehicle the player sits in).</summary>
-    public void RequestDropBagged(int cell) => Ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Bag, cell));
+    public void RequestDropBagged(int cell) => _ctx.SendHuman(EventKind.DropItem, ItemEvents.EncodeDrop(ItemHome.Bag, cell));
 
     /// <summary>Take the item lying on the ground (an id from <see cref="GroundItemInReach"/>). Counts one pickup.</summary>
-    public void RequestTakeGroundItem(ushort id) => Ctx.SendHuman(EventKind.TakeGroundItem, ItemEvents.EncodeTakeGround(id));
+    public void RequestTakeGroundItem(ushort id) => _ctx.SendHuman(EventKind.TakeGroundItem, ItemEvents.EncodeTakeGround(id));
 
     /// <summary>Take the item at <paramref name="index"/> of <see cref="CorpseItems"/> from a corpse in reach: into its empty slot, else the bag, else swapped with what is worn. Counts one pickup.</summary>
     public void RequestTakeCorpseItem(ushort corpse, int index) =>
-        Ctx.SendHuman(EventKind.PickUpCorpseItem, ItemEvents.EncodePickUp(corpse, index));
+        _ctx.SendHuman(EventKind.PickUpCorpseItem, ItemEvents.EncodePickUp(corpse, index));
 
     // ---- the server's events ----
 
-    void OnItemEvent(EventKind kind, byte[] payload)
+    public void OnEvent(EventKind kind, byte[] payload)
     {
         switch (kind)
         {
-            case EventKind.BinocularsRaised when Binoculars.TryDecodeRaised(payload, out var holder, out var up, out var pair):
-                OnBinocularsRaised(holder, up, pair);
-                break;
-            case EventKind.HeadLampState when HeadLamp.TryDecode(payload, out var lamp, out var lampOn):
-                _headLamps.SetLamp(lamp, lampOn);
-                break;
             case EventKind.Equipment when ItemEvents.TryDecodeEquipment(payload, out var worn, out var bag):
-                _wornItems = worn;
                 _bagItems = bag;
                 _wornView = View(worn);
                 _bagView = View(bag);
-                SetWornOf(Ctx.MyId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
+                SetWornOf(_ctx.MyId, worn.Select(w => (int?)w?.Item).ToArray()); // the seat view of the local player
                 ItemsChanged?.Invoke();
                 break;
             case EventKind.WornItems when ItemEvents.TryDecodeWorn(payload, out var player, out var others):
@@ -149,7 +136,6 @@ public partial class NetClient
             case EventKind.CorpseItems when ItemEvents.TryDecodeCorpseItems(payload, out var corpse, out var items):
                 var held = items.Select(Held).Where(h => h != null).Select(h => h!.Value).ToList();
                 if (held.Count > 0) _corpseItems[corpse] = held; else _corpseItems.Remove(corpse);
-                DressCorpse(corpse);
                 CorpseItemsChanged?.Invoke(corpse);
                 break;
             case EventKind.ItemNotice when ItemEvents.TryDecodeNotice(payload, out var notice):
@@ -160,50 +146,34 @@ public partial class NetClient
     }
 
     /// <summary>An item the data knows, as the screens read it; null for a position items.json does not have (a server with more items than this client).</summary>
-    HeldItem? Held(ItemStack stack) => ItemData.At(stack.Item) is { } def ? new HeldItem(stack.Item, def, stack.Pickups) : null;
+    HeldItem? Held(ItemStack stack) => _data.At(stack.Item) is { } def ? new HeldItem(stack.Item, def, stack.Pickups) : null;
 
     IReadOnlyList<HeldItem?> View(ItemStack?[] cells) => Array.AsReadOnly(cells.Select(c => c is { } s ? Held(s) : null).ToArray());
-
-    /// <summary>The definition of what the local player wears in a slot, or null.</summary>
-    ItemDef? WornIn(EquipSlot slot) => Worn(slot)?.Def;
 
     /// <summary>Records what a player wears and dresses their character (a remote player's, or the local player's in a vehicle seat) when it exists.</summary>
     void SetWornOf(ushort player, int?[] slots)
     {
         _wornBy[player] = slots;
-        if (Ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
-        if (player == Ctx.MyId && _rider.SelfView != null) Dress(_rider.SelfView, slots);
+        if (_ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
+        if (player == _ctx.MyId && _selfView() is { } self) Dress(self, slots);
     }
 
     /// <summary>Forgets a player who left.</summary>
-    void ForgetWorn(ushort player) => _wornBy.Remove(player);
+    public void Forget(ushort player) => _wornBy.Remove(player);
+
+    /// <summary>A corpse is gone: what it carried goes too.</summary>
+    public void ForgetCorpse(ushort corpse) => _corpseItems.Remove(corpse);
 
     /// <summary>The items.json positions of a player's equipment on a character: every slot is set, so an empty one takes off what was worn.</summary>
     void Dress(CharacterView view, int?[]? slots)
     {
         for (var s = 0; s < Equipment.SlotCount; s++)
-            view.SetWorn((EquipSlot)s, slots != null && s < slots.Length && slots[s] is { } i ? ItemData.At(i) : null);
+            view.SetWorn((EquipSlot)s, slots != null && s < slots.Length && slots[s] is { } i ? _data.At(i) : null);
     }
-
-    /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
-    void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); DressPlayer(view, Ctx.MyId); }
 
     /// <summary>Dresses a new character of a player with what they wear.</summary>
-    void DressPlayer(CharacterView view, ushort player) => Dress(view, _wornBy.GetValueOrDefault(player));
-
-    /// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
-    void DressCorpse(ushort corpse)
-    {
-        if (!_corpses.TryGetValue(corpse, out var v) || v.View == null) return; // the giant's corpse draws no worn item
-        var items = CorpseItems(corpse);
-        for (var s = 0; s < Equipment.SlotCount; s++)
-        {
-            ItemDef? shown = null; // the first item of the slot in the corpse's list (the worn ones come first)
-            foreach (var h in items) if (!h.Def.BagOnly && (int)h.Def.Slot == s) { shown = h.Def; break; }
-            v.View.SetWorn((EquipSlot)s, shown);
-        }
-    }
+    public void DressPlayer(CharacterView view, ushort player) => Dress(view, _wornBy.GetValueOrDefault(player));
 
     /// <summary>The first item a corpse carries, or null: what the corpse prompt and the chooser's single item row name.</summary>
-    ItemDef? CorpseItem(ushort corpse) => CorpseItems(corpse) is { Count: > 0 } list ? list[0].Def : null;
+    public ItemDef? CorpseItem(ushort corpse) => CorpseItems(corpse) is { Count: > 0 } list ? list[0].Def : null;
 }

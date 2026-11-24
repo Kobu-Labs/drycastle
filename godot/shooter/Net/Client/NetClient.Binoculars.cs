@@ -24,6 +24,12 @@ public partial class NetClient
     /// <summary>The other players who hold the binoculars up and the pair each holds (<see cref="EventKind.BinocularsRaised"/>), kept by id so a character made later is posed at once.</summary>
     readonly Dictionary<ushort, ItemDef> _binocularsBy = new();
 
+    /// <summary>The others' raised binoculars (<see cref="EventKind.BinocularsRaised"/>).</summary>
+    void OnBinocularsEvent(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.BinocularsRaised && Binoculars.TryDecodeRaised(payload, out var holder, out var up, out var pair)) OnBinocularsRaised(holder, up, pair);
+    }
+
     void OnBinocularsRaised(ushort player, bool up, int item)
     {
         var pair = up && ItemData.At(item) is { Binoculars: true } def ? def : null;
@@ -44,8 +50,8 @@ public partial class NetClient
         get
         {
             ItemDef? best = null;
-            foreach (var s in _bagItems)
-                if (s is { } stack && ItemData.At(stack.Item) is { Binoculars: true } pair && (best == null || Binoculars.FovOf(pair) < Binoculars.FovOf(best))) best = pair;
+            foreach (var held in Items.BagContents)
+                if (held?.Def is { Binoculars: true } pair && (best == null || Binoculars.FovOf(pair) < Binoculars.FovOf(best))) best = pair;
             return best;
         }
     }

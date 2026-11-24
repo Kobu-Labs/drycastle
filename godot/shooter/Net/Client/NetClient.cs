@@ -18,6 +18,7 @@ using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Movement;
@@ -193,6 +194,11 @@ public partial class NetClient : Node
     public SquadsClient Squads { get; private set; } = null!;
     public TeamsClient TeamAdmin { get; private set; } = null!;
 
+    /// <summary>items.json: set by the host (an item is named on the wire by its position in this list).</summary>
+    public ItemsFile ItemData = new();
+    /// <summary>What the local player wears and carries, and what the corpses carry (the Equipment screen reads and asks here).</summary>
+    public ItemsClient Items { get; private set; } = null!;
+
     public NetClient()
     {
         Ctx = new ClientContext(this) { Send = SendEvent, Connected = () => _peer != null, SendJoined = SendNow };
@@ -224,6 +230,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         if (KeepEventLogs) Ctx.Logs = _logs;
+        Items = new ItemsClient(Ctx, ItemData, () => _rider.SelfView);
         _blips = new BlipsClient(Ctx, BlipConfig);
         _mass = new MassClient(Ctx, HolyMassData, _prediction.Drop);
         Ctx.View.MassSeated = () => _mass.Seated;
@@ -327,6 +334,9 @@ public partial class NetClient : Node
         _citizens.Reset();
         _impacts.Reset();
     }
+
+    /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
+    void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); Items.DressPlayer(view, Ctx.MyId); }
 
     void Fail(string why)
     {
@@ -552,7 +562,7 @@ public partial class NetClient : Node
     {
         Ctx.Names.Remove(l.PlayerId); Match.Remove(l.PlayerId); Ctx.Snapshots.Forget(l.PlayerId);
         if (Ctx.Remotes.Remove(l.PlayerId, out var r)) r.Node.QueueFree();
-        ForgetWorn(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
+        Items.Forget(l.PlayerId); _binocularsBy.Remove(l.PlayerId); _headLamps.Forget(l.PlayerId);
         _status.Forget(l.PlayerId);
     }
 
@@ -563,7 +573,9 @@ public partial class NetClient : Node
         Sandbox.OnEvent(kind, payload); // sandbox answer (#156)
         Chat.OnEvent(kind, payload); // chat lines, the admin flag, the day clock
         _status.OnEvent(kind, payload); // statuses: blessing, curse, burning
-        OnItemEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
+        Items.OnEvent(kind, payload); // what the player wears, what a corpse carries, an item crumbling
+        OnBinocularsEvent(kind, payload); // the others' raised binoculars
+        _headLamps.OnEvent(kind, payload); // the head lamps switched on and off
         Companions.OnEvent(kind, payload); // the Companions the player can pick and the one that is out
         _intel.OnEvent(kind, payload); // the announced events: the intel screen, the announcement
         _thieves.OnVoiceEvent(kind, payload); // a Gang member says a line (ticket 09)

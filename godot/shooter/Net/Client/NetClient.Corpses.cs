@@ -7,6 +7,7 @@ using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Thieves;
@@ -61,6 +62,19 @@ public partial class NetClient
     readonly Dictionary<ushort, double> _lastRode = new();
     /// <summary>A corpse younger than this waits for its death event; one older with none is an old corpse (a join), and lies in the death pose.</summary>
     const double CollapseWaitSeconds = 0.25, CollapseWindowSeconds = 2.0;
+
+    /// <summary>Shows the item a corpse carries on the dead body (and nothing once it is taken or has crumbled). The view may not exist yet: it is dressed when it spawns.</summary>
+    void DressCorpse(ushort corpse)
+    {
+        if (!_corpses.TryGetValue(corpse, out var v) || v.View == null) return; // the giant's corpse draws no worn item
+        var items = Items.CorpseItems(corpse);
+        for (var s = 0; s < Equipment.SlotCount; s++)
+        {
+            ItemDef? shown = null; // the first item of the slot in the corpse's list (the worn ones come first)
+            foreach (var h in items) if (!h.Def.BagOnly && (int)h.Def.Slot == s) { shown = h.Def; break; }
+            v.View.SetWorn((EquipSlot)s, shown);
+        }
+    }
 
     void NoteDeath(DeathMsg d) => _deathSeen[d.Victim] = (Ctx.Now, d.Killer);
 
@@ -137,9 +151,10 @@ public partial class NetClient
             if (_chooser.IsOpen) SendPickUp(_chooser.Corpse, pos);
             _chooser.Close();
         };
-        _chooser.ItemPicked += index => { if (_chooser.IsOpen) RequestTakeCorpseItem(_chooser.Corpse, index); }; // the cell leaves with the server's next list
-        CorpseItemsChanged += ShowGiantHead;
-        CorpseItemsChanged += corpse => { if (_chooser.IsOpen && _chooser.Corpse == corpse) _chooser.SetItems(ChooserItems(corpse)); };
+        _chooser.ItemPicked += index => { if (_chooser.IsOpen) Items.RequestTakeCorpseItem(_chooser.Corpse, index); }; // the cell leaves with the server's next list
+        Items.CorpseItemsChanged += DressCorpse;
+        Items.CorpseItemsChanged += ShowGiantHead;
+        Items.CorpseItemsChanged += corpse => { if (_chooser.IsOpen && _chooser.Corpse == corpse) _chooser.SetItems(ChooserItems(corpse)); };
         AddChild(_chooser);
     }
 
@@ -161,7 +176,7 @@ public partial class NetClient
 
     void OnCorpseDespawned(ushort id)
     {
-        _corpseItems.Remove(id);
+        Items.ForgetCorpse(id);
         HarvesterCorpseGone(id);
         if (!_corpses.Remove(id, out var v)) return;
         v.Node.QueueFree();
@@ -245,11 +260,11 @@ public partial class NetClient
         if (_near is not { } id || !InteractArbiter.CorpseShowsPrompt(_crateNear != null, _groundNear != null, _groundNearest, true, ChooserOpen)) return null;
         var key = InputBindings.Name("interact");
         if (IsItemOnlyCorpse(id)) // the Bigfoot's and the Gang boss's corpse have no weapon to take, only what they carry (#264, Thieves 10)
-            return CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, ItemName(CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
+            return Items.CorpseItems(id).Count switch { 0 => null, 1 => Strings.F("hud.corpse.giant.item", key, Items.ItemName(Items.CorpseItem(id)!)), _ => Strings.F("hud.corpse.giant.items", key) };
         if (CorpseWeapon(id) is not { } w) return null;
         var hold = CorpseRules.CanReplace(w, CorpseRules.PrimaryPos);
-        if (CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, ClientText.WeaponName(w.Id)); // a list: its own chooser names them
-        if (CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, ClientText.WeaponName(w.Id), ItemName(item));
+        if (Items.CorpseItems(id).Count > 1) return Strings.F(hold ? "hud.corpse.hold.items" : "hud.corpse.tap.items", key, ClientText.WeaponName(w.Id)); // a list: its own chooser names them
+        if (Items.CorpseItem(id) is { } item) return Strings.F(hold ? "hud.corpse.hold.item" : "hud.corpse.tap.item", key, ClientText.WeaponName(w.Id), Items.ItemName(item));
         return hold
             ? Strings.F("hud.corpse.hold", key, ClientText.WeaponName(w.Id))
             : Strings.F("hud.corpse.tap", key, ClientText.WeaponName(w.Id));
@@ -277,7 +292,7 @@ public partial class NetClient
 
     /// <summary>The corpse's Items as the chooser's cells, in the server's order.</summary>
     List<ChooserItem> ChooserItems(ushort corpse) =>
-        CorpseItems(corpse).Select(h => new ChooserItem(h, ItemIcon(h.Def), ItemName(h.Def))).ToList();
+        Items.CorpseItems(corpse).Select(h => new ChooserItem(h, Items.ItemIcon(h.Def), Items.ItemName(h.Def))).ToList();
 
     /// <summary>A corpse that offers no weapon, only its Items: the giant's, and the Gang boss's with the Gold chain (owner <see cref="ThievesReward.ChainCorpseOwner"/>, drawn as a body like any other).</summary>
     bool IsItemOnlyCorpse(ushort corpse) =>

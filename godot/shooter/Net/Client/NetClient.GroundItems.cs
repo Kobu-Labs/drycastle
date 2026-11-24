@@ -138,13 +138,13 @@ public partial class NetClient
     {
         if (!GroundItemOwnsKey || _groundNear is not { } id || !WorldEntities.Entities.TryGetValue(id, out var e)) return null;
         var def = ItemData.At(GroundItemRules.ItemOf(e.State));
-        return def == null ? null : Strings.F("hud.ground.take", InputBindings.Name("interact"), ItemName(def));
+        return def == null ? null : Strings.F("hud.ground.take", InputBindings.Name("interact"), Items.ItemName(def));
     }
 
     /// <summary>A tap of the interact key at a ground item that has it asks the server to take it. Runs on the input tick.</summary>
     void TickGroundItems()
     {
         var use = Input.MouseMode == Input.MouseModeEnum.Captured && Input.IsActionPressed("interact");
-        if (_groundUse.Pressed(use) && GroundItemOwnsKey && _groundNear is { } id) RequestTakeGroundItem(id);
+        if (_groundUse.Pressed(use) && GroundItemOwnsKey && _groundNear is { } id) Items.RequestTakeGroundItem(id);
     }
 }

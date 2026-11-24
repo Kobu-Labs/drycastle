@@ -622,6 +622,6 @@ public partial class NetClient
         if (v.Node.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() is not Skeleton3D sk) return;
         var head = sk.FindBone("Head");
         if (head < 0) return;
-        sk.SetBonePoseScale(head, CorpseItems(corpse).Count > 0 ? Vector3.One : Vector3.One * 0.001f); // the clip is paused: the pose stays as set
+        sk.SetBonePoseScale(head, Items.CorpseItems(corpse).Count > 0 ? Vector3.One : Vector3.One * 0.001f); // the clip is paused: the pose stays as set
     }
 }

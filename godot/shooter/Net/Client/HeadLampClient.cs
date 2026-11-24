@@ -23,6 +23,11 @@ public sealed class HeadLampClient
 
     public HeadLampClient(ClientContext ctx) { _ctx = ctx; }
 
+    public void OnEvent(EventKind kind, byte[] payload)
+    {
+        if (kind == EventKind.HeadLampState && HeadLamp.TryDecode(payload, out var lamp, out var lampOn)) SetLamp(lamp, lampOn);
+    }
+
     public void SetLamp(ushort player, bool on)
     {
         if (on) _lit.Add(player); else _lit.Remove(player);
