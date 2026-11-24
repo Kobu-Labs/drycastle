@@ -34,17 +34,13 @@ using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Terrain;
 using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
-using Drycastle.ShooterCore.Camo;
 using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
-using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Corpses;
-using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
-using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
@@ -52,7 +48,6 @@ using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
-using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Scenery;
@@ -61,7 +56,6 @@ using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Turrets;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
-using Drycastle.ShooterCore.Wildlife;
 using Drycastle.ShooterServer.Persistence;
 using Drycastle.Shooter.Net.Server.Diagnostics;
 using Drycastle.Shooter.Net.Server.Sessions;
@@ -89,6 +83,7 @@ public partial class NetServer : Node
     Outbox _outbox = null!;
     ConnectionServer _connections = null!;
     PlayerRoster _roster = null!;
+    InputIntake _inputs = null!;
     DebugServer _debug = null!;
     // services several features share
     Fleet _fleet = null!; TargetBook _targets = null!; DamageServer _damage = null!; ProgressionServer _progress = null!; NavService _navMesh = null!;
@@ -121,7 +116,6 @@ public partial class NetServer : Node
     readonly PlayerIds _ids = new();
     /// <summary>The clients simulated in this tick (reused every tick).</summary>
     readonly List<ServerClient> _simClients = new();
-    readonly List<NetInput> _scratch = new();
     /// <summary>The entity states of the recent ticks, shared by every client's encoder (the baselines of their deltas).</summary>
     readonly SnapshotHistory _sentStates = new();
     /// <summary>The world states of recent ticks the server sent (the world channel's baselines, shared by every client).</summary>
@@ -397,6 +391,7 @@ public partial class NetServer : Node
         };
         _roster = new PlayerRoster(_ctx, Config, _host, _byId, _ids, _sentStates, _sentWorld, _progress, _areas, _animals, _profiles, _companions, _sandbox, _chat, _streaks, _status, _rozhlas, _sitters, _seats, tellJoiner);
         _connections = new ConnectionServer(_ctx, _host, _clients, _roster, _diag.Health, _sandbox, _profiles, Config.Map);
+        _inputs = new InputIntake(_ctx, _sentStates, _sentWorld);
         _debug = new DebugServer(_ctx, _fleet, _carDamage, _smoke);
     }
 
@@ -600,7 +595,7 @@ public partial class NetServer : Node
         if (!_clients.TryGetValue(peer, out var c) || d.Length == 0) return;
         if (d[0] < Wire.TInput) OnReliable(c, Wire.DecodeReliable(d)); // message type tells the channel apart (Godot does not expose it per packet)
         else if (c.Joined && d[0] == Wire.TRozhlasMic) _rozhlas.OnMic(c, d); // the set holder's voice
-        else if (c.Joined && d[0] == Wire.TInput) OnInputs(c, d);
+        else if (c.Joined && d[0] == Wire.TInput) _inputs.OnPacket(c, d);
     }
 
     /// <summary>A reliable message: the hello first, then the events by kind (the first that matches takes it), anything else is the profile's (loadouts, slots, camo).</summary>
@@ -630,43 +625,10 @@ public partial class NetServer : Node
         else if (c.Joined) _profiles.OnMessage(c, m);
     }
 
-    /// <summary>A packet of inputs: the snapshot and world acks it carries, and the inputs the player has not sent before, queued for the ticks (at most 8).</summary>
-    void OnInputs(ServerClient c, byte[] d)
-    {
-        _scratch.Clear();
-        if (!Wire.TryDecodeInputs(d, _scratch, out var snapTick, out var worldTick)) return;
-        if (snapTick != Wire.NoTick && snapTick <= _tick && _sentStates.Has(snapTick) && (c.SnapAck == Wire.NoTick || snapTick > c.SnapAck)) c.SnapAck = snapTick; // an older input's ack arriving late changes nothing
-        if (worldTick != Wire.NoTick && worldTick <= _tick && _sentWorld.Has(worldTick) && (c.WAck == Wire.NoTick || worldTick > c.WAck)) c.WAck = worldTick; // the world channel's ack, the same rule
-        foreach (var i in _scratch)
-        {
-            // redundant copies of already-seen inputs are skipped
-            if (c.HasSeq && !NetInput.Newer(i.Seq, c.LastSeq)) continue;
-            c.LastSeq = i.Seq; c.HasSeq = true;
-            c.Inputs.Enqueue(i);
-        }
-        while (c.Inputs.Count > 8) c.Inputs.Dequeue(); // a stalled sim never builds unbounded lag
-    }
-
     /// <summary>Hands each admin command to the chat; the commands of a feature with a class of its own are that class's methods.</summary>
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        _chat.Register("bots", _bots.ChatCommand);
-        _chat.Register("spawn", _spawner.ChatCommand);
-        _chat.Register("unicorn", _wildlife.ChatUnicorn);
-        _chat.Register("phoenix", _wildlife.ChatPhoenix);
-        _chat.Register("sandbox", _sandbox.ChatCommand);
-        _chat.Register("give", _gear.ChatGive);
-        _chat.Register("companion", _companions.ChatCommand);
-        _chat.Register("time", admin.Time);
-        _chat.Register("explode", admin.Explode);
-        _chat.Register("restart", admin.Restart);
-        _chat.Register("event", admin.Event);
-        _chat.Register("citizens", _citizens.Chat);
-        _chat.Register("church", _church.Chat);
-        _chat.Register("rozhlas", _rozhlas.ChatCommand);
-        _chat.Register("status", _status.ChatCommand);
-        _chat.Register("scud", _scud.Chat);
-        _chat.Register("squad", _teams.ChatSquad);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams);
     }
 }

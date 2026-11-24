@@ -9,7 +9,6 @@ using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Items;
 using Drycastle.ShooterCore.Killstreaks;
-using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Perks;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Progression;
