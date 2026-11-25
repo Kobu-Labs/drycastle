@@ -11,9 +11,11 @@
 # satellite dish).
 id: w378920362
 source: "Street View 2022-09, two close frames supplied by the author (street view + 3/4 right gable)"
+interior: true
 overhang_m: 0.35
 frame_colour: "#f6f6f3"
 openings:
+  - {id: d1, kind: door, edge: 4, at_m: 1.4, width_m: 0.95, height_m: 2.05, sill_m: 0.15, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}  # no capture saw a door: put where the wall is clear, nearest the street, so the house can be entered
   # two small windows left of the entrance bay, white frames, flower boxes below
   - {id: wa, kind: window, edge: 3, at_m: 2.45, width_m: 0.68, height_m: 0.8, sill_m: 1.05, recess_m: 0.1, confidence: medium}
   - {id: wb, kind: window, edge: 3, at_m: 4.31, width_m: 0.98, height_m: 1.05, sill_m: 0.9, recess_m: 0.1, confidence: medium}

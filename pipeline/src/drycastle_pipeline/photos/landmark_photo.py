@@ -361,7 +361,9 @@ def _derived(bid: str, ov: dict) -> dict:
     feats = json.loads((WORK / "normalised" / "buildings.geojson").read_text())
     feats = feats["features"] if isinstance(feats, dict) else feats
     f = next(f for f in feats if f["properties"]["osm_id"] == bid)
-    return derive_building(bid, b["parcel"], shape(f["geometry"]), f["properties"].get("tags", {}), load_building_rules(), ov)
+    # the footprint as the rules stage left it (set right by the cadastre where that applies), not as traced
+    geom = shape({"type": "Polygon", "coordinates": [b["footprint"]["exterior"], *(b["footprint"].get("holes") or [])]})
+    return derive_building(bid, b["parcel"], geom, f["properties"].get("tags", {}), load_building_rules(), ov)
 
 
 def _hex(rgb) -> str:
@@ -662,6 +664,8 @@ def _write_building_files(bid: str, b: dict, sheet: dict, detail: dict, ov: dict
     from drycastle_pipeline.core.config import PIPELINE_DIR
 
     openings = detail["openings"]
+    if "roof_part" not in ov:  # every house with a detail is hollow (ADR 0040); one cut in parts cannot be yet
+        detail = {**detail, "interior": True}
     lost = sheet.get("not_modelled", "")
     head = [f"# {b['parcel']}: {sheet.get('what', 'house')}. Measured by landmark_photo (camera fit: {fit_note}).",
             f"# Eave {eave:.2f} m, top {b['height_m']:.2f} m. Sides with no photo have no openings." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip

@@ -488,6 +488,34 @@ A hand-written description of one real building's geometry beyond its OSM footpr
 **Opening**:
 A window, door or garage door in a wall of a building with a detail: a real hole in the wall with recessed reveals, located by footprint edge, distance along it, size and sill height. Each carries a confidence (low/medium/high) for how well the photos pin it down.
 
+**Hollow house**:
+A house whose building detail says `interior: true` (ADR 0040, `buildings/interior.py`): walls 0.3 m thick inward of the footprint, a floor at the sill of its lowest door, a ceiling one storey above (at most 3.0 m), and collision that is this shell. Its windows, doors and garage doors that fit under the ceiling go through the wall; the doors and garage doors have leaves players open and close (ADR 0044). Listed in `interiors.json` with its room (one shelter volume) and doorways. Every other house is a solid block. Its floor plan gives it partitions and room types; furniture is not built yet.
+_Avoid_: enterable house, interior house
+
+**Floor plan**:
+The generated division of a hollow house (ADR 0041, `buildings/floorplan.py`): a hall, the rooms of its programme, the partitions between them and the links that join them, worked out from the footprint, the openings and a seed (the building's id). Never drawn by hand and never stored outside `interiors.json`.
+_Avoid_: layout, room layout
+
+**Programme**:
+The rooms a hollow house is to have, by room type, with the size each should get, listed from the front door inward (ADR 0042, `programme` in `floorplan.rs`). It comes before the walls: the floor plan is cut to fit it.
+
+**Room type**:
+What a room of a floor plan is for: hall, living, kitchen, living_kitchen, dining, bedroom, bathroom, storage, study or garage. It is the `type` of the room in `interiors.json`; furniture is chosen by it.
+_Avoid_: room kind (`kind` is only hall or room)
+
+**Openness**:
+The number 0..1, from a hollow house's seed, that picks its floor plan's style: closed (a corridor, living room and kitchen apart), mixed (a shorter hall, an archway between them) or open (one space to live and cook in, a vestibule at most).
+
+**Hall**:
+A room of a floor plan that is only a way to others: the strip from the front door inward (the stem), with a corridor along the house at its end in a deep house (the spine), and any corridor carried further in to rooms nothing else reaches. A small open house has none.
+_Avoid_: hallway, corridor (the spine is one part of it)
+
+**Partition**:
+A wall between two rooms of a floor plan: 0.1 m thick, floor to ceiling, in the visual and the collision mesh. The walls on the footprint are walls, not partitions.
+
+**Link**:
+The way into a room of a floor plan, through a partition: a door (no leaf), an archway, or open (no partition there). Links form a tree: one way into every room; only living room, kitchen and dining room open into each other.
+
 **Window pane**:
 The glass of a window opening, exported as its own node `window_<building>_<id>` and listed in `windows.json` (position, size, facade, `breakable`), so the game can make it transparent or breakable. In the shooter it is a glass pane. Doors and garage doors are part of the building and have no pane node.
 

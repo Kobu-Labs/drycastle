@@ -1,0 +1,39 @@
+# Where assets come from and where the catalogue's own data goes.
+# Paths are relative to the repo root. assets-private may be a symlink in a worktree.
+data_dir: assets-private/catalog
+
+# Synty packs only; other packs and audio are deliberately out.
+# One entry per asset root. pack_depth: how many folders under root name the pack
+# (0: the root itself is one pack, named by `pack`). Files above pack_depth go to pack "misc".
+sources:
+  - id: synty
+    root: assets-private/synty/glb
+    pack_depth: 1
+    exclude: ["atlas/**", "**/tex/**"]
+  - id: synty-anim
+    root: assets-private/synty/anim
+    pack_depth: 0
+    pack: anim
+    kind_hint: animation clip
+  - id: synty-parts
+    root: assets-private/synty/simple-military/parts
+    pack_depth: 0
+    pack: simple-military-parts
+
+# Embedding models, run locally. Two models are indexed side by side by naming both:
+# vectors live under data_dir/embed/<model>--<recipe>, so changing a model re-embeds
+# nothing that is already there. Prompts are exactly what each model card specifies.
+embeddings:
+  likely_queries: true # one extra text vector per likely query (max-sim over an asset's vectors)
+  text:
+    model: Qwen/Qwen3-Embedding-0.6B
+    query_prompt: "Instruct: Given a web search query, retrieve relevant passages that answer the query\nQuery:"
+    document_prompt: ""
+    likely_query_prompt: document # as query they score ~0.2 higher than descriptions
+    likely_query_bias: -0.1 # added to a likely query's cosine before the max over vectors
+    max_length: 512
+  image:
+    model: google/siglip2-so400m-patch14-384
+    views: [three_quarter, front, top, back]
+    prep: crop
+    query_template: "{}"

@@ -1,0 +1,25 @@
+# P-0397: small gable-front house, cream render with peach band, dark tiled roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.90 m, roof top 4.58 m. Walls seen: edges [0, 4]. Not modelled: peach band on lower wall, block plinth, satellite dish.
+id: w378900293
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
+overhang_m: 0.35
+frame_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.12, colour: '#77726c'}
+apron: {width_m: 0.91, colour: '#9e9995', joints_m: 0.5}
+roof_tiles: true
+eaves: {colour: '#41424a', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 11.94, colour: '#41424a', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#41424a', bends: true}
+- {edge: 3, at_m: 7.72, colour: '#41424a', bends: true}
+- {edge: 4, at_m: 4.6, colour: '#41424a', bends: true}
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 2.38, width_m: 0.96, height_m: 1.2, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.42, 0.86], rails: [0.17], sill: true}
+  - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w2, kind: window, edge: 2, at_m: 3.41, width_m: 0.96, height_m: 1.2, sill_m: 1.4, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 2.02, width_m: 0.96, height_m: 1.2, sill_m: 1.4, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 5.0, width_m: 0.96, height_m: 1.2, sill_m: 1.4, rails: [0.17], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

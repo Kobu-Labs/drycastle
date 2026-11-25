@@ -42,6 +42,9 @@ OVERRIDE_FIELDS = (
 
     "roof_part",
     "rest_height_m",
+    "rest_roof",
+    "roof_fit",
+    "roof_lead",
 )
 _COLOUR = re.compile(r"^#[0-9a-fA-F]{6}$")
 _NUMBER = re.compile(r"^\s*(-?\d+(?:[.,]\d+)?)\s*(m)?\s*$")
@@ -120,6 +123,16 @@ def load_building_rules(path: Path = DEFAULT_RULES) -> BuildingRules:
     )
 
 
+def load_traced(path: Path = DEFAULT_OVERRIDES) -> set[str]:
+    """Buildings (or whole parcels) whose footprint stays as traced, whatever the cadastre says: those modelled by hand
+    on that outline. The list keep_traced_footprint of overrides.yaml."""
+    data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
+    got = data.get("keep_traced_footprint") or []
+    if not isinstance(got, list) or not all(isinstance(k, str) for k in got):
+        raise RulesError("overrides: keep_traced_footprint must be a list of building or parcel ids")
+    return set(got)
+
+
 def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
     data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
     out = data.get("buildings") or {}
@@ -147,6 +160,12 @@ def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
                 isinstance(value, list) and len(value) >= 3 and all(isinstance(p, list) and len(p) == 2 for p in value)
             ):
                 raise RulesError(f"overrides: {key}: roof_part must be a polygon [[x, y], ...] in map metres")
+            if name == "roof_lead" and not (isinstance(value, list) and len(value) == 2 and all(isinstance(p, list) and len(p) == 2 for p in value)):
+                raise RulesError(f"overrides: {key}: roof_lead must be a wall [[x, y], [x, y]] in map metres")
+            if name == "roof_fit" and not isinstance(value, bool):
+                raise RulesError(f"overrides: {key}: roof_fit must be true or false")
+            if name == "rest_roof" and value not in ("flat", "lean_to", "auto"):
+                raise RulesError(f"overrides: {key}: rest_roof must be flat, lean_to or auto")
             if name == "rest_height_m" and not (isinstance(value, int | float) and value > 0):
                 raise RulesError(f"overrides: {key}: rest_height_m must be a positive number")
             if name.endswith("_colour") and not _COLOUR.match(str(value)):
@@ -272,13 +291,16 @@ def derive_building(
         else {}
     )
     part = (
-        {"roof_part": [[float(x), float(y)] for x, y in ov["roof_part"]], "rest_height_m": float(ov.get("rest_height_m", 2.8))}
+        {"roof_part": [[float(x), float(y)] for x, y in ov["roof_part"]], "rest_height_m": float(ov.get("rest_height_m", 2.8)),
+         **({"rest_roof": ov["rest_roof"]} if ov.get("rest_roof") in ("lean_to", "auto") else {})}
         if ov.get("roof_part")
         else {}
     )
     return {
         **landmark,
         **part,
+        **({"roof_fit": True} if ov.get("roof_fit") and not ov.get("roof_part") else {}),
+        **({"roof_lead": [[float(x), float(y)] for x, y in ov["roof_lead"]]} if ov.get("roof_fit") and ov.get("roof_lead") else {}),
         "id": building_id,
         "parcel": parcel_id,
         "footprint": {"exterior": exterior, "holes": holes},
@@ -309,6 +331,7 @@ class BuildingsResult:
     buildings: list[dict]
     unassigned: list[str]
     unused_overrides: list[str]
+    footprints_fixed: dict[str, int] | None = None  # by the cadastre: {replace|shift|clip: how many}
 
     def report(self) -> list[str]:
         lines = [
@@ -322,6 +345,8 @@ class BuildingsResult:
         cross = Counter((b["roof"], height_class(b["height_m"])) for b in self.buildings)
         for roof in ROOFS:
             lines.append(f"  {roof}: " + ", ".join(f"{k} {cross.get((roof, k), 0)}" for k in order))
+        if self.footprints_fixed:
+            lines.append("footprints set right by the cadastre: " + ", ".join(f"{k} {n}" for k, n in sorted(self.footprints_fixed.items())))
         for key in self.unused_overrides:
             lines.append(f"warning: override {key} matches no building")
         return lines
@@ -338,6 +363,9 @@ def build_buildings(
     feats = json.loads((work_dir / "normalised" / "buildings.geojson").read_text())["features"]
     by_id = {f["properties"]["osm_id"]: f for f in feats}
 
+    from drycastle_pipeline.buildings.cadastre_check import Plots, judge
+
+    plots, kept, fixed = Plots(parcels["parcels"]), load_traced(), Counter()
     out, used = [], set()
     for parcel in sorted(parcels["parcels"], key=lambda p: p["id"]):
         for bid in sorted(parcel["buildings"]):
@@ -349,13 +377,15 @@ def build_buildings(
                     used.add(key)
             if merged.pop("remove", False):
                 continue  # replaced by a placed object (a hangar from a pack): no mesh, no collider, no interior
-            out.append(
-                derive_building(
-                    bid, parcel["id"], shape(f["geometry"]), f["properties"]["tags"], rules, merged
-                )
-            )
+            geom = shape(f["geometry"])
+            if bid not in kept and parcel["id"] not in kept and geom.geom_type == "Polygon":
+                # the outline as traced in OpenStreetMap, set right by the cadastre where the cadastre knows better
+                finding, geom = judge(geom.buffer(0), parcel["id"], plots)
+                if finding["finding"] in ("replace", "shift", "clip"):
+                    fixed[finding["finding"]] += 1
+            out.append(derive_building(bid, parcel["id"], geom, f["properties"]["tags"], rules, merged))
     return BuildingsResult(
-        out, sorted(parcels.get("unassigned_buildings", [])), sorted(set(overrides) - used)
+        out, sorted(parcels.get("unassigned_buildings", [])), sorted(set(overrides) - used), dict(fixed)
     )
 
 

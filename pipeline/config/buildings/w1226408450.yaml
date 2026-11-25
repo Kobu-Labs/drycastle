@@ -1,0 +1,28 @@
+# P-0938: two-storey house with attic, pink render, dark tiled gabled roof with skylights, garage. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.78 m, roof top 5.77 m. Walls seen: edges [1]. Not modelled: skylight roof windows, TV antenna, brick-look plinth, attached garage.
+id: w1226408450
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.6
+frame_colour: '#5a4030'
+surround_colour: '#e9dcc0'
+trim_colour: '#e9dcc0'
+bands:
+- {top_m: 3.78, height_m: 0.18}
+ridge_caps: true
+plinth: {height_m: 0.25, colour: '#5b535c'}
+apron: {width_m: 0.39, colour: '#b4ad9f'}
+roof_tiles: true
+eaves: {colour: '#373a3e', fascia_m: 0.18, gutter: true, level_soffit: true}
+downpipes:
+- {edge: 1, at_m: 11.35, colour: '#373a3e', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#373a3e', bends: true}
+- {edge: 5, at_m: 8.28, colour: '#373a3e', bends: true}
+chimneys:
+- {x: -132.16, y: 395.08, top_m: 6.27, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 0.97, width_m: 1.9, height_m: 1.53, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
+  - {id: w2, kind: window, edge: 1, at_m: 4.47, width_m: 1.9, height_m: 1.53, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
+  - {id: g1, kind: garage_door, edge: 1, at_m: 8.11, width_m: 2.51, height_m: 2.12, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: d1, kind: door, edge: 5, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.25, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w3, kind: window, edge: 5, at_m: 5.05, width_m: 1.9, height_m: 1.53, sill_m: 0.6, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

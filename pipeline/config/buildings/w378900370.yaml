@@ -1,0 +1,30 @@
+# P-0778: single-storey house, yellow-cream render with white lower part, dark tiled roof with skylight, old attached building at right. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.59 m, roof top 6.45 m. Walls seen: edges [6]. Not modelled: roof skylight window, satellite dishes, attached older building with ivy at right.
+id: w378900370
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.36
+frame_colour: '#5a4030'
+surround_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.29, colour: '#767977'}
+apron: {width_m: 0.61, colour: '#8c8b83'}
+roof_tiles: true
+eaves: {colour: '#756c59', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 2, at_m: 5.0, colour: '#756c59', bends: true}
+- {edge: 4, at_m: 4.76, colour: '#756c59', bends: true}
+- {edge: 6, at_m: 10.15, colour: '#756c59', bends: true}
+- {edge: 6, at_m: 0.16, colour: '#756c59', bends: true}
+interior: true
+openings:
+  - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.29, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 4, at_m: 2.1, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 5, at_m: 1.85, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 5, at_m: 3.03, width_m: 0.81, height_m: 1.0, sill_m: 3.99, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 5, at_m: 4.51, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 5, at_m: 5.98, width_m: 0.81, height_m: 1.0, sill_m: 3.99, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w6, kind: window, edge: 5, at_m: 7.16, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w7, kind: window, edge: 6, at_m: 1.88, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w8, kind: window, edge: 6, at_m: 7.72, width_m: 0.81, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}

@@ -1,0 +1,407 @@
+# Evaluation queries. Edit freely: fix wording, delete bad queries, add your own.
+# Changing a query's text or filters makes its model judgments stale (they are redone).
+# Correct a grade in <set>.overrides.yaml, not here.
+name: office
+pack: synty/office
+queries:
+- id: office-001
+  text: sofa
+  style: keyword
+  answers: few
+  notes: Only the two wide 1.44 m couches are sofas; the 0.79 m single-seat couches are armchairs
+    and are the near-neighbour trap.
+- id: office-002
+  text: trash can
+  style: keyword
+  answers: few
+  notes: American synonym for the two rubbish bins; the janitor cart, which carries a bin, is a plausible
+    wrong hit.
+- id: office-003
+  text: xerox
+  style: keyword
+  answers: one
+  notes: Brand-as-noun for the photocopier. The printer and scanner are the tempting wrong office
+    machines.
+- id: office-004
+  text: potted plant
+  style: keyword
+  answers: many
+  notes: All five plants, including the long planter trough, are right. The coffee table dressed with
+    a plant is a near miss, not a plant asset.
+- id: office-005
+  text: binders
+  style: keyword
+  answers: many
+  notes: The lever-arch box files, single and grouped, in every colour are right. The user's word
+    is not the file name; books and the book box are near misses.
+- id: office-006
+  text: fire extinguser
+  style: keyword
+  answers: one
+  notes: Misspelt (missing 'i'), but the fire extinguisher is clearly recoverable; it tests typo tolerance
+    on a single asset.
+- id: office-007
+  text: floppy disc
+  style: keyword
+  answers: few
+  notes: British 'disc' spelling against the file name 'disk'. The three single disks and the small
+    stack are all right.
+- id: office-008
+  text: whitebord
+  style: keyword
+  answers: one
+  notes: Typo for the wheeled whiteboard. The cork pinboards are wall boards of similar size and are
+    the near-neighbour trap.
+- id: office-009
+  text: corkboard
+  style: keyword
+  answers: few
+  notes: Synonym for the pinboards; the one with notes pinned and the empty one both count. The whiteboard
+    and calendar are wrong.
+- id: office-010
+  text: post its
+  style: keyword
+  answers: many
+  notes: 'Brand name for sticky notes: the single notes and the pads are right. The monitor with notes
+    stuck on it and the spiral notepads are near misses.'
+- id: office-011
+  text: toilet cubicle
+  style: keyword
+  answers: few
+  notes: British word for a toilet stall; the single stall and the row of four are right. The urinal
+    is a related but wrong bathroom fixture.
+- id: office-012
+  text: mug
+  style: keyword
+  answers: few
+  notes: Common word for the two handled coffee cups, which are named 'coffee_cup' in the catalogue.
+    The pens and the water cooler are wrong.
+- id: office-013
+  text: an empty office desk with nothing on top, for setting up workstations in an open-plan office
+  style: descriptive
+  answers: many
+  notes: All six bare desks (straight, with or without a back panel, and L-shaped) are right. The
+    desk_preset assets come already dressed with computers and clutter, so they are the near-neighbour
+    trap.
+- id: office-014
+  text: a tall metal filing cabinet with three drawers to stand against the wall in the records room
+  style: descriptive
+  answers: one
+  notes: Only file_cabinet_02 (1.29 m) is tall. file_cabinet_01 has the same three drawers but is
+    a low under-desk pedestal, so height decides the answer.
+- id: office-015
+  text: a small soap pump to mount on the wall above the washbasins in the staff bathroom
+  style: descriptive
+  answers: one
+  notes: The answer is soap_dispenser. The paper towel dispenser and the hand dryer are other wall-mounted
+    washroom fixtures and act as traps; 'soap pump' is an informal synonym.
+- id: office-016
+  text: a bulky old beige CRT computer monitor for a retro nineties office scene
+  style: descriptive
+  answers: one
+  notes: Only monitor_03 is the deep beige tube screen. The flat-panel monitors and the dual-screen
+    setup are near neighbours, and desk_preset_05 contains a CRT but is a whole desk.
+- id: office-017
+  text: a long tube light fitting to mount on the ceiling above the rows of desks in the office
+  style: descriptive
+  answers: one
+  notes: The answer is fluorescent_light (1.79 m strip). This tests description over the file name;
+    ceiling_light, a pendant shade, and ceiling_fan are the ceiling-mounted traps.
+- id: office-018
+  text: a small electric fan that sits on a desk to keep a stuffy office cool
+  style: descriptive
+  answers: one
+  notes: Only deskfan sits on a desk. ceiling_fan matches 'fan' but is the wrong mounting and scale.
+- id: office-019
+  text: a fully glazed partition wall for a meeting room, all glass with no door in it
+  style: descriptive
+  answers: one
+  notes: The answer is wall_glass. wall_glass_door is the near-neighbour trap because it has a doorway,
+    and wall_window is a solid wall with a single window.
+- id: office-020
+  text: a plain painted wall section with an empty doorway opening, to separate the corridor from
+    an office
+  style: descriptive
+  answers: few
+  notes: wall_door_01 and wall_door_02 are solid walls with a door opening. wall_glass_door is glazed,
+    the standalone door is just a door leaf, and the plain walls have no opening.
+- id: office-021
+  text: metal storage shelving already stocked with cardboard boxes, for the back of a stockroom
+  style: descriptive
+  answers: one
+  notes: shelf_03 holds the cardboard boxes. shelf_01 is dressed with binders and file boxes and shelf_02
+    is empty, so the right answer depends on what is on the shelves.
+- id: office-022
+  text: a table with four chairs set around it for lunch in the staff kitchen
+  style: descriptive
+  answers: few
+  notes: table_preset_01 and table_preset_02 are tables with four chairs. table_preset_03 has no chairs,
+    and the lone chair_04 and desk_05 are only parts of the set.
+- id: office-023
+  text: a rolling office swivel chair that has armrests, for behind a manager's desk
+  style: descriptive
+  answers: few
+  notes: chair_01 and chair_03 have arms. chair_02 is the same swivel chair without armrests (the
+    trap), and chair_04 is a plain four-legged chair.
+- id: office-024
+  text: an opened cardboard box with its flaps folded out, as if someone is unpacking after a move
+  style: descriptive
+  answers: one
+  notes: Only carboard_box_02 is open. carboard_box_01 is taped shut, so open versus closed decides
+    it; the file and book boxes are other box-like traps.
+- id: office-025
+  text: something on the wall so people in the open-plan office can check the time from their desks
+  style: need
+  answers: one
+  notes: Only the wall clock serves this need, and the query never names it. Flat wall items like
+    the frames, the calendar and the paintings are the plausible wrong neighbours.
+- id: office-026
+  text: a way for everyone around the boardroom table to dial into a call with the remote team
+  style: need
+  answers: one
+  notes: The three-armed speakerphone is the answer. The ordinary handset desk phone and the cellphone
+    are near-neighbour traps that serve one person, not a group.
+- id: office-027
+  text: the lounge corner floor feels hard and bare, need something soft to lay down under the coffee
+    table
+  style: need
+  answers: few
+  notes: The two rectangular rugs are the answers. The grey carpet floor tile is a building-shell
+    piece rather than a placed object, so it is the closest wrong result, along with the plain floor
+    tiles.
+- id: office-028
+  text: something the cleaner would leave leaning in the corridor after sweeping up dust and crumbs
+  style: need
+  answers: one
+  notes: Requires reasoning from sweeping to the broom. The janitor cart is a related cleaning prop
+    but does not do the sweeping itself.
+- id: office-029
+  text: the trainer needs to throw their printed transparency slides up onto the wall for an old-fashioned
+    training session
+  style: need
+  answers: one
+  notes: Only the overhead projector fits. A search might wrongly return the whiteboard or the scanner,
+    which shares the lid-and-glass look.
+- id: office-030
+  text: staff need somewhere to plug in their phone chargers and laptops near the desks
+  style: need
+  answers: few
+  notes: Both the wall socket and the multi-socket extension lead serve this need. The light switch
+    looks very similar on the wall and is the main trap.
+- id: office-031
+  text: the afternoon sun is glaring through the office windows onto the screens, need a way to shade
+    them
+  style: need
+  answers: few
+  notes: The two slatted blind sets are the answers, large and small. The glazed wall pieces and the
+    window wall are near neighbours that cause the problem rather than fix it.
+- id: office-032
+  text: somewhere on the desk to collect incoming documents so loose sheets stop getting scattered
+    everywhere
+  style: need
+  answers: few
+  notes: The four open wire document trays, empty or filled, are the answers. Loose paper stacks and
+    lidded file boxes are tempting but wrong.
+- id: office-033
+  text: make the receptionist's workspace feel personal, a little reminder of family she can look
+    at during the day
+  style: need
+  answers: few
+  notes: The two small standing framed photos of people are right. Wall paintings and the award frame
+    are decorative near neighbours, but they are not personal and do not stand on a desk.
+- id: office-034
+  text: something small that keeps the men's room urinals smelling a bit fresher
+  style: need
+  answers: one
+  notes: Only the tiny urinal cake answers this. The urinal itself and the bathroom dispensers are
+    near neighbours a search might return.
+- id: office-035
+  text: hang proof in the lobby that the company won an industry prize last year
+  style: need
+  answers: one
+  notes: The framed certificate is the answer. The framed paintings and the photos look similar on
+    a wall but carry no award.
+- id: office-036
+  text: visitors need a way to get up to the third floor without taking the stairs
+  style: need
+  answers: few
+  notes: The elevator wall unit and its call button panel serve the need. The doorway walls and the
+    door are near neighbours that only lead sideways, not up.
+- id: office-037
+  text: desk lamp, nothing taller than 50 cm
+  style: constraint
+  filters:
+    max_height_m: 0.5
+  answers: few
+  notes: Both angled desk lamps (grey and green, 0.40 m tall) pass. The limit is loose, so this tests
+    that a height filter does not wrongly drop valid answers.
+- id: office-038
+  text: low coffee table for the lounge, under half a metre tall
+  style: constraint
+  filters:
+    max_height_m: 0.5
+  answers: one
+  notes: Only the bare coffeetable_01 (0.41 m) fits. coffeetable_02 is the same table, but the plant
+    on it makes it 0.89 m tall, so a search that ignores the height limit returns the wrong one.
+- id: office-039
+  text: metal staff lockers for the changing room, full height, at least 1.5 m tall
+  style: constraint
+  filters:
+    materials:
+    - metal
+    min_height_m: 1.5
+  answers: few
+  notes: Both four-door locker banks (grey and green, 1.72 m) qualify. The cupboard and the tall filing
+    cabinet are near neighbours that store things but are not lockers.
+- id: office-040
+  text: water cooler no taller than 1.4 m so it fits under the shelf
+  style: constraint
+  filters:
+    max_height_m: 1.4
+  answers: one
+  notes: water_cooler_02 is 1.31 m tall. water_cooler_01 looks the same but is 1.47 m and must be
+    excluded, a near-neighbour trap that only the measured height settles.
+- id: office-041
+  text: ballpoint pen, under 25 cm long
+  style: constraint
+  filters:
+    max_longest_m: 0.25
+  answers: few
+  notes: All three pen colour variants (0.24 m) pass a loose length limit. This tests retrieval of
+    a tiny hand object by a common word.
+- id: office-042
+  text: sticky tape dispenser for the desk, hand-sized
+  style: constraint
+  filters:
+    size_classes:
+    - hand
+  answers: few
+  notes: The two sellotape dispensers (blue and black) are right; the person never says 'sellotape'.
+    The stapler is a similar-sized desk gadget that should rank below them.
+- id: office-043
+  text: long mirror on the washroom wall above the sinks, at least 2 m wide
+  style: constraint
+  filters:
+    placements:
+    - wall-mounted
+    min_width_m: 2.0
+  answers: one
+  notes: Only the 2.33 m wide wall mirror fits. The glass wall and the large window blinds are wide,
+    flat, wall-like panels that an image search could confuse with it.
+- id: office-044
+  text: low partition wall under 1 m tall to split up desk clusters
+  style: constraint
+  filters:
+    max_height_m: 1.0
+  answers: one
+  notes: wall_divider (0.60 m tall) is the only low partition. The full-height wall sections (2.34
+    m) match 'partition wall' but break the height limit.
+- id: office-045
+  text: loose sheets of paper scattered on the floor, spread over at least half a metre
+  style: constraint
+  filters:
+    placements:
+    - scattered
+    min_longest_m: 0.5
+  answers: one
+  notes: papers_02 (0.88 x 0.65 m of strewn sheets) is the only spread-out litter. The neat paper
+    stacks and the folder are paper too but are compact (0.41 to 0.46 m) and stacked, not scattered.
+- id: office-046
+  text: wooden L-shaped corner workstation already cluttered with computer and paperwork
+  style: constraint
+  filters:
+    materials:
+    - wood
+  answers: one
+  notes: Only desk_preset_06 is wood, L-shaped and dressed. The grey L-shaped presets break the wood
+    limit, desk_preset_05 is wood but straight, and desk_04 is wood but empty.
+- id: office-047
+  text: something to flick through on the waiting room table, under 30 cm across
+  style: constraint
+  filters:
+    max_longest_m: 0.3
+  answers: one
+  notes: The magazine pile (0.29 m) is the answer. The hardback books (0.37 m) are also reading material
+    but break the size limit, so the query needs both reasoning and the size filter.
+- id: office-048
+  text: pc case to stand on the floor under a desk, less than half a metre tall
+  style: constraint
+  filters:
+    placements:
+    - floor-standing
+    max_height_m: 0.5
+  answers: one
+  notes: computer_tower (0.45 m) is the only standalone PC. The desk presets contain a tower but are
+    whole desks, and the photocopier is a floor-standing machine of the wrong kind.
+- id: office-049
+  text: coffee machine
+  style: negative
+  answers: none
+  notes: No espresso or filter coffee machine exists, so the correct result is nothing. Mugs and the
+    water cooler share the break-room context and are likely false hits.
+- id: office-050
+  text: a vending machine full of snacks and drinks for the break room
+  style: negative
+  answers: none
+  notes: No vending machine exists. Tall boxy appliances like the water cooler, lockers or photocopier
+    are plausible wrong matches a search should reject.
+- id: office-051
+  text: paper shreder
+  style: negative
+  answers: none
+  notes: Misspelt request for a document shredder, which is not in the pack. The printer, bin and
+    photocopier are paper-adjacent traps.
+- id: office-052
+  text: coat rack
+  style: negative
+  answers: none
+  notes: No coat stand or hooks exist. Thin upright objects like the broom or the corner post could
+    be mistaken for one, and so could the lockers.
+- id: office-053
+  text: tall bar stool for the kitchen counter
+  style: negative
+  answers: none
+  notes: The pack only has normal-height chairs and swivel office chairs, with no high stool. This
+    is a near-miss test against the seating.
+- id: office-054
+  text: calculator
+  style: negative
+  answers: none
+  notes: No calculator exists. The keypad on the cellphone, desk phone or keyboard is a visual lookalike
+    that should not be returned as a match.
+- id: office-055
+  text: fridge for the staff kitchen to keep everyone's lunches cold
+  style: negative
+  answers: none
+  notes: No refrigerator exists. A tall cupboard, lockers or the water cooler are boxy kitchen-area
+    near misses.
+- id: office-056
+  text: staircase up to the mezzanine
+  style: negative
+  answers: none
+  notes: The pack has no stairs. The elevator answers a related need but is not a staircase, so a
+    good search should say nothing fits.
+- id: office-057
+  text: medieval sword
+  style: negative
+  answers: none
+  notes: A clearly foreign object for an office pack. Long thin props like the broom, pen or post
+    are the only shape lookalikes.
+- id: office-058
+  text: bathtub
+  style: negative
+  answers: none
+  notes: The bathroom set has sinks, urinals and toilet stalls but no bath. This tests that bathroom
+    context alone does not produce a match.
+- id: office-059
+  text: smoke detector on the ceiling
+  style: negative
+  answers: none
+  notes: No smoke alarm exists. Ceiling-mounted fittings and small wall devices like the light switch
+    or exit sign are near-miss traps.
+- id: office-060
+  text: squishy stress ball to squeeze at the desk
+  style: negative
+  answers: none
+  notes: No stress ball exists. The puzzle cube is a small desk toy but a different object, and sticky-note
+    blocks and mouse pads are small desk clutter.

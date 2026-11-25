@@ -13,7 +13,11 @@ dependencies = [
     "pyyaml",
     "mapbox-earcut>=2.1.0",
     "mcp>=2.3.0",
+    "opencv-python-headless>=5.1.0.95",
 ]
+
+[project.optional-dependencies]
+reader = ["anthropic"]
 
 [dependency-groups]
 dev = [

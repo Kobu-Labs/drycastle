@@ -1,0 +1,31 @@
+# P-0752: small single-storey cottage, white render, red-brown tiled gabled roof with blue trim and a tall chimney. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.11 m, roof top 5.17 m. Walls seen: edges [2, 3]. Not modelled: tall chimney, attached lower wing with a small flat canopy-like roof on the right, blue gutters and downpipe.
+id: w378900272
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.1
+frame_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.31, colour: '#84857d'}
+apron: {width_m: 0.2, colour: '#84857d'}
+roof_tiles: true
+eaves: {colour: '#ece6d8', fascia_m: 0.18, gutter: true, rafters: true, gutter_colour: '#8d918e'}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 0, at_m: 11.16, colour: '#8d918e', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#8d918e', bends: true}
+- {edge: 2, at_m: 11.17, colour: '#8d918e', bends: true}
+- {edge: 2, at_m: 0.16, colour: '#8d918e', bends: true}
+chimneys:
+- {x: -260.75, y: 134.06, top_m: 5.67, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.31, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 2.36, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 5.38, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 8.39, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 2.3, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 3, at_m: 0.35, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 3, at_m: 1.62, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 3, at_m: 2.88, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 3, at_m: 4.14, width_m: 0.65, height_m: 0.98, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}

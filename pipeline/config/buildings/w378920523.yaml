@@ -1,0 +1,35 @@
+# P-1481: small family house, white render, brown-red roof, gable end facing the street. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.43 m, roof top 4.77 m. Walls seen: edges [8, 10]. Not modelled: satellite dish on the wall, drainpipe.
+id: w378920523
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#5a4030'
+surround_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.6, colour: '#77726c'}
+apron: {width_m: 0.2, colour: '#77726c'}
+roof_tiles: true
+eaves: {colour: '#8f8e81', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 3, at_m: 3.11, colour: '#8f8e81', bends: true}
+- {edge: 5, at_m: 14.16, colour: '#8f8e81', bends: true}
+- {edge: 5, at_m: 0.16, colour: '#8f8e81', bends: true}
+- {edge: 6, at_m: 3.19, colour: '#8f8e81', bends: true}
+- {edge: 8, at_m: 3.24, colour: '#8f8e81', bends: true}
+- {edge: 9, at_m: 3.81, colour: '#8f8e81', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 4, at_m: 2.19, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 4, at_m: 2.19, width_m: 0.58, height_m: 1.0, sill_m: 2.83, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 5, at_m: 2.42, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 5, at_m: 5.41, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 5, at_m: 8.41, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w6, kind: window, edge: 5, at_m: 11.41, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 6, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w7, kind: window, edge: 7, at_m: 2.22, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w8, kind: window, edge: 7, at_m: 2.22, width_m: 0.58, height_m: 1.0, sill_m: 2.83, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w9, kind: window, edge: 9, at_m: 1.74, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w10, kind: window, edge: 10, at_m: 1.73, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w11, kind: window, edge: 10, at_m: 2.76, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}

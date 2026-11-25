@@ -1,0 +1,24 @@
+# P-0183: bungalow, white render, red tiled roof, behind fence and block wall. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.54 m, roof top 5.02 m. Walls seen: edges [0]. Not modelled: neighbouring house with chimney at right; fence and block wall in front.
+id: w378920326
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.38
+frame_colour: '#3a3a3c'
+trim_colour: '#d8d2c4'
+ridge_caps: true
+plinth: {height_m: 0.28, colour: '#858682'}
+apron: {width_m: 0.98, colour: '#aca89f', joints_m: 0.5}
+roof_tiles: true
+eaves: {colour: '#81807f', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#3a3a3c'
+downpipes:
+- {edge: 0, at_m: 0.16, colour: '#81807f', bends: true}
+- {edge: 3, at_m: 2.82, colour: '#81807f', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 0.54, width_m: 4.54, height_m: 0.74, sill_m: 1.71, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.16, 0.36, 0.73], rails: [0.78], sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 1.67, width_m: 2.4, height_m: 0.9, sill_m: 1.34, rails: [0.78], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 2, at_m: 1.09, width_m: 0.6, height_m: 0.6, sill_m: 1.64, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w4, kind: window, edge: 10, at_m: 1.1, width_m: 0.6, height_m: 0.6, sill_m: 1.64, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 11, at_m: 1.59, width_m: 2.4, height_m: 0.9, sill_m: 1.34, rails: [0.78], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

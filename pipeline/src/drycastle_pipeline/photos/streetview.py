@@ -31,6 +31,8 @@ PROBE_RADIUS_M = 20  # snap radius of one metadata probe
 MAX_DISTANCE_M = 60.0  # ignore panoramas further than this from the building centre
 MIN_BEARING_GAP = 40.0  # chosen views of one building must differ at least this much in heading
 M_PER_DEG = 111_320.0
+TILE_PX = 640  # the most one Static API request gives
+TILE_MARGIN = 1.10  # a tile is this much wider than its cell, so the Google marks at its edge fall outside
 
 
 def building_points(osm: dict) -> dict[str, tuple[float, float, float]]:
@@ -89,11 +91,11 @@ class StreetView:
             return None
         raise HttpError(f"Street View metadata: {data.get('status')} {data.get('error_message', '')}")
 
-    def image(self, pano_id: str, heading: float, fov: int, pitch: int) -> bytes:
+    def image(self, pano_id: str, heading: float, fov: float, pitch: float) -> bytes:
         return self._get(
             IMAGE_URL,
-            {"pano": pano_id, "size": "640x640", "heading": f"{heading:.1f}", "fov": fov,
-             "pitch": pitch, "return_error_code": "true"},
+            {"pano": pano_id, "size": "640x640", "heading": f"{heading:.2f}", "fov": f"{fov:.2f}",
+             "pitch": f"{pitch:.2f}", "return_error_code": "true"},
         ).content
 
 
@@ -122,6 +124,83 @@ def views_for(sv: StreetView, lon: float, lat: float, radius_m: float, count: in
     return chosen
 
 
+def camera_axes(heading: float, pitch: float):
+    """(forward, right, up) of a level camera; world is x east, y north, z up."""
+    import numpy as np
+
+    h, t = math.radians(heading), math.radians(pitch)
+    fwd = np.array([math.sin(h) * math.cos(t), math.cos(h) * math.cos(t), math.sin(t)])
+    right = np.array([math.cos(h), -math.sin(h), 0.0])
+    return fwd, right, np.cross(right, fwd)
+
+
+def tile_plan(heading: float, fov: float, pitch: float, n: int) -> list[dict]:
+    """The n x n narrow views that together cover one view: [{row, col, heading, pitch, fov}].
+
+    Each aims at the middle of its cell of the wide picture and is just wide enough to hold the cell.
+    """
+
+    fwd, right, up = camera_axes(heading, pitch)
+    half = math.tan(math.radians(fov) / 2)
+    plan = []
+    for row in range(n):
+        for col in range(n):
+            x0, x1 = (2 * col / n - 1) * half, (2 * (col + 1) / n - 1) * half
+            y0, y1 = (1 - 2 * row / n) * half, (1 - 2 * (row + 1) / n) * half
+            mid = fwd + right * (x0 + x1) / 2 + up * (y0 + y1) / 2
+            th = math.degrees(math.atan2(mid[0], mid[1])) % 360
+            tp = math.degrees(math.atan2(mid[2], math.hypot(mid[0], mid[1])))
+            tf, tr, tu = camera_axes(th, tp)
+            reach = 0.0
+            for x, y in ((x0, y0), (x0, y1), (x1, y0), (x1, y1)):
+                ray = fwd + right * x + up * y
+                reach = max(reach, abs(ray @ tr) / (ray @ tf), abs(ray @ tu) / (ray @ tf))
+            tfov = math.degrees(2 * math.atan(reach)) * TILE_MARGIN
+            plan.append({"row": row, "col": col, "heading": th, "pitch": tp, "fov": max(10.0, tfov)})
+    return plan
+
+
+def stitch(tiles: list[tuple[dict, bytes]], heading: float, fov: float, pitch: float, n: int):
+    """The tiles of ``tile_plan`` resampled into one flat picture of n * 640 px (a PIL image)."""
+    import io
+
+    import numpy as np
+    from PIL import Image
+
+    size = n * TILE_PX
+    fwd, right, up = camera_axes(heading, pitch)
+    half = math.tan(math.radians(fov) / 2)
+    out = np.zeros((size, size, 3), dtype=np.uint8)
+    cell = size // n
+    for plan, data in tiles:
+        img = np.asarray(Image.open(io.BytesIO(data)).convert("RGB"), dtype=np.float32)
+        ph, pw = img.shape[:2]
+        r0, c0 = plan["row"] * cell, plan["col"] * cell
+        v, u = np.mgrid[r0:r0 + cell, c0:c0 + cell]
+        x = ((u + 0.5) / size * 2 - 1) * half
+        y = (1 - (v + 0.5) / size * 2) * half
+        rays = fwd + x[..., None] * right + y[..., None] * up
+        tf, tr, tu = camera_axes(plan["heading"], plan["pitch"])
+        thalf = math.tan(math.radians(plan["fov"]) / 2)
+        depth = rays @ tf
+        px = ((rays @ tr) / depth / thalf + 1) / 2 * pw - 0.5
+        py = (1 - (rays @ tu) / depth / thalf) / 2 * ph - 0.5
+        px, py = np.clip(px, 0, pw - 1.001), np.clip(py, 0, ph - 1.001)
+        ix, iy = px.astype(int), py.astype(int)
+        fx, fy = (px - ix)[..., None], (py - iy)[..., None]
+        top = img[iy, ix] * (1 - fx) + img[iy, ix + 1] * fx
+        bottom = img[iy + 1, ix] * (1 - fx) + img[iy + 1, ix + 1] * fx
+        out[r0:r0 + cell, c0:c0 + cell] = (top * (1 - fy) + bottom * fy + 0.5).astype(np.uint8)
+    return Image.fromarray(out)
+
+
+def tiled_image(sv: StreetView, pano_id: str, heading: float, fov: float, pitch: float, n: int):
+    """One view at n times the resolution: n * n billed requests, stitched."""
+    plan = tile_plan(heading, fov, pitch, n)
+    tiles = [(t, sv.image(pano_id, t["heading"], t["fov"], t["pitch"])) for t in plan]
+    return stitch(tiles, heading, fov, pitch, n)
+
+
 def fov_for(radius_m: float, dist_m: float) -> int:
     """Field of view that frames the building width (clamped to the API range 10-120)."""
     return int(max(20, min(100, math.degrees(2 * math.atan((radius_m * 1.3) / max(dist_m, 1))))))
@@ -135,6 +214,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     p.add_argument("--download", action="store_true", help="download images (billed); default only reports coverage")
     p.add_argument("--max-images", type=int, default=100, help="cap on images downloaded in one run")
     p.add_argument("--pitch", type=int, default=10, help="camera pitch in degrees (default 10)")
+    p.add_argument("--tiles", type=int, default=1, metavar="N",
+                   help="N x N requests per view stitched to N * 640 px (billed N * N times; default 1)")
     args = p.parse_args(argv)
     load_dotenv()
 
@@ -170,9 +251,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         break
                     target.parent.mkdir(parents=True, exist_ok=True)
                     fov = fov_for(r, v["distance_m"])
-                    target.write_bytes(sv.image(v["pano_id"], v["heading"], fov, args.pitch))
-                    v.update(file=f"{bid}/{n}.jpg", fov=fov, pitch=args.pitch)
-                    downloaded += 1
+                    if args.tiles > 1:
+                        tiled_image(sv, v["pano_id"], v["heading"], fov, args.pitch, args.tiles).save(target, quality=92)
+                    else:
+                        target.write_bytes(sv.image(v["pano_id"], v["heading"], fov, args.pitch))
+                    v.update(file=f"{bid}/{n}.jpg", fov=fov, pitch=args.pitch, px=TILE_PX * args.tiles)
+                    downloaded += args.tiles**2
             index[bid] = views
             if downloaded >= args.max_images:
                 print(f"reached --max-images {args.max_images}; rerun to continue")

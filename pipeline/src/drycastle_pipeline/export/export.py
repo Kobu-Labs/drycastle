@@ -99,6 +99,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # TEXCOORD_1 (the model says "base_uv2": true). A loader that does not know the file draws them but walks and shoots through them.
 # (no bump) urad.json (files.urad): the inside of the municipal office: entrance, rooms, worker seats, dictation desk.
 # (no bump) church.json (files.church): the inside of the church: door, seats with routes, spots, anchors, rooms.
+# (no bump) interiors.json (files.interiors): the houses with an inside (buildings/interior.py): room volume, floor, ceiling, doorways.
 # (no bump) bunkers.json (files.bunkers): the rooms of the enterable bunkers, per floor a polygon and a height range.
 # Only maps with a bunker have it; a loader that does not know it gives no shelter from blasts. A bunker may carry "intel", the
 # wall of its command post the intel screen hangs on (ADR 0017); a loader that does not know it has no intel room.
@@ -263,6 +264,9 @@ def _write_interior_docs(scene, out_dir: Path, files: dict) -> None:
     # church_interior.church_info: seats and routes, spots, demon anchors, shelter rooms
     # office_interior.urad_info: entrance, rooms, worker seats, dictation desk
     # garage.garage_info: the doorway of its swinging doors, the bay, the parking place
+    # buildings/interior.py: the houses that are hollow, each with its room (a shelter volume, as a bunker's), its doorways and the doors players open
+    interiors = {"version": 1, "axes": INTERIOR_AXES, "houses": sorted(scene.interiors, key=lambda h: h["id"])} if scene.interiors else None
+    write_optional(out_dir, "interiors.json", interiors, files, "interiors")
     for name, info in (("church", scene.church), ("urad", scene.urad), ("garage", scene.garage)):
         doc = {"version": 1, "axes": INTERIOR_AXES, **info} if info else None
         write_optional(out_dir, f"{name}.json", doc, files, name)

@@ -1,0 +1,34 @@
+# P-1045: bungalow, cream render, dark tiled hipped roof, attached wing on the right. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.03 m, roof top 5.62 m. Walls seen: edges [5]. Not modelled: entrance steps, attached wing on the right, mailbox.
+id: w1226408432
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#3a3a3c'
+trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.03, height_m: 0.1}
+ridge_caps: true
+apron: {width_m: 1.03, colour: '#aba79e', joints_m: 0.5}
+roof_tiles: true
+eaves: {colour: '#ece6d8', fascia_m: 0.18, gutter: true, gutter_colour: '#5a5a55'}
+bargeboard_colour: '#3a3a3c'
+downpipes:
+- {edge: 3, at_m: 13.22, colour: '#5a5a55', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#5a5a55', bends: true}
+- {edge: 5, at_m: 13.6, colour: '#5a5a55', bends: true}
+- {edge: 5, at_m: 0.16, colour: '#5a5a55', bends: true}
+skylights:
+- {edge: 3, at_m: 4.49, up_m: 1.35}
+- {edge: 3, at_m: 8.98, up_m: 1.35}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 3, at_m: 1.44, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 3, at_m: 4.45, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 7.46, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 10.47, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 4, at_m: 1.94, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 4, at_m: 2.63, width_m: 1.0, height_m: 1.0, sill_m: 3.43, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 4, at_m: 5.32, width_m: 1.0, height_m: 1.0, sill_m: 3.43, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 4, at_m: 5.44, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w9, kind: window, edge: 5, at_m: 1.59, width_m: 1.57, height_m: 1.55, sill_m: 1.18, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 5, at_m: 7.36, width_m: 0.86, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}

@@ -1,0 +1,23 @@
+# P-0597: small bungalow, white render, dark tiled hipped roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.77 m, roof top 4.09 m. Walls seen: edges [0].
+id: w378900242
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
+overhang_m: 0.22
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+ridge_caps: true
+plinth: {height_m: 0.43, colour: '#885b4b'}
+apron: {width_m: 0.64, colour: '#8b8c84'}
+roof_tiles: true
+eaves: {colour: '#7f7c7b', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 0, at_m: 3.0, colour: '#7f7c7b', bends: true}
+- {edge: 2, at_m: 2.88, colour: '#7f7c7b', bends: true}
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 1.18, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 3.55, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w3, kind: window, edge: 3, at_m: 1.18, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 3.56, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

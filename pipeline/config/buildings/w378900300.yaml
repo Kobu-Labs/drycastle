@@ -1,0 +1,24 @@
+# P-0780: single-storey house, pale yellow render, red tiled gabled roof, garage wall and gate in front. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.33 m, roof top 5.83 m. Walls seen: edges [2, 3, 4, 5]. Not modelled: garage wall with metal gate and fence in front; attached lower neighbouring house to the right with a different roof.
+id: w378900300
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#f2f0ea'
+surround_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.33, height_m: 0.1}
+ridge_caps: true
+apron: {width_m: 0.43, colour: '#b3b1a2'}
+roof_tiles: true
+eaves: {colour: '#7c7c73', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 2, at_m: 3.2, colour: '#7c7c73', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.42, width_m: 1.36, height_m: 1.16, sill_m: 1.4, posts: [0.34, 0.56], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w2, kind: window, edge: 1, at_m: 4.42, width_m: 1.36, height_m: 1.16, sill_m: 1.4, posts: [0.34, 0.56], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 5, at_m: 2.27, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.34, 0.56], sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 5, at_m: 5.4, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.34, 0.56], surround_m: 0.12}

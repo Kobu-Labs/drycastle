@@ -78,6 +78,11 @@ def _split_edge(p, q, boundary: BaseGeometry | None, height) -> list[tuple[float
             t = float((c - np.asarray(p)) @ d / n2)
             if 1e-6 < t < 1 - 1e-6:
                 ts.append(t)
+        # a boundary line lying along p-q comes back as one merged run: its own corners on p-q are kinks too
+        for c in get_coordinates(boundary):
+            t = float((c - np.asarray(p)) @ d / n2)
+            if 1e-6 < t < 1 - 1e-6 and float(np.hypot(*(np.asarray(p) + t * d - c))) < 1e-6:
+                ts.append(t)
     ts = sorted({round(t, 9) for t in ts})
     pts = [(p[0] + t * d[0], p[1] + t * d[1]) for t in ts]
     kept = [pts[0]]
@@ -158,11 +163,41 @@ def split_parts(b: dict) -> list[dict]:
 
     low = float(b["rest_height_m"]) if b.get("rest_height_m") else min(2.8, float(b["eave_height_m"]))
     out = [{**base, "footprint": ring(p)} for p in main]
-    out += [
-        {**base, "footprint": ring(p), "roof": "flat", "roof_height_m": 0.0, "eave_height_m": low, "height_m": low, "ridge_dir": None}
-        for p in rest
-    ]
+    for p in rest:
+        lean = _lean_to(p, main, low, base if b.get("rest_roof") == "auto" else None) if b.get("rest_roof") in ("lean_to", "auto") else None
+        out.append({**base, "footprint": ring(p), "roof": "flat", "roof_height_m": 0.0, "eave_height_m": low, "height_m": low, "ridge_dir": None, **(lean or {})})
     return out
+
+
+def _lean_to(p: Polygon, main: list[Polygon], top: float, house: dict | None = None) -> dict | None:
+    """A single-slope roof for a lower part ``p`` standing against the main part: its high edge, ``top`` up, along the
+    longest wall the two share, falling away from it. None when they share no wall or the part is too low for a slope."""
+    shared = p.exterior.intersection(unary_union(main).buffer(0.08, join_style=2))
+    segs = [(a, c) for g in getattr(shared, "geoms", [shared]) if g.geom_type == "LineString" for a, c in pairwise(list(g.coords))]
+    if not segs:
+        return None
+    a, c = max(segs, key=lambda s: math.dist(*s))
+    if math.dist(a, c) < 1.0:
+        return None
+    ux, uy = (c[0] - a[0]) / math.dist(a, c), (c[1] - a[1]) / math.dist(a, c)
+    if house is not None and house.get("roof") == "gabled" and house.get("ridge_dir") is not None:
+        # a wing standing against a gable wall of a gabled house carries the house's roof on, lower: its own gabled roof,
+        # ridge the same way, the same slope
+        ridge = float(house["ridge_dir"])
+        if abs(ux * math.cos(ridge) + uy * math.sin(ridge)) < 0.5:
+            _, _, _, _, half_house = roof_frame(max(main, key=lambda g: g.area), ridge)
+            _, _, _, _, half = roof_frame(p, ridge)
+            rise = min(float(house["roof_height_m"]) / max(half_house, 0.5) * half, float(house["roof_height_m"]) - 0.4)
+            if rise >= 0.3:
+                return {"roof": "gabled", "roof_height_m": round(rise, 2), "eave_height_m": top, "height_m": round(top + rise, 2), "ridge_dir": round(ridge % math.pi, 4)}
+    mid, cen = ((a[0] + c[0]) / 2, (a[1] + c[1]) / 2), p.centroid
+    if -uy * (mid[0] - cen.x) + ux * (mid[1] - cen.y) < 0:  # the high edge is on the left of the ridge direction
+        ux, uy = -ux, -uy
+    depth = max(-uy * x + ux * y for x, y in p.exterior.coords) - min(-uy * x + ux * y for x, y in p.exterior.coords)
+    rise = min(1.0, 0.2 * depth, top - 2.1)
+    if rise < 0.25:
+        return None
+    return {"roof": "lean_to", "roof_height_m": round(rise, 2), "eave_height_m": round(top - rise, 2), "height_m": top, "ridge_dir": round(math.atan2(uy, ux) % (2 * math.pi), 4)}
 
 
 def building_mesh(b: dict) -> Mesh:
@@ -178,6 +213,30 @@ def building_mesh(b: dict) -> Mesh:
         )
         return Mesh(tris, cols)
 
+    if b.get("roof_fit"):
+        from drycastle_pipeline.buildings.roof_fit import fit_building
+
+        fitted = fit_building(b)
+        if fitted is not None:
+            tris, cols = _extrude(poly, fitted.top, fitted.wall_lines, [], fitted.top, roof_c, wall_c)
+            roof_tris = []
+            for piece, (pa, pb, pc) in fitted.pieces:
+                for tri in triangulate(piece):
+                    v3 = [(x, y, eave + pa * x + pb * y + pc) for x, y in tri]
+                    if np.cross(np.subtract(v3[1], v3[0]), np.subtract(v3[2], v3[0]))[2] < 0:
+                        v3 = [v3[0], v3[2], v3[1]]
+                    roof_tris.append(v3)
+            if roof_tris:
+                tris = np.concatenate([tris, np.array(roof_tris, dtype=np.float64)])
+                cols = np.concatenate([cols, np.tile(np.array(roof_c, dtype=np.uint8), (len(roof_tris), 1))])
+            step_tris = []
+            for p, q, lo_p, hi_p, lo_q, hi_q in fitted.steps:  # the wall where one part of the roof stands above the next
+                a, b2, c, e = (*p, eave + lo_p), (*q, eave + lo_q), (*q, eave + hi_q), (*p, eave + hi_p)
+                step_tris += [[a, b2, c], [a, c, e], [a, c, b2], [a, e, c]]
+            if step_tris:
+                tris = np.concatenate([tris, np.array(step_tris, dtype=np.float64)])
+                cols = np.concatenate([cols, np.tile(np.array(wall_c, dtype=np.uint8), (len(step_tris), 1))])
+            return Mesh(tris, cols)
     angle, cu, cv, a, bb = roof_frame(poly, b["ridge_dir"], hipped=roof == "hipped")
     local = rotate(poly, -angle, origin=(0, 0), use_radians=True)
     height = _roof_height_fn(roof, rise, cu, cv, a, bb)

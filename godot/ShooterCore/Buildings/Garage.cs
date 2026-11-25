@@ -31,33 +31,10 @@ public sealed class Garage
     }
 
     /// <summary>Whether a player standing at <paramref name="feet"/> can work the doors: in front of or behind the doorway, close to it.</summary>
-    public bool InReach(Vector3 feet)
-    {
-        var d = feet - Doorway.Pos;
-        return MathF.Abs(Vector3.Dot(d, Doorway.Out)) <= ReachM && MathF.Abs(Vector3.Dot(d, Doorway.Right)) <= Doorway.Width / 2 + ReachSideM
-            && feet.Y > Doorway.Pos.Y - 1f && feet.Y < Doorway.Pos.Y + Doorway.Height;
-    }
+    public bool InReach(Vector3 feet) => Doorway.InReach(feet, ReachM, ReachSideM);
 
-    /// <summary>
-    /// Whether a vehicle (its footprint: centre, Godot yaw, half width and half length) stands in the doorway, so the doors cannot close. Two oriented rectangles on the
-    /// ground, tested on the four axes of the pair; the doorway's rectangle is the closed doors' box with a hand of slack.
-    /// </summary>
-    public bool InDoorway(Vector3 centre, float yaw, float halfWidth, float halfLength)
-    {
-        var fwd = new Vector2(-MathF.Sin(yaw), -MathF.Cos(yaw));
-        var side = new Vector2(-fwd.Y, fwd.X);
-        var dOut = new Vector2(Doorway.Out.X, Doorway.Out.Z);
-        var dRight = new Vector2(Doorway.Right.X, Doorway.Right.Z);
-        var between = new Vector2(centre.X - Doorway.Pos.X, centre.Z - Doorway.Pos.Z);
-        float hw = Doorway.Width / 2, hd = Doorway.Depth / 2 + 0.1f;
-        foreach (var axis in new[] { fwd, side, dOut, dRight })
-        {
-            var vehicle = MathF.Abs(Vector2.Dot(fwd, axis)) * halfLength + MathF.Abs(Vector2.Dot(side, axis)) * halfWidth;
-            var door = MathF.Abs(Vector2.Dot(dOut, axis)) * hd + MathF.Abs(Vector2.Dot(dRight, axis)) * hw;
-            if (MathF.Abs(Vector2.Dot(between, axis)) > vehicle + door) return false;
-        }
-        return true;
-    }
+    /// <summary>Whether a vehicle stands in the doorway, so the doors cannot close (<see cref="Doorway.Holds"/>).</summary>
+    public bool InDoorway(Vector3 centre, float yaw, float halfWidth, float halfLength) => Doorway.Holds(centre, yaw, halfWidth, halfLength);
 
     /// <summary>The garage of a garage.json text; null for an empty text.</summary>
     public static Garage? FromJson(string? json) => string.IsNullOrEmpty(json) ? null : Parse(json);

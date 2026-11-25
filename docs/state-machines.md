@@ -918,6 +918,20 @@ stateDiagram-v2
 - **Warning**: The target has its red-dot warning; at zero the burst starts if it is still visible, else back to Waiting.
 - **Burst**: One round each round interval while the target stays visible; the last round or a lost target goes back to Waiting.
 
+## House.Door
+
+One door or garage door of a hollow house: a player on foot at the doorway opens and closes it with the interact key.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Shut
+    Shut --> Open
+    Open --> Shut
+```
+
+- **Shut**: Closed and solid (the start state, and every new server): the leaf fills the doorway.
+- **Open**: The leaf is swung into the house, or tipped up under the garage's ceiling, and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
+
 ## Hud.MoabBanner
 
 The MOAB's top-centre banner: countdown, then the blast or the cancelled line.

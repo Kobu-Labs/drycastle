@@ -1,0 +1,44 @@
+# P-0784: two-storey family house, cream render, gabled roof, recessed porch and wooden balcony. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.82 m, roof top 8.98 m. Walls seen: edges [3]. Not modelled: recessed porch under the balcony, wooden balcony in the roof overhang, satellite dishes.
+id: w378900271
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.39, colour: '#817b6e'}
+apron: {width_m: 0.2, colour: '#817b6e'}
+roof_tiles: true
+eaves: {colour: '#a5442e', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 0, at_m: 10.72, colour: '#a5442e', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#a5442e', bends: true}
+- {edge: 4, at_m: 12.83, colour: '#a5442e', bends: true}
+- {edge: 4, at_m: 0.16, colour: '#a5442e', bends: true}
+balconies:
+- {edge: 3, at_m: 0.5, width_m: 9.17, floor_m: 2.77}
+skylights:
+- {edge: 0, at_m: 3.66, up_m: 1.78}
+- {edge: 0, at_m: 7.31, up_m: 1.78}
+- {edge: 4, at_m: 4.36, up_m: 1.78}
+- {edge: 4, at_m: 8.72, up_m: 1.78}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.94, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 4.95, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 7.96, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 1.88, width_m: 0.75, height_m: 0.72, sill_m: 2.46, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 3, at_m: 2.78, width_m: 1.07, height_m: 2.72, sill_m: 2.82, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: false, posts: [0.5]}
+  - {id: d1, kind: door, edge: 3, at_m: 3.02, width_m: 0.85, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w7, kind: window, edge: 3, at_m: 5.79, width_m: 1.07, height_m: 1.7, sill_m: 0.82, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w8, kind: window, edge: 3, at_m: 7.47, width_m: 1.07, height_m: 1.7, sill_m: 0.82, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w9, kind: window, edge: 4, at_m: 1.76, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w10, kind: window, edge: 4, at_m: 4.59, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 4, at_m: 7.42, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 4, at_m: 10.25, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 5, at_m: 2.15, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 5, at_m: 3.64, width_m: 1.0, height_m: 1.0, sill_m: 3.22, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w15, kind: window, edge: 5, at_m: 5.37, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w16, kind: window, edge: 5, at_m: 7.18, width_m: 1.0, height_m: 1.0, sill_m: 3.22, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w17, kind: window, edge: 5, at_m: 8.6, width_m: 1.07, height_m: 1.7, sill_m: 0.82, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

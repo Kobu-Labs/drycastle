@@ -1,0 +1,33 @@
+# P-0611: family house, peach render, gable facing street, dark roof, small arched entrance porch. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.91 m, roof top 6.12 m. Walls seen: edges [0]. Not modelled: arched entrance porch recessed in the wall, chimney on the roof slope.
+id: w378900334
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#f2f0ea'
+surround_colour: '#6b4a3a'
+trim_colour: '#6b4a3a'
+ridge_caps: true
+plinth: {height_m: 0.59, colour: '#77726c'}
+apron: {width_m: 0.53, colour: '#8b877f'}
+roof_tiles: true
+eaves: {colour: '#41424a', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 2, at_m: 7.85, colour: '#41424a', bends: true}
+- {edge: 6, at_m: 9.14, colour: '#41424a', bends: true}
+chimneys:
+- {x: -434.49, y: 182.11, top_m: 6.42, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 0.98, width_m: 1.61, height_m: 1.41, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.47, 0.57], sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 0, at_m: 3.45, width_m: 1.61, height_m: 1.13, sill_m: 3.99, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.47, 0.57], sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 0, at_m: 4.72, width_m: 1.61, height_m: 1.41, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.47, 0.57], sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 0, at_m: 8.01, width_m: 1.0, height_m: 1.65, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w4, kind: window, edge: 2, at_m: 1.63, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 2, at_m: 4.86, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w6, kind: window, edge: 5, at_m: 1.31, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w7, kind: window, edge: 5, at_m: 4.23, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w8, kind: window, edge: 5, at_m: 7.15, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w9, kind: window, edge: 6, at_m: 1.14, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w10, kind: window, edge: 6, at_m: 3.89, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w11, kind: window, edge: 6, at_m: 6.64, width_m: 1.61, height_m: 1.41, sill_m: 1.4, posts: [0.47, 0.57], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

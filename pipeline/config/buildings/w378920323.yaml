@@ -1,0 +1,56 @@
+# P-0141: two-storey house, pink render, terracotta tiled roof with three dormers. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.87 m, roof top 7.52 m. Walls seen: edges [3]. Not modelled: three roofed dormers, garage door, electric meter box.
+id: w378920323
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
+overhang_m: 0.6
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.39, colour: '#757874'}
+apron: {width_m: 0.2, colour: '#757874'}
+roof_tiles: true
+eaves: {colour: '#ece6d8', fascia_m: 0.18, gutter: true, level_soffit: true, gutter_colour: '#857d74'}
+downpipes:
+- {edge: 3, at_m: 15.58, colour: '#857d74', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#857d74', bends: true}
+- {edge: 5, at_m: 8.33, colour: '#857d74', bends: true}
+dormers:
+- id: dm2
+  edge: 3
+  at_m: 7.51
+  bottom_m: 4.49
+  width_m: 1.18
+  height_m: 1.05
+  rise_m: 0.35
+  window_m: &id001 [0.78, 0.75]
+  colour: '#e5b68a'
+- id: dm3
+  edge: 3
+  at_m: 11.99
+  bottom_m: 4.49
+  width_m: 1.18
+  height_m: 1.05
+  rise_m: 0.35
+  window_m: *id001
+  colour: '#e5b68a'
+- id: dm1
+  edge: 3
+  at_m: 3.06
+  bottom_m: 4.49
+  width_m: 1.18
+  height_m: 1.05
+  rise_m: 0.35
+  window_m: *id001
+  colour: '#e5b68a'
+openings:
+  - {id: g1, kind: garage_door, edge: 3, at_m: 2.33, width_m: 2.46, height_m: 2.52, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: d1, kind: door, edge: 3, at_m: 7.24, width_m: 1.02, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 3, at_m: 9.77, width_m: 1.02, height_m: 1.57, sill_m: 1.18, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w2, kind: window, edge: 3, at_m: 11.42, width_m: 1.02, height_m: 1.57, sill_m: 1.18, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 13.24, width_m: 1.02, height_m: 1.57, sill_m: 1.18, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w4, kind: window, edge: 4, at_m: 1.95, width_m: 1.02, height_m: 1.57, sill_m: 1.18, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 5, at_m: 2.18, width_m: 1.02, height_m: 1.57, sill_m: 1.18, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 5, at_m: 5.38, width_m: 1.02, height_m: 1.57, sill_m: 1.18, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 8, at_m: 1.63, width_m: 1.02, height_m: 1.57, sill_m: 1.18, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 9, at_m: 1.6, width_m: 1.02, height_m: 1.57, sill_m: 1.18, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

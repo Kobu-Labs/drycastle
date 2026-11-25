@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BotRoster;
 using Drycastle.Shooter.Net.Server.BigfootEvent;
 using Drycastle.Shooter.Net.Server.BusGarage;
+using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Careers;
 using Drycastle.Shooter.Net.Server.ChatRoom;
@@ -100,7 +101,7 @@ public partial class NetServer : Node
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     // the village and its animals
-    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; IntelServer _intel = null!; CrateServer _crates = null!;
+    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
@@ -192,6 +193,7 @@ public partial class NetServer : Node
         _teams = new TeamServer(_ctx, _chat, _sandbox);
         _damage = new DamageServer(_ctx, _animals, _progress, _bots, _smoke, () => _streaks, () => _demon, () => _hunts, () => _status, () => _gunships, (attacker, weapon) => _bigfoot.Hit(attacker, weapon), _diag.Loss.Hit);
         _garage = new GarageServer(_ctx, Config.ArenaMode, Config.MapDir, _fleet.Cars, () => Config.Vehicles);
+        _houses = new HouseDoorServer(_ctx, Config.ArenaMode, _fleet.Cars);
         _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops);
         _hunts = new HuntLogServer(_ctx, Config.Progression, Config.AnimalData, Config.Weapons, Config.Items, Config.CompanionData, _progress.Scores, _progress.WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
@@ -265,7 +267,7 @@ public partial class NetServer : Node
         _flak = new FlakServer(_ctx, Config.Weapons, _gunships, _targets, _fleet, () => Config.Vehicles, _rng);
         _crates = new CrateServer(_ctx, Config.Killstreaks.Rewards, () => _shot.Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
         BuildVehicles();
@@ -295,7 +297,7 @@ public partial class NetServer : Node
         var pellets = new PelletFan(_ctx, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _wildlife, Config.Vehicles, _rng, baleShot);
         _shots = new ShotServer(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _sentries, _wildlife, _lockOn, _rockets, pellets, _impacts, _smoke, Config.Vehicles, _rng, Config.Turret.KnifeDamage, Config.WeaponsSmoke,
             baleShot, new LagCompLog(Config.PerfOut, Config.PerfLagComp, _ctx, _rewind, _shot, _targets).Shot);
-        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _seats, _guns, _shots, _smoke, _plantation.Use, _scud.UseKey, Config.KillY);
+        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, _plantation.Use, _scud.UseKey, Config.KillY);
         _snapshots = new SnapshotServer(_ctx, _fleet, _sitters, _dummies, _rockets, Config.Vehicles, _diag.Perf.AuditTick, _diag.Loss.LogStates);
     }
 
@@ -379,6 +381,7 @@ public partial class NetServer : Node
             _minerals.SendOnJoin, // the mineral nodes
             _rozhlas.SendOnJoin, // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
             _garage.SendOnJoin, // and the garage doors, when they are open
+            _houses.SendOnJoin, // and the houses' open doors
             _harvester.SendOnJoin, // the harvester's job and the bales that burn
             _scud.SendOnJoin, // the Scud trucks' racks and proposals
             _demon.SendOnJoin, // and the demon's pounce, when one is on

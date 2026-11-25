@@ -14,6 +14,7 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
+from drycastle_pipeline.buildings import floorplan, interior
 from drycastle_pipeline.buildings.landmarks.bunker import bunker_rooms
 from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
 from drycastle_pipeline.buildings.meshes import building_mesh, collision_mesh
@@ -169,6 +170,7 @@ class MapScene:
     church: dict | None = None  # the inside of the church, see church_interior.church_info
     urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
     garage: dict | None = None  # the bus garage's doorway, bay and parking place, see garage.garage_info
+    interiors: list[dict] = field(default_factory=list)  # the houses with an inside: room and doorways, see buildings/interior.py
     water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
@@ -315,11 +317,21 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
     """The visual (or collision) mesh of one building, on the ground: a detailed one, a landmark or the plain massing."""
     fn = building_mesh if visual else collision_mesh
     if bid in details and not b.get("model"):
+        ins = interior.inside_of(b, details[bid])
         if not visual:
-            m = fn(b)
+            m = interior.collision(b, details[bid]) if ins else fn(b)
         else:
             m, tags = build_detail(b, details[bid])
             _add_window_tags(scene, p, tags, dz)
+            if ins:
+                scene.interiors.append({
+                    "id": bid, "parcel": p["id"],
+                    "room": {"polygon": interior.room_ring(b), "z0": round(dz + ins.floor - 0.2, 3), "z1": round(dz + ins.ceiling + 0.1, 3)},
+                    "floor_z": round(dz + ins.floor, 3), "ceiling_z": round(dz + ins.ceiling, 3), "wall_m": interior.WALL_M,
+                    **(floorplan.plan_doc(plan) if (plan := interior.plan_of(b, details[bid], ins)) else {}),
+                    "doorways": [{**w, "at": [w["at"][0], w["at"][1], round(w["at"][2] + dz, 3)]} for w in interior.doorways(b, details[bid], ins)],
+                    "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, details[bid], ins)],
+                })  # fmt: skip
     elif b.get("model"):
         m = _landmark_mesh(scene, p, bid, b, dz, visual)
     else:
@@ -329,6 +341,8 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
 
 def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: dict) -> None:
     """``scene.parcels``: the buildings of each parcel as one visual and one collision mesh, standing on the terrain."""
+    used = {bid for p in parcels_doc["parcels"] for bid in p["buildings"]}
+    interior.prepare_plans([(buildings[i], details[i]) for i in sorted(used) if i in buildings and i in details and not buildings[i].get("model")])
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
         ids = sorted(bid for bid in p["buildings"] if bid in buildings)
         if not ids:

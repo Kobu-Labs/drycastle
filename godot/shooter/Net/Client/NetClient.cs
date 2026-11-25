@@ -406,7 +406,7 @@ public partial class NetClient : Node
 
     /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
     string? PromptLine(string? ride) =>
-        _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.GarageDoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
+        _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
         ?? _crates.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt();
 
     void HudWelcome()

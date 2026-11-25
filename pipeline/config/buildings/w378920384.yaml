@@ -1,0 +1,36 @@
+# P-0484: small single-storey house, gable end with bare concrete block gable above white render, dark tiled roof on neighbouring building. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.32 m, roof top 4.68 m. Walls seen: edges [1].
+id: w378920384
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+gable_colour: '#b4b1a8'
+gable_from_m: 2.32
+ridge_caps: true
+plinth: {height_m: 0.23, colour: '#898784'}
+apron: {width_m: 0.59, colour: '#938e89'}
+roof_tiles: true
+eaves: {colour: '#a1a38f', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 0, at_m: 10.6, colour: '#a1a38f', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#a1a38f', bends: true}
+- {edge: 2, at_m: 10.57, colour: '#a1a38f', bends: true}
+- {edge: 2, at_m: 0.16, colour: '#a1a38f', bends: true}
+skylights:
+- {edge: 0, at_m: 3.62, up_m: 0.67}
+- {edge: 0, at_m: 7.23, up_m: 0.67}
+- {edge: 2, at_m: 3.61, up_m: 0.67}
+- {edge: 2, at_m: 7.21, up_m: 0.67}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 2.18, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 5.07, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 7.96, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 1.87, width_m: 0.71, height_m: 0.9, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, rails: [0.68], sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 2.17, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 2, at_m: 5.05, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 2, at_m: 7.94, width_m: 0.71, height_m: 0.9, sill_m: 1.12, rails: [0.68], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w8, kind: window, edge: 3, at_m: 1.72, width_m: 0.71, height_m: 1.0, sill_m: 2.72, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

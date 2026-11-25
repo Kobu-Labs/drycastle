@@ -37,6 +37,37 @@ public sealed record Doorway(Vector3 Pos, float Yaw, float Width, float Height)
         return feet + Out * (target - depth);
     }
 
+    /// <summary>
+    /// Whether a player standing at <paramref name="feet"/> can work a door that hangs here: in front of or behind the doorway, within <paramref name="reach"/> of its plane and
+    /// at most <paramref name="side"/> beside it, between a metre below its floor and its head.
+    /// </summary>
+    public bool InReach(Vector3 feet, float reach, float side)
+    {
+        var d = feet - Pos;
+        return MathF.Abs(Vector3.Dot(d, Out)) <= reach && MathF.Abs(Vector3.Dot(d, Right)) <= Width / 2 + side && feet.Y > Pos.Y - 1f && feet.Y < Pos.Y + Height;
+    }
+
+    /// <summary>
+    /// Whether a vehicle (its footprint: centre, Godot yaw, half width and half length) stands in the doorway, so a door cannot close. Two oriented rectangles on the
+    /// ground, tested on the four axes of the pair; the doorway's rectangle is the closed door's box with a hand of slack.
+    /// </summary>
+    public bool Holds(Vector3 centre, float yaw, float halfWidth, float halfLength)
+    {
+        var fwd = new Vector2(-MathF.Sin(yaw), -MathF.Cos(yaw));
+        var side = new Vector2(-fwd.Y, fwd.X);
+        var dOut = new Vector2(Out.X, Out.Z);
+        var dRight = new Vector2(Right.X, Right.Z);
+        var between = new Vector2(centre.X - Pos.X, centre.Z - Pos.Z);
+        float hw = Width / 2, hd = Depth / 2 + 0.1f;
+        foreach (var axis in new[] { fwd, side, dOut, dRight })
+        {
+            var vehicle = MathF.Abs(Vector2.Dot(fwd, axis)) * halfLength + MathF.Abs(Vector2.Dot(side, axis)) * halfWidth;
+            var door = MathF.Abs(Vector2.Dot(dOut, axis)) * hd + MathF.Abs(Vector2.Dot(dRight, axis)) * hw;
+            if (MathF.Abs(Vector2.Dot(between, axis)) > vehicle + door) return false;
+        }
+        return true;
+    }
+
     /// <summary>The point <paramref name="metres"/> out from the middle of the doorway, on the doorway's floor height.</summary>
     public Vector3 Outside(float metres) => Pos + Out * metres;
 }
