@@ -2,6 +2,7 @@
 # Wall top 2.80 m, roof top 6.38 m. Walls seen: edges [3, 5]. Not modelled: covered porch or terrace with awning on the ground floor, neighbouring houses behind.
 id: w378900356
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

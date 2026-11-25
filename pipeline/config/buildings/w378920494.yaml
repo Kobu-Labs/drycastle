@@ -2,6 +2,7 @@
 # Wall top 3.25 m, roof top 5.86 m. Walls seen: edges [2, 5]. Not modelled: flue pipe on roof, satellite dish, downpipe, meter box.
 id: w378920494
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

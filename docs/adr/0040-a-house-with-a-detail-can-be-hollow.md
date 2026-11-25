@@ -19,3 +19,5 @@ Consequences:
 - A window opening has no collider (a glass pane never had one), so a player can jump in or out through a window, broken or not, where its sill is within a jump (1.1 m). Not decided whether an unbroken pane should stop a body.
 - A building cut in parts (`roof_part`) cannot be hollow yet; the pipeline refuses.
 - A recess deeper than the wall (a porch) would reach into the room; it stays closed and the room ignores it.
+
+Since 2026-11-25 every house with a detail is hollow (landmark models aside), and the photo pipeline writes `interior: true` unless the building is cut in parts. A house no capture saw a door on was given one by hand (P-0030, P-0023, P-1135).

@@ -1,0 +1,46 @@
+# P-1590: detached family house, white render with timber-clad central gable, red tiled gabled roof, attached garage. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 5.00 m, roof top 8.92 m. Walls seen: edges [1, 3, 5]. Not modelled: attached garage, skylight roof window, small chimney with antenna, gabion fence.
+id: w378920420
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.42
+frame_colour: '#3a3a3c'
+trim_colour: '#f2f0ea'
+gable_colour: '#73502e'
+gable_from_m: 5.0
+ridge_caps: true
+plinth: {height_m: 0.35, colour: '#898784'}
+apron: {width_m: 0.64, colour: '#96928a'}
+roof_tiles: true
+eaves: {colour: '#ece6d8', fascia_m: 0.26, gutter: true, gutter_colour: '#4e5251'}
+bargeboard_colour: '#3a3a3c'
+downpipes:
+- {edge: 1, at_m: 3.91, colour: '#4e5251', bends: true}
+- {edge: 3, at_m: 3.5, colour: '#4e5251', bends: true}
+- {edge: 5, at_m: 4.4, colour: '#4e5251', bends: true}
+- {edge: 7, at_m: 12.32, colour: '#4e5251', bends: true}
+- {edge: 7, at_m: 0.16, colour: '#4e5251', bends: true}
+chimneys:
+- {x: 841.69, y: 193.62, top_m: 9.42, width_m: 0.5, depth_m: 0.5, cap: true}
+skylights:
+- {edge: 7, at_m: 4.19, up_m: 1.89}
+- {edge: 7, at_m: 8.38, up_m: 1.89}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 0.76, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 3.9, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 4.17, width_m: 1.0, height_m: 1.0, sill_m: 5.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 0, at_m: 7.05, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 0, at_m: 8.17, width_m: 1.0, height_m: 1.0, sill_m: 5.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 0, at_m: 10.19, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 1, at_m: 0.89, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: g1, kind: garage_door, edge: 5, at_m: 1.16, width_m: 2.33, height_m: 3.53, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: w9, kind: window, edge: 5, at_m: 1.96, width_m: 0.74, height_m: 0.7, sill_m: 2.67, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w10, kind: window, edge: 6, at_m: 0.75, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 6, at_m: 3.9, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 6, at_m: 4.16, width_m: 1.0, height_m: 1.0, sill_m: 5.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 6, at_m: 7.04, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 6, at_m: 8.16, width_m: 1.0, height_m: 1.0, sill_m: 5.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w15, kind: window, edge: 6, at_m: 10.18, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 7, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.35, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w16, kind: window, edge: 7, at_m: 5.09, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w17, kind: window, edge: 7, at_m: 8.83, width_m: 2.39, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

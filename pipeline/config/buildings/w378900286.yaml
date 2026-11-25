@@ -2,6 +2,7 @@
 # Wall top 4.20 m, roof top 7.30 m. Walls seen: edges [3]. Not modelled: green gutter and downpipe.
 id: w378900286
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#3a3a3c'
 trim_colour: '#f2f0ea'

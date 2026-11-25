@@ -2,6 +2,7 @@
 # Wall top 3.18 m, roof top 6.36 m. Walls seen: edges [0, 2, 4]. Not modelled: dormer, porch with canopy, side wing with lower roof, downpipes.
 id: w378920324
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.34
 frame_colour: '#3a3a3c'
 trim_colour: '#f2f0ea'

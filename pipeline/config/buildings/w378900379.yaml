@@ -2,6 +2,7 @@
 # Wall top 3.12 m, roof top 6.30 m. Walls seen: edges [0, 5]. Not modelled: two chimneys, garage door with wide white surround, downpipes.
 id: w378900379
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.2
 frame_colour: '#f2f0ea'
 surround_colour: '#f2f0ea'

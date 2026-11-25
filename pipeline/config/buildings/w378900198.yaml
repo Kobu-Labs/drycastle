@@ -2,6 +2,7 @@
 # Wall top 3.56 m, roof top 14.71 m. Walls seen: edges [9]. Not modelled: roof skylights, downpipe, flower boxes, white central wall strip.
 id: w378900198
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.72
 frame_colour: '#f2f0ea'
 surround_colour: '#f2f0ea'

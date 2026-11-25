@@ -2,6 +2,7 @@
 # Wall top 3.27 m, roof top 6.50 m. Walls seen: edges [2]. Not modelled: recessed brick porch with terrace, chimney, roof skylights, satellite dish.
 id: w378900253
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.25
 frame_colour: '#5a4030'
 trim_colour: '#d8d2c4'

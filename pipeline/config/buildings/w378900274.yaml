@@ -2,6 +2,7 @@
 # Wall top 4.18 m, roof top 6.52 m. Walls seen: edges [2, 3]. Not modelled: chimney, satellite dish, side porch, dark fence/gate, attached low building.
 id: w378900274
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.68
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

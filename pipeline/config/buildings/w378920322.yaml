@@ -2,6 +2,7 @@
 # Wall top 4.28 m, roof top 6.34 m. Walls seen: edges [4, 10]. Not modelled: brick plinth, garage door, bare blockwork band below eave, mailboxes.
 id: w378920322
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.14
 frame_colour: '#3a3a3c'
 trim_colour: '#f2f0ea'

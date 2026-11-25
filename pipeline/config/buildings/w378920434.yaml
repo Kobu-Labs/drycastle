@@ -2,6 +2,7 @@
 # Wall top 3.64 m, roof top 5.25 m. Walls seen: edges [1, 2]. Not modelled: chimney, canopy over garage door, downpipe, wall lamps.
 id: w378920434
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.1
 frame_colour: '#f2f0ea'
 surround_colour: '#a9a8a4'

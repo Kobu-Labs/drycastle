@@ -2,6 +2,7 @@
 # Wall top 4.29 m, roof top 6.61 m. Walls seen: edges [2, 4, 6, 7]. Not modelled: chimney on ridge, neighbouring lower wing with brown roof, downpipes.
 id: w378900351
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.83
 frame_colour: '#5a4030'
 trim_colour: '#d8d2c4'

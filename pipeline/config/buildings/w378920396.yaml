@@ -1,0 +1,24 @@
+# P-0796: single-storey village house, white and beige render, gabled red-tile roof, with a flat-roofed annex. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.45 m, roof top 5.67 m. Walls seen: edges [2, 4, 5, 6, 7]. Not modelled: flat-roofed annex with a glazed veranda on the left, a small concrete canopy and door in the gable, a roof extension on the right.
+id: w378920396
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.8
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+ridge_caps: true
+plinth: {height_m: 0.22, colour: '#7d5346'}
+apron: {width_m: 0.67, colour: '#87867d'}
+roof_tiles: true
+eaves: {colour: '#8a8580', fascia_m: 0.42, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 2, at_m: 3.39, colour: '#8a8580', bends: true}
+- {edge: 4, at_m: 7.0, colour: '#8a8580', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 0.94, width_m: 0.6, height_m: 0.6, sill_m: 2.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.22, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w2, kind: window, edge: 3, at_m: 4.26, width_m: 1.86, height_m: 1.7, sill_m: 1.13, posts: [0.48, 0.74], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 5, at_m: 1.15, width_m: 0.62, height_m: 0.59, sill_m: 1.7, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.48, 0.74], sill: true}
+  - {id: w4, kind: window, edge: 7, at_m: 0.35, width_m: 1.86, height_m: 1.7, sill_m: 1.13, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.48, 0.74], sill: true}
+  - {id: w5, kind: window, edge: 7, at_m: 4.84, width_m: 1.86, height_m: 1.7, sill_m: 1.13, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.48, 0.74]}

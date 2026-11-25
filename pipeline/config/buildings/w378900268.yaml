@@ -2,6 +2,7 @@
 # Wall top 3.31 m, roof top 3.31 m. Walls seen: edges [1, 2]. Not modelled: neighbouring house behind with chimney and dormer is not part of it.
 id: w378900268
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'
 plinth: {height_m: 0.26, colour: '#676664'}

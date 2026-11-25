@@ -6,6 +6,7 @@
 # Flat-roof height is from the photos (~4.4 m), not the generated 7.6.
 id: w378900226
 source: "Street View 2022-09, front and side frames supplied by the author (scaled from pixels)"
+interior: true
 overhang_m: 0.15
 frame_colour: "#f4f4f1"
 openings:

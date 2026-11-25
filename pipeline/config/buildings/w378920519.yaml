@@ -2,6 +2,7 @@
 # Wall top 3.07 m, roof top 5.33 m. Walls seen: edges [4, 7]. Not modelled: chimney, attached flat-roof garage with sectional door, drainpipe.
 id: w378920519
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 surround_colour: '#f2f0ea'

@@ -2,6 +2,7 @@
 # Wall top 3.98 m, roof top 9.00 m. Walls seen: edges [1]. Not modelled: chimney, recessed loggia with flower rail on left, satellite dish, brick plinth.
 id: w378920336
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.1
 frame_colour: '#f2f0ea'
 trim_colour: '#d8d2c4'

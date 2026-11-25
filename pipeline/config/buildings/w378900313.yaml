@@ -1,0 +1,27 @@
+# P-0772: bungalow, white render, brown tiled hipped roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.63 m, roof top 5.38 m. Walls seen: edges [1]. Not modelled: satellite dish on wall.
+id: w378900313
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.28
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+bands:
+- {top_m: 3.63, height_m: 0.18}
+ridge_caps: true
+plinth: {height_m: 0.25, colour: '#827f7e'}
+apron: {width_m: 0.2, colour: '#827f7e'}
+roof_tiles: true
+eaves: {colour: '#8e8983', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 5.66, colour: '#8e8983', bends: true}
+- {edge: 4, at_m: 5.4, colour: '#8e8983', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.36, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 4.93, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 8.51, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 0, at_m: 12.09, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 1.84, width_m: 2.22, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.38, 0.5]}
+  - {id: w6, kind: window, edge: 2, at_m: 1.47, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.25, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}

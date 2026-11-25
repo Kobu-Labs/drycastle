@@ -2,6 +2,7 @@
 # Wall top 3.06 m, roof top 6.26 m. Walls seen: edges [1, 3]. Not modelled: dark brown plinth band, attached garage/gate on left.
 id: w378920453
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.14
 frame_colour: '#f2f0ea'
 surround_colour: '#6b4a3a'

@@ -2,6 +2,7 @@
 # Wall top 3.90 m, roof top 7.40 m. Walls seen: edges [4]. Not modelled: construction tarp and ivy in front, unfinished walls with small vent slots under the eave.
 id: w378900360
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.5
 frame_colour: '#a87f55'
 trim_colour: '#f2f0ea'

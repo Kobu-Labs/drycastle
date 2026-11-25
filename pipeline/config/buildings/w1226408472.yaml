@@ -2,6 +2,7 @@
 # Wall top 3.19 m, roof top 7.59 m. Walls seen: edges [1]. Not modelled: dormer, roof windows, entrance porch with gutter chains, chimney pipe.
 id: w1226408472
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.25
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'

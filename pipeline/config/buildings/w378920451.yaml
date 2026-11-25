@@ -1,0 +1,29 @@
+# P-0044: house, cream render, dark shingle roof, wooden soffit, roof windows. Measured by facade_pipeline from 3 Street View capture(s).
+# Wall top 3.84 m, roof top 5.94 m. Walls seen: edges [3, 4]. Not modelled: chimney, two roof windows, wooden soffit, side annex with lower gabled roof.
+id: w378920451
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
+overhang_m: 0.36
+frame_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.35, colour: '#7f7d6f'}
+apron: {width_m: 0.6, colour: '#8f8c85'}
+roof_tiles: true
+eaves: {colour: '#9d9e9c', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 7.75, colour: '#9d9e9c', bends: true}
+- {edge: 3, at_m: 8.14, colour: '#9d9e9c', bends: true}
+- {edge: 4, at_m: 11.29, colour: '#9d9e9c', bends: true}
+- {edge: 4, at_m: 0.16, colour: '#9d9e9c', bends: true}
+chimneys:
+- {x: -22.97, y: 44.37, top_m: 6.44, width_m: 0.5, depth_m: 0.5, cap: true}
+openings:
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.35, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 1, at_m: 2.24, width_m: 0.64, height_m: 1.26, sill_m: 1.35, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 5.12, width_m: 0.64, height_m: 1.26, sill_m: 1.35, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 0.41, width_m: 0.64, height_m: 1.26, sill_m: 1.35, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 1.68, width_m: 0.64, height_m: 1.26, sill_m: 1.35, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 3, at_m: 2.66, width_m: 1.18, height_m: 1.0, sill_m: 1.56, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w6, kind: window, edge: 3, at_m: 5.44, width_m: 1.21, height_m: 1.0, sill_m: 1.56, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.5]}

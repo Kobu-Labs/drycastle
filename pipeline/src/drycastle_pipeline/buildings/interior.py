@@ -26,6 +26,7 @@ WALL_M = 0.3
 MIN_FLOOR_M = 0.05  # above the flattened ground, so the floor and the terrain do not fight
 STOREY_M = 3.0  # a room is not higher than this: a taller wall has an attic or a floor above it, which stays closed
 HEAD_CLEAR_M = 0.05  # an opening's head stays this far under the ceiling to go through
+LOW_STOREY_M = 2.3  # a storey of a low house is still this high, where the walls are
 INNER_WALL, FLOOR, CEILING = (236, 232, 222), (146, 118, 88), (244, 242, 236)
 GREY = (128, 128, 128)
 RAMP_RUN_PER_RISE = 2.0  # a door above the ground with no steps: the collision ramp's run
@@ -56,7 +57,10 @@ def inside_of(b: dict, d) -> Inside | None:
     floor = min(doors) if doors else (d.plinth.height_m if d.plinth is not None else 0.15)
     floor = max(floor, MIN_FLOOR_M)
     levels = max(int(b.get("levels") or 1), 1)
-    ceiling = min(eave, floor + min((eave - floor) / levels, STOREY_M))
+    # one storey, but never so low that a door of the ground floor does not go through while the walls have the height
+    heads = [o.sill_m + o.height_m + HEAD_CLEAR_M + 0.01 - floor for o in d.openings if o.kind in ("door", "garage_door") and o.parent is None and o.sill_m < eave / 2]
+    storey = max(min((eave - floor) / levels, STOREY_M), LOW_STOREY_M, *(h for h in heads if h <= eave - floor))
+    ceiling = min(eave, floor + storey)
     if ceiling - floor < 2.0:
         from drycastle_pipeline.buildings.openings import DetailError
 

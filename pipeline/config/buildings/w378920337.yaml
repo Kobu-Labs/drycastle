@@ -2,6 +2,7 @@
 # Wall top 3.12 m, roof top 4.86 m. Walls seen: edges [0, 3]. Not modelled: chimney, small half-hip at top of gable end, balcony on white gable side wall, attached white building on gable side.
 id: w378920337
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

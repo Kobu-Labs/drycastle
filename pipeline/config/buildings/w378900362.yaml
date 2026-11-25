@@ -2,6 +2,7 @@
 # Wall top 5.28 m, roof top 10.28 m. Walls seen: edges [2]. Not modelled: balcony with railing, entrance porch with steps, roof dormer, satellite dish, TV antenna.
 id: w378900362
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.6
 frame_colour: '#f2f0ea'
 trim_colour: '#d8d2c4'

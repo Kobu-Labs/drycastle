@@ -2,6 +2,7 @@
 # Wall top 2.59 m, roof top 4.85 m. Walls seen: edges [0, 3]. Not modelled: brick fence wall and gate in front, small chimney on the roof.
 id: w378900307
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 surround_colour: '#5e9a5a'

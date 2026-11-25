@@ -2,6 +2,7 @@
 # Wall top 3.28 m, roof top 3.28 m. Walls seen: edges [0, 2]. Not modelled: balcony with wooden railing, canopy over ground floor, garage, brick-red pillars.
 id: w378900339
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'
 plinth: {height_m: 0.22, colour: '#7b6664'}

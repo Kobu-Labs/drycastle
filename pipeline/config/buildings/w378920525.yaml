@@ -2,6 +2,7 @@
 # Wall top 2.98 m, roof top 6.76 m. Walls seen: edges [0]. Not modelled: two dormers, flower boxes.
 id: w378920525
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.36
 frame_colour: '#5a4030'
 surround_colour: '#e9dcc0'

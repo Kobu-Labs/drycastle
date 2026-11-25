@@ -2,6 +2,7 @@
 # Wall top 3.12 m, roof top 6.28 m. Walls seen: edges [1]. Not modelled: satellite dish, downpipe, stone infill beside left window, dark plinth.
 id: w378900350
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.25
 frame_colour: '#f2f0ea'
 surround_colour: '#a9a8a4'

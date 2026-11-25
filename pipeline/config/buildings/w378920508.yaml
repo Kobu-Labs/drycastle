@@ -12,6 +12,7 @@
 # wooden gate and brick pillar (street fence, not part of the house).
 id: w378920508
 source: "Street View 2022-09, one close frame of the street gable supplied by the author"
+interior: true
 overhang_m: 0.3
 frame_colour: "#4a2f22"
 openings:

@@ -2,6 +2,7 @@
 # Wall top 2.60 m, roof top 5.82 m. Walls seen: edges [1]. Not modelled: satellite dishes, pink plinth, attached neighbouring house.
 id: w378900352
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.25
 frame_colour: '#f2f0ea'
 surround_colour: '#e9dcc0'

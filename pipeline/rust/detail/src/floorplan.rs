@@ -33,10 +33,14 @@ const CORRIDOR_ROOM_DEPTH_M: f64 = 2.2; // a corridor to rooms nothing else reac
 const NO_HALL_BELOW_M2: f64 = 80.0; // an open house smaller than this has no hall: the door opens into the living space
 const TRIES: usize = 4; // plans drawn at most for each kind of hall; the one with the fewest faults is kept
 const GOOD_FAULTS: f64 = 0.8; // a plan with so few ends the search
+const MORE_TRIES: usize = 24; // drawn at most while the best plan still has a room a body cannot get to
+const BLOCKED: f64 = 100.0; // points for such a room, or for a partition ending in a door to the outside
+const BODY_M: f64 = 0.35; // a player's radius
 const HALL_SHARE: f64 = 0.12; // the floor a hall may take before it counts as waste
 const HALL_FREE_M2: f64 = 4.0;
 const HALL_PER_DOOR_M2: f64 = 3.0;
 const MIN_PIECE_AREA: f64 = 1e-6;
+const HAIR_M: f64 = 0.003; // half the width of floor too thin to be anything but a rounding of a cut
 const CAR_M: (f64, f64) = (2.4, 4.8); // the floor a parked car needs, across and in from its garage door
 const GARAGE_W_M: [f64; 4] = [3.0, 3.3, 2.7, 3.8]; // widths and depths tried for a garage, the usual first
 const GARAGE_D_M: [f64; 5] = [5.5, 5.2, 6.0, 5.0, 100.0]; // (the last: the whole depth of the building)
@@ -305,9 +309,42 @@ fn poly_of(g: &G) -> PolyC {
     geom::polys(g).into_iter().next().unwrap_or_default()
 }
 
-/// ``orient(polygon, 1.0)``
+/// The outline without doubled corners and without hairs: stretches that run out along a line and straight back. A hair
+/// left by a cut would count as a wall shared with whoever lies beside it, and draw a partition across their doorway.
+fn despiked(ring: &[Pt]) -> Vec<Pt> {
+    let mut v: Vec<Pt> = ring.to_vec();
+    if v.len() > 1 && v.first() == v.last() {
+        v.pop();
+    }
+    let mut i = 0;
+    while v.len() > 3 && i < v.len() {
+        let n = v.len();
+        let (a, b, c) = (v[(i + n - 1) % n], v[i], v[(i + 1) % n]);
+        let (ux, uy, wx, wy) = (a[0] - b[0], a[1] - b[1], c[0] - b[0], c[1] - b[1]);
+        let (lu, lw) = (ux.hypot(uy), wx.hypot(wy));
+        // doubled, or both neighbours the same way from here, one of them on the line to the other
+        if lu < 1e-4 || lw < 1e-4 || (ux * wx + uy * wy > 0.0 && (ux * wy - uy * wx).abs() / lu.max(lw) < 1e-4) {
+            v.remove(i);
+            i = i.saturating_sub(1);
+        } else {
+            i += 1;
+        }
+    }
+    v.push(v[0]);
+    v
+}
+
+/// ``orient(polygon, 1.0)``, hairs taken off: first whatever is under 6 mm wide (a hair along a slanted wall can run all
+/// round a neighbour), then doubled corners.
 fn oriented(g: &G) -> G {
-    geom::from_polyc(&geom::orient(&poly_of(g)))
+    let opened = buffered(&buffered(g, -HAIR_M, JoinStyle::Mitre), HAIR_M, JoinStyle::Mitre);
+    // (unless that would cost real floor: two parts joined by a thread stay one)
+    let p = match first_max(solid(&opened), geom::area) {
+        Some(o) if geom::area(&o) > geom::area(g) - 0.05 => poly_of(&o),
+        _ => poly_of(g),
+    };
+    let clean = PolyC { ext: despiked(&p.ext), holes: p.holes.iter().map(|h| despiked(h)).collect() };
+    geom::from_polyc(&geom::orient(&clean))
 }
 
 fn rect(x0: f64, y0: f64, x1: f64, y1: f64) -> G {
@@ -1055,6 +1092,59 @@ impl<'a> Maker<'a> {
         (links, lost)
     }
 
+    /// The rooms a body cannot walk to from a door to the outside: the floor it fits on is the floor a radius inside the
+    /// walls and clear of the partitions, with the passage through each of those doors.
+    fn shut_off(&self, cells: &[Rc<Cell>], links: &[Link]) -> usize {
+        let doors: Vec<[Pt; 2]> = self.house.ops.iter().filter(|o| o.kind == Hole::Door).map(|o| o.seg).collect();
+        if doors.is_empty() {
+            return 0;
+        }
+        let whole = geom::union_py(cells.iter().map(|c| geom::dup(&c.g)).collect());
+        let floor = buffered(&buffered(&whole, 0.002, JoinStyle::Mitre), -0.002, JoinStyle::Mitre);
+        let mut free = vec![buffered(&floor, -BODY_M, JoinStyle::Round)];
+        let mut entries = vec![];
+        for [a, b] in doors {
+            let width = dist(a, b);
+            let mid = [(a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0];
+            // (the outline runs counter-clockwise: inward is to the left of the door)
+            let (nx, ny) = (-(b[1] - a[1]) / width, (b[0] - a[0]) / width);
+            if width > 2.0 * BODY_M {
+                let through = geom::line(&[[mid[0] - nx * 0.3, mid[1] - ny * 0.3], [mid[0] + nx * (BODY_M + 0.1), mid[1] + ny * (BODY_M + 0.1)]]);
+                free.push(through.buffer_with_style(width / 2.0 - BODY_M, 8, CapStyle::Flat, JoinStyle::Round, 5.0).unwrap_or_else(|_| geom::empty()));
+            }
+            entries.push(geom::point(mid[0], mid[1]));
+        }
+        let mut solids = vec![];
+        for i in 0..cells.len() {
+            for j in i + 1..cells.len() {
+                for &(p, q) in self.shared(&cells[i], &cells[j]).iter() {
+                    let length = dist(p, q);
+                    let wall = geom::line(&[p, q]);
+                    let on = |at: Pt| geom::distance(&wall, &geom::point(at[0], at[1])) < 1e-3;
+                    let mut gaps: Vec<(f64, f64)> = links
+                        .iter()
+                        .filter(|l| ((l.a == i && l.b == j) || (l.a == j && l.b == i)) && on(l.p) && on(l.q))
+                        .map(|l| (dist(p, l.p), dist(p, l.q)))
+                        .collect();
+                    gaps.sort_by(|a, b| cmpf(a.0, b.0));
+                    gaps.push((length, length));
+                    let mut cursor: f64 = 0.0;
+                    for (s0, s1) in gaps {
+                        if s0 - cursor > 0.02 {
+                            let at = |s: f64| [p[0] + (q[0] - p[0]) * s / length, p[1] + (q[1] - p[1]) * s / length];
+                            let piece = geom::line(&[at(cursor), at(s0)]);
+                            solids.push(piece.buffer_with_style(0.05 + BODY_M, 4, CapStyle::Round, JoinStyle::Round, 5.0).unwrap_or_else(|_| geom::empty()));
+                        }
+                        cursor = cursor.max(s1);
+                    }
+                }
+            }
+        }
+        let walkable = geom::diff(&geom::union_py(free), &geom::union_py(solids));
+        let reached = geom::union_py(solid(&walkable).into_iter().filter(|g| entries.iter().any(|e| geom::distance(g, e) < 0.05)).collect());
+        cells.iter().filter(|c| geom::area(&geom::inter(&reached, &buffered(&c.g, -0.05, JoinStyle::Round))) < 0.15).count()
+    }
+
     /// What is wrong with a plan, in points: floor wasted on halls, rooms a house cannot do without, a front door into the
     /// wrong room, rooms too large or too thin, rooms without daylight, rooms walked through.
     fn faults(&self, cells: &[Rc<Cell>], types: &[Kind], links: &[Link], has_hall: bool) -> f64 {
@@ -1317,7 +1407,8 @@ fn build(house: &House, variant: &str, attempt: usize) -> Option<Candidate> {
             types[i] = Bathroom;
         }
     }
-    let faults = mk.faults(&cells, &types, &links, has_hall);
+    let cut = cells.iter().filter(|c| mk.cuts_a_door(&geom::boundary(&c.g))).count().min(1);
+    let faults = mk.faults(&cells, &types, &links, has_hall) + BLOCKED * (mk.shut_off(&cells, &links) + cut) as f64;
     let score = faults + rng.uniform(0.0, 0.6); // (some chance: houses are not all the one best shape)
     Some(Candidate { score, cells: cells.iter().map(|c| poly_of(&c.g)).collect(), types, links })
 }
@@ -1330,7 +1421,10 @@ fn search(house: &House) -> Option<Candidate> {
         kinds.push("side");
     }
     let mut best: Option<Candidate> = None;
-    for attempt in 0..TRIES {
+    for attempt in 0..MORE_TRIES {
+        if attempt >= TRIES && best.as_ref().is_some_and(|b| b.score < BLOCKED) {
+            break;
+        }
         let round: Vec<Option<Candidate>> = kinds.par_iter().map(|v| build(house, v, attempt)).collect();
         for got in round.into_iter().flatten() {
             if best.as_ref().map_or(true, |b| got.score < b.score) {
@@ -1609,6 +1703,12 @@ mod tests {
     fn scaled_keeps_small_rooms_small() {
         let w = scaled(&[want(Living, 20.0), want(Bathroom, 5.0)], 50.0);
         assert!((w[0].area + w[1].area - 50.0).abs() < 1e-9 && (w[1].area - 6.25).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_hair_along_a_wall_is_taken_off() {
+        let ring = [[0.0, 0.0], [4.0, 0.0], [4.0, 3.0], [0.0, 3.0], [0.0, 5.0], [0.0, 5.0], [0.0, 1.0], [0.0, 0.0]];
+        assert_eq!(despiked(&ring), [[0.0, 0.0], [4.0, 0.0], [4.0, 3.0], [0.0, 3.0], [0.0, 1.0], [0.0, 0.0]]);
     }
 
     #[test]

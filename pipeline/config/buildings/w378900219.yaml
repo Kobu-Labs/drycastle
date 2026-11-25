@@ -2,6 +2,7 @@
 # Wall top 5.24 m, roof top 8.14 m. Walls seen: edges [0, 11]. Not modelled: timber balcony with railing, brick pilaster and entrance canopy, side garage wing with lower roof, exposed timber roof beams.
 id: w378900219
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'

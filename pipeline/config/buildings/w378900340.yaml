@@ -2,6 +2,7 @@
 # Wall top 3.71 m, roof top 12.12 m. Walls seen: edges [3, 4]. Not modelled: chimney, dark double door, neighbouring roof with skylights.
 id: w378900340
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.86
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

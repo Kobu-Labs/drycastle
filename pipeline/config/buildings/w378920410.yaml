@@ -2,9 +2,11 @@
 # Eave 2.30 m, top 4.98 m. Sides with no photo have no openings. Not modelled: the balcony and outside stair to the loft door, the gate and boundary wall, the white colour of the gable ends, the ridge standing off the middle.
 id: w378920410
 source: owner's Street View photo of 2026-11-16, from sketch point A
+interior: true
 overhang_m: 0.25
 frame_colour: '#e6e8e8'
 openings:
+  - {id: d1, kind: door, edge: 1, at_m: 1.15, width_m: 0.95, height_m: 2.05, sill_m: 0.15, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}  # no capture saw a door: put where the wall is clear, nearest the street, so the house can be entered
   - {id: w1, kind: window, edge: 0, at_m: 1.13, width_m: 1.46, height_m: 1.03, sill_m: 0.81, recess_m: 0.12, confidence: medium}
   - {id: w2, kind: window, edge: 0, at_m: 4.78, width_m: 1.41, height_m: 1.01, sill_m: 0.76, recess_m: 0.12, confidence: medium}
   - {id: w3, kind: window, edge: 1, at_m: 5.89, width_m: 0.76, height_m: 0.74, sill_m: 0.99, recess_m: 0.12, confidence: medium}

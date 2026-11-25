@@ -2,6 +2,7 @@
 # Wall top 2.85 m, roof top 4.31 m. Walls seen: edges [7]. Not modelled: brick chimney, brick plinth.
 id: w378900374
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.32
 frame_colour: '#5a4030'
 trim_colour: '#d8d2c4'

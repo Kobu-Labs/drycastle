@@ -2,6 +2,7 @@
 # Wall top 2.86 m, roof top 4.47 m. Walls seen: edges [2]. Not modelled: two roof skylights, gutter, window shutters, lean-to shed at left.
 id: w378900264
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.18
 frame_colour: '#f2f0ea'
 trim_colour: '#d8d2c4'

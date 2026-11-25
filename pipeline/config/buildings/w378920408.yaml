@@ -2,6 +2,7 @@
 # Wall top 3.38 m, roof top 8.42 m. Walls seen: edges [1, 7]. Not modelled: roof skylight, vent pipe, drainpipe, attached barn/garage to the left.
 id: w378920408
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.32
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

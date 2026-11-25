@@ -442,7 +442,10 @@ def invent_balcony(said: str | None, edge: int, role: dict, eave: float, top: fl
     # the slab lies over the ground floor's doors and windows
     heads = [o["sill_m"] + o["height_m"] + (0.25 if o["kind"] == "window" else 0.55) for o in openings if o["sill_m"] < 1.5]
     floor = max(heads) if heads else eave
-    return {"edge": edge, "at_m": 0.5, "width_m": round(role["length"] - 1.0, 2), "floor_m": round(floor, 2)}
+    if not 1.8 <= floor <= 12.0:
+        return None
+    width = min(role["length"] - 1.0, 20.0)
+    return {"edge": edge, "at_m": round((role["length"] - width) / 2, 2), "width_m": round(width, 2), "floor_m": round(floor, 2)}
 
 
 def invent_skylights(building_id: str, roles: dict[int, dict], seen: set[int], roof: str, eave: float, top: float, half: float, dormer_edges: set[int]) -> list[dict]:

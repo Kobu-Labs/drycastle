@@ -2,6 +2,7 @@
 # Wall top 3.29 m, roof top 7.09 m. Walls seen: edges [1]. Not modelled: brick plinth, mailboxes on wall, drainpipes.
 id: w378900230
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.18
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

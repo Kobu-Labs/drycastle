@@ -664,6 +664,8 @@ def _write_building_files(bid: str, b: dict, sheet: dict, detail: dict, ov: dict
     from drycastle_pipeline.core.config import PIPELINE_DIR
 
     openings = detail["openings"]
+    if "roof_part" not in ov:  # every house with a detail is hollow (ADR 0040); one cut in parts cannot be yet
+        detail = {**detail, "interior": True}
     lost = sheet.get("not_modelled", "")
     head = [f"# {b['parcel']}: {sheet.get('what', 'house')}. Measured by landmark_photo (camera fit: {fit_note}).",
             f"# Eave {eave:.2f} m, top {b['height_m']:.2f} m. Sides with no photo have no openings." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip

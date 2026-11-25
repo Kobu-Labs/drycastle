@@ -1664,7 +1664,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     counts: dict[str, int] = {}
     for o in openings:
         counts[o["kind"]] = counts.get(o["kind"], 0) + 1
-        o["id"] = f"{o['kind'][0]}{counts[o['kind']]}"
+        o["id"] = f"{'gd' if o['kind'] == 'glass_door' else o['kind'][0]}{counts[o['kind']]}"  # (glass_door and garage_door share a letter)
     openings = [{"id": o["id"], **{k: v for k, v in o.items() if k != "id"}} for o in openings]
 
     detail: dict = {"id": bid, "source": "Street View captures, measured by facade_pipeline" + ("; walls no capture saw, pipes, eaves and chimney by rule" if guess else "")}
@@ -1853,6 +1853,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         head = [f"# {b['parcel']}: {what}. Measured by facade_pipeline from {len(state['captures'])} Street View capture(s).",
                 f"# Wall top {eave:.2f} m, roof top {top:.2f} m. Walls seen: edges {seen}." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip
         rest = {k: v for k, v in detail.items() if k != "openings"}
+        if "roof_part" not in ov:  # every house with a detail is hollow (ADR 0040); one cut in parts cannot be yet
+            rest["interior"] = True
         body = yaml.safe_dump(rest, sort_keys=False, default_flow_style=None, width=200)
 
         def flow(v) -> str:

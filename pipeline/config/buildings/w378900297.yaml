@@ -2,6 +2,7 @@
 # Wall top 4.31 m, roof top 7.04 m. Walls seen: edges [1]. Not modelled: chimney, air conditioner, satellite dish, lower side extension.
 id: w378900297
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'

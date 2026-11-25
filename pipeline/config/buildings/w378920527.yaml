@@ -2,6 +2,7 @@
 # Wall top 3.10 m, roof top 4.86 m. Walls seen: edges [4]. Not modelled: chimney, downpipe, metal stair at left, utility boxes on wall.
 id: w378920527
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+interior: true
 overhang_m: 0.38
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
