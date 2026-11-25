@@ -1,0 +1,1547 @@
+status: working version, not yet approved
+notes:
+- 'Function: decorate, set dressing, litter, add greenery, decorate sky and similar catch-alls were dropped.
+  Roles visible from kind (wildlife, npc, companion, roam) and those a vision model cannot judge (enemy,
+  destructible) were also dropped. Cover was split into full-cover and low-cover because shooter level
+  builders need crouch-height cover.'
+- 'Interactive parts: the raw interactive_parts data (doors, lids, drawers, hatches) became the function
+  openable. Wheels, legs and tails should not be described. Rigged or animated status (SK_ meshes, animated-*
+  packs) should come from file metadata as a boolean, not from vision.'
+- 'Kind changes: structure was added so fences, bridges and poles are not mixed with modular building
+  pieces. Rock, decal and backdrop are their own kinds. Sign and tool were folded into prop, and sky into
+  backdrop. The furniture/prop line is: furniture is something you sit, sleep, work at, store in or wash
+  at; everything else movable is prop.'
+- Wrecks and destroyed variants (_Destroyed, _Broken, _Burnt, Car_Wrecked) take the same leaf as the intact
+  item, with condition destroyed or damaged. building/ruin is only for ruins whose original type is unclear.
+  Crushed or stacked car piles go to prop/debris/scrap-wreckage.
+- 'Placement: on the floor, on the ground and freestanding (outdoors, indoors, on ground) were merged
+  into floor-standing, since indoor versus outdoor belongs to setting. Hundreds of ''on a table/desk/shelf/counter''
+  variants became on-surface. Linear runs and grid snapping were merged into modular.'
+- 'Setting: the raw list had about 600 near-duplicates. Collapse rule: a qualifier such as post-apocalyptic,
+  ruined, abandoned or war-torn goes to style or condition, and the place noun goes to setting. Room-level
+  interior terms were added despite low sample counts because the first consumer furnishes rooms. Public
+  washrooms share bathroom. Home garage and auto workshop were merged.'
+- 'Setting overuse: raw over-applied military base (101) and battlefield (65). Tell the describer to choose
+  the most specific place, at most 3, and to use battlefield only when combat is evident.'
+- 'Style: modern was dropped because it applied to nearly everything; no period style means present day.
+  Natural, wild and nature were dropped because kind covers them. Farm, agricultural and rustic were merged
+  into rural. Desert, swamp and wetland moved to setting. Wartime, cold war and german map to military,
+  plus wwii where it fits.'
+- 'Style priors from pack: consider seeding style from the pack name for consistency (war -> wwii, apocalypse
+  -> post-apocalyptic, gang-warfare -> criminal, office -> office, kenney -> cartoon) and letting the
+  describer add more.'
+- 'Material: synonyms were merged (steel, iron, chrome, painted metal -> metal; dirt, earth, mud -> soil;
+  leaves, foliage, moss, hay -> plant; cloth, canvas, tarp -> fabric). Rust and paint are condition or
+  free text.'
+- 'Colour: the raw colour terms are noisy (grey, dark grey, olive green and so on). Leave colour to free
+  text, or add a small fixed palette of about 12 colours if colour filtering is wanted.'
+- 'Condition: broken was merged into damaged, and dirty, weathered and faded into worn. Burnt and muddy
+  go to free text. Clean/Dirty and Open/Closed variant pairs (Crate_Open, Hangar_Open, Setup_Dirty) are
+  states, not conditions; put them in aliases, or add a small state facet (open, closed, filled, empty)
+  if agents need it.'
+- 'Missing facet: scale is absent from raw data but matters to level-building agents. Add a size class
+  or real dimensions computed from mesh bounds rather than from vision.'
+- 'Variants and presets: xN variants should share one description and differ only where the mesh does
+  (condition, colour). _Preset, _Group and _Stack composites take the leaf of their dominant item and
+  get the placement stacked where it applies.'
+- 'Leaf judgement calls: a few leaves are small but kept for strong browse intent (mushroom, fuel-pump,
+  barracks-hall, cactus-palm, decal/damage). Greenhouse was merged into barn-outbuilding and silo into
+  tower-tank. Unicorn goes to livestock and phoenix to bird, both with style fantasy, instead of a two-item
+  mythical leaf. prop/misc/other is the only catch-all leaf.'
+kind:
+  building: Complete standalone building or tent that reads as a whole, such as a house, barn, tower or
+    tent; a single wall or floor segment is building-piece.
+  building-piece: 'Modular segment that snaps together into a building: wall, floor, ceiling, roof, door,
+    window, stairs or beam; not a whole building.'
+  structure: 'Fixed outdoor construction that is not a building: fence, freestanding wall, bridge, jetty,
+    pole, pipeline, scaffold, statue or court; movable barriers are prop.'
+  terrain: Ground surface piece such as a ground tile, hill, road, sidewalk, water plane or canal; loose
+    rocks are rock and vegetation is plant.
+  plant: Living or dead vegetation, including trees, logs, stumps, grass, crops and potted plants; harvested
+    fruit and vegetables are prop.
+  rock: 'Natural rock: boulder, rock pile, pebbles, cliff or crystal; broken concrete or brick is prop
+    (rubble).'
+  vehicle: Whole vehicle, drivable or wrecked; separate attachments and loose parts are vehicle-part.
+  vehicle-part: Attachment or loose component for a vehicle, such as armour, bumper, wheel, roof cargo
+    or farm implement.
+  weapon: Firearm, heavy or melee weapon, explosive, ammunition or missile.
+  furniture: Furnishing used to sit, sleep, work at, store things in or wash, such as a chair, bed, shelf,
+    toilet or rug; small objects are prop.
+  prop: Any other movable object, from handheld items to dumpsters and barriers.
+  decal: Flat overlay with almost no volume laid on a surface, such as a blood pool, bullet holes or road
+    markings; a 3D puddle mesh is still decal.
+  character: Complete human or humanoid figure, including monsters on two legs.
+  character-part: Head base or wearable or attachable piece of a character, such as a helmet, pack or
+    tail.
+  animal: Complete non-humanoid creature, real or mythical.
+  backdrop: Sky dome, cloud or distant scenery card that is never meant to be reached.
+material:
+  metal: 'Any metal: steel, iron, painted, galvanised or corrugated sheet; record rust under condition,
+    not here.'
+  wood: Timber, planks, plywood, logs or bark; not paper or cardboard.
+  plastic: Plastic, vinyl or polymer bodies and parts.
+  concrete: Poured concrete, cinderblock or cement; not brick or natural stone.
+  stone: Natural or cut stone, including gravel; not concrete or brick.
+  brick: Fired brick walls, piles or pieces.
+  plaster: Painted plaster, drywall or render finish on interior walls and ceilings.
+  glass: Glass panes, bottles, screens or shards.
+  rubber: Tyres, rubber mats, hoses.
+  fabric: Cloth, canvas, tarp, burlap, carpet, upholstery or padding.
+  leather: Leather goods such as a holster, couch or bag; not animal fur.
+  paper: Paper sheets, books, posters, banknotes or packets; not cardboard.
+  cardboard: Cardboard boxes and card packaging.
+  ceramic: Porcelain, clay, terracotta or pottery, such as a toilet, vase or jar.
+  gold: Gold or gilded objects such as treasure, plates or jewellery.
+  crystal: Crystal or gemstone formations.
+  plant: Leaves, grass, moss, straw, hay or other plant tissue; cut timber is wood.
+  food: 'Edible matter: fruit, vegetables, meat.'
+  soil: Dirt, earth or mud surfaces and piles; not sand.
+  sand: Beach or desert sand.
+  asphalt: Tarmac road or parking surface.
+  water: Water or other liquid surfaces, including puddles and blood pools.
+  fur-feather: Animal fur, hide, feathers or creature skin.
+  bone: Bone, skulls, horn or antler.
+setting:
+  living-room: Home lounge with sofa, TV and coffee table; desk-and-books rooms are study.
+  bedroom: Adult home bedroom; children's rooms are kids-room and soldiers' quarters are barracks.
+  kids-room: Nursery or child's bedroom with toys or a cot.
+  kitchen: Home kitchen with appliances and cabinets; an office kitchenette is break-room.
+  dining-room: Home room for eating at a table; diners and cafes are restaurant.
+  bathroom: Any toilet, washroom or shower room, home or public.
+  hallway: Corridor, entrance hall or stairwell.
+  study: Home office or library with desk and books; corporate workspace is office.
+  utility-room: Laundry, storeroom, boiler room or cleaning cupboard.
+  office: Corporate workspace with desks and computers; not meeting-room.
+  meeting-room: Conference or briefing room with a large table, boards or projector.
+  reception: Lobby or front-desk area of an office or public building.
+  break-room: Staff kitchenette or lounge with water cooler and coffee.
+  shop: Retail interior or storefront with shelves, counters or checkouts.
+  restaurant: Diner, cafe or food-stand area; drinking venues are bar-nightclub.
+  bar-nightclub: Bar, pub or club with alcohol, stools and speakers.
+  church: Church, chapel or shrine, inside or in its grounds.
+  classroom: School room with blackboard and desks.
+  hospital: Clinic, ward, field hospital or medical tent.
+  gym: Fitness or training room with weights and mats.
+  warehouse: Storage hall or loading dock with racks and pallets; production lines are factory.
+  factory: Manufacturing or processing plant with machinery.
+  workshop-garage: Vehicle garage, repair bay or tool workshop.
+  gang-hideout: Criminal den, drug lab or stash house.
+  construction-site: Active building site with scaffolds and materials.
+  scrapyard: Junkyard of wrecked cars, tyres and scrap.
+  industrial-site: Outdoor refinery, pipeline, power or utility yard; not a factory interior.
+  military-base: Armed-forces compound, depot, motor pool or helipad.
+  barracks: Soldiers' living quarters with bunks and lockers.
+  command-post: Briefing, radio, drone or control room.
+  bunker: Underground shelter or fortified concrete room.
+  battlefield: Active combat zone, frontline or trenches; use only when combat is evident, not for any
+    military item.
+  checkpoint: Guarded roadblock or gated entry point.
+  camp: 'Tent camp: refugee, survivor, military field camp or campsite.'
+  airfield: Runway, hangar apron or airstrip.
+  shooting-range: Firing range with lanes and targets.
+  city-street: Urban road, sidewalk and storefronts; not suburb.
+  alley: Narrow back street behind buildings.
+  suburb: Residential street with houses, driveways, mailboxes and front yards.
+  car-park: Parking lot or parking garage.
+  town-square: Plaza, market square or town centre.
+  rooftop: Flat roof of a building.
+  highway: Motorway, overpass, ramp or road tunnel.
+  gas-station: Fuel station forecourt.
+  park: Public park, playground or sports court.
+  garden: Private garden or backyard with flower beds; cultivated fields are farm-field.
+  farmyard: Yard around barns and farmhouse with tools and animal pens.
+  farm-field: Crop field, orchard or pasture.
+  village: Small rural, medieval or desert settlement; not city-street.
+  country-road: Rural road or dirt track between places.
+  forest: Woodland, forest floor or clearing.
+  meadow: Open uncultivated grassland or countryside.
+  swamp: Marsh, bog or wetland.
+  lakeside: River bank, lake or pond shore; sea coasts are beach.
+  beach: Sandy sea coast or shoreline.
+  desert: Sand dunes, arid ground or oasis.
+  mountain: Rocky hillside, cliff or canyon.
+  cave: Cavern, dungeon or crystal cave.
+  wasteland: Barren post-apocalyptic outskirts and scrubland; destroyed towns are ruins.
+  ruins: Destroyed town or area of ruined buildings.
+  harbour: Port, dock, pier or jetty.
+placement:
+  floor-standing: Stands on its own on the floor or ground; use against-wall instead when its back is
+    meant to face a wall.
+  against-wall: Stands on the floor with its back to a wall, such as a wardrobe, bookshelf or fridge.
+  wall-mounted: Fixed to or hung on a wall off the floor, such as a poster, wall light or AC unit.
+  ceiling-hung: Hangs from or is fixed to an indoor ceiling; outdoor spans are overhead.
+  on-surface: Small item meant to sit on a table, desk, shelf or counter; not scattered.
+  part-of-ground: Forms the ground or lies flush with it, such as a terrain tile, road, decal or ground
+    cover.
+  scattered: Loose litter or small items strewn on the ground or floor.
+  stacked: Designed to stack, or shown stacked with copies, such as crates, pallets or tyres.
+  in-opening: Fits into a door or window opening in a wall, such as a door, shutter or blind.
+  rooftop: Sits on a roof, such as a chimney, satellite dish, roof AC unit or roof billboard.
+  overhead: Spans above head height outdoors, such as a power line, awning, canopy or string lights.
+  on-water: Floats on the water surface, such as a lily pad, scum or boat.
+  shoreline: Stands at the water's edge or partly in shallow water, such as reeds, a jetty or a mangrove.
+  vehicle-mounted: Attaches to a vehicle body.
+  carried: Held in a hand or worn by a character.
+  sky: Floats or flies in the sky, such as clouds or birds aloft.
+  distant: Far-background only and never reached, such as a skydome, background card or distant mountains.
+  modular: Joins edge to edge with matching pieces, such as walls, floors, road tiles, fence runs or pipes.
+function:
+  full-cover: Solid and tall enough to hide a standing character from gunfire; waist-high objects are
+    low-cover.
+  low-cover: Solid waist-high object a character can crouch behind.
+  concealment: Hides a character from view but would not stop bullets, such as a bush, tall grass, tarp
+    or camo net.
+  obstacle: Blocks movement on foot; use roadblock when it is meant to stop vehicles.
+  roadblock: Built or placed to stop vehicles, such as a concrete barrier, tank trap or road barrier.
+  boundary: Marks or encloses the edge of an area, such as a fence or wall run.
+  hazard: Hurts or impedes on contact, such as razor wire, spikes, fire, a toxic spill or a trap.
+  explosive: Could plausibly explode, such as a fuel can, propane bottle, mine or missile.
+  seating: Designed to be sat on.
+  sleeping: Designed to lie or sleep on.
+  surface: Flat top for placing items or working, such as a table, desk, counter or workbench.
+  storage: Holds other items, such as a shelf, cabinet, crate or locker; display is for showing goods.
+  display: Presents goods or information for viewing, such as a shop shelf, stall, mannequin or notice
+    board.
+  openable: Has a visible door, lid, drawer or hatch that could open.
+  light-source: Emits or is meant to emit light.
+  power-source: Supplies electricity or fuel, such as a generator, battery, power box or fuel pump.
+  cooking: Used to cook or heat food, such as a stove, grill, oven or fire pit.
+  shelter: Provides a roof or shade overhead, such as a tent, awning or shack.
+  walkable: Designed to be walked or driven on as ground or a platform, such as a floor, road, bridge
+    or jetty.
+  vertical-access: Lets characters change level, such as stairs, a ladder, a ramp or a climbing rope.
+  vantage-point: Raised position to look out or shoot from, such as a guard tower or platform.
+  landmark: Large or distinctive enough to navigate by from afar.
+  drivable: Whole vehicle in a usable state; never use for wrecks.
+  weapon: Can be wielded, thrown or fired as a weapon.
+  pickup: Small item a player could pick up or loot, such as ammo, medicine, money, keys or a tool.
+  consumable: Eaten, drunk or used up, such as food, drink, medicine or drugs.
+style:
+  military: Armed-forces equipment or installations of any era; add wwii only for that period.
+  wwii: 1939-45 period gear such as German, British or US WWII weapons, helmets and posters.
+  post-apocalyptic: Abandoned, quarantine or wasteland survival theme; makeshift is for objects built
+    from scrap.
+  makeshift: Improvised from scrap, junk or salvaged parts, such as junk walls, spiked bumpers or pallet
+    barricades.
+  industrial: Factories, pipes, heavy machinery and utilities.
+  urban: City streets, shops and high-rise buildings; residential streets are suburban.
+  suburban: Residential houses, gardens, driveways and mailboxes.
+  rural: Farm and countryside, including rustic wooden handmade items.
+  office: Corporate office workplace.
+  middle-eastern: Desert-village architecture, woven rugs, clay pots and cloth sunshades.
+  medieval: 'Pre-industrial European: peasants, monks, pews, wells.'
+  fantasy: 'Magical or mythical: crystals, unicorn, phoenix, dungeon.'
+  horror: Demons, monsters, blood, skulls and other macabre items.
+  religious: Church furnishings, crosses, clergy.
+  criminal: Gang, drugs, cash stacks, heist and illegal items.
+  retro: Mid-20th-century civilian look (1950s-80s), such as a VCR, gramophone or retro luggage; WWII
+    items are wwii.
+  cartoon: Toy-like exaggerated look beyond normal low-poly, as in the Kenney kits or kids characters.
+condition:
+  intact: Undamaged and in normal condition; the default.
+  worn: Weathered, scuffed, faded, dirty or stained but whole; use rusty for rust.
+  rusty: Visibly rusted metal.
+  damaged: Cracked, dented, torn or partly broken but still standing and recognisable; not destroyed.
+  destroyed: Wrecked, collapsed, burnt out or in pieces.
+  overgrown: Covered by vines, moss or weeds.
+  dead: Dead, dried or leafless vegetation.
+category:
+  building/residential/house:
+    definition: Detached house, farmhouse, cottage or village house, intact or burnt.
+    examples:
+    - SM_Bld_House
+    - SM_Bld_Farmhouse
+    - SM_Bld_Village_House
+  building/residential/apartment-block:
+    definition: Multi-storey residential block, motel, or stackable high-rise section.
+    examples:
+    - SM_Bld_Apartment_01
+    - SM_Bld_HighRise_Medium_01_Stack_01
+    - SM_Bld_Motel_01
+  building/commercial/shop:
+    definition: Shop, cafe, diner, market hall or commercial block.
+    examples:
+    - SM_Bld_Shop_Large
+    - SM_Bld_Diner_01
+    - SM_Bld_Commercial_Medium_01
+  building/commercial/gas-station-garage:
+    definition: Fuel station, auto repair shop or vehicle garage building.
+    examples:
+    - SM_Bld_GasStation_01
+    - SM_Bld_AutoRepair_01
+    - SM_Bld_Garage_01
+  building/commercial/market-stall:
+    definition: Open stall, produce stand or food cart; a cloth cover alone is building-piece/exterior/awning-shade.
+    examples:
+    - SM_Bld_ProduceStand_01
+    - SM_Prop_HotdogStand_01
+    - SM_Prop_Cart_Stall_01
+  building/industrial/factory:
+    definition: Industrial production building.
+    examples:
+    - SM_Bld_Industrial_Medium_01
+    - SM_Bld_Industrial_Large_01
+    - SM_Bld_Industrial_Small_01
+  building/industrial/warehouse-hangar:
+    definition: Warehouse, storage hall or aircraft hangar.
+    examples:
+    - SM_Bld_Warehouse_Brick_01
+    - SM_Bld_Hangar_01
+    - SM_Bld_Warehouse_01
+  building/industrial/tower-tank:
+    definition: Cooling tower, smokestack, gas or oil tower, water tower, silo, large tank or crane.
+    examples:
+    - SM_Bld_Cooling_Tower
+    - SM_Bld_WaterTower_01
+    - SM_Bld_Silo
+  building/farm/barn-outbuilding:
+    definition: Barn, greenhouse, open farm shelter or outhouse.
+    examples:
+    - SM_Bld_Barn
+    - SM_Bld_Greenhouse_01
+    - SM_Bld_Outhouse_01
+  building/small/shed-shack:
+    definition: Shed, shack, scrap shelter or mobile-home trailer.
+    examples:
+    - SM_Bld_Plywood_Shed_01
+    - SM_Bld_Junk_Shelter
+    - SM_Bld_Trailer
+  building/military/barracks-hall:
+    definition: Barracks or large military hall.
+    examples:
+    - SM_Bld_Barracks_01
+    - SM_Bld_Hall
+  building/military/guard-tower:
+    definition: Guard tower, watchtower or air-traffic control tower.
+    examples:
+    - SM_Bld_GuardTower
+    - SM_Bld_ControlTower_01
+    - SM_Prop_GuardTower_01
+  building/military/bunker:
+    definition: Bunker or tunnel entrance structure.
+    examples:
+    - SM_Bld_Bunker_Entrance_01
+    - SM_Env_Bunker_Entrance_Round_01
+    - SM_Env_Tunnel_Entrance_01
+  building/tent/military-tent:
+    definition: Army tent or camo-net tent.
+    examples:
+    - SM_Bld_Military_Tent
+    - SM_Bld_CamoNet_Tent
+    - SM_Bld_Tent_Desert_01
+  building/tent/civilian-tent:
+    definition: Camping, refugee or quarantine tent.
+    examples:
+    - SM_Prop_Tent_Dome_01
+    - SM_Bld_Tent_Refugee_01
+    - SM_Bld_Quarantine_Tent
+  building/civic/public-landmark:
+    definition: Church, lighthouse, clock tower or other public or landmark building.
+    examples:
+    - SM_Bld_Church_01
+    - SM_Bld_Lighthouse_01
+    - SM_Bld_Clock_Tower_01
+  building/ruin:
+    definition: Generic ruin whose original building type is unclear; a destroyed house stays in house
+      with condition destroyed.
+    examples:
+    - SM_Bld_Ruins
+    - SM_Env_Ruin
+    - SM_Bld_Destroyed
+  building-piece/wall/wall-panel:
+    definition: Solid modular wall segment or corner with no opening.
+    examples:
+    - SM_Bld_Bunker_Wall_Concrete_x1
+    - SM_Bld_Interior_Wall_01
+    - SM_Bld_Wall_Metal_01
+  building-piece/wall/wall-doorway:
+    definition: Modular wall segment with a door opening or a door built in.
+    examples:
+    - SM_Bld_Interior_Wall_Door_01
+    - SM_Bld_Wall_Brick_Door
+    - wall_glass_door
+  building-piece/wall/wall-window:
+    definition: Modular wall segment with a window opening or glazing.
+    examples:
+    - SM_Bld_Wall_Brick_Window
+    - SM_Bld_Interior_Wall_Window_01
+    - wall_window
+  building-piece/floor-ceiling/floor:
+    definition: Modular floor tile or raised floor block.
+    examples:
+    - SM_Bld_Bunker_Floor_Wood
+    - SM_Bld_Floor_Asphalt
+    - floor_carpet_grey
+  building-piece/floor-ceiling/ceiling:
+    definition: Modular ceiling panel.
+    examples:
+    - SM_Bld_Bunker_Ceiling_Concrete
+    - SM_Bld_Ceiling
+    - ceiling
+  building-piece/roof:
+    definition: Roof section, roof cap, trim or truss.
+    examples:
+    - SM_Bld_Roof_Flat_Corner
+    - SM_Bld_Roof_Cap
+    - SM_Bld_Roof_Truss_01
+  building-piece/opening/door-hatch:
+    definition: Separate door, garage door, barricaded door or floor or roof hatch.
+    examples:
+    - SM_Bld_Door
+    - SM_Bld_Door_Barricaded
+    - SM_Bld_Bunker_Hatch_01
+  building-piece/opening/window:
+    definition: Window frame, shutter or window bars.
+    examples:
+    - SM_Bld_Village_Window
+    - SM_Bld_Window_Shutter
+    - SM_Bld_Window_Bars
+  building-piece/beam-column:
+    definition: Beam, pillar or column.
+    examples:
+    - SM_Bld_Bunker_Beam_Concrete_01
+    - SM_Bld_Pillar
+    - SM_Bld_Wall_Beam
+  building-piece/access/stairs-ladder:
+    definition: Fixed stairs or built-in ladder; portable ladders are prop/tool/workshop-equipment.
+    examples:
+    - SM_Bld_Bunker_Stairs_Single_01
+    - SM_Bld_Village_Stairs
+    - SM_Bld_Bunker_Ladder_01
+  building-piece/access/walkway-railing:
+    definition: Elevated walkway, catwalk or railing.
+    examples:
+    - SM_Bld_IndustrialWalkway_x1_01
+    - SM_Bld_Walkway_Rail
+    - SM_Prop_Railing_01
+  building-piece/exterior/awning-shade:
+    definition: Awning, cloth cover, sunshade, tarp canopy or parasol.
+    examples:
+    - SM_Bld_Sunshade_Round
+    - SM_Bld_Village_ClothCover
+    - SM_Prop_Umbrella_01
+  building-piece/exterior/trim-ornament:
+    definition: Chimney, dome, ledge, decorative block or facade trim.
+    examples:
+    - SM_Bld_Decorative_Block
+    - SM_Bld_Village_Chimney_01
+    - SM_Bld_Village_Edge
+  structure/fence/fence-panel:
+    definition: Fence section of wood, wire, brick or scrap.
+    examples:
+    - SM_Prop_Fence_Wood
+    - SM_Prop_Fence_Wire
+    - fence-low
+  structure/fence/fence-post:
+    definition: Standalone fence post or pole.
+    examples:
+    - SM_Prop_Fence_Wood_Pole
+    - SM_Bld_Fence_Pole_01
+    - SM_Prop_Fence_White_Post_01
+  structure/fence/gate:
+    definition: Fence or wall gate.
+    examples:
+    - SM_Prop_Fence_Wood_Gate_01
+    - SM_Prop_Wall_Quarantine_Gate_01
+    - SM_Bld_Village_Wall_Gate_01
+  structure/wall/freestanding-wall:
+    definition: Compound, quarantine, harbour or range wall that stands alone, not part of a building.
+    examples:
+    - SM_Bld_Village_Wall
+    - SM_Prop_Wall_Quarantine_Base
+    - SM_Prop_BaseWall_01
+  structure/wall/scrap-wall:
+    definition: Wall built from junk, trash, crates or a container.
+    examples:
+    - SM_Prop_Wall_Junk
+    - SM_Prop_TrashPile_Wall
+    - SM_Prop_Crate_Wall_01
+  structure/wall/archway:
+    definition: Archway or gateway arch.
+    examples:
+    - SM_Bld_Archway
+    - SM_Bld_Village_Archway
+    - SM_Bld_Village_ArchwayBridge
+  structure/bridge:
+    definition: Bridge deck, bridge ramp or bridge support.
+    examples:
+    - SM_Env_Bridge_01
+    - SM_Env_Motorway_Bridge_Middle
+    - SM_Env_Bridge_Support_01
+  structure/jetty-dock:
+    definition: Jetty, dock, pier plank, mooring post or support.
+    examples:
+    - SM_Prop_Jetty
+    - SM_Env_Dock_01
+    - SM_Prop_Jetty_Plank
+  structure/utility/power-pole-line:
+    definition: Power pole, pylon or strung power line.
+    examples:
+    - SM_Prop_Powerpole_01
+    - SM_Bld_Pylon_01
+    - SM_Prop_Powerline
+  structure/utility/radio-mast:
+    definition: Radio tower, aerial mast, speaker or alarm pole.
+    examples:
+    - SM_Bld_RadioTower_01
+    - SM_Prop_Aerial_01
+    - SM_Prop_SpeakerPole_01
+  structure/utility/pipe-duct:
+    definition: Pipeline, pipe run or ventilation ducting.
+    examples:
+    - SM_Prop_Pipeline_Pipe_Large
+    - SM_Prop_Warehouse_Venting
+    - SM_Prop_Pipes_Rusted
+  structure/scaffold:
+    definition: Scaffolding or open steel frame.
+    examples:
+    - SM_Prop_Scaffold_01
+    - SM_Prop_Scaffold_Wood_01
+    - SM_Bld_Industrial_Beam_Fence
+  structure/base-slab:
+    definition: Helipad, concrete base, plinth or slab.
+    examples:
+    - SM_Env_Helipad_01
+    - SM_Bld_ConcreteBase_01
+    - SM_Bld_Plinth
+  structure/statue-fountain:
+    definition: Statue, monument or fountain.
+    examples:
+    - SM_Prop_Statue_01
+    - SM_Bld_Fountain
+    - SM_Bld_Monument_01
+  structure/playground-sports:
+    definition: Playground equipment, sports court, hoop, goalposts, horse jump or pool.
+    examples:
+    - SM_Prop_Playground_Swing_01
+    - SM_Env_BasketBall_Court
+    - SM_Bld_Pool_01
+  terrain/ground/ground-tile:
+    definition: Flat or gently shaped base ground piece, including wheat-covered ground.
+    examples:
+    - SM_Generic_Ground
+    - SM_Env_Ground_Square
+    - SM_Generic_Ground_Wheat_01
+  terrain/ground/landform:
+    definition: Hill, mound, dirt pile, dune or crater.
+    examples:
+    - SM_Generic_Ground_Hill
+    - SM_Terrain_Ground_Mound_Large
+    - SM_Env_Crater_01
+  terrain/ground/edge-skirt:
+    definition: Edge, slope or skirt piece that blends ground types.
+    examples:
+    - SM_Terrain_GrassEdge
+    - SM_Env_Dirt_Skirt_01
+    - SM_Env_Dirt_Slope_Corner
+  terrain/ground/tilled-soil:
+    definition: Ploughed farm rows and furrows.
+    examples:
+    - SM_Env_Dirt_Rows_01
+    - SM_Env_Dirt_Rows_Mounds_01
+    - SM_Env_Dirt_Rows_Center_01
+  terrain/ground/beach-sand:
+    definition: Beach strip, sand dune or sand edge.
+    examples:
+    - SM_Env_Beach_01
+    - SM_Env_SandDunes
+    - SM_Env_SandEdge
+  terrain/road/road-tile:
+    definition: Paved road tile, crossing, damaged road, parking bay or runway.
+    examples:
+    - SM_Env_Road_Straight
+    - SM_Env_RoadPiece_Damaged
+    - SM_Env_Runway_01
+  terrain/road/dirt-gravel-road:
+    definition: Unpaved dirt or gravel road piece.
+    examples:
+    - SM_Env_DirtRoad_Straight_01
+    - SM_Env_Road_Gravel_Corner
+    - SM_Env_Road_Dirt_Swerve
+  terrain/road/highway:
+    definition: Motorway section, ramp or road tunnel.
+    examples:
+    - SM_Env_Motorway_Middle_01
+    - SM_Env_Motorway_Ramp_Edge
+    - SM_Env_Motorway_Tunnel_Edge
+  terrain/road/sidewalk-path:
+    definition: Sidewalk, kerb, driveway or footpath piece.
+    examples:
+    - SM_Env_Sidewalk_Straight
+    - SM_Env_Driveway_01
+    - path-stones-short
+  terrain/water/water-surface:
+    definition: Water plane, ocean tile or pond.
+    examples:
+    - SM_Generic_Water_Plane
+    - SM_Generic_Ocean_Tile_Flat_01
+    - SM_Env_Pond_01
+  terrain/water/canal:
+    definition: Concrete storm-canal channel piece.
+    examples:
+    - SM_Env_StormCanal_Straight
+    - SM_Env_StormCanal_Floor
+    - SM_Env_StormCanal_Pipe
+  plant/tree/broadleaf-tree:
+    definition: Leafy deciduous tree, alive or dead, including dead generic trees.
+    examples:
+    - SM_Tree_Round
+    - SM_Tree_Birch
+    - SM_Generic_Tree
+  plant/tree/conifer:
+    definition: Pine or other needle tree.
+    examples:
+    - SM_Tree_Pine
+    - SM_Tree_PolyPine
+    - SM_Env_Tree_Pine_Tall
+  plant/tree/fruit-tree:
+    definition: Orchard tree, with or without fruit.
+    examples:
+    - SM_Env_Tree_Apple_01
+    - SM_Env_Tree_Lemon_Grown_01
+    - SM_Env_Tree_Cherry_01
+  plant/tree/swamp-tree:
+    definition: Swamp cypress, mangrove or willow.
+    examples:
+    - SM_Env_Tree_Mangrove
+    - Swamp_Tree
+    - SM_Tree_Willow_Large_01
+  plant/tree-part/stump-root:
+    definition: Tree stump or exposed roots.
+    examples:
+    - SM_Tree_Stump
+    - Swamp_Tree_Root
+    - SM_Swamp_Root
+  plant/tree-part/log-branch:
+    definition: Fallen log, trunk, branch or twig.
+    examples:
+    - SM_Prop_Log_Big
+    - SM_Prop_Swamp_Log
+    - SM_Tree_Twig
+  plant/shrub/bush:
+    definition: Bush, bramble or hedge.
+    examples:
+    - SM_Plant_Bush
+    - SM_Env_Bush_Large
+    - SM_Plant_Hedge_Bush
+  plant/shrub/cactus-palm:
+    definition: Cactus or palm bush.
+    examples:
+    - SM_Env_Cactus
+    - SM_Plant_PalmBush_01
+  plant/ground-cover/grass:
+    definition: Grass clump, tuft or patch.
+    examples:
+    - SM_Env_GrassBlob
+    - SM_Plant_Grass
+    - Grass_Common_Tall
+  plant/ground-cover/reeds-marsh-grass:
+    definition: Reeds, swamp grass or toetoe.
+    examples:
+    - SM_Env_Reeds
+    - SM_Env_SwampGrass_Tall_01
+    - SM_Env_Toetoe
+  plant/ground-cover/undergrowth:
+    definition: Fern, leafy ground plant, clover or fallen-leaf litter.
+    examples:
+    - SM_Plant_Fern
+    - SM_Plant_Undergrowth_01
+    - SM_Env_GroundLeaves
+  plant/ground-cover/vines-overgrowth:
+    definition: Vines, creepers or overgrowth over walls and ground.
+    examples:
+    - SM_Env_Overgrowth
+    - SM_Tree_Vines
+    - SM_Terrain_Swamp_Growth
+  plant/flower:
+    definition: Flower, flower patch or sunflower.
+    examples:
+    - SM_Env_Flowers
+    - SM_Prop_Sunflower
+    - Flower_3_Group
+  plant/mushroom:
+    definition: Mushroom or fungus cluster.
+    examples:
+    - SM_Plant_Mushrooms
+  plant/water-plant:
+    definition: Lily pad, algae or swamp scum on water.
+    examples:
+    - SM_Plant_Lillypad_Large
+    - SM_Env_LillyPads
+    - SM_Env_Swamp_Scum
+  plant/crop/field-crop:
+    definition: Wheat, corn, hemp or rapeseed plants.
+    examples:
+    - SM_Prop_Plant_Wheat
+    - SM_Prop_Plant_Corn
+    - rapeseed_plant
+  plant/crop/vegetable-plant:
+    definition: Growing vegetable plant or vegetable row.
+    examples:
+    - SM_Prop_Plant_Bush_02_Tomato
+    - SM_Prop_Plant_Potato
+    - SM_Env_Vege_Rows
+  plant/potted-plant:
+    definition: Houseplant, flower pot or planter box.
+    examples:
+    - SM_Prop_FlowerPot
+    - SM_Prop_Plant_Palm
+    - SM_Prop_PlantBox_Large_01
+  rock/boulder:
+    definition: Single rock or boulder.
+    examples:
+    - SM_Rock
+    - SM_Env_Rock
+    - SM_Rock_Boulder_01
+  rock/rock-cluster:
+    definition: Group or pile of large rocks.
+    examples:
+    - SM_Rock_Cluster_Large
+    - SM_Rock_Pile
+    - SM_Rock_Pile_Curved
+  rock/pebbles:
+    definition: Scatter of small stones or pebbles.
+    examples:
+    - SM_Generic_Small_Rocks
+    - SM_Env_Pebbles
+    - SM_Terrain_Rubble_Pebbles
+  rock/cliff-mountain:
+    definition: Playable cliff, rock wall, rock arch or mountain; unreachable mountains are backdrop.
+    examples:
+    - SM_Env_Mountain
+    - SM_Rock_Wall
+    - SM_Env_Rock_Archway_01
+  rock/crystal:
+    definition: Crystal shard, crystal rock or crystal cluster.
+    examples:
+    - SM_Prop_Crystal
+    - SM_Prop_Crystal_Rock_A
+    - SM_Env_Crystals_Cluster_Large
+  vehicle/car/sedan-hatchback:
+    definition: Ordinary passenger car.
+    examples:
+    - SM_Veh_Car_Medium_01
+    - car_small_blue
+    - golf_mk2
+  vehicle/car/sports-muscle:
+    definition: Sports, race, muscle, hot rod or lowrider car.
+    examples:
+    - SM_Veh_Muscle_01
+    - SM_Veh_HotRod_01
+    - SM_Veh_LowCar
+  vehicle/car/suv-pickup:
+    definition: Civilian SUV, ute or pickup truck.
+    examples:
+    - SM_Veh_SUV_01
+    - SM_Veh_Ute_01
+    - SM_Veh_Pickup_01
+  vehicle/commercial/van-bus:
+    definition: Van, camper, ice-cream van or bus.
+    examples:
+    - SM_Veh_Van_01
+    - SM_Veh_IceCream_01
+    - bus
+  vehicle/commercial/truck:
+    definition: Civilian truck, big rig or garbage truck.
+    examples:
+    - SM_Veh_BigRig_01
+    - garbage-truck
+    - truck-flat
+  vehicle/commercial/trailer-caravan:
+    definition: Towed trailer, tanker trailer or caravan.
+    examples:
+    - SM_Veh_BigRig_Trailer_Tanker_01
+    - SM_Veh_Caravan_01
+    - SM_Veh_Attach_Trailer_Tank_01
+  vehicle/commercial/emergency:
+    definition: Ambulance, police car, fire truck or raid van.
+    examples:
+    - SM_Veh_Ambulance_01
+    - police
+    - firetruck
+  vehicle/light/two-wheeler:
+    definition: Motorbike, dirt bike, moped or bicycle.
+    examples:
+    - SM_Veh_Motorbike_01
+    - SM_Veh_Moped_01
+    - bike_desert
+  vehicle/light/quad-buggy:
+    definition: Quad bike, dune buggy or golf cart.
+    examples:
+    - SM_Veh_QuadBike_01
+    - SM_Veh_Buggy_01
+    - SM_Veh_GolfCart_01
+  vehicle/military/tank:
+    definition: Tracked battle tank or tracked radar tank.
+    examples:
+    - SM_Veh_Tank_German_01
+    - SM_Veh_Light_Tank_01
+    - SM_Veh_Radar_Tank_01
+  vehicle/military/armored-vehicle:
+    definition: APC, armoured car, humvee or amphibious transport.
+    examples:
+    - SM_Veh_APC
+    - humvee
+    - amphibious_transport
+  vehicle/military/military-truck:
+    definition: Army truck, technical, rocket or missile launcher truck.
+    examples:
+    - SM_Veh_Army_Truck_01
+    - SM_Veh_Rocket_Truck_01
+    - SK_Veh_ScudTruck_01
+  vehicle/aircraft/helicopter:
+    definition: Helicopter, whole or crashed.
+    examples:
+    - SM_Veh_Helicopter_Attack
+    - utility_helicopter
+    - SM_Prop_Helicopter_Crashed_01
+  vehicle/aircraft/airplane:
+    definition: Jet, transport plane, light plane or drone.
+    examples:
+    - SM_Veh_Jet
+    - SM_Veh_TransportPlane_01
+    - SM_Veh_Drone_01
+  vehicle/boat:
+    definition: Boat, canoe, raft or ship.
+    examples:
+    - SM_Veh_Boat_01
+    - SM_Prop_Canoe_01
+    - SM_Prop_Ship_01
+  vehicle/work-vehicle:
+    definition: Tractor, combine harvester or forklift.
+    examples:
+    - SM_Veh_Tractor_01
+    - SM_Veh_Harvester_01
+    - SM_Veh_Forklift_01
+  vehicle-part/armor-bumper:
+    definition: Bolt-on armour plate, spikes, bull bar or bumper.
+    examples:
+    - SM_Veh_Attach_Plating
+    - SM_Veh_Attach_Bumper
+    - SM_Veh_Attach_Tank_Armour
+  vehicle-part/wheel-tire:
+    definition: Loose wheel, tyre, tyre pile or track piece.
+    examples:
+    - SM_Prop_Car_Wrecked_Wheel
+    - SM_Prop_Tire_01
+    - SM_Veh_Attach_Spare_Tyre_01
+  vehicle-part/cargo-attachment:
+    definition: Roof load, mounted box, container, fuel can, basket or rope.
+    examples:
+    - SM_Veh_Attach_Roof_Props
+    - SM_Veh_Attach_Container
+    - SM_Veh_Attach_Fuel_01
+  vehicle-part/trim-accessory:
+    definition: Lights, mirror, spoiler, intake, winch, tow hook, aerial, plate, badge or dashboard ornament.
+    examples:
+    - SM_Veh_Attach_Lights
+    - SM_Veh_Attach_Winch_01
+    - SM_Prop_Car_Ornament
+  vehicle-part/farm-implement:
+    definition: 'Tractor implement: plough, baler, planter or sprayer.'
+    examples:
+    - SM_Veh_Attach_Plough_01
+    - SM_Veh_Attach_Baler_01
+    - SM_Veh_Attach_Sprayer_01
+  vehicle-part/body-section:
+    definition: Truck canopy, tray, ramp or detached fuselage piece.
+    examples:
+    - SM_Veh_Truck_01_Canopy
+    - SM_Veh_BigRig_DumpTray_01
+    - SM_Veh_TransportPlane_Destroyed_Tail_01
+  weapon/firearm/pistol:
+    definition: Handgun.
+    examples:
+    - pistol
+    - wep_german_pistol_01
+  weapon/firearm/rifle:
+    definition: Assault rifle, bullpup or submachine gun.
+    examples:
+    - assault-rifle
+    - bullpup
+    - submachine-gun
+  weapon/firearm/sniper-rifle:
+    definition: Sniper, hunting or bolt-action rifle.
+    examples:
+    - sniper-rifle
+    - SM_Wep_HuntingRifle_Clean_01
+    - wep_british_rifle_01
+  weapon/firearm/shotgun:
+    definition: Shotgun.
+    examples:
+    - shotgun
+    - SM_Wep_Shotgun_01
+  weapon/heavy/machine-gun-turret:
+    definition: Heavy machine gun, tripod or gun stand, flak gun, minigun or sentry turret.
+    examples:
+    - wep_german_heavy_machine_gun_01
+    - sentry_turret
+    - flak
+  weapon/heavy/launcher-mortar:
+    definition: RPG, missile launcher, rocket pod or mortar.
+    examples:
+    - rpg_01
+    - wep_mortar_01
+    - SM_Prop_Missile_Launcher
+  weapon/explosive:
+    definition: Grenade, mine, IED, C4 or bomb device.
+    examples:
+    - SM_Prop_IED
+    - SM_Prop_C4
+    - grenade_01
+  weapon/ammunition:
+    definition: Bullets, shells, casings or rockets as loose ammo.
+    examples:
+    - SM_Item_Bullet_01
+    - SM_Prop_Shell
+    - SM_Prop_Bullet_Casing
+  weapon/missile-bomb:
+    definition: Large missile, aerial bomb or nuke.
+    examples:
+    - SM_Prop_Missile
+    - scud_missile
+    - SM_Prop_Nuke
+  weapon/melee:
+    definition: Bat, blade or bayonet; a crowbar is prop/tool/hand-tool.
+    examples:
+    - bat_01
+    - bayonet
+    - SM_Prop_Sword_Display_01
+  furniture/seating/chair:
+    definition: Single chair or stool of any type.
+    examples:
+    - SM_Prop_Chair_Folding_01
+    - SM_Prop_OfficeChair
+    - SM_Bld_Diner_Stool
+  furniture/seating/sofa-armchair:
+    definition: Upholstered sofa, armchair or rocking chair.
+    examples:
+    - SM_Prop_Couch
+    - SM_Prop_Chair_Soft_01
+    - SM_Prop_Chair_Rocking_01
+  furniture/seating/bench-pew:
+    definition: Bench, church pew or booth seat.
+    examples:
+    - SM_Prop_Church_Pew_01
+    - SM_Prop_Bench_01
+    - SM_Bld_Diner_Booth_Seat
+  furniture/table/table:
+    definition: Dining, coffee, bedside, cafe, outdoor or makeshift table.
+    examples:
+    - SM_Prop_DiningTable_01
+    - SM_Prop_CoffeeTable_02
+    - SM_Prop_Bedside_Table_01
+  furniture/table/desk:
+    definition: Office, study or school desk.
+    examples:
+    - SM_Prop_Office_Desk_01
+    - desk
+    - SM_Prop_Study_Desk_01
+  furniture/table/workbench:
+    definition: Workbench, trestle table or range booth table.
+    examples:
+    - SM_Prop_Workbench_01
+    - SM_Prop_Trestle_Table_01
+    - SM_Prop_Range_BoothTable_01
+  furniture/bed/bed:
+    definition: Domestic or hospital bed, bed frame or baby cot.
+    examples:
+    - SM_Prop_Bed_Big
+    - SM_Prop_Bedframe
+    - SM_Prop_BabyCot_01
+  furniture/bed/bunk-cot:
+    definition: Bunk bed, military cot, camp bed or stretcher.
+    examples:
+    - SM_Prop_Bed_Military_Bunk_01
+    - prop_camp_bed
+    - SM_Prop_Bed_Stretcher
+  furniture/bed/bedding:
+    definition: Mattress, pillow or sleeping bag on its own.
+    examples:
+    - SM_Prop_Sleeping_Bag_01
+    - SM_Prop_Pillow
+    - SM_Prop_Bed_Mattress
+  furniture/storage/shelf-rack:
+    definition: Bookshelf, wall shelf, warehouse rack or gun rack.
+    examples:
+    - SM_Prop_Bookshelf_01
+    - SM_Prop_Warehouse_Rack
+    - SM_Prop_Gunrack_01
+  furniture/storage/cabinet-dresser:
+    definition: Dresser, cupboard, wardrobe, kitchen cabinet or filing cabinet.
+    examples:
+    - SM_Prop_Dresser
+    - SM_Prop_Wardrobe_01
+    - file_cabinet
+  furniture/storage/locker:
+    definition: Locker or gun locker.
+    examples:
+    - SM_Prop_Lockers_01
+    - SM_Prop_Gunlocker_01
+    - lockers
+  furniture/shop-fixture:
+    definition: Shop counter, checkout, shop shelf or mannequin.
+    examples:
+    - SM_Prop_ShopCounter
+    - SM_Prop_ShopShelf_Long_01
+    - SM_Prop_Mannequin_Female
+  furniture/religious:
+    definition: Altar, lectern or book podium.
+    examples:
+    - altar_table_01
+    - church_lectern_01
+    - SM_Prop_BookPodium_01
+  furniture/bathroom/toilet:
+    definition: Toilet, urinal, toilet stall or portable toilet.
+    examples:
+    - SM_Prop_Toilet_01
+    - urinal
+    - SM_Prop_Portaloo_01
+  furniture/bathroom/sink-bath-shower:
+    definition: Sink, bathtub, shower or washroom fitting such as a dryer or dispenser.
+    examples:
+    - SM_Prop_Bathtub_01
+    - SM_Prop_Shower_01
+    - hand_dryer
+  furniture/soft-furnishing:
+    definition: Rug, mat, curtain or window blind.
+    examples:
+    - SM_Prop_Rug
+    - SM_Prop_Window_Curtain
+    - window_blinds_large
+  prop/container/barrel-tank:
+    definition: Barrel, drum, keg, water tank or fuel bladder.
+    examples:
+    - SM_Prop_Barrel
+    - SM_Prop_WaterTank
+    - SM_Prop_Fuel_Bladder
+  prop/container/crate-pallet:
+    definition: Wooden or plastic crate, pallet or supply drop.
+    examples:
+    - SM_Prop_Crate_Wood
+    - SM_Prop_Pallet
+    - SM_Prop_EmergencyDrop_Crate_01
+  prop/container/ammo-weapon-case:
+    definition: Ammo box, weapon case or missile crate.
+    examples:
+    - SM_Prop_AmmoBox
+    - SM_Prop_WeaponCase_01
+    - SM_Prop_Missile_Crate
+  prop/container/cardboard-box:
+    definition: Cardboard box, flat-packed boxes or file box.
+    examples:
+    - SM_Prop_CardboardBox
+    - SM_Prop_FlatPackCardboardBoxes
+    - bookbox
+  prop/container/sack-bag:
+    definition: Sack, grain bag, holdall, luggage or guitar case.
+    examples:
+    - SM_Prop_Sack
+    - SM_Prop_GrainBag_01
+    - SM_Prop_Luggage_Retro_01
+  prop/container/fuel-can-gas-bottle:
+    definition: Jerry can, propane bottle, gas tank or chemical drum.
+    examples:
+    - SM_Prop_GasCan_01
+    - SM_Prop_Propane_Tall
+    - SM_Prop_Chemical
+  prop/container/shipping-container:
+    definition: Shipping or storage container.
+    examples:
+    - SM_Prop_Shipping_Container
+    - SM_Prop_Container_Small_01
+    - SM_Prop_Container
+  prop/container/bucket-paint-can:
+    definition: Bucket, paint can or spray can.
+    examples:
+    - SM_Prop_PaintCan
+    - SM_Prop_Bucket_Tin_01
+    - SM_Prop_SprayCan
+  prop/container/bin-dumpster:
+    definition: Rubbish bin, dumpster or skip.
+    examples:
+    - SM_Prop_Dumpster
+    - SM_Prop_RubbishBin
+    - SM_Prop_Skip_Large_01
+  prop/barrier/concrete-barrier:
+    definition: Jersey or concrete road barrier.
+    examples:
+    - SM_Prop_Barrier_Concrete
+    - SM_Prop_Barrier_Long_01
+    - SM_Prop_Barricade_Concrete_01
+  prop/barrier/sandbag-hesco:
+    definition: Sandbag wall or earth-filled mesh blast barrier.
+    examples:
+    - SM_Prop_Sandbag_Wall
+    - SM_Prop_Barrier_Base_Group
+    - SM_Prop_Barrier_Tall
+  prop/barrier/barricade:
+    definition: Improvised barricade of planks, metal sheets, pallets or spikes.
+    examples:
+    - SM_Prop_Barricade
+    - SM_Prop_Barricade_Pallet_01
+    - SM_Prop_SpikeWall
+  prop/barrier/wire-spike-obstacle:
+    definition: Razor wire, barbed wire or tank trap.
+    examples:
+    - SM_Prop_RazorWire_01
+    - SM_Prop_TankTrap_01
+    - SM_Prop_Wall_Wire_01
+  prop/barrier/traffic-barrier:
+    definition: Traffic cone, road barrier, median, speed bump or caution line.
+    examples:
+    - SM_Prop_Cone_01
+    - SM_Prop_Road_Barrier
+    - SM_Prop_Speed_Bump_01
+  prop/appliance/household-appliance:
+    definition: Fridge, oven, toaster, blender, stove or washing machine.
+    examples:
+    - SM_Prop_Kitchen_Fridge_01
+    - SM_Prop_WashingMachine_01
+    - SM_Prop_Toaster_01
+  prop/appliance/vending-cooler:
+    definition: Vending machine, water cooler or shop drinks fridge.
+    examples:
+    - SM_Prop_VendingMachine_01
+    - water_cooler
+    - SM_Prop_ShopFridge
+  prop/appliance/fan-aircon:
+    definition: Fan, air conditioner or air vent.
+    examples:
+    - SM_Prop_Airconditioner
+    - ceiling_fan
+    - SM_Prop_AirVent
+  prop/electronics/computer-office:
+    definition: Computer, monitor, keyboard, printer, photocopier, projector or typewriter.
+    examples:
+    - laptop
+    - photocopier
+    - prop_typewriter_01
+  prop/electronics/tv-audio:
+    definition: TV, VCR, stereo, speaker, boombox or gramophone.
+    examples:
+    - SM_Prop_Electronics_Tv
+    - SM_Prop_Stereo_Speaker_Large_01
+    - SM_Prop_Gramophone_01
+  prop/electronics/phone-radio-control:
+    definition: Phone, radio, walkie-talkie, security camera or control station.
+    examples:
+    - SM_Prop_Radio
+    - SM_Item_WalkieTalkie_01
+    - SM_Prop_Security_Camera
+  prop/lighting/ceiling-wall-light:
+    definition: Fixed ceiling or wall light, fluorescent tube or string lights.
+    examples:
+    - SM_Prop_Light_Industrial_Ceiling_01
+    - SM_Prop_Warehouse_WallLight_01
+    - fluorescent_light
+  prop/lighting/lamp:
+    definition: Desk lamp, floor lamp or flashlight.
+    examples:
+    - SM_Prop_Lamp
+    - SM_Prop_Study_Lamp_01
+    - SM_Prop_Flashlight
+  prop/lighting/floodlight:
+    definition: Floodlight, searchlight or portable work light.
+    examples:
+    - SM_Prop_Floodlights
+    - SM_Prop_SearchLight_01
+    - SM_Prop_Light_Portable_01
+  prop/lighting/street-light:
+    definition: Street lamp post or runway or road light.
+    examples:
+    - SM_Prop_Street_Light
+    - SM_Prop_LightPole_01
+    - SM_Prop_Runway_Light_01
+  prop/utility/electrical:
+    definition: Generator, battery, power box, transformer, outlet or switch.
+    examples:
+    - SM_Prop_Generator_01
+    - SM_Prop_PowerBox
+    - power_outlet
+  prop/utility/cable-hose:
+    definition: Cable, wire spool or hose.
+    examples:
+    - SM_Prop_Wirespool
+    - SM_Prop_Cable_01
+    - SM_Prop_Sprinkler_Hose_01
+  prop/utility/fuel-pump:
+    definition: Fuel pump or pump canopy.
+    examples:
+    - SM_Prop_Gaspump
+    - SM_Prop_Gaspump_Cover_01
+  prop/utility/antenna-dish:
+    definition: Satellite dish, TV antenna or solar panel.
+    examples:
+    - SM_Prop_Satellite_Dish
+    - SM_Prop_TV_Antenna
+    - SM_Prop_Roof_SolarPanel_01
+  prop/utility/street-fixture:
+    definition: Manhole, drain grate, hydrant, bollard or pole.
+    examples:
+    - SM_Prop_Manhole_01
+    - SM_Prop_Hydrant_01
+    - SM_Prop_Bollard_01
+  prop/utility/mailbox:
+    definition: Letterbox or mailbox.
+    examples:
+    - SM_Prop_LetterBox
+    - SM_Prop_Mailbox_01
+    - SM_Prop_LetterBox_Group
+  prop/sign/shop-sign:
+    definition: Business, shop, motel or produce-stall sign.
+    examples:
+    - SM_Prop_Sign_Diner_01
+    - SM_Bld_Motel_Sign
+    - SM_Prop_Sign_Apples_01
+  prop/sign/warning-sign:
+    definition: Danger, caution, quarantine, safety, exit or info sign.
+    examples:
+    - SM_Prop_Sign_Danger_01
+    - SM_Prop_Sign_Radioactive_01
+    - exit_sign
+  prop/sign/road-sign:
+    definition: Traffic sign, signpost, welcome sign or traffic light.
+    examples:
+    - SM_Prop_Sign_Stop_01
+    - SM_Prop_TrafficLight
+    - welcome_sign
+  prop/sign/billboard:
+    definition: Billboard, freestanding or on a roof.
+    examples:
+    - SM_Prop_Billboard_Sign
+    - SM_Prop_Billboard_Roof_01
+    - SM_Prop_Billboard_01
+  prop/food/produce:
+    definition: Fruit or vegetable, single, grouped or boxed.
+    examples:
+    - SM_Prop_Apple_01
+    - SM_Prop_Pumpkin
+    - SM_Prop_Box_Carrot_01
+  prop/food/packaged-food:
+    definition: Ration pack, can, meat or sausage.
+    examples:
+    - SM_Item_Meal_Pack_01
+    - SM_Item_Can
+    - SM_Item_Meat
+  prop/food/drink:
+    definition: Bottle, glass, cup, flask or canteen.
+    examples:
+    - SM_Prop_Alcohol_Bottle_01
+    - coffee_cup
+    - SM_Item_Canteen_01
+  prop/food/cookware-tableware:
+    definition: Pan, pot, plate, bowl, teapot, tray or spoon.
+    examples:
+    - SM_Prop_Pan_01
+    - SM_Prop_TeaPot
+    - SM_Prop_Plate_Large
+  prop/valuables/money:
+    definition: Banknotes, cash stacks or credit card.
+    examples:
+    - SM_Prop_Money_Stack
+    - SM_Prop_DollarRoll_01
+    - SM_Prop_CreditCard_01
+  prop/valuables/treasure:
+    definition: Gold tableware, jewellery or chains.
+    examples:
+    - SM_Prop_Gold_Teapot
+    - SM_Prop_JewelryPile_01
+    - gold_chain
+  prop/crime/drugs:
+    definition: Drug packets, powder, baggies, scales, syringes or pipes.
+    examples:
+    - SM_Prop_Packet_Stack
+    - SM_Prop_Powder_Line
+    - SM_Prop_ZipBag_Blue_L
+  prop/crime/drug-lab:
+    definition: Lab glassware, burners, tanks or panels.
+    examples:
+    - SM_Prop_Lab_Beaker
+    - SM_Prop_Lab_Burner
+    - SM_Prop_Lab_Tank
+  prop/personal/smoking:
+    definition: Cigarette, cigar, pack, lighter or ashtray.
+    examples:
+    - SM_Prop_Cigarette
+    - SM_Prop_Cigar
+    - cigarette_tray_01
+  prop/personal/toy-game:
+    definition: Toy, figurine, cards or puzzle.
+    examples:
+    - SM_Prop_Toy_Bear_01
+    - SM_Prop_Toy_Samurai_Full_Painted_01
+    - rubix_cube
+  prop/personal/clothing-accessory:
+    definition: Shoes, mask, glasses or hat not worn by a character.
+    examples:
+    - SM_Prop_Shoes
+    - SM_Prop_Mask_01
+    - SM_Item_SunGlasses_01
+  prop/office/paper-book:
+    definition: Papers, folders, clipboard, books or magazines.
+    examples:
+    - SM_Prop_Papers
+    - SM_Prop_Book_Group
+    - SM_Prop_Folder_Manila
+  prop/office/stationery:
+    definition: Pen, stapler, tape, sticky notes, paper tray or mousepad.
+    examples:
+    - stapler
+    - pen
+    - sticky_notes_pack
+  prop/office/board:
+    definition: Whiteboard, blackboard, pinboard or briefing board.
+    examples:
+    - whiteboard
+    - SM_Prop_Blackboard_01
+    - SM_Prop_Briefing_Board_01
+  prop/decor/wall-art:
+    definition: Painting, photo, poster, award frame, clock or calendar.
+    examples:
+    - painting
+    - SM_Prop_Poster_Girl_01
+    - clock
+  prop/decor/flag-banner:
+    definition: Flag, wall flag, bunting or hanging rug banner.
+    examples:
+    - SM_Prop_Flag
+    - env_flag_wall_01_england
+    - SM_Prop_FlagLine
+  prop/decor/ornament:
+    definition: Vase, jar, globe, lawn flamingo, skull or other ornament.
+    examples:
+    - SM_Prop_Vase
+    - SM_Prop_Globe_01
+    - SM_Prop_Skull
+  prop/decor/religious:
+    definition: Cross, crucifix, grave marker or holy water.
+    examples:
+    - SM_Prop_Crucifix_01
+    - SM_Prop_Cross
+    - SM_Prop_GraveStick_01
+  prop/tool/hand-tool:
+    definition: Wrench, crowbar, brush, broom or fire extinguisher.
+    examples:
+    - SM_Tool_Wrench_01
+    - SM_Item_Crowbar_01
+    - broom
+  prop/tool/power-tool:
+    definition: Grinder, drill, saw, chainsaw or compressor.
+    examples:
+    - SM_Tool_Angle_Grinder_01
+    - SM_Prop_ChainSaw_01
+    - SM_Prop_Table_Saw_01
+  prop/tool/farm-garden-tool:
+    definition: Pitchfork, rake, hoe, scythe, axe, watering can, sprinkler, scarecrow or seed packet.
+    examples:
+    - SM_Prop_Tool_Pitchfork_01
+    - SM_Prop_Watering_Can_01
+    - SM_Prop_Scarecrow_01
+  prop/tool/workshop-equipment:
+    definition: Vice, anvil, sawhorse, toolbox or portable ladder.
+    examples:
+    - SM_Prop_Vice_01
+    - SM_Prop_Anvil_01
+    - SM_Prop_Ladder
+  prop/tool/cart-wheelbarrow:
+    definition: Wheelbarrow, hand cart, shopping cart, wheelchair or janitor cart.
+    examples:
+    - SM_Prop_Wheelbarrow_01
+    - SM_Prop_ShoppingCart_01
+    - janitor_cart
+  prop/medical:
+    definition: Medkit, bandage, pills, syringe, IV stand or medical container.
+    examples:
+    - SM_Prop_HealthKit_01
+    - SM_Prop_Medical_IVStand_01
+    - SM_Prop_Pills
+  prop/military/field-gear:
+    definition: Loose gas mask, binoculars, pouch, goggles, earmuffs or metal detector.
+    examples:
+    - SM_Item_GasMask_01
+    - SM_Item_Binoculars_01
+    - SM_Item_Pouch
+  prop/military/shooting-range:
+    definition: Target, target holder, range rail or booth.
+    examples:
+    - SM_Prop_Target
+    - SM_Prop_Range_Target_01
+    - SM_Prop_Range_Rail_01
+  prop/gym-equipment:
+    definition: Weights, bench press, chin-up bar, gym mat or climbing rope.
+    examples:
+    - SM_Prop_Bench_Press_01
+    - SM_Prop_Dumbbell
+    - SM_Prop_Chin_Up_Bar_01
+  prop/farm/hay-bale:
+    definition: Round or square hay bale, or hay pile.
+    examples:
+    - SM_Prop_Hay_Bale_Round
+    - SM_Prop_Hay_Bale_Square
+    - SM_Prop_Hay_Pile
+  prop/farm/animal-pen-feeder:
+    definition: Trough, chicken coop, beehive or dog house.
+    examples:
+    - SM_Prop_Trough_01
+    - SM_Prop_Chicken_Coop_01
+    - SM_Prop_Beehive
+  prop/farm/windmill-well:
+    definition: Windmill, wind turbine, well or weathervane.
+    examples:
+    - SM_Prop_Windmill_01
+    - SM_Prop_Well_01
+    - SM_Prop_Weathervane
+  prop/outdoor/washing-line:
+    definition: Clothes line or rotary washing line.
+    examples:
+    - SM_Prop_WashingLine
+    - SM_Prop_ClothesLine
+    - SM_Prop_Washingline_Small
+  prop/outdoor/fire-pit-grill:
+    definition: Fire pit, burn pile, barbecue or grill.
+    examples:
+    - SM_Prop_FirePit_01
+    - SM_Prop_BurnPile
+    - SM_Prop_Barbeque_01
+  prop/building-material:
+    definition: Planks, metal sheets, bricks, cinderblocks, beams or firewood stacks.
+    examples:
+    - SM_Prop_Plank
+    - SM_Prop_Iron_Sheet
+    - SM_Prop_Cinderblock_01
+  prop/debris/rubble:
+    definition: Concrete, brick, stone or plank rubble.
+    examples:
+    - SM_Prop_Rubble_Concrete
+    - SM_Env_Rubble_Pile
+    - SM_Prop_Wall_Brick_Pile_01
+  prop/debris/trash-litter:
+    definition: Trash pile, bin bag, litter, bottles or animal droppings.
+    examples:
+    - SM_Prop_TrashPile
+    - SM_Prop_TrashBag
+    - SM_Prop_Rubbish_Paper
+  prop/debris/scrap-wreckage:
+    definition: Vehicle debris, crushed or stacked car wrecks, crash debris or glass shards.
+    examples:
+    - SM_Prop_Vehicle_Debris
+    - SM_Prop_Car_Wrecked_Stack
+    - SM_Prop_Glass_Shard
+  prop/misc/other:
+    definition: Catch-all for props that fit no other leaf (keys, padlock, piano); use sparingly.
+    examples:
+    - SM_Prop_Padlock
+    - SM_Prop_Key
+    - SM_Prop_Piano_01
+  decal/stain:
+    definition: Blood pool, puddle or spill.
+    examples:
+    - SM_Prop_BloodPool
+    - SM_Prop_Puddle
+    - SM_Prop_Barrel_Nuke_Pool_01
+  decal/damage:
+    definition: Bullet holes or cracks.
+    examples:
+    - SM_Prop_BulletHoles
+    - SM_Prop_Grass_Cracks
+  decal/marking:
+    definition: Road arrows, lane, parking or floor lines.
+    examples:
+    - SM_Env_Road_Arrow
+    - SM_Bld_Floor_Lines
+    - SM_Env_Road_ParkingLines_01
+  character/soldier:
+    definition: Soldier or armed operator.
+    examples:
+    - soldier-male
+    - operator
+    - rifleman-male
+  character/civilian:
+    definition: Civilian, peasant, child or clergy.
+    examples:
+    - peasant_female
+    - kid_tracksuit_01
+    - priest_01
+  character/gang-member:
+    definition: Gang boss, enforcer or thief.
+    examples:
+    - gang_boss_01
+    - gang_enforcer_01
+    - gang_thief
+  character/monster:
+    definition: Demon, bigfoot, vampire or other humanoid monster.
+    examples:
+    - demon_01
+    - bigfoot
+    - priest_fangs_01
+  character/part:
+    definition: Head base or attachment such as a helmet, pack, hat or tail.
+    examples:
+    - SM_Prop_HeadBase_Skin
+    - char_attach_german_helmet_01
+    - demon_tail_01
+  animal/pet/dog:
+    definition: Dog of any breed.
+    examples:
+    - dog/labrador
+    - husky
+    - shiba-inu
+  animal/pet/cat:
+    definition: Cat of any breed.
+    examples:
+    - cat/tabby
+    - cat/siamese
+    - cat/sphynx
+  animal/farm/livestock:
+    definition: Cow, bull, horse, donkey, alpaca or unicorn.
+    examples:
+    - cow
+    - horse
+    - alpaca
+  animal/farm/poultry:
+    definition: Chicken, rooster, chick or duck.
+    examples:
+    - hen/chicken_brown
+    - rooster/rooster_black
+    - duck/duck_white
+  animal/wild/hoofed:
+    definition: Deer, stag, doe, moose or boar.
+    examples:
+    - deer
+    - moose/moose_male
+    - boar/boar
+  animal/wild/predator:
+    definition: Wolf, fox or bear.
+    examples:
+    - wolf
+    - bear/bear
+    - fox
+  animal/wild/small-mammal:
+    definition: Rabbit, raccoon or skunk.
+    examples:
+    - rabbit/rabbit
+    - raccoon/raccoon
+    - skunk/skunk
+  animal/wild/bird:
+    definition: Wild bird, eagle or phoenix.
+    examples:
+    - bird
+    - eagle
+    - phoenix
+  backdrop/sky-dome:
+    definition: Sky dome or cloud ring.
+    examples:
+    - SM_Generic_SkyDome_Apoco
+    - SM_Skydome_01
+    - SM_Generic_CloudRing_01
+  backdrop/cloud:
+    definition: Individual cloud mesh.
+    examples:
+    - SM_Generic_Cloud
+  backdrop/distant-scenery:
+    definition: Background mountains, hills, tree lines or background cards.
+    examples:
+    - SM_Generic_Mountains_Snow_01
+    - SM_Env_BackgroundCard
+    - SM_Env_Background_Trees_01
