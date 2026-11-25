@@ -489,7 +489,7 @@ A hand-written description of one real building's geometry beyond its OSM footpr
 A window, door or garage door in a wall of a building with a detail: a real hole in the wall with recessed reveals, located by footprint edge, distance along it, size and sill height. Each carries a confidence (low/medium/high) for how well the photos pin it down.
 
 **Hollow house**:
-A house whose building detail says `interior: true` (ADR 0040, `buildings/interior.py`): walls 0.3 m thick inward of the footprint, a floor at the sill of its lowest door, a ceiling one storey above (at most 3.0 m), and collision that is this shell. Its windows and doors between floor and ceiling go through the wall; the doors have leaves players open and close (ADR 0044). Listed in `interiors.json` with its room (one shelter volume) and doorways. Every other house is a solid block. Its floor plan gives it partitions and room types; furniture is not built yet.
+A house whose building detail says `interior: true` (ADR 0040, `buildings/interior.py`): walls 0.3 m thick inward of the footprint, a floor at the sill of its lowest door, a ceiling one storey above (at most 3.0 m), and collision that is this shell. Its windows, doors and garage doors that fit under the ceiling go through the wall; the doors and garage doors have leaves players open and close (ADR 0044). Listed in `interiors.json` with its room (one shelter volume) and doorways. Every other house is a solid block. Its floor plan gives it partitions and room types; furniture is not built yet.
 _Avoid_: enterable house, interior house
 
 **Floor plan**:

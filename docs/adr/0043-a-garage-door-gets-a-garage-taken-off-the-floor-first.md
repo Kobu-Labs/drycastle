@@ -10,7 +10,7 @@ Step 4 of ADR 0040, before furnishing. Asked by the owner on 2026-11-25: a garag
 
 **4. One door from the house** into the garage (hall, kitchen, closet or living room first); nothing is walked through it and it is never merged away.
 
-**5. The garage door stays shut:** it is not a way through, and is listed as the room's `garage_doors` in `interiors.json`.
+**5. The garage door is no way through for the plan** (players open it, ADR 0044). It is listed as the room's `garage_doors` in `interiors.json`.
 
 Consequences:
 

@@ -4,7 +4,7 @@ Step 3 of ADR 0040. `programme` in `pipeline/rust/detail/src/floorplan.rs`. Each
 
 A first version typed the rooms after the plan had been cut into equal pieces; the owner rejected the result on 2026-11-24 (ADR 0041). Now the programme comes before the walls, and the floor plan is cut to fit it.
 
-**1. Nine types.** `hall`, `living`, `kitchen`, `living_kitchen` (one space to live and cook in), `dining`, `bedroom`, `bathroom`, `storage` (a closet, a pantry, a utility room), `study`. The type is the `type` of a room in `interiors.json`.
+**1. Ten types.** `hall`, `living`, `kitchen`, `living_kitchen` (one space to live and cook in), `dining`, `bedroom`, `bathroom`, `storage` (a closet, a pantry, a utility room), `study`, `garage` (not part of the programme: ADR 0043). The type is the `type` of a room in `interiors.json`.
 
 **2. The programme is a list of rooms with sizes, front door first,** for the floor left beside the hall:
 

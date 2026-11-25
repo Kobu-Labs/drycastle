@@ -3,8 +3,8 @@
 A detail opts in with ``interior: true``. The outer face of every wall stays on the footprint (what the photos measured);
 the wall grows ``WALL_M`` inward. The floor lies at the sill of the lowest door (the steps in front already climb to
 it), the ceiling one storey above it (at most ``STOREY_M``); what is above the ceiling stays closed (upper floors: later). A window or a door
-between floor and ceiling is a hole through the whole wall; a garage door, a recess and what is cut into a recess stay
-closed, as do windows above the ceiling.
+between floor and ceiling is a hole through the whole wall, as is a garage door (it may start below the floor); a recess
+and what is cut into a recess stay closed, as do windows above the ceiling. Overview: docs/interiors.md.
 
 ``openings.build_detail`` calls in here for the visual parts; ``collision`` is the same shell as the collision mesh
 (ADR 0040), with a ramp where the visual has door steps.

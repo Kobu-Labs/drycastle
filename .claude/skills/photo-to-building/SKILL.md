@@ -1,6 +1,6 @@
 ---
 name: photo-to-building
-description: Model one real building of the village in the map from photos of its sides (one or more photos, each with its side or viewpoint). Use for "make a 3d model of this building from the photo", "model parcel P-xxxx / G-xxxx / building wxxxx from these photos", "this house looks like this [image]". Exterior only. Not for interiors, doors that open, or game code.
+description: Model one real building of the village in the map from photos of its sides (one or more photos, each with its side or viewpoint). Use for "make a 3d model of this building from the photo", "model parcel P-xxxx / G-xxxx / building wxxxx from these photos", "this house looks like this [image]". Measures the exterior; the interior is generated from it (docs/interiors.md). Not for hand-modelled interiors or game code.
 ---
 
 # Photo to building
@@ -17,7 +17,7 @@ Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`O
 - Never estimate a size or a position yourself, and never change a number in `state.json`. If the candidates do not
   hold the right thing, answer `"none"` (or `"no"`): the tool reports it. A wrong letter is worse than `"none"`.
 - The building has no captures (`photo_capture list`), or the user gave a photo of their own: that is the other way,
-  `SHEET.md` in this folder. Lean-to or split roofs, two buildings that are one, an interior: stop and say it needs
+  `SHEET.md` in this folder. Lean-to or split roofs, two buildings that are one, a hand-modelled interior: stop and say it needs
   `LANDMARK.md` (same folder). Do not read either file otherwise.
 
 ## Who answers (cheapest first)
@@ -25,7 +25,7 @@ Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`O
 The two answers (`ends.json`, `names.json`) can be given three ways; the questions and files are the same.
 
 1. **One API call per question, no agent** (about 9k tokens a house instead of about 30k). Needs `ANTHROPIC_API_KEY`
-   (repo `.env`) and `uv sync --extra reader`:
+   in the environment (kept in the repo `.env`) and `uv sync --extra reader`:
 
        uv run python -m drycastle_pipeline.photos.facade_pipeline read <id> <id> ...
 

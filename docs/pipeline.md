@@ -682,7 +682,7 @@ identical files. `uv run python -m drycastle_pipeline.preview.detail --parcel P-
 one parcel top-down from the real patches, textures and clutter meshes into `out/detail/`.
 
 **Floor plans** of hollow houses (`buildings/floorplan.py`, ADR 0041) are worked out by the same module (`floorplan.rs`,
-`floor_plans`), so `export` needs it built too.
+`floor_plans`), so `export` needs it built too. Whole flow: [interiors.md](interiors.md).
 
 **Rust engine** (`pipeline/rust/detail`, `detail/rust.py`). The Python stage takes about 250 s on the full village map (the big
 ground areas and the dike are most of it: shapely calls on 100 ha polygons, a Poisson-disc sweep and point-in-polygon tests per
@@ -809,6 +809,9 @@ above). The shooter's server uses the rooms for the shelter rule (`ShooterCore/B
 only when both are in the open or both are in the same room), and the ladders go to every player body (`Ladders.Climb`, the
 shared movement step). The client darkens the rooms and hangs a lamp in each (`shooter/Bunkers/BunkerLights.cs`). The placeable
 `prim:bunker` is the closed form (a placed object collides as one box) and has no room.
+
+**Hollow houses (`interiors.json`).** Per building whose detail says `interior: true`: shell, floor plan and doors.
+Listed under `files.interiors`, only when the map has one. Fields: [interiors.md](interiors.md).
 
 **Water bodies (`water.json`, version 2).** Written when the terrain exists, listed in `manifest.json` under
 `files.water`. One body per parcel or ground area (`parcels.json` `ground`) of a water kind (a type that carries the `water`

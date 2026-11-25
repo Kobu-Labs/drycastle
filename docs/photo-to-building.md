@@ -53,6 +53,9 @@ in `pipeline/config/overrides.yaml` (roof form, heights, colours). No code; the 
 | 5 | tool | `facade_pipeline apply DIR`: heights, openings, the ridge from the roof's outline against the sky, the overhang, eaves, plinth, downpipes; both files; the model drawn over each photo, beside it, and from four corners | `overlay_<n>.png`, `compare_<n>.png`, `render_<k>.png`, `result.json` |
 | 6 | model | one look at the overlay and the comparison, at most one correction | |
 
+`apply` also writes `interior: true` (not for a building with `roof_part`): the house is hollow, with a generated floor
+plan and doors that open (docs/interiors.md).
+
 `apply --dry` measures and draws without writing. After a batch: `make rules && make export` once. Nothing is
 committed unless you ask.
 
@@ -159,7 +162,7 @@ than 15 px (such lines are now one candidate).
 
 Lean-to or split roofs, two buildings sharing a wall, a hollow part, an L-shape: `LANDMARK.md` in the skill folder, the
 long way. It writes a Python module on `landmark_kit` (reference: `buildings/landmarks/garage.py`, ADR 0027) and costs several times more.
-Interiors, doors that open and parked vehicles are separate work on top of that.
+A hand-modelled interior, its doors and parked vehicles are separate work on top of that.
 
 ## Limits
 
