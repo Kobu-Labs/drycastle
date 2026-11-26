@@ -48,10 +48,10 @@ public sealed record DestructionConfig : IVersioned
     {
         ["foundation"] = new() { Resist = 0, Weight = 0, Strength = 0 },
         ["floor"] = new() { Resist = 1.2f, Weight = 3, Strength = 60000 },
-        ["wall"] = new() { Resist = 1.0f, Weight = 4, Strength = 40000 },
-        ["partition"] = new() { Resist = 0.6f, Weight = 2, Strength = 8000 },
-        ["ceiling"] = new() { Resist = 0.9f, Weight = 2, Strength = 20000 },
-        ["roof"] = new() { Resist = 0.5f, Weight = 1, Strength = 6000 },
+        ["wall"] = new() { Resist = 1.0f, Weight = 4, Strength = 1500 },
+        ["partition"] = new() { Resist = 0.6f, Weight = 2, Strength = 800 },
+        ["ceiling"] = new() { Resist = 0.9f, Weight = 2, Strength = 2500 },
+        ["roof"] = new() { Resist = 0.5f, Weight = 1, Strength = 400 },
     };
 
     DestructionConfig Validate()

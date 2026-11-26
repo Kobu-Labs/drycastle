@@ -8,10 +8,10 @@
   "materials": {
     "foundation": { "resist": 0,   "weight": 0, "strength": 0 },
     "floor":      { "resist": 1.2, "weight": 3, "strength": 60000 },
-    "wall":       { "resist": 1.0, "weight": 4, "strength": 40000 },
-    "partition":  { "resist": 0.6, "weight": 2, "strength": 8000 },
-    "ceiling":    { "resist": 0.9, "weight": 2, "strength": 20000 },
-    "roof":       { "resist": 0.5, "weight": 1, "strength": 6000 }
+    "wall":       { "resist": 1.0, "weight": 4, "strength": 1500 },
+    "partition":  { "resist": 0.6, "weight": 2, "strength": 800 },
+    "ceiling":    { "resist": 0.9, "weight": 2, "strength": 2500 },
+    "roof":       { "resist": 0.5, "weight": 1, "strength": 400 }
   },
   "support": { "max_passes": 4, "span_cells": 0 },
   "fracture": { "cells_per_piece": 24, "impact_bias": 0.6, "dust_below_cells": 4 },

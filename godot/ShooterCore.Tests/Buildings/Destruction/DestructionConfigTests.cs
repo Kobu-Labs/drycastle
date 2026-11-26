@@ -17,7 +17,7 @@ public class DestructionConfigTests
         Assert.Equal(19, c.Resist(CellMaterial.Floor));     // 1.2 * 16 = 19.2
         Assert.Equal(0, c.Resist(CellMaterial.Foundation));
         Assert.Equal(4, c.Weight(CellMaterial.Wall));
-        Assert.Equal(6000, c.Strength(CellMaterial.Roof));
+        Assert.Equal(400, c.Strength(CellMaterial.Roof));
         Assert.Equal(4, c.Support.MaxPasses);
         Assert.Equal(24, c.Fracture.CellsPerPiece);
         Assert.Equal(RubbleMode.Fade, c.Debris.Rubble);
