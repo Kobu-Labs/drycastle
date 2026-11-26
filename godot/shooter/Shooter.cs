@@ -489,7 +489,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var config = new ServerConfig
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation,

@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Killstreaks;
@@ -41,6 +42,7 @@ internal sealed class GunshipServer
     readonly Splash _splash;
     readonly DeathPush _deathPush;
     readonly Func<KillstreakService> _streaks;
+    readonly Action<NVec3, float, BlastSource> _carve;
 
     /// <summary>Shells in the air, by their detonation time (the server's clock).</summary>
     readonly TimedQueue<PendingShell> _shells = new();
@@ -56,9 +58,10 @@ internal sealed class GunshipServer
 
     /// <summary>Registers the aircraft type and resolves the gunship's weapons.</summary>
     public GunshipServer(ServerContext ctx, KillstreakFile killstreaks, WeaponsFile weapons, TargetBook targets, Fleet fleet, Func<WorldQuery> query, Func<VehiclesFile?> vehicles, DealDamage deal,
-        Action<ServerCar, float, ushort, byte, float> damageVehicle, LaunchRocket launchRocket, ImpactFx impacts, Splash splash, DeathPush deathPush, Func<KillstreakService> streaks)
+        Action<ServerCar, float, ushort, byte, float> damageVehicle, LaunchRocket launchRocket, ImpactFx impacts, Splash splash, DeathPush deathPush, Func<KillstreakService> streaks,
+        Action<NVec3, float, BlastSource> carve)
     {
-        _streaks = streaks;
+        _streaks = streaks; _carve = carve;
         _ctx = ctx; _killstreaks = killstreaks; _weapons = weapons; _targets = targets; _fleet = fleet; _query = query; _vehicles = vehicles; _deal = deal;
         _damageVehicle = damageVehicle; _launchRocket = launchRocket; _impacts = impacts; _splash = splash; _deathPush = deathPush;
         Aircraft.Register(WorldEntityRegistry.Shared);
@@ -251,6 +254,7 @@ internal sealed class GunshipServer
         ushort? direct = route.Impact == GunshipImpact.Body ? route.TargetId : null;
         var directCar = route.Impact == GunshipImpact.Vehicle ? route.VehicleIndex : -1;
         Fx.Blast(owner, new GunshipBlast(at, splash.Radius));
+        _carve(at, splash.Radius, BlastSources.OfGunshipRound(def.Kind, credit == SpecialWeapons.Flak)); // the hollow houses it reaches (no glass: gunship rounds never broke panes)
         var hits = GunshipRouting.Burst(def, at, owner, direct, directCar, targets, RoutedVehicles(),
             _vehicles()?.RocketDamageMultiplier ?? 0f, id => _ctx.Players.TryGetValue(id, out var c) ? c.Perks.ExplosiveDamageTaken : 1f); // Flak Jacket
         var kill = false;

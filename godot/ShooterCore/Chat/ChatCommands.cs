@@ -87,6 +87,9 @@ public static class ChatCommands
     /// <summary>Bounds of /explode's wave speed, metres a second.</summary>
     public const int MinExplodeSpeed = 5, MaxExplodeSpeed = 400;
 
+    /// <summary>Largest /carve radius, metres (the MOAB's carve is 14).</summary>
+    public const int MaxCarveRadius = 20;
+
     /// <summary>The value of /companion that takes the Companion away.</summary>
     public const string CompanionOff = "off";
 
@@ -115,6 +118,9 @@ public static class ChatCommands
         new("night", "TEST (this client only): tune the night lighting, all in percent: moon light (default 8), ambient floor (4), night exposure (90). No arguments shows the values, reset restores them. Use /time midnight to see it",
             new[] { new ChatArg("moon", ChatArgKind.IntOrChoice, false, 0, 100), new ChatArg("ambient", ChatArgKind.Int, false, 0, 100), new ChatArg("exposure", ChatArgKind.Int, false, 10, 200) }, ClientSide: true),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
+        new("carve", "TEST: carve a sphere of that radius (metres) out of the hollow houses where your crosshair meets the world. No damage, no glass, no blast", new[] { new ChatArg("radius", ChatArgKind.Int, true, 1, MaxCarveRadius) }),
+        new("houses", "TEST: make every hollow house whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
 
     public static ChatCommand? Find(string name) => All.FirstOrDefault(c => c.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
@@ -156,6 +162,8 @@ public static class ChatCommands
                 ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
+            ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
+            ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "night" => new[] { ("reset", "back to the shipped night") },
