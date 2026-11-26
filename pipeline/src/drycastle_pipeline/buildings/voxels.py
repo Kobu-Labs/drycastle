@@ -14,7 +14,11 @@ facade):
 * ceiling: one layer just over the ceiling height; the attic above it is air, closed all round (an attic cell beside the
   outside, as where a high roof steps down to a low one, becomes roof; the export fails on an open attic);
 * roof: a skin under the visual roof surface (found by rasterising the up-facing roof triangles), one cell thick and as
-  much more as the slope needs to stay face-connected; chimneys and dormers fill from the skin up to their tops;
+  much more as the slope needs to stay face-connected; chimneys fill from the skin up to their tops; a dormer is a shell
+  one cell thick, its inside air joined to the attic under it;
+* what stands out of the walls and roof (door canopies, steps, balconies, fascia and gutters, downpipes): every cell
+  outside the footprint its faces pass through (canopies, eaves and pipes roof; steps and balconies floor, the lowest cell
+  of each step column foundation, so steps stand and a balcony falls with its wall);
 * partitions of the floor plan: the cells their middle line passes through, from floor to ceiling, open in the gaps
   (a doorway up to its head).
 
@@ -274,6 +278,44 @@ def _line_columns(p, q, to_grid, step: float) -> np.ndarray:
     return np.unique(np.floor(np.stack([g[1], g[0]], axis=1)).astype(np.int64), axis=0)
 
 
+def _added(full: Mesh, prev: Mesh) -> Mesh:
+    """The triangles of ``full`` that ``prev`` does not have (as a multiset; the same build of the same part gives the same floats)."""
+    left: dict[bytes, int] = {}
+    for t in prev.tris:
+        k = t.tobytes()
+        left[k] = left.get(k, 0) + 1
+    keep = np.zeros(len(full.tris), bool)
+    for n, t in enumerate(full.tris):
+        k = t.tobytes()
+        if left.get(k, 0):
+            left[k] -= 1
+        else:
+            keep[n] = True
+    return Mesh(full.tris[keep], full.colours[keep])
+
+
+_BARY: dict[int, np.ndarray] = {}
+
+
+def _surface_cells(tris: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """The (k, j, i) of every cell a triangle passes through (sampled every quarter cell) and the triangle's index.
+    ``tris`` is (n, 3, 3) in grid units (x, y, z)."""
+    cells, which = [], []
+    for n, t in enumerate(tris):
+        m = max(1, math.ceil(4 * max(np.linalg.norm(t[1] - t[0]), np.linalg.norm(t[2] - t[0]), np.linalg.norm(t[2] - t[1]))))
+        if m not in _BARY:
+            a, b = np.meshgrid(np.arange(m + 1), np.arange(m + 1))
+            ok = a + b <= m
+            _BARY[m] = np.stack([a[ok], b[ok]], axis=1) / m
+        w = _BARY[m]
+        p = t[0] + w[:, :1] * (t[1] - t[0]) + w[:, 1:] * (t[2] - t[0])
+        cells.append(np.floor(p[:, ::-1]).astype(np.int64))
+        which.append(np.full(len(p), n))
+    if not cells:
+        return np.zeros((0, 3), np.int64), np.zeros(0, np.int64)
+    return np.concatenate(cells), np.concatenate(which)
+
+
 def voxelise(bid: str, b: dict, d, ins, visual: Mesh, dz: float = 0.0, plan=None, cell: float = CELL_M) -> HouseGrid:
     """The cells of hollow house ``bid`` (building ``b``, detail ``d``, room ``ins``), from its visual (house local: z 0 at
     its base) standing ``dz`` high on the map. ``plan``: its floor plan (None: ``interior.plan_of``; False: no partitions)."""
@@ -400,9 +442,65 @@ def voxelise(bid: str, b: dict, d, ins, visual: Mesh, dz: float = 0.0, plan=None
                 part[zs, j, i] = True
         mat[part & (mat == AIR)] = PARTITION
 
-    if 0 <= k_ceil < nz:  # the attic: air over the ceiling, under the roof skin
+    # what stands out of the walls and the roof: the cells its faces pass through, outside the footprint, so it falls with
+    # what holds it (a balcony with its wall) instead of floating; steps stand on their own lowest cells (foundation)
+    att_colour = np.zeros((nz, ny, nx, 3), np.uint8)
+    att = np.zeros((nz, ny, nx), bool)
+    no_steps = [replace(o, steps=0, canopy_m=0.0) for o in d.openings]
+    base = replace(_roof_only(d), openings=no_steps, interior=d.interior)  # as the visual's walls: a door's steps need its opening
+    built = [build_detail(b, base)[0]]
+    parts = (  # each built on the one before it: what it adds, in its material
+        (replace(base, openings=[replace(o, steps=0) for o in d.openings]), ROOF),  # door canopies
+        (replace(base, openings=d.openings), FLOOR),  # steps
+        (replace(base, openings=d.openings, balconies=d.balconies), FLOOR),
+        (replace(base, openings=d.openings, balconies=d.balconies, eaves=d.eaves, downpipes=d.downpipes), ROOF),  # fascia, gutters, pipes
+    )
+    prev = base
+    for k_part, (dd, m_part) in enumerate(parts):
+        built.append(built[-1] if dd == prev else build_detail(b, dd)[0])  # nothing of this part: no build
+        prev = dd
+        add = _added(built[-1], built[-2])
+        if not len(add.tris):
+            continue
+        t = frame_tris(add)
+        t[..., 2] = (t[..., 2] - oz) / cell
+        c, which = _surface_cells(t)
+        ok = (c[:, 0] >= 0) & (c[:, 0] < nz) & (c[:, 1] >= 0) & (c[:, 1] < ny) & (c[:, 2] >= 0) & (c[:, 2] < nx)
+        c, which = c[ok], which[ok]
+        ok = ~in_poly[c[:, 1], c[:, 2]] & (mat[c[:, 0], c[:, 1], c[:, 2]] == AIR)
+        c, which = c[ok], which[ok]
+        mat[c[:, 0], c[:, 1], c[:, 2]] = m_part
+        att[c[:, 0], c[:, 1], c[:, 2]] = True
+        att_colour[c[:, 0], c[:, 1], c[:, 2]] = add.colours[which]
+        if k_part == 1 and len(c):  # steps are solid down to the ground (their faces have no bottom), the ground cell foundation
+            top = np.full((ny, nx), -1)
+            np.maximum.at(top, (c[:, 1], c[:, 2]), c[:, 0])
+            colour_of = np.zeros((ny, nx, 3), np.uint8)
+            colour_of[c[:, 1], c[:, 2]] = add.colours[which]
+            k_ground = max(0, math.floor(-oz / cell))  # the cell of the house's foot (z 0)
+            fill = (K >= k_ground) & (K <= top[None]) & (mat == AIR) & ~in_poly[None]
+            mat[fill] = FLOOR
+            att[fill] = True
+            att_colour[fill] = np.broadcast_to(colour_of[None], att_colour.shape)[fill]
+            foot = fill & (K == k_ground)
+            mat[foot] = FOUNDATION
+
+    # a dormer is hollow: a shell one cell thick, its inside open to the attic under it (not a solid block on the roof)
+    pocket = np.zeros((nz, ny, nx), bool)
+    if d.dormers and 0 <= k_ceil < nz:
+        dorm_top, _ = _tops(frame_tris(build_detail(b, replace(_roof_only(d), dormers=d.dormers))[0]), nx, ny)
+        dcol = has_roof & (dorm_top > roof_top + cell / 2)
+        vol = dcol[None] & (Z > roof_top[None]) & (Z <= dorm_top[None]) & (mat == ROOF)
+        skin = dcol[None] & (Z <= roof_top[None]) & (Z > under[None]) & (mat == ROOF)
+        pocket = vol & ~_beside(~(vol | skin))
         ceiled = mat[k_ceil] == CEILING
-        _seal_attic(mat, (mat == AIR) & ceiled[None] & (K > k_ceil) & (Z < roof_top[None]))
+        cols = pocket.any(axis=0) & ceiled  # under the pocket, over an attic: the skin opens into it
+        pocket |= skin & cols[None]
+        mat[pocket] = AIR
+
+    if 0 <= k_ceil < nz:  # the attic: air over the ceiling, under the roof skin (and a dormer's inside)
+        ceiled = mat[k_ceil] == CEILING
+        _seal_attic(mat, ((mat == AIR) & ceiled[None] & (K > k_ceil) & (Z < roof_top[None])) | pocket)
     mat[~_supported(mat)] = AIR  # a piece the foundation does not hold (a scrap of roof) would fall at the first carve
     if attic_open(mat):
         raise ValueError(f"house {bid}: its attic is open to the outside (house_voxels.bin needs it closed)")
@@ -430,6 +528,8 @@ def voxelise(bid: str, b: dict, d, ins, visual: Mesh, dz: float = 0.0, plan=None
     on_roof = extra[None] & (Z > roof_top[None]) & (mat == ROOF)
     if on_roof.any():  # what stands on the roof, in its own colour
         colour[on_roof] = np.broadcast_to(visual.colours[np.maximum(full_tri, 0)][None], colour.shape)[on_roof]
+    kept = att & (mat != AIR)
+    colour[kept] = att_colour[kept]  # steps, balconies, gutters: the colour of their faces
     keys = mat.astype(np.uint32) << 24 | colour[..., 0].astype(np.uint32) << 16 | colour[..., 1].astype(np.uint32) << 8 | colour[..., 2]
     keys[mat == AIR] = 0
     uniq, inv = np.unique(keys, return_inverse=True)

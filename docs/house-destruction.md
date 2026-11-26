@@ -66,6 +66,8 @@ Voxeliser rules (WP-D):
 - Openings that go through (`Inside.through`) are air. Closed openings, recesses and windows above the ceiling are wall.
 - Roof: a 1-cell skin under the visual roof surface. The **attic is air**, closed by the ceiling slab.
 - Foundation: one layer under the floor slab, across the footprint. It is the only support root and is never carved.
+- What stands out of the walls and roof (door canopies, steps, balconies, fascia and gutters, downpipes): every cell outside the footprint its faces pass through. Canopies, eaves and pipes are roof, steps and balconies floor. Steps are solid down to the ground and their ground cell is foundation, so they stand on their own; a balcony is held by its wall and falls with it.
+- Chimneys are solid from the skin up. A dormer is a 1-cell shell whose inside is air joined to the attic under it.
 - Deterministic: same input, same bytes.
 
 ## Contract 2: map nodes (pipeline writes, MapLoader reads)

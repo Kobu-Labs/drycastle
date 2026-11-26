@@ -112,3 +112,39 @@ def test_an_attic_beside_the_outside_is_sealed_with_roof():
 def test_a_house_has_a_closed_attic():
     g, _ = grid()
     assert not vx.attic_open(g.materials())
+
+
+def test_steps_stand_on_their_own_foot_and_a_balcony_hangs_on_its_wall():
+    bal = {"edge": 3, "at_m": 0.5, "width_m": 5.0, "floor_m": 1.8}  # the gable wall at x = 0, 1.1 m out
+    g, _ = grid(balconies=[bal])
+    z = 10.0
+    assert at(g, 6.5, -0.1, z + 0.0) == vx.FOUNDATION  # the door's steps (x 6..6.95, up to the sill at 0.6): the lowest cell
+    assert at(g, 6.5, -0.1, z + 0.45) == vx.FLOOR  # the top step
+    assert at(g, -0.5, 2.0, z + 1.72) == vx.FLOOR  # the balcony's slab (1.64..1.8)
+    mats = g.materials()
+    i, j, k = (int(np.floor((v - o) / C)) for v, o in zip((-0.5, 2.0, z + 1.72), g.origin, strict=True))
+    no_walls = np.where(mats == vx.WALL, vx.AIR, mats)
+    assert vx._supported(mats)[k, j, i] and not vx._supported(no_walls)[k, j, i]  # held by the wall only: it falls with it
+
+
+def test_gutters_and_downpipes_are_roof_cells_outside_held_by_the_house():
+    g, _ = grid(eaves={"gutter": True}, downpipes=[{"edge": 0, "at_m": 0.3}])
+    mats = g.materials()
+    assert at(g, 0.3, -0.1, 10.0 + 1.5) == vx.ROOF  # the downpipe, down the south wall
+    k, j, i = np.nonzero(mats == vx.ROOF)
+    assert (g.origin[1] + (j + 0.5) * C < -0.5).any()  # the gutter, past the overhang's rim (0.4 out)
+    assert vx._supported(mats)[mats == vx.ROOF].all()  # held by the house: none left floating
+
+
+def test_a_dormer_is_a_shell_whose_inside_is_part_of_the_attic():
+    dm = {"id": "dm1", "edge": 0, "at_m": 5.0, "bottom_m": 3.4, "height_m": 1.0, "rise_m": 0.4, "window_m": [0.6, 0.6]}
+    g, _ = grid(dormers=[dm])
+    mats, z = g.materials(), 10.0
+    assert at(g, 5.0, 1.7, z + 4.3) == vx.AIR  # inside the dormer, over the roof slope (4.13 there)
+    assert at(g, 5.0, 1.7, z + 4.7) == vx.ROOF  # its roof
+    assert at(g, 5.0 + 0.7 - 0.1, 1.7, z + 4.3) != vx.AIR  # its cheek
+    assert not vx.attic_open(mats)
+    cell = lambda x, y, zz: tuple(int(np.floor((v - o) / C)) for v, o in zip((x, y, zz), g.origin, strict=True))[::-1]  # noqa: E731
+    start = np.zeros(mats.shape, bool)
+    start[cell(5.0, 3.0, z + 4.0)] = True  # the attic under the ridge
+    assert vx._flood(mats == vx.AIR, start)[cell(5.0, 1.7, z + 4.3)]  # joined to the dormer's inside

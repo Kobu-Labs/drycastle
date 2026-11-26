@@ -10,6 +10,7 @@ Everything is in the building's own metres. A part is {core, domain (the core gr
 height above the eave is the lowest of its planes ``a*x + b*y + c``.
 """
 
+import json
 import itertools
 import math
 from dataclasses import dataclass, field
@@ -696,9 +697,19 @@ def _polys(g) -> list[Polygon]:
 
 
 def fit_building(b: dict, overhang: float = 0.0) -> Fit | None:
-    from shapely.geometry.polygon import orient
+    """The fitted roof of ``b``; the last few are kept, as one house is built several times over (the voxeliser builds its parts
+    one by one, buildings/voxels.py). A Fit is never changed after it is made."""
+    key = json.dumps([b["footprint"], b["roof"], b.get("ridge_dir"), b["roof_height_m"], b["eave_height_m"], overhang, b.get("roof_lead")])
+    if key not in _FITS:
+        from shapely.geometry.polygon import orient
 
-    from drycastle_pipeline.buildings.footprint import footprint_polygon
+        from drycastle_pipeline.buildings.footprint import footprint_polygon
 
-    poly = orient(Polygon(footprint_polygon(b["footprint"]).exterior), 1.0)
-    return fit(poly, b["roof"], b.get("ridge_dir"), float(b["roof_height_m"]), float(b["eave_height_m"]), overhang, b.get("roof_lead"))
+        poly = orient(Polygon(footprint_polygon(b["footprint"]).exterior), 1.0)
+        if len(_FITS) >= 8:
+            _FITS.pop(next(iter(_FITS)))
+        _FITS[key] = fit(poly, b["roof"], b.get("ridge_dir"), float(b["roof_height_m"]), float(b["eave_height_m"]), overhang, b.get("roof_lead"))
+    return _FITS[key]
+
+
+_FITS: dict[str, Fit | None] = {}
