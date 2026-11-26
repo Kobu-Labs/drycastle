@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Godot;
 using Drycastle.Shooter.Buildings.Destruction;
+using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Movement;
@@ -106,18 +107,72 @@ internal sealed class HouseDestructionServer
             var (centre, radius) = _bounds[i];
             var reach = radius + radiusM;
             if (NVec3.DistanceSquared(centre, map) > reach * reach) continue;
-            var house = _houses[i];
-            if (CarveOp.From(house.Grid, map, radiusM) is not { } op) continue;
-            var result = house.Apply(op, _cfg);
-            _ctx.Broadcast(EventKind.HouseCarve, HouseCodec.EncodeCarve(new HouseCarveMsg(house.Grid.Index, house.OpSeq, op, result.Hash))); // every op, even one that took nothing: the clients count them too
-            if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0)
-            {
-                _dirty[i] = true;
-                Changed?.Invoke(house);
-            }
+            if (CarveOp.From(_houses[i].Grid, map, radiusM) is not { } op) continue;
+            ApplyOp(i, op);
             reached++;
         }
         return reached;
+    }
+
+    /// <summary>Applies <paramref name="op"/> to house <paramref name="i"/> and sends it to everyone.</summary>
+    void ApplyOp(int i, CarveOp op)
+    {
+        var house = _houses[i];
+        var result = house.Apply(op, _cfg);
+        _ctx.Broadcast(EventKind.HouseCarve, HouseCodec.EncodeCarve(new HouseCarveMsg(house.Grid.Index, house.OpSeq, op, result.Hash))); // every op, even one that took nothing: the clients count them too
+        if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0)
+        {
+            _dirty[i] = true;
+            Changed?.Invoke(house);
+        }
+    }
+
+    // ---- rams ----
+
+    readonly List<(int House, CarveOp[] Hole, NVec3 At)> _rammed = new();
+
+    /// <summary>
+    /// A vehicle that lost <see cref="ServerCar.LastImpact"/> m/s to something this tick, from <see cref="ServerCar.LastImpactVelocity"/> (HouseRam,
+    /// house_destruction.json <c>ram</c>). Below <c>ram.min_speed</c>, or no hollow house wall just ahead along that velocity: null, a crash like any.
+    /// Its momentum (mass times the speed lost) against what the holes it needs take: more, the holes are cut, the vehicle goes on slowed by them, and the
+    /// speed that cost is returned (its crash); less, each house it met gets a dent and it stops (null: the crash is the whole impact).
+    /// </summary>
+    public float? Ram(ServerCar car)
+    {
+        var rc = _cfg.Ram;
+        if (!On || !rc.Enabled || car.LastImpact < rc.MinSpeed) return null;
+        var v = car.LastImpactVelocity;
+        var speed = v.Length();
+        if (speed < 1e-3f) return null;
+        var s = car.ContactShape();
+        var box = RamBox.FromGodot(s.Feet, s.Yaw, s.HalfWidth, s.HalfLength, s.Height);
+        var dir = RamBox.ToMap(v) / speed;
+        var reachM = box.Extent(dir) + rc.ProbeM + box.Half.Length();
+        _rammed.Clear();
+        var cost = 0f;
+        for (var i = 0; i < _houses.Length; i++)
+        {
+            var (centre, radius) = _bounds[i];
+            if (NVec3.DistanceSquared(centre, box.Centre) > (radius + reachM) * (radius + reachM)) continue;
+            if (HouseRam.Contact(_houses[i], box, dir, rc.ProbeM) is not { } hit) continue;
+            var hole = HouseRam.Hole(_houses[i].Grid, box, dir, hit.Front, rc);
+            cost += HouseRam.Cost(_houses[i], hole, _cfg);
+            _rammed.Add((i, hole, hit.At));
+        }
+        if (_rammed.Count == 0) return null;
+        var mass = car.BumpBody().Mass;
+        var momentum = mass * car.LastImpact;
+        if (momentum <= cost)
+        {
+            foreach (var (i, _, at) in _rammed)
+                if (HouseRam.Dent(_houses[i].Grid, at, momentum, cost, rc) is { } dent) ApplyOp(i, dent);
+            return null;
+        }
+        foreach (var (i, hole, _) in _rammed)
+            foreach (var op in hole) ApplyOp(i, op);
+        var kept = HouseRam.SpeedThrough(speed, cost, mass);
+        car.Rammed(v * (kept / speed));
+        return speed - kept;
     }
 
     /// <summary>The houses that changed this tick get their new collider, each once (called once at the end of the tick).</summary>

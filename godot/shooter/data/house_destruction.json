@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "House destruction (docs/house-destruction.md Contract 5). carve.by_source: carve radius in metres by blast source, else splash radius * default_share; 0 = no carve. materials: resist (1.0 = the radius as is, 0 = never carved; read in 1/16 units), weight and strength (load before a cell crumbles) per cell material. support: passes of detach + load, span_cells (0 = off). fracture: Voronoi pieces of a fallen part. debris: the client's cosmetic debris; rubble fade|stay (/rubble overrides it for the round).",
+  "_note": "House destruction (docs/house-destruction.md Contract 5). carve.by_source: carve radius in metres by blast source, else splash radius * default_share; 0 = no carve. materials: resist (1.0 = the radius as is, 0 = never carved; read in 1/16 units), weight and strength (load before a cell crumbles) per cell material. support: passes of detach + load, span_cells (0 = off). fracture: Voronoi pieces of a fallen part. debris: the client's cosmetic debris; rubble fade|stay (/rubble overrides it for the round). ram: a vehicle that loses min_speed m/s (13.9 = 50 km/h) to a hollow house's wall in one tick rams it: its momentum (mass * speed lost) against momentum_per_cell * resist for every cell of the hole its cross-section needs (margin_m around it, depth_m deep, tiled by at most max_ops spheres of max_sphere_m); more goes through, slowed by the cost; less leaves a dent of up to dent_max_m and stops.",
   "enabled": true,
   "carve": { "default_share": 0.2,
              "by_source": { "rpg": 2.0, "grenade": 1.5, "cannon": 0.6, "flak": 0.0, "gunship_rocket": 1.6,
@@ -16,5 +16,7 @@
   "support": { "max_passes": 4, "span_cells": 0 },
   "fracture": { "cells_per_piece": 24, "impact_bias": 0.6, "dust_below_cells": 4 },
   "debris": { "rubble": "fade", "fade_after_s": 15, "fade_s": 2, "max_bodies": 64, "max_distance_m": 150,
-              "break_impulse": 4.0, "second_break": true, "stay_cap_cells": 20000 }
+              "break_impulse": 4.0, "second_break": true, "stay_cap_cells": 20000 },
+  "ram": { "enabled": true, "min_speed": 13.9, "momentum_per_cell": 270, "dent_max_m": 1.2, "margin_m": 0.15, "probe_m": 0.5, "depth_m": 0.6,
+           "max_sphere_m": 1.5, "max_ops": 16 }
 }

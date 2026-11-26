@@ -19,6 +19,7 @@ public sealed record DestructionConfig : IVersioned
     public SupportSection Support { get; init; } = new();
     public FractureConfig Fracture { get; init; } = new();
     public DebrisConfig Debris { get; init; } = new();
+    public RamConfig Ram { get; init; } = new();
 
     int[] _resist = [], _weight = [], _strength = [], _span = [];
 
@@ -87,6 +88,8 @@ public sealed record DestructionConfig : IVersioned
         if (Fracture.DustBelowCells < 0) throw new DataFileException($"{f}: fracture.dust_below_cells must not be negative");
         if (Debris.FadeAfterS < 0 || Debris.FadeS < 0 || Debris.MaxBodies < 0 || Debris.MaxDistanceM < 0 || Debris.BreakImpulse < 0 || Debris.StayCapCells < 0)
             throw new DataFileException($"{f}: debris numbers must not be negative");
+        if (!(Ram.MinSpeed > 0) || !(Ram.MomentumPerCell > 0) || !(Ram.DentMaxM >= 0) || !(Ram.MarginM >= 0) || !(Ram.ProbeM > 0) || !(Ram.DepthM > 0) || !(Ram.MaxSphereM > 0) || Ram.MaxOps < 1)
+            throw new DataFileException($"{f}: ram numbers must be positive (dent_max_m and margin_m may be 0, max_ops at least 1)");
         return this;
     }
 }
@@ -132,6 +135,29 @@ public sealed record FractureConfig
     public float ImpactBias { get; init; } = 0.6f;
     /// <summary>Pieces under this many cells go to the last group, dust.</summary>
     public int DustBelowCells { get; init; } = 4;
+}
+
+/// <summary>house_destruction.json <c>ram</c>: a vehicle driven into a hollow house (<see cref="HouseRam"/>).</summary>
+public sealed record RamConfig
+{
+    /// <summary>Off: vehicles stop at walls as at any other.</summary>
+    public bool Enabled { get; init; } = true;
+    /// <summary>Speed the wall takes from the vehicle in one tick (m/s) from which it is a ram: 13.9 = 50 km/h.</summary>
+    public float MinSpeed { get; init; } = 13.9f;
+    /// <summary>Momentum (kg m/s) one cell of resist 1.0 takes to break; a cell of resist r takes r times it.</summary>
+    public float MomentumPerCell { get; init; } = 270f; // a car (1200 kg) breaks through a typical outer wall (about 74 cells for its hole) from about 60 km/h
+    /// <summary>Radius of the dent a ram that does not go through leaves, at the momentum just short of it (metres; it shrinks with the momentum).</summary>
+    public float DentMaxM { get; init; } = 1.2f;
+    /// <summary>The hole is this much bigger than the vehicle's cross-section on every side (metres).</summary>
+    public float MarginM { get; init; } = 0.15f;
+    /// <summary>How far ahead of the stopped vehicle's box a wall is looked for (metres).</summary>
+    public float ProbeM { get; init; } = 0.5f;
+    /// <summary>How deep the hole is cut past the wall's face (metres).</summary>
+    public float DepthM { get; init; } = 0.6f;
+    /// <summary>The spheres that tile the hole are no bigger than this across their cut circle (metres).</summary>
+    public float MaxSphereM { get; init; } = 1.5f;
+    /// <summary>At most this many carve ops for one hole.</summary>
+    public int MaxOps { get; init; } = 16;
 }
 
 /// <summary>The rubble of fallen pieces (D8): sink away, or stay as frozen piles for the round.</summary>

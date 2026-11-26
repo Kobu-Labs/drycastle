@@ -40,6 +40,7 @@ internal sealed class VehicleLoop
     readonly Action _shoveByVans;
     readonly Action<ServerCar, float> _stepThrown;
     readonly Func<ServerClient, bool> _steersItself;
+    readonly Func<ServerCar, float?> _ram;
 
     /// <summary>Each live vehicle's origin for the broad test of <see cref="ResolveContacts"/> (reused every tick).</summary>
     Vector3[] _contactAt = Array.Empty<Vector3>();
@@ -47,9 +48,11 @@ internal sealed class VehicleLoop
     /// <param name="shoveByVans">The Raid vans push through: a vehicle in a van's box is shoved out (once per tick, before the pairs bump).</param>
     /// <param name="stepThrown">A vehicle thrown by the Bigfoot flies its arc: the server places it, and its riders with it.</param>
     /// <param name="steersItself">The harvester's own driver sends no inputs: the server steers it, one step a tick.</param>
+    /// <param name="ram">A vehicle that hit something this tick, into a hollow house (HouseDestructionServer.Ram): the speed it lost to the house when it went through, else null.</param>
     public VehicleLoop(ServerContext ctx, Fleet fleet, CarSeats seats, CarDamage damage, CarBlast blast, TowServer tow, RunOverServer runOver, GlassServer glass, SmokeStats smoke, VehiclesFile vehicles,
-        Water water, float killY, bool blastSmoke, Action shoveByVans, Action<ServerCar, float> stepThrown, Func<ServerClient, bool> steersItself)
+        Water water, float killY, bool blastSmoke, Action shoveByVans, Action<ServerCar, float> stepThrown, Func<ServerClient, bool> steersItself, Func<ServerCar, float?> ram)
     {
+        _ram = ram;
         _ctx = ctx; _fleet = fleet; _seats = seats; _damage = damage; _blast = blast; _tow = tow; _runOver = runOver; _glass = glass; _smoke = smoke; _vehicles = vehicles;
         _water = water; _killY = killY; _blastSmoke = blastSmoke; _shoveByVans = shoveByVans; _stepThrown = stepThrown; _steersItself = steersItself;
     }
@@ -87,6 +90,8 @@ internal sealed class VehicleLoop
         var here = car.GlobalPosition; // read once: a native read each time, every car every tick
         car.TickEndPos = here;
         if (here.Y < _killY) { foreach (var o in _fleet.Occupants(car)) _seats.Leave(o, false); car.Reset(false); return; }
+        // a hollow house's wall it hit hard enough breaks: through it, the crash is only what the hole took (driven or not, any vehicle)
+        if (car.LastImpact > 0 && _ram(car) is { } lost) car.LastImpact = lost;
         // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
         if (driver != null || car.Flies) _damage.Crash(car, car.LastImpact, 0);
         if (car.Life.DetonationDue(_ctx.Now)) { _blast.Detonate(car); return; }
@@ -178,6 +183,7 @@ internal sealed class VehicleLoop
         }
         else if (_ctx.Tick - car.FlightTick > FlightStarveTicks) car.StepFlight(FlightInput.Idle, dt, _ctx.Tick);
         car.LastImpact = car.FlightImpact;
+        car.LastImpactVelocity = car.FlightImpactVelocity;
         car.FlightImpact = 0;
         if (car.Flight.InWater) _damage.Damage(car, car.Def.Flight!.WaterDamagePerSecond * dt, 0, SpecialWeapons.Vehicle, 0);
     }
@@ -200,6 +206,7 @@ internal sealed class VehicleLoop
             if (!car.Asleep) car.StepDriveUnpiloted(dt); // a parked one at rest is not stepped until disturbed (DriveRest)
         }
         car.LastImpact = car.DriveImpact;
+        car.LastImpactVelocity = car.DriveImpactVelocity;
         car.DriveImpact = 0;
     }
 }

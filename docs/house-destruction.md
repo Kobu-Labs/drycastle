@@ -16,8 +16,20 @@ Status: designed 2026-11-26, nothing built. This doc is the contract for paralle
 | D7 | **Debris is client-side cosmetic.** A falling part is one Jolt rigid body. On its first hard impact it is split into Voronoi pieces. The server has no debris, and debris collides with nobody. |
 | D8 | **Rubble mode is a toggle:** "fade" (pieces sink away after a while) or "stay" (frozen as cosmetic piles for the round). Set in `house_destruction.json` and live via the admin command `/rubble fade\|stay`. |
 | D9 | **Round only.** Round reset restores every house. A joiner gets the removed cells (no debris). |
+| D10 | **Vehicles ram walls by momentum** (see "Ramming"). Any vehicle that loses 50 km/h or more to a hollow house's wall in one tick rams it. Its momentum against the hole its cross-section needs decides: through (slowed by the hole) or a dent (it stops). Sent as ordinary carve ops. |
 
-**v2, not in scope:** vehicles ramming walls; debris and collapse hurting players (needs server-side debris); terrain craters; digging or placing blocks by hand; bots and nav re-bake; other building types.
+**v2, not in scope:** debris and collapse hurting players (needs server-side debris); terrain craters; digging or placing blocks by hand; bots and nav re-bake; other building types.
+
+## Ramming
+
+`HouseRam` (ShooterCore), `HouseDestructionServer.Ram`, called from `VehicleLoop.StepCar` before the crash rule. `house_destruction.json` `ram`.
+
+- **Trigger.** The speed a wall took in one tick (`ServerCar.LastImpact`, the number the crash rule reads) is at least `ram.min_speed` (13.9 m/s = 50 km/h). Every vehicle: driven, coasting, flown; not a thrown one (the Bigfoot's), not a towed trailer.
+- **Contact.** The vehicle's upright box (`ContactShape`), shifted up to `probe_m` along the velocity it hit with (`LastImpactVelocity`), meets live cells (not foundation or floor) ahead of its centre.
+- **Cost.** The hole: spheres tiling the box's cross-section square to the velocity, `margin_m` larger on every side, `depth_m` deep past the wall's face, at most `max_ops`. Its cost is `momentum_per_cell` times the resist of every live cell it would remove. A car's hole in a typical outer wall is about 74 cells, so 270 kg m/s a cell is about 20 000.
+- **Through** (mass times speed lost above the cost, summed over every house it meets): the holes are cut, the vehicle goes on along its velocity, slowed by cost / mass, and the crash rule reads only that loss. A car (1200 kg) goes through from about 60 km/h; a truck, a bus or a Humvee at 50 km/h.
+- **Dent** (less): each house gets one sphere at the contact, `dent_max_m` times the share of the momentum. The vehicle stops as at any wall.
+- **Net.** Only carve ops (242), and the vehicle state the reconciliation already carries. The driver's client predicts the stop and is corrected a round trip later.
 
 ## How it fits (existing code)
 

@@ -27,6 +27,7 @@ public class DestructionConfigTests
         Assert.Equal(1f, c.CarveRadius(BlastSource.Other, 5), 4);
         // the shipped file equals the built-in defaults
         var d = DestructionConfig.Default;
+        Assert.Equal(d.Ram, c.Ram);
         foreach (var m in Enum.GetValues<CellMaterial>())
             Assert.Equal((d.Resist(m), d.Weight(m), d.Strength(m)), (c.Resist(m), c.Weight(m), c.Strength(m)));
     }

@@ -313,7 +313,7 @@ public partial class NetServer : Node
     void BuildVehicles()
     {
         _tow = new TowServer(_ctx, _fleet, _carBlast, _runOver, _bigfoot.StepThrownVehicle, Config.KillY);
-        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Config.Vehicles, Config.Water, Config.KillY, Config.BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver);
+        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Config.Vehicles, Config.Water, Config.KillY, Config.BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver, _houseDestruction.Ram);
         _guns = new VehicleGuns(_ctx, _rewind, _shot, _glass, _scenery, _flak, _targets, _impacts, _damage.Deal, _carDamage, Config.Vehicles, _rng);
         _dealer = new CarDealer(_fleet, Config.Vehicles, Config.World, Config.Map, Config.Water, Config.Spawns, _rng, _garage, Config.BlastSmoke, Config.CarSmoke, Config.SmokeKind);
     }
