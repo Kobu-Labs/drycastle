@@ -152,6 +152,7 @@ public partial class NetClient : Node
     // the features that need only the context; the ones that take the host's data are made in _Ready
     readonly MoabClient _moab;
     readonly DoorsClient _doors;
+    readonly HousesClient _houses;
     readonly UavClient _uav;
     readonly IntelClient _intel;
     BlipsClient _blips = null!;
@@ -262,6 +263,7 @@ public partial class NetClient : Node
         Report = new ReportClient(Ctx, _server.Conn, () => !Bot && !LinkEnded && _welcomed, () => _server.Peer, () => _elapsed);
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
+        _houses = new HousesClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
         _poop = new PoopClient(Ctx);
@@ -297,6 +299,7 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _server.Peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _server.Peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
+        _houses.PaneFrameChanged = _glass.OnHousePaneFrame; // a hollow house's pane without a frame shows no shard rim
         _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
@@ -385,6 +388,7 @@ public partial class NetClient : Node
         Ctx.Rockets.Clear();
         Ctx.Cars.Clear(); _flight.Clear(); _driveClient.Clear(); // the probes are under Owned and go with them
         _glass.Teardown();
+        _houses.Teardown();
         if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.QueueFree();
         Ctx.Me = null;
         FreeOwned();
@@ -642,6 +646,7 @@ public partial class NetClient : Node
         _harvester.OnEvent(kind, payload); // the harvester's cut, its bales' fire (#331)
         _thieves.OnEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
+        _houses.OnEvent(kind, payload); // house destruction: carve ops, catch-up cells, rubble and reset
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         _demon.OnEvent(kind, payload); // the demon: fireballs, the curse

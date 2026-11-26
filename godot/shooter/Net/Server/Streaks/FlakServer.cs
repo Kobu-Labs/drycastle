@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Flight;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
@@ -31,12 +32,14 @@ internal sealed class FlakServer
     readonly Fleet _fleet;
     readonly Func<VehiclesFile?> _vehicles;
     readonly Random _rng;
+    readonly Action<NVec3, float, BlastSource> _carve;
     readonly TimedQueue<PendingFlak> _shells = new();
     readonly Dictionary<VehicleFlakDef, GunshipWeaponDef> _shellDefs = new();
     readonly Dictionary<VehicleFlakDef, int> _weaponIndex = new();
 
-    public FlakServer(ServerContext ctx, WeaponsFile? weapons, GunshipServer gunships, TargetBook targets, Fleet fleet, Func<VehiclesFile?> vehicles, Random rng)
+    public FlakServer(ServerContext ctx, WeaponsFile? weapons, GunshipServer gunships, TargetBook targets, Fleet fleet, Func<VehiclesFile?> vehicles, Random rng, Action<NVec3, float, BlastSource> carve)
     {
+        _carve = carve;
         _ctx = ctx; _weapons = weapons; _gunships = gunships; _targets = targets; _fleet = fleet; _vehicles = vehicles; _rng = rng;
     }
 
@@ -148,6 +151,7 @@ internal sealed class FlakServer
             return;
         }
         _gunships.Fx.Blast(s.Owner, new GunshipBlast(s.Plan.At, s.Def.PuffRadius));
+        _carve(s.Plan.At, s.Def.PuffRadius, BlastSource.Flak); // an airburst by a house's roof (house_destruction.json flak: 0 by default)
         if (s.Plan.End != FlakEnd.Burst) return;
         foreach (var (id, e) in _ctx.Match.Entities.OfType(Aircraft.WireType))
         {

@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
@@ -19,7 +20,7 @@ internal sealed class CarBlast
     readonly CarDamage _damage;
     readonly CarSeats _seats;
     readonly RidingCorpses _riding;
-    readonly GlassServer _glass;
+    readonly WorldBlasts _blasts;
     readonly ImpactFx _impacts;
     readonly Splash _splash;
     readonly DeathPush _deathPush;
@@ -30,10 +31,10 @@ internal sealed class CarBlast
     readonly VehiclesFile _vehicles;
 
     /// <param name="cartBlast">The Scud blast where a loaded rocket cart stood, credited to the attacker.</param>
-    public CarBlast(ServerContext ctx, Fleet fleet, CarDamage damage, CarSeats seats, RidingCorpses riding, GlassServer glass, ImpactFx impacts, Splash splash, DeathPush deathPush, TargetBook targets,
+    public CarBlast(ServerContext ctx, Fleet fleet, CarDamage damage, CarSeats seats, RidingCorpses riding, WorldBlasts blasts, ImpactFx impacts, Splash splash, DeathPush deathPush, TargetBook targets,
         DealDamage deal, Action<NVec3, ushort> cartBlast, SmokeStats smoke, VehiclesFile vehicles)
     {
-        _ctx = ctx; _fleet = fleet; _damage = damage; _seats = seats; _riding = riding; _glass = glass; _impacts = impacts; _splash = splash; _deathPush = deathPush; _targets = targets;
+        _ctx = ctx; _fleet = fleet; _damage = damage; _seats = seats; _riding = riding; _blasts = blasts; _impacts = impacts; _splash = splash; _deathPush = deathPush; _targets = targets;
         _deal = deal; _cartBlast = cartBlast; _smoke = smoke; _vehicles = vehicles;
     }
 
@@ -76,7 +77,7 @@ internal sealed class CarBlast
         var e = _vehicles.Explosion;
         _ctx.Broadcast(EventKind.VehicleExplosion, WeaponCodec.Encode(new VehicleExplosionMsg(car.Id, attacker, at.ToNumerics(), e.Splash.Radius)));
         _impacts.Broadcast(car.GlobalPosition.ToNumerics(), ImpactSize.Plume); // the blast throws up dirt or road where the car sits (ticket #154)
-        _glass.Blast(at, e.Splash.Radius);
+        _blasts.Blast(at, e.Splash.Radius, BlastSource.Car); // the panes and the houses
         GD.Print($"server: {car.Def.Id} {car.Id} exploded at ({at.X:F1},{at.Y:F1},{at.Z:F1}), credited to #{attacker}");
 
         _riding.Throw(car, carVelocity, at.ToNumerics(), e.Splash, 1f); // the dead pilots and drivers still in their seats are flung out (ADR 0026)

@@ -10,6 +10,7 @@ import json
 import sys
 from pathlib import Path
 
+from drycastle_pipeline.buildings import voxels
 from drycastle_pipeline.buildings.derive import DEFAULT_OVERRIDES
 from drycastle_pipeline.core.config import DEFAULT_RAW_DIR, REPO_ROOT, map_paths
 from drycastle_pipeline.core.rules import DEFAULT_RULES, load_section
@@ -117,7 +118,13 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
 # (no bump) NORMAL on every drawn mesh of the chunk files, clutter_meshes.glb and prims (the face normal, flat shading);
 # collision meshes have none. Maps built before this shade with one constant normal (lights cut off by heading).
-MAP_VERSION_BASE = "0.14.0"
+# 0.15.0: house destruction (docs/house-destruction.md): every hollow house is its own house_<bid>_visual and house_<bid>_collision node
+# of the chunk of its centroid, no longer merged into its parcel's nodes (a parcel of hollow houses only has none), and
+# house_voxels.bin (files.house_voxels) holds their hidden voxel grids. A loader that registers only parcel_* colliders still
+# collides with the houses but cannot swap them; a map without the file has no destruction. (A node-layout change: the minor part.)
+# The manifest's file_sha256 names the sha256 of every file of `files`, so the build hash the join check compares (MapLoader.BuildHash)
+# covers them too: a client with another house_voxels.bin is refused at join instead of never matching the server's houses.
+MAP_VERSION_BASE = "0.15.0"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
@@ -447,6 +454,7 @@ def run_export(
     _write_scene_docs(scene, out_dir, rules_path, float(parcels_doc["chunk_size_m"]), files)
     _copy_work_files(work_dir, out_dir, files)
     _write_interior_docs(scene, out_dir, files)
+    voxels.write_file(out_dir, scene.house_voxels, files)
 
     parcels_file, zrules = _parcels_file(parcels_doc, parcels_out, scene, rules_path, edits_path)
     dump_doc(out_dir / "parcels.json", parcels_file)
@@ -467,6 +475,7 @@ def run_export(
         "inputs": _input_hashes(work_dir, raw_manifest, rules_path, overrides_path),
         "generated": sorted(generated),
         "files": files,
+        "file_sha256": {k: _sha256(out_dir / v) for k, v in sorted(files.items())},
         "edit_defaults": _edit_defaults(rules_path),
         "textures": sorted(
             {name.partition("_tex_")[2] for c in chunk_entries for name in c["triangles"] if "_tex_" in name}

@@ -90,6 +90,8 @@ public partial class ServerCar : CharacterBody3D
     public readonly VehiclePoseRing Poses = new();
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
+    /// <summary>The velocity (Godot frame) it had going into the step of <see cref="LastImpact"/>: what a ram into a house reads (HouseRam).</summary>
+    public System.Numerics.Vector3 LastImpactVelocity;
 
     /// <summary>Runs after a crash sound went out: the vehicle's next one waits for it (vehicles.json crash_sound_gap, #410).</summary>
     public Countdown CrashSoundGap;
@@ -104,6 +106,8 @@ public partial class ServerCar : CharacterBody3D
     public uint FlightTick;
     /// <summary>The hardest impact of the flight steps since the vehicle step last read it, m/s.</summary>
     public float FlightImpact;
+    /// <summary>The velocity going into the flight step of <see cref="FlightImpact"/>.</summary>
+    public System.Numerics.Vector3 FlightImpactVelocity;
     /// <summary>Set by the server before the node enters the tree: the map's water and flyable rectangle for the probe.</summary>
     public Water FlightWater = Water.Empty;
     public FlightBounds FlightBounds = FlightBounds.None;
@@ -118,6 +122,8 @@ public partial class ServerCar : CharacterBody3D
     public uint DriveTick;
     /// <summary>The hardest impact of the drive steps since the vehicle step last read it, m/s.</summary>
     public float DriveImpact;
+    /// <summary>The velocity going into the drive step of <see cref="DriveImpact"/>.</summary>
+    public System.Numerics.Vector3 DriveImpactVelocity;
     /// <summary>Where it stood when the last vehicle step ended: the run-over test sweeps from here, since a driver's inputs move it before the next one.</summary>
     public Vector3 TickEndPos;
 
@@ -232,8 +238,10 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public void StepFlight(in FlightInput input, float dt, uint tick)
     {
+        var going = Flight.Velocity;
         FlightModel.Step(ref Flight, Def, input, dt, Probe!);
         FlightTick = tick;
+        if (Flight.Impact > FlightImpact) FlightImpactVelocity = going;
         FlightImpact = MathF.Max(FlightImpact, Flight.Impact);
         GlobalPosition = new Vector3(Flight.Position.X, Flight.Position.Y, Flight.Position.Z);
         Rotation = new Vector3(0, Flight.Yaw, 0);
@@ -329,8 +337,34 @@ public partial class ServerCar : CharacterBody3D
         var before = Drive;
         DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld!, TowEffectNow());
         if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
+        if (Drive.Impact > DriveImpact) DriveImpactVelocity = before.Velocity;
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
         FollowDrive();
+    }
+
+    /// <summary>
+    /// It went through a house's wall (HouseRam): it goes on at <paramref name="v"/> (Godot frame), the velocity it hit the wall with less what the hole took.
+    /// A ground vehicle keeps only what its model carries (along the heading; a driven one also sideways).
+    /// </summary>
+    public void Rammed(System.Numerics.Vector3 v)
+    {
+        Wake();
+        if (Flies)
+        {
+            Flight.Velocity = v;
+            State.Speed = v.Length();
+            Velocity = new Vector3(v.X, v.Y, v.Z);
+            return;
+        }
+        var fwd = Forward;
+        State.Speed = v.X * fwd.X + v.Z * fwd.Z;
+        if (Drives)
+        {
+            Drive.Speed = State.Speed;
+            Drive.Slip = v.X * -fwd.Z + v.Z * fwd.X; // right = (cos yaw, 0, -sin yaw) = (-fwd.z, 0, fwd.x)
+            FollowDrive();
+        }
+        else Velocity = fwd * State.Speed + new Vector3(0, Velocity.Y, 0);
     }
 
     /// <summary>The brakes are on and the driver's keys ignored (a Scud truck while its rack moves): every drive step is <see cref="DriveInput.Held"/>. The driver's client does the same from the launcher's state.</summary>
@@ -442,6 +476,7 @@ public partial class ServerCar : CharacterBody3D
         var wasAfloat = Afloat;
         Afloat = body != null;
         var placeBefore = GlobalPosition; var yawBefore = State.Yaw;
+        var going = Forward * State.Speed;
         CarModel.Step(ref State, def, throttle, steer, handbrake, dt, Afloat, TowEffectNow());
         var fwd = Forward;
         Rotation = new Vector3(0, State.Yaw, 0);
@@ -460,6 +495,7 @@ public partial class ServerCar : CharacterBody3D
         // a wall or a slope takes speed away: feed the real speed back
         var real = new Vector3(Velocity.X, 0, Velocity.Z).Dot(fwd);
         LastImpact = Mathf.Abs(State.Speed) - Mathf.Abs(real);
+        LastImpactVelocity = new System.Numerics.Vector3(going.X, going.Y, going.Z);
         if (Mathf.Abs(real) < Mathf.Abs(State.Speed)) State.Speed = real;
         if (Towing != null && !StepTowed(dt))
         {

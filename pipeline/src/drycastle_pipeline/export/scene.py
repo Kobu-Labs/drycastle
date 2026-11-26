@@ -14,7 +14,9 @@ import numpy as np
 import shapely
 from shapely.geometry import Polygon
 
-from drycastle_pipeline.buildings import floorplan, interior
+from drycastle_pipeline.buildings import floorplan, interior, voxels
+from drycastle_pipeline.core import zfight
+from drycastle_pipeline.buildings.footprint import footprint_polygon
 from drycastle_pipeline.buildings.landmarks.bunker import bunker_rooms
 from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
 from drycastle_pipeline.buildings.meshes import building_mesh, collision_mesh
@@ -171,6 +173,7 @@ class MapScene:
     urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
     garage: dict | None = None  # the bus garage's doorway, bay and parking place, see garage.garage_info
     interiors: list[dict] = field(default_factory=list)  # the houses with an inside: room and doorways, see buildings/interior.py
+    house_voxels: list = field(default_factory=list)  # their hidden voxel grids (house_voxels.bin), see buildings/voxels.py
     water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
@@ -332,6 +335,10 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
                     "doorways": [{**w, "at": [w["at"][0], w["at"][1], round(w["at"][2] + dz, 3)]} for w in interior.doorways(b, details[bid], ins)],
                     "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, details[bid], ins)],
                 })  # fmt: skip
+                scene.house_voxels.append(voxels.voxelise(bid, b, details[bid], ins, m, dz))
+                fought = zfight.fights(m.tris, m.colours)  # its inside is seen up close, and through every hole
+                if sum(f[2] for f in fought) > zfight.WARN_M2:
+                    scene.warnings.append(f"house {bid}: {len(fought)} pairs of faces in one plane fight (flicker), {sum(f[2] for f in fought):.2f} m2 (core/zfight.py)")
     elif b.get("model"):
         m = _landmark_mesh(scene, p, bid, b, dz, visual)
     else:
@@ -340,7 +347,10 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
 
 
 def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: dict) -> None:
-    """``scene.parcels``: the buildings of each parcel as one visual and one collision mesh, standing on the terrain."""
+    """``scene.parcels``: the buildings of each parcel as one visual and one collision mesh, standing on the terrain. A hollow house
+    is not merged: it is a ``house_<bid>_visual`` and a ``house_<bid>_collision`` node of the chunk of its centroid
+    (docs/house-destruction.md, Contract 2)."""
+    chunk_m = float(parcels_doc["chunk_size_m"])
     used = {bid for p in parcels_doc["parcels"] for bid in p["buildings"]}
     interior.prepare_plans([(buildings[i], details[i]) for i in sorted(used) if i in buildings and i in details and not buildings[i].get("model")])
     for p in sorted(parcels_doc["parcels"], key=lambda p: p["id"]):
@@ -351,11 +361,18 @@ def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: d
         for bid in ids:
             dz = scene.building_elevation.get(bid, 0.0)
             b = buildings[bid]
-            for visual, meshes in ((True, vis), (False, col)):
-                meshes.append(_building_mesh(scene, p, bid, b, details, dz, visual))
-        scene.parcels.setdefault(tuple(p["chunk"]), []).append(
-            (p["id"], Mesh.concat(vis), Mesh.concat(col))
-        )
+            pair = [_building_mesh(scene, p, bid, b, details, dz, visual) for visual in (True, False)]
+            if bid in details and not b.get("model") and interior.inside_of(b, details[bid]) is not None:
+                c = footprint_polygon(b["footprint"]).centroid
+                nodes = scene.nodes.setdefault(_chunk((c.x, c.y), chunk_m), {})
+                nodes[f"house_{bid}_visual"], nodes[f"house_{bid}_collision"] = pair
+            else:
+                vis.append(pair[0])
+                col.append(pair[1])
+        if vis:  # a parcel of hollow houses only has no parcel nodes
+            scene.parcels.setdefault(tuple(p["chunk"]), []).append(
+                (p["id"], Mesh.concat(vis), Mesh.concat(col))
+            )
 
 
 def _exact_collision_chunks(scene: MapScene, cuts: list[Polygon], chunk_m: float) -> set[Chunk]:

@@ -176,6 +176,7 @@ def _layers(scene: MapScene) -> list[Mesh]:
         return Mesh.concat([n[name] for n in scene.nodes.values() if name in n])
 
     objects = [v for chunk in scene.parcels.values() for _, v, _ in chunk]
+    objects += [m for nodes in scene.nodes.values() for n, m in nodes.items() if n.startswith("house_") and n.endswith("_visual")]
     for chunk in scene.parcel_props.values():
         for _, visual, _, textured in chunk:
             objects += [visual, flat_mesh(textured)]

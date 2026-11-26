@@ -98,9 +98,12 @@ def add_inner_wall(out, to3, ring: list, i: int, ops, ins: Inside, colour=INNER_
             _face(out, to3, box(o.at_m, o.sill_m, o.at_m + o.width_m, ins.floor), WALL_M, colour, inward=False)
 
 
-def add_floor_ceiling(out, poly: Polygon, ins: Inside, floor=FLOOR, ceiling=CEILING) -> None:
-    """The floor (seen from above) and the ceiling (seen from below), over the whole footprint: their rims are in the walls."""
-    for tri in triangulate(poly):
+def add_floor_ceiling(out, poly: Polygon, ins: Inside, floor=FLOOR, ceiling=CEILING, inset: float = 0.0) -> None:
+    """The floor (seen from above) and the ceiling (seen from below), over the footprint shrunk by ``inset``. The visual passes
+    the wall's width: the floor then ends at the walls' inner faces and never lies under a doorway's reveal, whose bottom is
+    at the floor's height (two faces in one plane flicker). The collision keeps the whole footprint: its rims are in the walls."""
+    area = poly if inset <= 0 else poly.buffer(-inset, join_style=2)
+    for tri in (t for part in getattr(area, "geoms", [area]) if not part.is_empty for t in triangulate(part)):
         a0, a1, a2 = tri
         ccw = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0]) > 0
         up = (a0, a1, a2) if ccw else (a0, a2, a1)

@@ -23,6 +23,8 @@ public abstract partial class DoorNode : Node3D
 
     public Doorway Gate { get; private set; } = null!;
     public bool IsOpen { get; private set; }
+    /// <summary>Blown out of a broken frame (a hollow house's door, house destruction): not drawn and not solid, whatever <see cref="IsOpen"/> says.</summary>
+    public bool IsBlown { get; private set; }
 
     bool _draw;
     StaticBody3D _body = null!;
@@ -83,14 +85,23 @@ public abstract partial class DoorNode : Node3D
     /// For the navigation bake only (<see cref="BotNav"/>): while <paramref name="through"/> the box is off the World layer whatever the door's state, so the doorway is part of the mesh and a route may
     /// go through it. Whether the door lets anyone through is a question for the moment of walking (a closed box is solid then); the baked mesh does not remember the state it was baked in.
     /// </summary>
-    public void PassForBake(bool through) => _body.CollisionLayer = through || IsOpen ? 0 : CollisionLayers.World;
+    public void PassForBake(bool through) => _body.CollisionLayer = through || IsOpen || IsBlown ? 0 : CollisionLayers.World;
 
     /// <summary>Opens or closes the doors. Closed: the box is solid. <paramref name="animate"/>: the leaves swing; else they jump (the server, a joiner).</summary>
     public void SetOpen(bool open, bool animate)
     {
         IsOpen = open;
-        _body.CollisionLayer = open ? 0 : CollisionLayers.World;
+        _body.CollisionLayer = open || IsBlown ? 0 : CollisionLayers.World;
         if (!animate) { Angle = open ? 1 : 0; Pose(); }
+    }
+
+    /// <summary>Blown out (the leaves hidden, the box off) or hung again, shut.</summary>
+    public void SetBlown(bool blown)
+    {
+        IsBlown = blown;
+        Visible = !blown;
+        if (!blown) SetOpen(false, animate: false);
+        else _body.CollisionLayer = 0;
     }
 
     public override void _Process(double delta)

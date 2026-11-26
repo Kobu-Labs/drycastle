@@ -8,10 +8,10 @@ namespace Drycastle.ShooterCore.Buildings;
 public enum HouseDoorKind : byte { Hinged, Garage }
 
 /// <summary>One door of a hollow house (interiors.json), in Godot axes.</summary>
-public sealed record HouseDoor(Doorway Doorway, HouseDoorKind Kind, string Colour);
+public sealed record HouseDoor(Doorway Doorway, HouseDoorKind Kind, string Colour, string House = "");
 
-/// <summary>A house's door: shut or open.</summary>
-public enum HouseDoorState : byte { Shut, Open }
+/// <summary>A house's door: shut, open, or blown out of its broken frame (house destruction). The wire's state byte.</summary>
+public enum HouseDoorState : byte { Shut, Open, Blown }
 
 /// <summary>
 /// The doors of the map's hollow houses (the <c>doors</c> of each house in interiors.json, written by the pipeline's buildings/interior.py) and the single owner of which are
@@ -29,8 +29,12 @@ public sealed class HouseDoors
         .Define("House.Door", "One door or garage door of a hollow house: a player on foot at the doorway opens and closes it with the interact key.", HouseDoorState.Shut)
         .Allow(HouseDoorState.Shut, HouseDoorState.Open)
         .Allow(HouseDoorState.Open, HouseDoorState.Shut)
+        .Allow(HouseDoorState.Shut, HouseDoorState.Blown)
+        .Allow(HouseDoorState.Open, HouseDoorState.Blown)
+        .Allow(HouseDoorState.Blown, HouseDoorState.Shut)
         .Note(HouseDoorState.Shut, "Closed and solid (the start state, and every new server): the leaf fills the doorway.")
         .Note(HouseDoorState.Open, "The leaf is swung into the house, or tipped up under the garage's ceiling, and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.")
+        .Note(HouseDoorState.Blown, "A carve took a cell of the doorway's frame (docs/house-destruction.md): the leaf is gone, nothing is solid and nobody can work it. Hung again, shut, when the houses are restored (a new round, /houses restore).")
         .Build();
 
     readonly StateMachine<HouseDoorState>[] _doors;
@@ -45,6 +49,14 @@ public sealed class HouseDoors
     }
 
     public bool IsOpen(int door) => _doors[door].Is(HouseDoorState.Open);
+    public bool IsBlown(int door) => _doors[door].Is(HouseDoorState.Blown);
+    public HouseDoorState StateOf(int door) => _doors[door].Current;
+
+    /// <summary>The door's frame is broken: it is blown out. False when it already was.</summary>
+    public bool Blow(int door) => _doors[door].Enter(HouseDoorState.Blown);
+
+    /// <summary>A blown door is hung again, shut. False when it was not blown.</summary>
+    public bool Rehang(int door) => IsBlown(door) && _doors[door].Enter(HouseDoorState.Shut);
 
     /// <summary>The door a player at <paramref name="feet"/> would work (the nearest in reach), or -1.</summary>
     public int Nearest(Vector3 feet)
@@ -55,7 +67,7 @@ public sealed class HouseDoors
         {
             var way = All[i].Doorway;
             var sq = Vector3.DistanceSquared(way.Pos, feet);
-            if (sq < bestSq && way.InReach(feet, ReachM, ReachSideM)) { best = i; bestSq = sq; }
+            if (sq < bestSq && !IsBlown(i) && way.InReach(feet, ReachM, ReachSideM)) { best = i; bestSq = sq; }
         }
         return best;
     }
@@ -63,6 +75,7 @@ public sealed class HouseDoors
     /// <summary>A player works a door. True when it moved; false when it is open and <paramref name="vehicleInDoorway"/> keeps it from closing.</summary>
     public bool Use(int door, bool vehicleInDoorway)
     {
+        if (IsBlown(door)) return false;
         var open = IsOpen(door);
         if (open && vehicleInDoorway) return false;
         return _doors[door].Enter(open ? HouseDoorState.Shut : HouseDoorState.Open);
@@ -89,7 +102,7 @@ public sealed class HouseDoors
                 if (!(d.Width > 0) || !(d.Height > 0)) throw new DataFileException($"{what} needs a width and a height");
                 if (d.Pos.Length != 3 || !d.Pos.All(float.IsFinite) || !float.IsFinite(d.Yaw)) throw new DataFileException($"{what} needs a pos [x, y, z] and a yaw");
                 var way = new Doorway(new Vector3(d.Pos[0], d.Pos[2], -d.Pos[1]), -d.Yaw * MathF.PI / 180f, d.Width, d.Height);
-                doors.Add(new HouseDoor(way, d.Kind, d.Colour));
+                doors.Add(new HouseDoor(way, d.Kind, d.Colour, house.Id));
             }
         return new HouseDoors(doors);
     }
@@ -119,11 +132,13 @@ public sealed class InteriorDoorDef
     public string Colour { get; set; } = "#5a4636";
 }
 
-/// <summary>The house door event (<see cref="Net.EventKind.HouseDoor"/>): the door's index (u16, little endian) and 1 open, 0 closed.</summary>
+/// <summary>The house door event (<see cref="Net.EventKind.HouseDoor"/>): the door's index (u16, little endian) and its <see cref="HouseDoorState"/> (0 shut, 1 open, 2 blown).</summary>
 public static class HouseDoorCodec
 {
-    public static byte[] Encode(int door, bool open) => new[] { (byte)door, (byte)(door >> 8), open ? (byte)1 : (byte)0 };
+    public static byte[] Encode(int door, bool open) => Encode(door, open ? HouseDoorState.Open : HouseDoorState.Shut);
 
-    public static (int Door, bool Open)? Decode(byte[] payload) =>
-        payload.Length == 3 && payload[2] <= 1 ? (payload[0] | payload[1] << 8, payload[2] == 1) : null;
+    public static byte[] Encode(int door, HouseDoorState state) => new[] { (byte)door, (byte)(door >> 8), (byte)state };
+
+    public static (int Door, HouseDoorState State)? Decode(byte[] payload) =>
+        payload.Length == 3 && payload[2] <= (byte)HouseDoorState.Blown ? (payload[0] | payload[1] << 8, (HouseDoorState)payload[2]) : null;
 }

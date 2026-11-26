@@ -4,6 +4,7 @@ using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Buildings;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Net;
@@ -32,6 +33,8 @@ internal sealed class GlassServer
     readonly GlassPanes _glass = new();
     List<MapGlassPane>? _mapPanes;
     List<GlassPaneRect>? _mapPaneRects;
+    /// <summary>Per hollow house (grid index): its breakable panes and their frame cells (<see cref="HouseFrames"/>), found at its first carve.</summary>
+    readonly Dictionary<ushort, (int Pane, int[] Frame)[]> _housePanes = new();
 
     public GlassServer(ServerContext ctx, Fleet fleet, PoseRewind rewind, Drycastle.MapLoader.MapLoader? map, GlassConfig data)
     {
@@ -150,6 +153,27 @@ internal sealed class GlassServer
             var key = new GlassPaneKey(car.Id, (ushort)i);
             var hp = VehiclePaneHp(car.Def, i);
             if (crash == GlassCrash.Shatter) _glass.Damage(key, hp, hp); else _glass.CrackTo(key, _data.CrashCrackFraction, hp);
+        }
+    }
+
+    /// <summary>A hollow house lost cells: each of its panes whose frame a carve took shatters (docs/house-destruction.md).</summary>
+    public void HouseChanged(HouseCells house)
+    {
+        var g = house.Grid;
+        if (!_housePanes.TryGetValue(g.Index, out var panes))
+        {
+            var mine = new List<(int, int[])>();
+            var all = MapPanes;
+            for (var i = 0; i < all.Count; i++)
+                if (all[i].Breakable && all[i].Building == g.Id && HouseFrames.FrameCells(g, all[i].Rect) is { Length: > 0 } frame) mine.Add((i, frame));
+            _housePanes[g.Index] = panes = mine.ToArray();
+        }
+        foreach (var (pane, frame) in panes)
+        {
+            var key = new GlassPaneKey(GlassPaneKey.Map, (ushort)pane);
+            if (_glass.IsShattered(key) || !HouseFrames.Unframed(house, frame)) continue;
+            var hp = MapPanes[pane].Hp ?? _data.BuildingPaneHp;
+            _glass.Damage(key, hp, hp);
         }
     }
 

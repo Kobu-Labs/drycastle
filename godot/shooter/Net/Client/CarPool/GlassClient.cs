@@ -72,10 +72,12 @@ internal sealed class GlassClient
         if (!ShotFx.Enabled) return;
         if (s.Hp == GlassRules.Whole) { DropGlassOverlay(s.Key); return; }
         if (!GlassPlace(s.Key, out var parent, out var rect, out var hole)) return;
-        if (HasPaneNode(s.Key) || IsGaragePlate(s.Key)) hole = 0; // the model has a real opening: nothing to darken (nor the garage's, the room behind is real)
+        var house = HousePane(s.Key);
+        if (HasPaneNode(s.Key) || IsGaragePlate(s.Key) || house != null) hole = 0; // a real opening: nothing to darken (the model's, the garage's room, a hollow house)
         if (!_glassOverlays.TryGetValue(s.Key, out var overlay) || !GodotObject.IsInstanceValid(overlay))
             _glassOverlays[s.Key] = overlay = GlassFx.MakeOverlay(parent, rect, s.Key, hole, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null);
         SetPaneGeometry(s.Key, !s.Shattered, animate);
+        if (house != null) overlay.Visible = !house.PaneGone(s.Key.Index); // no shard rim in a frame that is gone
         GlassFx.SetOverlay(overlay, GlassRules.CrackStage(s.Fraction, Data.CrackStages), GlassRules.MaxCrackStage(Data.CrackStages), s.Shattered);
         if (animate && parent.IsVisibleInTree()) GlassFx.Shatter(_ctx.Owned, parent.GlobalTransform, rect, Data, s.Key, IsGaragePlate(s.Key) ? GlassFx.OsbShards : null, s.Key.Owner == GlassPaneKey.Map ? null : parent);
     }
@@ -120,6 +122,7 @@ internal sealed class GlassClient
     /// <summary>Shows or hides the model's own glass of a vehicle's pane. A model without a node for it (the loose legacy models) and a pane of the map are left as they are.</summary>
     void SetPaneGeometry(GlassPaneKey key, bool visible, bool animate = false)
     {
+        if (HousePane(key) is { } house) house.SetPaneShattered(key.Index, !visible); // a hollow house's glass is hidden behind its shattered look
         if (IsGaragePlate(key)) MechanicGarage.Current?.SetPlate(standing: visible, animate); // the plate's box and mesh go with its pane, and the room's lights start
         if (key.Owner == GlassPaneKey.Map || !_ctx.Cars.TryGet(key.Owner, out var v) || !GodotObject.IsInstanceValid(v.Node)) return;
         if (v.Node.FindChild(PaneNodeName(key.Index), true, false) is Node3D glass) glass.Visible = visible;
@@ -130,6 +133,16 @@ internal sealed class GlassClient
 
     /// <summary>The pane is the mechanic garage's breakable plate (a map pane of the shared list).</summary>
     bool IsGaragePlate(GlassPaneKey key) => key.Owner == GlassPaneKey.Map && key.Index < MapPanes.Count && MapPanes[key.Index].Node == MechanicGarageSite.PlateNode;
+
+    /// <summary>The house destruction node when <paramref name="key"/> is a hollow house's pane, else null.</summary>
+    static Buildings.Destruction.HouseWorldNode? HousePane(GlassPaneKey key) =>
+        key.Owner == GlassPaneKey.Map && Buildings.Destruction.HouseWorldNode.Current is { } h && h.IsHousePane(key.Index) ? h : null;
+
+    /// <summary>A hollow house's pane lost or got back its frame (house destruction): its shard rim hides or shows.</summary>
+    public void OnHousePaneFrame(int index, bool gone)
+    {
+        if (_glassOverlays.TryGetValue(new GlassPaneKey(GlassPaneKey.Map, (ushort)index), out var overlay) && GodotObject.IsInstanceValid(overlay)) overlay.Visible = !gone;
+    }
 
     void DropGlassOverlay(GlassPaneKey key)
     {

@@ -44,8 +44,27 @@ public partial class HouseDoorsNode : Node3D
     public bool IsOpen(int door) => _nodes[door].IsOpen;
 
     /// <summary>Opens or closes door <paramref name="door"/>'s box and leaf; an index the map has no door for is ignored.</summary>
-    public void Show(int door, bool open, bool animate)
+    public void Show(int door, bool open, bool animate) => Show(door, open ? HouseDoorState.Open : HouseDoorState.Shut, animate);
+
+    /// <summary>Sets door <paramref name="door"/> to <paramref name="state"/> here (the node and this process's <see cref="Doors"/>); a blown door hung again is shut.</summary>
+    public void Show(int door, HouseDoorState state, bool animate)
     {
-        if (door >= 0 && door < _nodes.Count) _nodes[door].SetOpen(open, animate);
+        if (door < 0 || door >= _nodes.Count) return;
+        var node = _nodes[door];
+        if (state == HouseDoorState.Blown)
+        {
+            Doors.Blow(door);
+            node.SetBlown(true);
+            return;
+        }
+        if (node.IsBlown) { node.SetBlown(false); Doors.Rehang(door); animate = false; }
+        node.SetOpen(state == HouseDoorState.Open, animate);
+    }
+
+    /// <summary>Every blown door hung again, shut (a client leaving its server, a reset of the houses).</summary>
+    public void RehangAll()
+    {
+        for (var i = 0; i < _nodes.Count; i++)
+            if (_nodes[i].IsBlown) Show(i, HouseDoorState.Shut, animate: false);
     }
 }

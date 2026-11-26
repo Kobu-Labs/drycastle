@@ -205,6 +205,14 @@ public enum EventKind : byte
     TeamAssign = 240,
     /// <summary>Client to server: a squad request from the Squads screen (<see cref="SquadAssignCodec"/>, #379): create, join or leave. The server checks the match is team deathmatch and the sender a human on a team. The result travels in the scoreboard (squad byte per row, squad names).</summary>
     SquadAssign = 241,
+    /// <summary>Server to everyone: one carve op on a hollow house (<see cref="Drycastle.ShooterCore.Buildings.Destruction.HouseCodec"/>: u16 house, u16 op seq after it, i16 x3 centre and u16 radius in quarter-cells, u32 hash after Settle; docs/house-destruction.md Contract 4). Clients apply it with HouseCells.Apply. Kinds 242-244 and 249 belong to house destruction.</summary>
+    HouseCarve = 242,
+    /// <summary>Server to one player: a house's removed cells (u16 house, u16 op seq, u32 hash, u32 first run, varint runs; at most 200 bytes a message, a long mask is several): the join catch-up and the answer to <see cref="HouseResync"/>.</summary>
+    HouseCells = 243,
+    /// <summary>Server to everyone, and to a joiner: house destruction settings (u8 flags, bit 0 rubble stays; u8 reset, 1 = every house whole): round start, a /rubble change, join.</summary>
+    HouseSettings = 244,
+    /// <summary>Client to server: a house's state differs from the server's (op seq or hash), send its <see cref="HouseCells"/> (u16 house).</summary>
+    HouseResync = 249,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -418,7 +426,8 @@ public static class Wire
     //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
-    public const byte ProtocolVersion = 86;
+    //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
+    public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

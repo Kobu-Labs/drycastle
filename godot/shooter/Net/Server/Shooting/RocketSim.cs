@@ -4,6 +4,7 @@ using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Panes;
 using Drycastle.Shooter.Net.Server.Rewind;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Fsm;
@@ -42,7 +43,7 @@ internal sealed class RocketSim
     readonly ServerContext _ctx;
     readonly PoseRewind _rewind;
     readonly ShotWorld _shot;
-    readonly GlassServer _glass;
+    readonly WorldBlasts _blasts;
     readonly CarDamage _carDamage;
     readonly TargetBook _targets;
     readonly DealDamage _deal;
@@ -54,10 +55,10 @@ internal sealed class RocketSim
     readonly SmokeStats _smoke;
     readonly List<Rocket> _rockets = new();
 
-    public RocketSim(ServerContext ctx, PoseRewind rewind, ShotWorld shot, GlassServer glass, CarDamage carDamage, TargetBook targets, DealDamage deal, DeathPush deathPush, Splash splash, ImpactFx impacts,
+    public RocketSim(ServerContext ctx, PoseRewind rewind, ShotWorld shot, WorldBlasts blasts, CarDamage carDamage, TargetBook targets, DealDamage deal, DeathPush deathPush, Splash splash, ImpactFx impacts,
         RocketIds ids, WeaponsFile weapons, SmokeStats smoke)
     {
-        _ctx = ctx; _rewind = rewind; _shot = shot; _glass = glass; _carDamage = carDamage; _targets = targets; _deal = deal; _deathPush = deathPush; _splash = splash; _impacts = impacts;
+        _ctx = ctx; _rewind = rewind; _shot = shot; _blasts = blasts; _carDamage = carDamage; _targets = targets; _deal = deal; _deathPush = deathPush; _splash = splash; _impacts = impacts;
         _ids = ids; _weapons = weapons; _smoke = smoke;
     }
 
@@ -180,7 +181,7 @@ internal sealed class RocketSim
         var w = ProjectileMath.WithBlast(weapon, r.Blast); // a gunship's rocket has its own blast (killstreaks.json); the rpg keeps weapons.json's
         _smoke.Explosions++;
         _carDamage.Rockets(pos, w, r.Owner, r.Weapon, directCar);
-        _glass.Blast(pos, w.Splash?.Radius ?? 0);
+        _blasts.Blast(pos, w.Splash?.Radius ?? 0, BlastSources.OfRocket(weapon, r.Blast != null)); // the panes and the houses (a gunship rocket carves as one)
         _ctx.Broadcast(EventKind.Explosion, WeaponCodec.Encode(new ExplosionMsg(r.Id, r.Owner, r.Weapon, pos.ToNumerics(), w.Splash?.Radius ?? 0, w.Splash?.WaveSpeed ?? 0)));
         _impacts.Broadcast(pos.ToNumerics(), ImpactSize.Plume, body: direct != null && directCar == null, vehicle: directCar != null); // rockets throw up a plume (ticket #154)
         var own = CarOf(r);
