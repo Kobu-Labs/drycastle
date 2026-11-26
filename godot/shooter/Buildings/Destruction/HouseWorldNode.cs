@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore.Buildings.Destruction;
+using Drycastle.ShooterCore.Glass;
 using NVec3 = System.Numerics.Vector3;
 using MapLoaderT = Drycastle.MapLoader.MapLoader;
 
@@ -40,6 +41,33 @@ public partial class HouseWorldNode : Node3D
     readonly List<House> _awaiting = new();
     bool _rubbleStay, _warmed;
     static Shader? _shader;
+
+    /// <summary>
+    /// A window pane of a hollow house (windows.json): its map node, its frame cells (<see cref="HouseFrames"/>, found at the house's first carve), whether the frame is gone
+    /// and whether the server has shattered it. The node shows only while it stands in a frame; the glass client's shard rim shows only while the frame is there.
+    /// </summary>
+    sealed class Pane
+    {
+        public int Index;
+        public GlassPaneRect Rect;
+        public MeshInstance3D? Node;
+        public int[]? Frame;
+        public bool Gone, Shattered;
+    }
+
+    /// <summary>Per house (grid index): its panes.</summary>
+    List<Pane>[] _panes = [];
+    /// <summary>Map pane index to its pane, for the hollow houses' panes only.</summary>
+    readonly Dictionary<int, Pane> _paneByIndex = new();
+    /// <summary>Told when a hollow house's pane loses or gets back its frame (map pane index, gone): the glass client hides or shows its shard rim.</summary>
+    public Action<int, bool>? PaneFrameChanged { get; set; }
+
+    /// <summary>See-through glass for the panes of the hollow houses (the map draws every window as an opaque coloured mesh; these stand in real openings).</summary>
+    static readonly StandardMaterial3D ClearPane = new()
+    {
+        Transparency = BaseMaterial3D.TransparencyEnum.Alpha, AlbedoColor = new Color(0.62f, 0.78f, 0.88f, 0.25f),
+        Roughness = 0.08f, Metallic = 0.1f, // culled: a pane that goes through has a quad facing each way already, and two blended in one place would flicker
+    };
 
     readonly List<Quad> _quads = new();
     readonly List<NVec3> _pos = new(), _nrm = new();
@@ -105,7 +133,64 @@ public partial class HouseWorldNode : Node3D
             node._houses[g.Index] = new House(new HouseReplica(g), nodes);
         }
         if (unplaced > 0) GD.PrintErr($"client: {unplaced} of {grids.Count} destructible houses have no house_<id>_visual node; their state is kept, not drawn");
+        node.FindPanes(grids);
         return node;
+    }
+
+    /// <summary>The hollow houses' panes of windows.json, their nodes made see-through.</summary>
+    void FindPanes(IReadOnlyList<HouseGrid> grids)
+    {
+        _panes = new List<Pane>[_houses.Length];
+        for (var i = 0; i < _panes.Length; i++) _panes[i] = new();
+        List<MapGlassPane> all;
+        try { all = MapGlass.Parse(_map.WindowsJson); }
+        catch (Drycastle.ShooterCore.Data.DataFileException e) { GD.PrintErr($"client: {e.Message}; house panes stay as they are"); return; }
+        var byId = grids.ToDictionary(g => g.Id, g => g.Index);
+        var nodes = new Dictionary<string, MeshInstance3D>();
+        foreach (var n in _map.Root.FindChildren("window_*", "MeshInstance3D", true, false))
+            if (n is MeshInstance3D m) nodes.TryAdd(m.Name, m);
+        for (var i = 0; i < all.Count; i++)
+        {
+            if (!byId.TryGetValue(all[i].Building, out var house)) continue;
+            var pane = new Pane { Index = i, Rect = all[i].Rect, Node = nodes.GetValueOrDefault(all[i].Node) };
+            if (pane.Node != null) pane.Node.MaterialOverride = ClearPane;
+            _panes[house].Add(pane);
+            _paneByIndex[i] = pane;
+        }
+    }
+
+    /// <summary>Whether map pane <paramref name="index"/> is a hollow house's (its opening is real: nothing to darken behind it).</summary>
+    public bool IsHousePane(int index) => _paneByIndex.ContainsKey(index);
+
+    /// <summary>Whether the frame of map pane <paramref name="index"/> is gone (its shard rim is not shown).</summary>
+    public bool PaneGone(int index) => _paneByIndex.TryGetValue(index, out var p) && p.Gone;
+
+    /// <summary>The server's glass state of a hollow house's pane: a shattered pane's glass is not drawn.</summary>
+    public void SetPaneShattered(int index, bool shattered)
+    {
+        if (!_paneByIndex.TryGetValue(index, out var p)) return;
+        p.Shattered = shattered;
+        ShowPane(p);
+    }
+
+    static void ShowPane(Pane p)
+    {
+        if (p.Node != null && GodotObject.IsInstanceValid(p.Node)) p.Node.Visible = !p.Gone && !p.Shattered;
+    }
+
+    /// <summary>Which of the house's panes lost their frame (or got it back).</summary>
+    void UpdatePanes(House h)
+    {
+        var g = h.Replica.Grid;
+        foreach (var p in _panes[g.Index])
+        {
+            p.Frame ??= HouseFrames.FrameCells(g, p.Rect);
+            var gone = p.Frame.Length > 0 && HouseFrames.Unframed(h.Replica.Cells, p.Frame);
+            if (gone == p.Gone) continue;
+            p.Gone = gone;
+            ShowPane(p);
+            PaneFrameChanged?.Invoke(p.Index, gone);
+        }
     }
 
     public override void _EnterTree() => Current = this;
@@ -171,6 +256,7 @@ public partial class HouseWorldNode : Node3D
             if (h == null) continue;
             h.Replica.Reset();
             Unswap(h);
+            UpdatePanes(h);
             h.Dirty = h.ColliderDirty = false;
         }
         _dirty.Clear();
@@ -215,6 +301,7 @@ public partial class HouseWorldNode : Node3D
 
     void Rebuild(House h)
     {
+        UpdatePanes(h);
         if (!h.Replica.Cells.Damaged) { Unswap(h); return; }
         if (!h.Swapped) Swap(h);
         (h.Look ??= new HouseDamageLook(h.Replica.Grid)).Update(h.Replica.Cells);

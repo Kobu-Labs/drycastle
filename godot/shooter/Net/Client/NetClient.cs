@@ -299,6 +299,7 @@ public partial class NetClient : Node
         _session = new SessionLog(Ctx, Host, Port, () => !Bot && !LinkEnded && _welcomed, () => _server.Peer);
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _server.Peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
+        _houses.PaneFrameChanged = _glass.OnHousePaneFrame; // a hollow house's pane without a frame shows no shard rim
         _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);

@@ -14,6 +14,8 @@ public sealed class HousesClient
 {
     readonly ClientContext _ctx;
     readonly Action<ushort> _resync;
+    /// <summary>The glass client's shard rims of the hollow houses' panes (set by the net client once it has one).</summary>
+    public Action<int, bool>? PaneFrameChanged { get; set; }
 
     public HousesClient(ClientContext ctx)
     {
@@ -43,6 +45,7 @@ public sealed class HousesClient
     void Wire(HouseWorldNode houses)
     {
         houses.RequestResync = _resync;
+        houses.PaneFrameChanged = PaneFrameChanged;
         if (houses.Debris is DebrisNode d && GodotObject.IsInstanceValid(d) && d.IsInsideTree()) return;
         var owned = _ctx.Owned;
         var debris = DebrisNode.Create(houses.Config, owned);
