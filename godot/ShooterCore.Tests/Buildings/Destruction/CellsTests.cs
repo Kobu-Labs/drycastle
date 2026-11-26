@@ -184,7 +184,7 @@ public class CellsTests(ITestOutputHelper output)
         for (var k = 0; k < n; k++) { c.Restore(); c.Carve(op, Cfg); c.Hash(); }
         var carveMs = sw.Elapsed.TotalMilliseconds / n;
         output.WriteLine($"carve + hash, r = 2 m, 40x32x28: {carveMs:F4} ms ({CountFirst(g, op)} cells carved)");
-        Assert.True(carveMs < 0.5, $"carve + hash took {carveMs:F3} ms");
+        Assert.True(carveMs < Budget.Ms(0.5), $"carve + hash took {carveMs:F3} ms (budget {Budget.Ms(0.5)} ms)");
 
         // with Settle, once WP-B has landed it (the stub throws until then)
         try
@@ -194,7 +194,7 @@ public class CellsTests(ITestOutputHelper output)
             for (var k = 0; k < n; k++) { c.Restore(); c.Apply(op, Cfg); }
             var applyMs = sw.Elapsed.TotalMilliseconds / n;
             output.WriteLine($"Apply (carve + Settle + hash): {applyMs:F4} ms");
-            Assert.True(applyMs < 1, $"Apply took {applyMs:F3} ms");
+            Assert.True(applyMs < Budget.Ms(1), $"Apply took {applyMs:F3} ms (budget {Budget.Ms(1)} ms)");
         }
         catch (NotImplementedException) { output.WriteLine("Support.Settle not implemented yet: Apply not timed"); }
     }

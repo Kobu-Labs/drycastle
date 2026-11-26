@@ -5,23 +5,18 @@ using MapLoaderT = Drycastle.MapLoader.MapLoader;
 
 namespace Drycastle.Shooter.Buildings.Destruction;
 
-/// <summary>Which collider a carved house gets (the server's must be the same): the greedy box cover of its cells, or one trimesh of their faces.</summary>
-public enum HouseColliderKind { Boxes, AllFaces }
-
 /// <summary>
 /// The client's destructible houses (docs/house-destruction.md, WP-F). One <see cref="HouseReplica"/> per house of house_voxels.bin follows the server's
 /// carve ops (242), the catch-up and resync runs (243) and the settings (244). An undamaged house keeps the map's flat material and its exact shell collider;
 /// on its first carve its visual gets the discard shader (an R8 3D texture of the removed cells), a cut-face mesh shows the broken cells, and its collider
-/// becomes the voxel one (<see cref="Collider"/>). Texture, mesh and collider are rebuilt at most once per house per frame. Fallen and crumbled cells
-/// go to <see cref="Debris"/> (WP-G). A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
+/// becomes the voxel trimesh (<see cref="HouseColliderBuilder"/>, the server's too). Texture, mesh and collider are rebuilt at most once per house per frame. Fallen and crumbled cells
+/// go to <see cref="Debris"/> (WP-G), after the collider has its hole. The wire is <see cref="HouseCodec"/>'s. A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
 /// One per map, client only: <see cref="Current"/>.
 /// </summary>
 public partial class HouseWorldNode : Node3D
 {
     public const string ShaderPath = "res://shaders/house_destruction.gdshader";
     public static HouseWorldNode? Current { get; private set; }
-    /// <summary>The carved houses' collider; the same as the server's (HouseDestructionServer).</summary>
-    public static HouseColliderKind Collider = HouseColliderKind.Boxes;
     const double ResyncRetrySeconds = 5;
 
     IHouseDebris? _debris;
@@ -37,6 +32,8 @@ public partial class HouseWorldNode : Node3D
 
     MapLoaderT _map = null!;
     DestructionConfig _cfg = null!;
+    /// <summary>house_destruction.json as this map was loaded with it.</summary>
+    public DestructionConfig Config => _cfg;
     House?[] _houses = [];
     readonly List<House> _dirty = new();
     readonly List<House> _awaiting = new();
@@ -45,7 +42,7 @@ public partial class HouseWorldNode : Node3D
 
     readonly List<Quad> _quads = new();
     readonly List<NVec3> _pos = new(), _nrm = new();
-    readonly List<(NVec3 Min, NVec3 Max)> _boxes = new();
+    readonly HouseColliderBuilder _collider = new();
 
     sealed class House
     {
@@ -68,8 +65,9 @@ public partial class HouseWorldNode : Node3D
         public byte[][] LayerBytes = [];
         public MeshInstance3D? Cut;
         public ArrayMesh? CutMesh;
-        public readonly List<CollisionShape3D> Boxes = new();
-        public bool Swapped, Dirty;
+        /// <summary>The voxel collider, in the map's node while swapped.</summary>
+        public ConcavePolygonShape3D? Voxel;
+        public bool Swapped, Dirty, ColliderDirty;
         public double ResyncAt;
         public ushort Index => Replica.Grid.Index;
         public string Id => Replica.Grid.Id;
@@ -117,39 +115,45 @@ public partial class HouseWorldNode : Node3D
     House? Of(ushort index) => index < _houses.Length ? _houses[index] : null;
 
     /// <summary>242: one op, applied as the server did; a mismatch asks for the house's cells.</summary>
-    public void OnCarve(HouseReplicaWire.Carve m)
+    public void OnCarve(HouseCarveMsg m)
     {
         if (Of(m.House) is not { } h) return;
         var (outcome, r) = h.Replica.OnCarve(m, _cfg);
         if (r != null)
         {
             MarkDirty(h);
+            if (_debris != null && r.Fallen.Count > 0 && h.Replica.Cells.Damaged)
+            {
+                // the hole goes into the collider now, so the falling parts do not start inside the old shell
+                if (!h.Swapped) Swap(h);
+                h.ColliderDirty = false;
+                RebuildCollider(h);
+            }
             var g = h.Replica.Grid;
-            _debris?.Fall(g, r, g.ToMap(new NVec3(m.Op.Cx, m.Op.Cy, m.Op.Cz) / 4f), r.Hash ^ ((uint)m.House << 16 | m.OpSeq));
+            _debris?.Fall(g, r, g.ToMap(new NVec3(m.Op.Cx, m.Op.Cy, m.Op.Cz) / 4f), (uint)m.House << 16 | m.OpSeq);
         }
         if (outcome == HouseReplica.CarveOutcome.Desync) Desync(h);
     }
 
-    /// <summary>243: one part of a house's removed cells (join catch-up or resync); the house is redrawn when the list is whole.</summary>
-    public void OnCells(HouseReplicaWire.CellsPart m)
+    /// <summary>243: one message of a house's removed cells (join catch-up or resync); the house is redrawn when it equals the server's, a broken set asks again.</summary>
+    public void OnCells(HouseCellsMsg m)
     {
         if (Of(m.House) is not { } h) return;
         switch (h.Replica.OnCells(m))
         {
-            case HouseReplica.CellsOutcome.Replaced:
+            case CatchUpStep.Done:
                 _awaiting.Remove(h);
                 MarkDirty(h);
                 break;
-            case HouseReplica.CellsOutcome.ReplacedHashDiffers:
-                _awaiting.Remove(h);
+            case CatchUpStep.Broken:
                 MarkDirty(h);
-                GD.PrintErr($"house desync {h.Id} (hash differs after its cells came)");
+                Desync(h);
                 break;
         }
     }
 
     /// <summary>244: the rubble mode, and a round reset when asked.</summary>
-    public void OnSettings(HouseReplicaWire.Settings s)
+    public void OnSettings(HouseSettingsMsg s)
     {
         if (s.Reset) ResetAll();
         _rubbleStay = s.RubbleStay;
@@ -164,7 +168,7 @@ public partial class HouseWorldNode : Node3D
             if (h == null) continue;
             h.Replica.Reset();
             Unswap(h);
-            h.Dirty = false;
+            h.Dirty = h.ColliderDirty = false;
         }
         _dirty.Clear();
         _awaiting.Clear();
@@ -182,6 +186,7 @@ public partial class HouseWorldNode : Node3D
 
     void MarkDirty(House h)
     {
+        h.ColliderDirty = true;
         if (h.Dirty) return;
         h.Dirty = true;
         _dirty.Add(h);
@@ -211,11 +216,12 @@ public partial class HouseWorldNode : Node3D
         if (!h.Swapped) Swap(h);
         UpdateTexture(h);
         RebuildCut(h);
-        RebuildCollider(h);
+        if (h.ColliderDirty) RebuildCollider(h);
+        h.ColliderDirty = false;
     }
 
     /// <summary>Map local (Godot frame) to world: the map root's transform.</summary>
-    Transform3D MapToWorld => _map.Root.IsInsideTree() ? _map.Root.GlobalTransform : Transform3D.Identity;
+    Transform3D MapToWorld => HouseColliderBuilder.MapToWorld(_map.Root);
 
     static Transform3D GridToMap(HouseGrid g)
     {
@@ -252,12 +258,7 @@ public partial class HouseWorldNode : Node3D
             h.Cut = new MeshInstance3D { Name = $"house_{g.Id}_cut", Mesh = h.CutMesh, MaterialOverride = MapLoaderT.SharedFlatMaterial };
             _map.Root.AddChild(h.Cut);
         }
-        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape))
-        {
-            h.Shell = h.Shape.Shape;
-            if (Collider == HouseColliderKind.Boxes) h.Shape.Disabled = true;
-            else h.Shape.Shape = new ConcavePolygonShape3D { BackfaceCollision = true };
-        }
+        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape)) h.Shell = h.Shape.Shape; // the voxel trimesh replaces it at the collider rebuild
     }
 
     /// <summary>Back to the undamaged look and the shell collider.</summary>
@@ -269,15 +270,12 @@ public partial class HouseWorldNode : Node3D
         h.Material = null; h.Texture = null; h.Layers = null; h.LayerBytes = []; h.FlatMaterial = null;
         if (h.Cut != null && GodotObject.IsInstanceValid(h.Cut)) h.Cut.QueueFree();
         h.Cut = null; h.CutMesh = null;
-        foreach (var b in h.Boxes) if (GodotObject.IsInstanceValid(b)) b.QueueFree();
-        h.Boxes.Clear();
-        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape))
+        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape) && h.Shell != null)
         {
             h.Shape.Shape = h.Shell;
-            h.Shape.Disabled = false;
             _map.HouseGeometryChanged();
         }
-        h.Shell = null;
+        h.Shell = null; h.Voxel = null;
     }
 
     void UpdateTexture(House h)
@@ -319,40 +317,12 @@ public partial class HouseWorldNode : Node3D
         h.CutMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
     }
 
+    /// <summary>The house's collision node gets the voxel trimesh of its live cells (<see cref="HouseColliderBuilder"/>, as the server builds it).</summary>
     void RebuildCollider(House h)
     {
-        if (h.Shape == null || !GodotObject.IsInstanceValid(h.Shape) || h.Shape.GetParent() is not Node3D body) return;
-        var g = h.Replica.Grid;
-        var toBody = body.GlobalTransform.AffineInverse() * MapToWorld; // map local to the body's frame (identity for a chunk's collider)
-        if (Collider == HouseColliderKind.AllFaces)
-        {
-            _quads.Clear(); _pos.Clear();
-            HouseMesher.Surface(h.Replica.Cells, MeshMode.AllFaces, _quads);
-            HouseFrame.Triangles(g, _quads, _pos);
-            var faces = new Vector3[_pos.Count];
-            for (var i = 0; i < faces.Length; i++) faces[i] = toBody * V(_pos[i]);
-            if (h.Shape.Shape is ConcavePolygonShape3D shape) shape.SetFaces(faces);
-        }
-        else
-        {
-            _boxes.Clear();
-            HouseMesher.Boxes(h.Replica.Cells, _boxes);
-            for (var i = 0; i < _boxes.Count; i++)
-            {
-                if (i == h.Boxes.Count)
-                {
-                    var cs = new CollisionShape3D { Name = $"Voxels{i}", Shape = new BoxShape3D() };
-                    body.AddChild(cs);
-                    h.Boxes.Add(cs);
-                }
-                var (centre, size, yaw) = HouseFrame.Box(g, _boxes[i].Min, _boxes[i].Max);
-                var b = h.Boxes[i];
-                ((BoxShape3D)b.Shape).Size = V(size);
-                b.Transform = toBody * new Transform3D(new Basis(Vector3.Up, yaw), V(centre));
-                b.Disabled = false;
-            }
-            for (var i = _boxes.Count; i < h.Boxes.Count; i++) h.Boxes[i].Disabled = true;
-        }
+        if (h.Shape == null || !GodotObject.IsInstanceValid(h.Shape) || h.Shell == null) return;
+        h.Voxel = _collider.Build(h.Replica.Cells, h.Shape, MapToWorld, h.Voxel);
+        if (h.Shape.Shape != h.Voxel) h.Shape.Shape = h.Voxel;
         _map.HouseGeometryChanged();
     }
 

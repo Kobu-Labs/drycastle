@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Numerics;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Xunit;
@@ -7,74 +6,40 @@ namespace Drycastle.ShooterCore.Tests.Buildings.Destruction;
 
 public class HouseReplicaTests
 {
-    static byte[] Carve(ushort house, ushort seq, short cx, short cy, short cz, ushort r, uint hash)
-    {
-        var b = new byte[16];
-        BinaryPrimitives.WriteUInt16LittleEndian(b, house);
-        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(2), seq);
-        BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(4), cx);
-        BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(6), cy);
-        BinaryPrimitives.WriteInt16LittleEndian(b.AsSpan(8), cz);
-        BinaryPrimitives.WriteUInt16LittleEndian(b.AsSpan(10), r);
-        BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(12), hash);
-        return b;
-    }
-
-    static HouseReplicaWire.CellsPart Part(ushort seq, uint hash, uint first, params uint[] runs)
-    {
-        var o = new List<byte>();
-        foreach (var r in runs) Varint.Write(o, r);
-        return new HouseReplicaWire.CellsPart(0, seq, hash, first, o.ToArray());
-    }
-
-    [Fact]
-    public void Wire_decodes_carve_cells_and_settings()
-    {
-        var c = HouseReplicaWire.DecodeCarve(Carve(3, 7, -5, 12, 40, 32, 0xDEADBEEF))!.Value;
-        Assert.Equal(new HouseReplicaWire.Carve(3, 7, new CarveOp(-5, 12, 40, 32), 0xDEADBEEF), c);
-        Assert.Null(HouseReplicaWire.DecodeCarve(new byte[15]));
-
-        var p = new byte[14];
-        BinaryPrimitives.WriteUInt16LittleEndian(p, 9);
-        BinaryPrimitives.WriteUInt16LittleEndian(p.AsSpan(2), 4);
-        BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(4), 77);
-        BinaryPrimitives.WriteUInt32LittleEndian(p.AsSpan(8), 2);
-        p[12] = 5; p[13] = 1;
-        var cells = HouseReplicaWire.DecodeCells(p)!.Value;
-        Assert.Equal((9, 4, 77u, 2u), (cells.House, cells.OpSeq, cells.Hash, cells.FirstRun));
-        Assert.Equal(new byte[] { 5, 1 }, cells.Runs.ToArray());
-
-        Assert.Equal(new HouseReplicaWire.Settings(true, false), HouseReplicaWire.DecodeSettings([1, 0]));
-        Assert.Equal(new HouseReplicaWire.Settings(false, true), HouseReplicaWire.DecodeSettings([0, 1]));
-        Assert.Equal(new byte[] { 0x34, 0x12 }, HouseReplicaWire.EncodeResync(0x1234));
-    }
+    static readonly DestructionConfig Cfg = DestructionConfig.Default;
 
     [Fact]
     public void A_gap_in_op_seq_is_a_desync_and_later_ops_wait_for_the_cells()
     {
         var r = new HouseReplica(TestHouses.Box(8, 8, 8));
-        var cfg = DestructionConfig.Default;
-        var (o, res) = r.OnCarve(new HouseReplicaWire.Carve(0, 2, new CarveOp(8, 8, 8, 4), 0), cfg); // op 1 never came
+        var (o, res) = r.OnCarve(new HouseCarveMsg(0, 2, new CarveOp(8, 8, 8, 4), 0), Cfg); // op 1 never came
         Assert.Equal(HouseReplica.CarveOutcome.Desync, o);
         Assert.Null(res);
         Assert.True(r.AwaitingResync);
-        Assert.Equal(HouseReplica.CarveOutcome.Ignored, r.OnCarve(new HouseReplicaWire.Carve(0, 3, new CarveOp(8, 8, 8, 4), 0), cfg).Outcome);
+        Assert.Equal(HouseReplica.CarveOutcome.Ignored, r.OnCarve(new HouseCarveMsg(0, 3, new CarveOp(8, 8, 8, 4), 0), Cfg).Outcome);
         r.Reset();
         Assert.False(r.AwaitingResync);
-        Assert.Equal(HouseReplica.CarveOutcome.Ignored, r.OnCarve(new HouseReplicaWire.Carve(0, 0, new CarveOp(8, 8, 8, 4), 0), cfg).Outcome); // stale
+        Assert.Equal(HouseReplica.CarveOutcome.Ignored, r.OnCarve(new HouseCarveMsg(0, 0, new CarveOp(8, 8, 8, 4), 0), Cfg).Outcome); // stale
     }
 
     [Fact]
-    public void Cell_parts_must_continue_the_list()
+    public void Cells_from_the_codec_end_a_resync_and_a_gap_breaks_the_set()
     {
-        var r = new HouseReplica(TestHouses.Box(8, 8, 8));
-        Assert.True(r.SolidCount > 10);
-        Assert.Equal(HouseReplica.CellsOutcome.Partial, r.OnCells(Part(5, 9, 0, 3, 2)));
-        Assert.Equal(HouseReplica.CellsOutcome.Dropped, r.OnCells(Part(5, 9, 3, 1))); // the next part starts at run 2
-        Assert.Equal(HouseReplica.CellsOutcome.Dropped, r.OnCells(Part(5, 9, 2, 1))); // dropped: waits for a new start
-        Assert.Equal(HouseReplica.CellsOutcome.Partial, r.OnCells(Part(5, 9, 0, 3, 2)));
-        Assert.Equal(HouseReplica.CellsOutcome.Dropped, r.OnCells(Part(6, 9, 2, 1))); // another op seq
-        Assert.Equal(HouseReplica.CellsOutcome.Dropped, r.OnCells(Part(5, 9, 0, (uint)r.SolidCount + 1))); // more cells than the house has
+        var g = TestHouses.Box(16, 12, 10);
+        var server = new HouseCells(g);
+        server.Apply(CarveOp.From(g, g.ToMap(new Vector3(1.5f, 6, 4)), 1f)!.Value, Cfg);
+        server.Apply(CarveOp.From(g, g.ToMap(new Vector3(8, 0.5f, 5)), 0.75f)!.Value, Cfg);
+        var msgs = HouseCodec.EncodeCells(server, HouseCodec.CellsHeaderBytes + 5).Select(b => HouseCodec.DecodeCells(b)!).ToList();
+        Assert.True(msgs.Count >= 3);
+
+        var r = new HouseReplica(g);
+        r.MarkAwaiting();
+        Assert.Equal(CatchUpStep.Pending, r.OnCells(msgs[0]));
+        Assert.Equal(CatchUpStep.Broken, r.OnCells(msgs[2])); // msgs[1] lost
+        Assert.True(r.AwaitingResync);
+        for (var i = 0; i < msgs.Count; i++) Assert.Equal(i == msgs.Count - 1 ? CatchUpStep.Done : CatchUpStep.Pending, r.OnCells(msgs[i]));
+        Assert.False(r.AwaitingResync);
+        Assert.Equal((server.OpSeq, server.Hash()), (r.Cells.OpSeq, r.Cells.Hash()));
     }
 
     [Fact]

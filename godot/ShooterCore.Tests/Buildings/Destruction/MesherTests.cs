@@ -189,8 +189,8 @@ public class MesherTests(ITestOutputHelper log)
         q.Clear(); HouseMesher.Surface(c, MeshMode.CutFaces, q); b.Clear(); HouseMesher.Boxes(c, b);
         var alloc = GC.GetAllocatedBytesForCurrentThread() - before;
         log.WriteLine($"CutFaces {cut:F3} ms ({cutN} quads), AllFaces {all:F3} ms ({allN} quads), Boxes {box:F3} ms ({b.Count} boxes), roof piece {piece:F3} ms ({roof.Length} cells), warm alloc {alloc} B");
-        Assert.True(cut < 2, $"CutFaces {cut:F3} ms");
-        Assert.True(box < 2, $"Boxes {box:F3} ms");
+        Assert.True(cut < Budget.Ms(2), $"CutFaces {cut:F3} ms");
+        Assert.True(box < Budget.Ms(2), $"Boxes {box:F3} ms");
         Assert.Equal(0, alloc);
     }
 }
