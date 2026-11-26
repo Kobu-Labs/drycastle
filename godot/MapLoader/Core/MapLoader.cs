@@ -438,6 +438,7 @@ public sealed partial class MapLoader
             {
                 RegisterBakedPatch(patchId, mi);
             }
+            else if (RegisterHouseVisual(mi, name)) { } // house_<bid>_visual (MapLoader.Houses.cs)
             else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
             {
                 var id = name["parcel_".Length..^"_visual".Length];
@@ -506,7 +507,8 @@ public sealed partial class MapLoader
         Stats.CollidersBuilt++;
         if (dynamic) return cs;
 
-        if (name == "terrain_collision")
+        if (RegisterHouseCollision(cs, name)) { } // house_<bid>_collision (MapLoader.Houses.cs): an ordinary collider, also kept by bid
+        else if (name == "terrain_collision")
         {
             var faces = shape.GetFaces();
             _terrain.Add((faces, FacesAabb(faces)));
