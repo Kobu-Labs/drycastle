@@ -15,6 +15,7 @@ import shapely
 from shapely.geometry import Polygon
 
 from drycastle_pipeline.buildings import floorplan, interior, voxels
+from drycastle_pipeline.core import zfight
 from drycastle_pipeline.buildings.footprint import footprint_polygon
 from drycastle_pipeline.buildings.landmarks.bunker import bunker_rooms
 from drycastle_pipeline.buildings.landmarks.catalog import build_landmark
@@ -335,6 +336,9 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
                     "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, details[bid], ins)],
                 })  # fmt: skip
                 scene.house_voxels.append(voxels.voxelise(bid, b, details[bid], ins, m, dz))
+                fought = zfight.fights(m.tris, m.colours)  # its inside is seen up close, and through every hole
+                if sum(f[2] for f in fought) > zfight.WARN_M2:
+                    scene.warnings.append(f"house {bid}: {len(fought)} pairs of faces in one plane fight (flicker), {sum(f[2] for f in fought):.2f} m2 (core/zfight.py)")
     elif b.get("model"):
         m = _landmark_mesh(scene, p, bid, b, dz, visual)
     else:

@@ -11,7 +11,8 @@ facade):
   wall thinner than a cell still has one); from the floor slab up to the roof skin (gables included);
 * openings that go through (``Inside.through``) are air; closed ones, recesses, windows above the ceiling stay wall;
 * floor: one slab layer just under the floor; foundation: one layer under it across the footprint (the support root);
-* ceiling: one layer just over the ceiling height; the attic above it is air;
+* ceiling: one layer just over the ceiling height; the attic above it is air, closed all round (an attic cell beside the
+  outside, as where a high roof steps down to a low one, becomes roof; the export fails on an open attic);
 * roof: a skin under the visual roof surface (found by rasterising the up-facing roof triangles), one cell thick and as
   much more as the slope needs to stay face-connected; chimneys and dormers fill from the skin up to their tops;
 * partitions of the floor plan: the cells their middle line passes through, from floor to ceiling, open in the gaps
@@ -203,11 +204,11 @@ def _tops(tris: np.ndarray, nx: int, ny: int) -> tuple[np.ndarray, np.ndarray]:
     return top.reshape(ny, nx), which.reshape(ny, nx)
 
 
-def _supported(mat: np.ndarray) -> np.ndarray:
-    """Air, and every solid cell joined face to face to the foundation. A flood fill by whole runs: each sweep along one
-    axis reaches every run of solid cells that has a reached cell, so it takes as many sweeps as a path has turns."""
-    solid = mat != AIR
-    reached, n = mat == FOUNDATION, -1
+def _flood(passable: np.ndarray, start: np.ndarray) -> np.ndarray:
+    """The passable cells joined face to face to a start cell. A flood fill by whole runs: each sweep along one axis
+    reaches every run of passable cells that has a reached cell, so it takes as many sweeps as a path has turns."""
+    solid = passable
+    reached, n = start & passable, -1
     while (m := int(reached.sum())) != n:
         n = m
         for axis in range(3):
@@ -219,7 +220,44 @@ def _supported(mat: np.ndarray) -> np.ndarray:
             hit[run[r]] = True
             hit[0] = False
             reached = np.moveaxis(hit[run], -1, axis)
-    return reached | ~solid
+    return reached
+
+
+def _supported(mat: np.ndarray) -> np.ndarray:
+    """Air, and every solid cell joined face to face to the foundation."""
+    solid = mat != AIR
+    return _flood(solid, mat == FOUNDATION) | ~solid
+
+
+def _beside(m: np.ndarray) -> np.ndarray:
+    """The cells face to face with a cell of ``m`` (a cell of ``m`` itself only when it is beside another)."""
+    out = np.zeros_like(m)
+    for axis in range(3):
+        lo = [slice(None)] * 3
+        hi = [slice(None)] * 3
+        lo[axis], hi[axis] = slice(None, -1), slice(1, None)
+        out[tuple(lo)] |= m[tuple(hi)]
+        out[tuple(hi)] |= m[tuple(lo)]
+    return out
+
+
+def _seal_attic(mat: np.ndarray, attic: np.ndarray) -> None:
+    """Closes the attic: each of its air cells face to face with air that is not attic (the outside over a lower roof, a room
+    with no ceiling) becomes roof, so the attic is never open to the outside, whatever left the gap (the game draws the
+    attic's inside only when it is closed, docs/house-destruction.md)."""
+    mat[attic & _beside(~attic & (mat == AIR))] = ROOF
+
+
+def attic_open(mat: np.ndarray) -> bool:
+    """Whether air over a ceiling cell can be reached through air from the grid's edge (an attic open to the outside).
+    ``mat`` is (nz, ny, nx) materials."""
+    air = mat == AIR
+    edge = np.zeros_like(air)
+    edge[0], edge[-1], edge[:, 0], edge[:, -1], edge[:, :, 0], edge[:, :, -1] = True, True, True, True, True, True
+    outside = _flood(air, edge)
+    over_ceiling = np.zeros_like(air)
+    over_ceiling[1:] = (mat[:-1] == CEILING) & air[1:]
+    return bool((outside & over_ceiling).any())
 
 
 def _roof_only(d):
@@ -362,7 +400,12 @@ def voxelise(bid: str, b: dict, d, ins, visual: Mesh, dz: float = 0.0, plan=None
                 part[zs, j, i] = True
         mat[part & (mat == AIR)] = PARTITION
 
+    if 0 <= k_ceil < nz:  # the attic: air over the ceiling, under the roof skin
+        ceiled = mat[k_ceil] == CEILING
+        _seal_attic(mat, (mat == AIR) & ceiled[None] & (K > k_ceil) & (Z < roof_top[None]))
     mat[~_supported(mat)] = AIR  # a piece the foundation does not hold (a scrap of roof) would fall at the first carve
+    if attic_open(mat):
+        raise ValueError(f"house {bid}: its attic is open to the outside (house_voxels.bin needs it closed)")
 
     # colours, then the palette (sorted: same input, same bytes)
     wall_c = tuple(int(c) for c in b["wall_colour"][:3])

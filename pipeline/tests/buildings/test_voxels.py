@@ -90,3 +90,25 @@ def test_file_round_trip_and_layout():
 
 def test_same_input_same_bytes():
     assert vx.encode([grid()[0]]) == vx.encode([grid()[0]])
+
+
+def test_an_attic_beside_the_outside_is_sealed_with_roof():
+    # a ceiling, attic air over it, walls on three sides and on the fourth (+x) the outside over a lower roof
+    mat = np.zeros((7, 5, 6), np.uint8)
+    mat[1, 1:4, 1:5] = vx.CEILING
+    mat[5, 1:4, 1:5] = vx.ROOF
+    mat[2:5, 1:4, 0] = vx.WALL
+    mat[2:5, 0, 1:5] = vx.WALL
+    mat[2:5, 4, 1:5] = vx.WALL
+    assert vx.attic_open(mat)
+    attic = np.zeros_like(mat, bool)
+    attic[2:5, 1:4, 1:5] = True
+    vx._seal_attic(mat, attic)
+    assert not vx.attic_open(mat)
+    assert (mat[2:5, 1:4, 4] == vx.ROOF).all()  # the cells beside the gap
+    assert (mat[2:5, 1:4, 1:4] == vx.AIR).all()  # the rest of the attic stays air
+
+
+def test_a_house_has_a_closed_attic():
+    g, _ = grid()
+    assert not vx.attic_open(g.materials())

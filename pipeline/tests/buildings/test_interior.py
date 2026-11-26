@@ -3,6 +3,7 @@ import pytest
 
 from drycastle_pipeline.buildings import interior
 from drycastle_pipeline.buildings.openings import DetailError, build_detail, parse_detail
+from drycastle_pipeline.core import zfight
 from tests.buildings.test_building_detail import WINDOW, house
 
 DOOR = {"id": "d", "kind": "door", "edge": 0, "at_m": 6.0, "width_m": 0.95, "height_m": 2.05, "sill_m": 0.6, "steps": 4}
@@ -107,3 +108,10 @@ def test_refusals():
         parse_detail({"id": "w1", "interior": "yes"})
     with pytest.raises(DetailError, match="between the floor"):
         interior.inside_of({**house(), "eave_height_m": 2.2}, detail(DOOR))
+
+
+def test_a_hollow_house_has_no_faces_that_fight(no_plan):
+    # a door at the floor (its reveal's bottom at the floor's height), windows with frames and posts, the floor and ceiling
+    framed = {**WINDOW, "frame_m": 0.06, "posts": [0.5], "sill": True}
+    mesh, _ = build_detail(house(), detail(framed, DOOR))
+    assert zfight.fights(mesh.tris, mesh.colours) == []

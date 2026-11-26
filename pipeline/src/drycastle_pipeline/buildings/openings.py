@@ -1016,7 +1016,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         order = (a0, a1, a2) if area < 0 else (a0, a2, a1)
         out.add([(x, y, 0.0) for x, y in order], wall_c)
     if inside is not None:
-        interior.add_floor_ceiling(out, poly, inside)
+        interior.add_floor_ceiling(out, poly, inside, inset=interior.WALL_M)
         interior.add_partitions(out, interior.plan_of(b, d, inside), inside)
     if d.apron is not None:
         _add_apron(out, poly, d.apron)
