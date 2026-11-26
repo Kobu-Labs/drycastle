@@ -332,19 +332,19 @@ public partial class Shooter : Node3D
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
                 else if (_client == client) LeaveMatch(Strings.F("connect.err.lost", $"{host}:{port}", why));
             };
-            client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts());
             client.MenuOpen = () => _shell.Top != null;
-            client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             client.Sandbox.Answered += a => _shell.Toast(a.Reason, a.Granted ? ToastKind.Info : ToastKind.Warn);
             client.Sandbox.Noticed += text => _shell.Toast(text, ToastKind.Warn);
             client.Sandbox.OpenPanel = () => _shell.Push(new SandboxScreen(client, () => _data ??= LoadData()));
             AddChild(client);
+            client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts()); // made in the client's _Ready
+            client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             result = await done.Task;
         }
         catch (Exception e)
         {
             result = JoinResult.Failed(e.Message);
-            GD.PrintErr($"start failed: {e.Message}");
+            GD.PrintErr($"start failed: {e}");
         }
         if (!_phase.Is(AppPhase.Loading)) return; // the connection dropped while we waited: LeaveMatch already put the menu back
         if (result.Outcome != JoinOutcome.Welcomed)
