@@ -159,6 +159,7 @@ Reliable, ordered. Kinds **242, 243, 244** (free at protocol 86; check `Wire.cs`
 Client:
 - Applies 242 with `HouseCells.Apply`.
 - When its `op_seq` or `hash` differs from the server's, it logs `house desync <id>` and asks for 243. The request is a client message on a free client kind (picked in WP-0).
+- Resync request: client to server event **249 `HouseResync`**, payload u16 house (protocol 87).
 - A joiner gets 244, then 243 for every damaged house.
 
 ## Contract 5: `godot/shooter/data/house_destruction.json`
