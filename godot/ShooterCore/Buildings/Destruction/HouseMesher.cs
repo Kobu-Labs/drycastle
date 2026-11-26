@@ -14,6 +14,8 @@ public static class HouseMesher
     // Scratch volume codes: 0 = not solid and never was (original air, or not in the piece), 1..63 = solid (palette index),
     // Cut | palette = was solid, now removed.
     const byte Cut = 0x80;
+    /// <summary>Solid for the neighbour test, but its own faces are not meshed (a palette index is under 64).</summary>
+    const byte NoMesh = 0x40;
 
     /// <summary>
     /// Greedy faces of the live cells, no allocation beyond <paramref name="into"/>. <see cref="MeshMode.CutFaces"/>: the faces of solid
@@ -38,6 +40,39 @@ public static class HouseMesher
             Fill(c, vol, Math.Max(x0 - 2, 0), Math.Max(y0 - 2, 0), Math.Max(z0 - 2, 0), Math.Min(x1 + 3, g.Nx), Math.Min(y1 + 3, g.Ny), Math.Min(z1 + 3, g.Nz));
             Greedy(vol, g.Nx, g.Ny, g.Nz, Math.Max(x0 - 1, 0), Math.Max(y0 - 1, 0), Math.Max(z0 - 1, 0),
                 Math.Min(x1 + 2, g.Nx), Math.Min(y1 + 2, g.Ny), Math.Min(z1 + 2, g.Nz), true, Vector3.Zero, into);
+        }
+        finally { ArrayPool<byte>.Shared.Return(vol); }
+    }
+
+    /// <summary>
+    /// The voxel faces of a damaged house (<see cref="HouseDamageLook"/>): every open face (toward air, a removed cell or the grid's edge) of the live
+    /// cells in <paramref name="near"/>, and the faces of the other live cells toward <paramref name="enclosed"/> air (the attic's inside). Greedy, grid units.
+    /// </summary>
+    public static void Damaged(HouseCells c, ReadOnlySpan<byte> near, ReadOnlySpan<byte> enclosed, bool anyEnclosed, List<Quad> into)
+    {
+        var g = c.Grid;
+        if (!c.Damaged) return;
+        var n = g.Count;
+        var vol = ArrayPool<byte>.Shared.Rent(n);
+        try
+        {
+            var pal = g.Cells.Span;
+            var bits = c.RemovedBits;
+            for (var i = 0; i < n; i++)
+            {
+                var p = pal[i];
+                var live = p != 0 && (bits[i >> 6] & (1UL << (i & 63))) == 0;
+                vol[i] = live ? (near[i] != 0 ? p : NoMesh) : (byte)0;
+            }
+            Greedy(vol, g.Nx, g.Ny, g.Nz, 0, 0, 0, g.Nx, g.Ny, g.Nz, false, Vector3.Zero, into);
+            if (!anyEnclosed) return;
+            for (var i = 0; i < n; i++)
+            {
+                var p = pal[i];
+                var live = p != 0 && (bits[i >> 6] & (1UL << (i & 63))) == 0;
+                vol[i] = live ? (near[i] != 0 ? NoMesh : p) : p == 0 && enclosed[i] != 0 ? (byte)0 : NoMesh;
+            }
+            Greedy(vol, g.Nx, g.Ny, g.Nz, 0, 0, 0, g.Nx, g.Ny, g.Nz, false, Vector3.Zero, into, edgeFaces: false);
         }
         finally { ArrayPool<byte>.Shared.Return(vol); }
     }
@@ -175,7 +210,7 @@ public static class HouseMesher
     /// neighbour is not solid (outside the volume counts as not solid). Only the cells of the region [lo, hi) are meshed; the cells next to it
     /// that are read must be filled too.
     /// </summary>
-    static void Greedy(byte[] vol, int nx, int ny, int nz, int lx, int ly, int lz, int hx, int hy, int hz, bool cutOnly, Vector3 offset, List<Quad> into)
+    static void Greedy(byte[] vol, int nx, int ny, int nz, int lx, int ly, int lz, int hx, int hy, int hz, bool cutOnly, Vector3 offset, List<Quad> into, bool edgeFaces = true)
     {
         Span<int> size = [nx, ny, nz];
         Span<int> stride = [1, nx, nx * ny];
@@ -205,10 +240,10 @@ public static class HouseMesher
                             {
                                 var p = vol[at];
                                 byte f = 0;
-                                if (p is > 0 and < Cut)
+                                if (p is > 0 and < NoMesh)
                                 {
                                     if (cutOnly) { if (vol[at + nbOff] >= Cut) f = p; }
-                                    else if (!hasNb) f = p;
+                                    else if (!hasNb) { if (edgeFaces) f = p; }
                                     else { var q = vol[at + nbOff]; if (q == 0 || q >= Cut) f = p; }
                                 }
                                 mask[m + iu] = f;

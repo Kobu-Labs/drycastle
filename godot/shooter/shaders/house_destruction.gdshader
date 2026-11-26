@@ -2,7 +2,8 @@
 // The look is the map's flat material (MapLoader FlatMaterial): sRGB vertex colours as albedo, fully rough, no metal, no specular.
 // A fragment is discarded when its cell in the house's hidden grid is removed: the world position, stepped 0.01 m against the normal
 // (a face on a cell boundary reads the cell behind it), is mapped to grid cells by world_to_grid and looks up an R8 3D texture
-// (one texel a cell, nearest, 1 = removed). Outside the grid nothing is discarded.
+// (one texel a cell, nearest, 1 = hidden: near a hole, where voxel blocks are drawn instead, or air left with nothing next to it;
+// ShooterCore HouseDamageLook). Outside the grid nothing is discarded.
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 

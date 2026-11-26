@@ -946,10 +946,14 @@ stateDiagram-v2
     [*] --> Shut
     Shut --> Open
     Open --> Shut
+    Shut --> Blown
+    Open --> Blown
+    Blown --> Shut
 ```
 
 - **Shut**: Closed and solid (the start state, and every new server): the leaf fills the doorway.
 - **Open**: The leaf is swung into the house, or tipped up under the garage's ceiling, and nothing is solid. Stays open until a player closes it; it does not close while a vehicle stands in the doorway.
+- **Blown**: A carve took a cell of the doorway's frame (docs/house-destruction.md): the leaf is gone, nothing is solid and nobody can work it. Hung again, shut, when the houses are restored (a new round, /houses restore).
 
 ## Hud.MoabBanner
 

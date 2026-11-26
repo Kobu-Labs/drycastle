@@ -60,9 +60,10 @@ public class HouseDoorsTests
     [Fact]
     public void The_event_names_the_door_and_its_state()
     {
-        Assert.Equal((300, true), HouseDoorCodec.Decode(HouseDoorCodec.Encode(300, true)));
-        Assert.Equal((0, false), HouseDoorCodec.Decode(HouseDoorCodec.Encode(0, false)));
-        Assert.Null(HouseDoorCodec.Decode(new byte[] { 0, 0, 2 }));
+        Assert.Equal((300, HouseDoorState.Open), HouseDoorCodec.Decode(HouseDoorCodec.Encode(300, true)));
+        Assert.Equal((0, HouseDoorState.Shut), HouseDoorCodec.Decode(HouseDoorCodec.Encode(0, false)));
+        Assert.Equal((7, HouseDoorState.Blown), HouseDoorCodec.Decode(HouseDoorCodec.Encode(7, HouseDoorState.Blown)));
+        Assert.Null(HouseDoorCodec.Decode(new byte[] { 0, 0, 3 }));
         Assert.Null(HouseDoorCodec.Decode(new byte[] { 1 }));
     }
 }

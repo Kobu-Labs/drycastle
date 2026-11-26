@@ -56,5 +56,6 @@ public sealed class HousesClient
         if (HouseWorldNode.Current is not { } houses) return;
         houses.ResetAll();
         houses.Debris = null; // freed with Owned
+        Drycastle.Shooter.Buildings.HouseDoorsNode.Current?.RehangAll(); // the next server says which doors it has blown
     }
 }

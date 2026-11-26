@@ -302,11 +302,11 @@ public sealed class GlassReplica
 }
 
 /// <summary>A building's pane from the base map's windows.json: the node of its mesh, its rectangle in the game's axes (Y up), whether it can break, and its own hit points where it has them (else glass.json's building_pane_hp; the mechanic garage's plate, <see cref="MechanicGarageSite"/>).</summary>
-public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable, float? Hp = null);
+public sealed record MapGlassPane(string Node, GlassPaneRect Rect, bool Breakable, float? Hp = null, string Building = "");
 
 /// <summary>
 /// The building panes of a base map (windows.json, written by the map pipeline's building detail). Server and client read the same file,
-/// and the order here (by node name, ordinal) is the pane's index on the wire.
+/// and the order here (by node name, ordinal) is the pane's index on the wire. Building: the pane's building id (a hollow house's, HousePanes), empty when the file has none.
 /// </summary>
 public static class MapGlass
 {
@@ -326,7 +326,8 @@ public static class MapGlass
                 float width = w.GetProperty("width_m").GetSingle(), height = w.GetProperty("height_m").GetSingle();
                 if (normal.LengthSquared() < 1e-6f || !(width > 0) || !(height > 0)) throw new DataFileException("windows.json: a pane needs a normal and a positive width_m and height_m");
                 var breakable = !w.TryGetProperty("breakable", out var b) || b.ValueKind != JsonValueKind.False;
-                list.Add(new MapGlassPane(w.GetProperty("node").GetString() ?? "", GlassPaneRect.Make(centre, normal, width, height), breakable));
+                list.Add(new MapGlassPane(w.GetProperty("node").GetString() ?? "", GlassPaneRect.Make(centre, normal, width, height), breakable,
+                    Building: w.TryGetProperty("building", out var bid) ? bid.GetString() ?? "" : ""));
             }
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException or FormatException)

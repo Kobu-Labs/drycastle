@@ -34,6 +34,10 @@ internal sealed class HouseDestructionServer
     readonly HouseCollider?[] _colliders;
     readonly bool[] _noCollider;
     readonly HouseColliderBuilder _collider = new();
+    /// <summary>A house lost cells (after the op went out): its panes may have lost their frame (<see cref="Panes.GlassServer.HouseChanged"/>).</summary>
+    public Action<HouseCells>? Changed { get; set; }
+    /// <summary>Every house was made whole (a new round, <c>/houses restore</c>): what hung in their openings goes back (<see cref="HouseDoorServer.RehangAll"/>).</summary>
+    public Action? Restored { get; set; }
     /// <summary><c>/rubble</c>'s choice for this round; null = house_destruction.json's.</summary>
     bool? _rubbleStays;
 
@@ -106,7 +110,11 @@ internal sealed class HouseDestructionServer
             if (CarveOp.From(house.Grid, map, radiusM) is not { } op) continue;
             var result = house.Apply(op, _cfg);
             _ctx.Broadcast(EventKind.HouseCarve, HouseCodec.EncodeCarve(new HouseCarveMsg(house.Grid.Index, house.OpSeq, op, result.Hash))); // every op, even one that took nothing: the clients count them too
-            if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0) _dirty[i] = true;
+            if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0)
+            {
+                _dirty[i] = true;
+                Changed?.Invoke(house);
+            }
             reached++;
         }
         return reached;
@@ -173,6 +181,7 @@ internal sealed class HouseDestructionServer
             _houses[i].Restore();
         }
         _ctx.Broadcast(EventKind.HouseSettings, HouseCodec.EncodeSettings(new HouseSettingsMsg(RubbleStays, Reset: true)));
+        Restored?.Invoke();
     }
 
     /// <summary>The joiner's catch-up: the settings, then the removed cells of every house an op has touched this round (one whose op count is not 0, even with nothing removed: the joiner's count must match).</summary>

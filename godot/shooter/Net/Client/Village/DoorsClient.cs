@@ -33,7 +33,7 @@ public sealed class DoorsClient
                 GarageDoorNode.Current?.SetOpen(garage, animate: true);
                 break;
             case EventKind.HouseDoor when HouseDoorCodec.Decode(payload) is { } house:
-                HouseDoorsNode.Current?.Show(house.Door, house.Open, animate: true);
+                HouseDoorsNode.Current?.Show(house.Door, house.State, animate: true);
                 break;
         }
     }

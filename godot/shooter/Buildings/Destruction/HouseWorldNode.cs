@@ -8,7 +8,8 @@ namespace Drycastle.Shooter.Buildings.Destruction;
 /// <summary>
 /// The client's destructible houses (docs/house-destruction.md, WP-F). One <see cref="HouseReplica"/> per house of house_voxels.bin follows the server's
 /// carve ops (242), the catch-up and resync runs (243) and the settings (244). An undamaged house keeps the map's flat material and its exact shell collider;
-/// on its first carve its visual gets the discard shader (an R8 3D texture of the removed cells), a cut-face mesh shows the broken cells, and its collider
+/// on its first carve its visual gets the discard shader (an R8 3D texture of the cells it hides near holes, HouseDamageLook), a voxel mesh draws the live cells there
+/// and the attic's inside, and its collider
 /// becomes the voxel trimesh (<see cref="HouseColliderBuilder"/>, the server's too). Texture, mesh and collider are rebuilt at most once per house per frame. Fallen and crumbled cells
 /// go to <see cref="Debris"/> (WP-G), after the collider has its hole. The wire is <see cref="HouseCodec"/>'s. A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
 /// One per map, client only: <see cref="Current"/>.
@@ -64,6 +65,8 @@ public partial class HouseWorldNode : Node3D
         public Godot.Collections.Array<Image>? Layers;
         public byte[][] LayerBytes = [];
         public MeshInstance3D? Cut;
+        /// <summary>Near-hole cells, hidden cells and the attic (made at the first carve).</summary>
+        public HouseDamageLook? Look;
         public ArrayMesh? CutMesh;
         /// <summary>The voxel collider, in the map's node while swapped.</summary>
         public ConcavePolygonShape3D? Voxel;
@@ -214,6 +217,7 @@ public partial class HouseWorldNode : Node3D
     {
         if (!h.Replica.Cells.Damaged) { Unswap(h); return; }
         if (!h.Swapped) Swap(h);
+        (h.Look ??= new HouseDamageLook(h.Replica.Grid)).Update(h.Replica.Cells);
         UpdateTexture(h);
         RebuildCut(h);
         if (h.ColliderDirty) RebuildCollider(h);
@@ -275,16 +279,17 @@ public partial class HouseWorldNode : Node3D
             h.Shape.Shape = h.Shell;
             _map.HouseGeometryChanged();
         }
-        h.Shell = null; h.Voxel = null;
+        h.Shell = null; h.Voxel = null; h.Look = null;
     }
 
     void UpdateTexture(House h)
     {
-        if (h.Texture == null || h.Layers == null) return;
+        if (h.Texture == null || h.Layers == null || h.Look == null) return;
         var g = h.Replica.Grid;
+        var n = g.Nx * g.Ny;
         for (var z = 0; z < h.LayerBytes.Length; z++)
         {
-            h.Replica.FillRemovedLayer(z, h.LayerBytes[z]);
+            Buffer.BlockCopy(h.Look.Hide, z * n, h.LayerBytes[z], 0, n);
             h.Layers[z].SetData(g.Nx, g.Ny, false, Image.Format.R8, h.LayerBytes[z]);
         }
         h.Texture.Update(h.Layers);
@@ -292,10 +297,10 @@ public partial class HouseWorldNode : Node3D
 
     void RebuildCut(House h)
     {
-        if (h.CutMesh == null) return;
+        if (h.CutMesh == null || h.Look == null) return;
         var g = h.Replica.Grid;
         _quads.Clear(); _pos.Clear(); _nrm.Clear();
-        HouseMesher.Surface(h.Replica.Cells, MeshMode.CutFaces, _quads);
+        HouseMesher.Damaged(h.Replica.Cells, h.Look.Near, h.Look.Enclosed, h.Look.AnyEnclosed, _quads);
         HouseFrame.Triangles(g, _quads, _pos, _nrm);
         h.CutMesh.ClearSurfaces();
         if (_pos.Count == 0) return;

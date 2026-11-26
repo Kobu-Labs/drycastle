@@ -206,6 +206,8 @@ public partial class NetServer : Node
         _glass = new GlassServer(_ctx, _fleet, _rewind, Config.Map, Config.GlassData);
         _houseDestruction = new HouseDestructionServer(_ctx, Config.HouseDestruction, Config.ArenaMode, Config.MapDir, Config.Map, () => _shot.Query);
         _blasts = new WorldBlasts(_glass, _houseDestruction); // every blast's panes and houses
+        _houseDestruction.Changed = house => { _glass.HouseChanged(house); _houses.HouseChanged(house); }; // a pane whose frame a carve took shatters, a door is blown out
+        _houseDestruction.Restored = _houses.RehangAll;
         _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, Config.World, _diag.Perf.Ticks != null);
         _carDamage = new CarDamage(_ctx, _fleet, _glass, _smoke, Config.Vehicles);
         _rocketCarts = new RocketCarts(_fleet, () => _shot.Query, Config.Vehicles);
