@@ -787,7 +787,7 @@ change (pre-1.0, a node-layout change bumps the minor part). Also
 `parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and
 y north, chunk, building IDs), `roads.json`, `spawns.json` and `manifest.json` (map version
 `<MAP_VERSION_BASE>-village`, chunk list with triangle counts per node, generated parts, terrain grid info,
-attribution, input hashes including the work files). The output has no timestamp and is
+attribution, input hashes including the work files, `file_sha256`: the sha256 of every file of `files`, so the build hash the game's join check compares covers them). The output has no timestamp and is
 byte-identical for identical input.
 
 **Bunkers (`bunkers.json`).** The three bunkers are buildings with `model: bunker` in `config/overrides.yaml`

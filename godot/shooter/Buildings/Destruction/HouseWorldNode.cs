@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore.Buildings.Destruction;
+using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Glass;
 using NVec3 = System.Numerics.Vector3;
 using MapLoaderT = Drycastle.MapLoader.MapLoader;
@@ -21,6 +22,8 @@ public partial class HouseWorldNode : Node3D
     public const string ShaderPath = "res://shaders/house_destruction.gdshader";
     public static HouseWorldNode? Current { get; private set; }
     const double ResyncRetrySeconds = 5;
+    /// <summary>A house still unlike the server's after this long of asking with the server's house unchanged (its map data differs: a full 243 never matches) is frozen as it is until the round resets.</summary>
+    const double ResyncGiveUpSeconds = 20;
 
     IHouseDebris? _debris;
     /// <summary>The debris of fallen parts (WP-G); null = none. Set, it gets the current rubble mode.</summary>
@@ -104,6 +107,10 @@ public partial class HouseWorldNode : Node3D
         public ArrayMesh? CutMesh;
         public bool Swapped, Dirty, ColliderDirty;
         public double ResyncAt;
+        /// <summary>Asking for 243 since the first desync; dropped when one ends it or after <see cref="ResyncGiveUpSeconds"/>.</summary>
+        public PendingAnswer Resync;
+        /// <summary>The op seq of the last 243 set: one at a new op seq (the server's house moved on) restarts <see cref="Resync"/>.</summary>
+        public ushort ResyncSeq;
         public ushort Index => Replica.Grid.Index;
         public string Id => Replica.Grid.Id;
     }
@@ -225,10 +232,12 @@ public partial class HouseWorldNode : Node3D
     public void OnCells(HouseCellsMsg m)
     {
         if (Of(m.House) is not { } h) return;
+        if (m.FirstRun == 0 && h.Resync.Active && m.OpSeq != h.ResyncSeq) { h.ResyncSeq = m.OpSeq; h.Resync.Begin(Time.GetTicksMsec() / 1000.0); }
         switch (h.Replica.OnCells(m))
         {
             case CatchUpStep.Done:
                 _awaiting.Remove(h);
+                h.Resync.End();
                 MarkDirty(h);
                 h.Collider?.MarkAll();
                 break;
@@ -258,6 +267,7 @@ public partial class HouseWorldNode : Node3D
             Unswap(h);
             UpdatePanes(h);
             h.Dirty = h.ColliderDirty = false;
+            h.Resync.End();
         }
         _dirty.Clear();
         _awaiting.Clear();
@@ -270,7 +280,9 @@ public partial class HouseWorldNode : Node3D
         GD.Print($"house desync {h.Id}");
         h.Replica.MarkAwaiting();
         if (!_awaiting.Contains(h)) _awaiting.Add(h);
-        h.ResyncAt = Time.GetTicksMsec() / 1000.0 + ResyncRetrySeconds;
+        var now = Time.GetTicksMsec() / 1000.0;
+        if (!h.Resync.Active) h.Resync.Begin(now);
+        h.ResyncAt = now + ResyncRetrySeconds;
         RequestResync?.Invoke(h.Index);
     }
 
@@ -288,8 +300,17 @@ public partial class HouseWorldNode : Node3D
         if (_awaiting.Count > 0)
         {
             var now = Time.GetTicksMsec() / 1000.0;
-            foreach (var h in _awaiting)
-                if (now >= h.ResyncAt) { h.ResyncAt = now + ResyncRetrySeconds; RequestResync?.Invoke(h.Index); }
+            for (var k = _awaiting.Count - 1; k >= 0; k--)
+            {
+                var h = _awaiting[k];
+                if (h.Resync.GiveUp(now, ResyncGiveUpSeconds))
+                {
+                    // still awaiting in the replica: its 242s are ignored, so it asks no more; the next round reset makes it whole
+                    GD.PushWarning($"house {h.Id}: still unlike the server's after {ResyncGiveUpSeconds} s of resyncs (map data differs?); frozen until the round resets");
+                    _awaiting.RemoveAt(k);
+                }
+                else if (now >= h.ResyncAt) { h.ResyncAt = now + ResyncRetrySeconds; RequestResync?.Invoke(h.Index); }
+            }
         }
         // a house with falling parts first, whatever the budget: its collider gets the hole, then the parts fall
         if (_falls.Count > 0)
