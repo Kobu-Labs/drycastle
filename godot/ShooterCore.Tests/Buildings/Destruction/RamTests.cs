@@ -39,9 +39,9 @@ public class RamTests
         var c = new HouseCells(g);
         var box = Car(g, 0.05f);
         var hit = HouseRam.Contact(c, box, Vector3.UnitY, Cfg.Ram.ProbeM)!.Value;
-        var ops = HouseRam.Hole(g, box, Vector3.UnitY, hit.Front, Cfg.Ram);
-        Assert.InRange(ops.Length, 1, Cfg.Ram.MaxOps);
-        foreach (var op in ops) c.Apply(op, Cfg);
+        var op = HouseRam.Hole(g, box, Vector3.UnitY, hit.Front, Cfg.Ram);
+        Assert.NotNull(op);
+        c.Apply(op.Value, Cfg);
         Assert.Null(HouseRam.Contact(c, box, Vector3.UnitY, 1.5f)); // driving on through the wall meets nothing
         Assert.True(c.Solid(g.IndexOf(3, 22, 5)));   // the wall well to the side stands
     }
@@ -53,8 +53,8 @@ public class RamTests
         var c = new HouseCells(g);
         var box = Car(g, 0.05f);
         var hit = HouseRam.Contact(c, box, Vector3.UnitY, Cfg.Ram.ProbeM)!.Value;
-        var cost = HouseRam.Cost(c, HouseRam.Hole(g, box, Vector3.UnitY, hit.Front, Cfg.Ram), Cfg);
-        Assert.InRange(cost, 40 * Cfg.Ram.MomentumPerCell, 120 * Cfg.Ram.MomentumPerCell); // the hole is some 60 to 90 wall cells
+        var cost = HouseRam.Cost(c, [HouseRam.Hole(g, box, Vector3.UnitY, hit.Front, Cfg.Ram)!.Value], Cfg);
+        Assert.InRange(cost, 100 * Cfg.Ram.MomentumPerCell, 220 * Cfg.Ram.MomentumPerCell); // the hole's sphere takes some 150 wall and floor cells
         // a car at 50 km/h has less than that: a dent smaller than the full one; a truck (6500 kg) at the same speed goes through
         var car = 1200f * 13.9f; var truck = 6500f * 13.9f;
         Assert.True(car < cost);
@@ -63,6 +63,24 @@ public class RamTests
         Assert.InRange(dent.RadiusQ, 1, (int)(Cfg.Ram.DentMaxM / g.Cell * 4));
         Assert.Equal(13.9f - cost / 6500f, HouseRam.SpeedThrough(13.9f, cost, 6500f), 4);
         Assert.Equal(0f, HouseRam.SpeedThrough(13.9f, cost, 1200f));
+    }
+
+    [Fact]
+    public void Decide_goes_through_on_momentum_over_the_cost()
+    {
+        // 20 000 kg m/s of wall: a car (1200 kg) losing 13.9 m/s stops (the whole impact is its crash); at 20 m/s into it, head on, it goes through at 3.33 m/s
+        var stop = HouseRam.Decide(20000, 1200, 13.9f, 13.9f);
+        Assert.False(stop.Through);
+        Assert.Equal(13.9f, stop.SpeedLost);
+        var through = HouseRam.Decide(20000, 1200, 20f, 20f);
+        Assert.True(through.Through);
+        Assert.Equal(20f - 20000f / 1200, through.SpeedKept, 3);
+        Assert.Equal(20000f / 1200, through.SpeedLost, 3);
+        // a glancing hit: the wall took less than the speed; momentum is mass times what it took, the kept speed is off the whole speed
+        var glance = HouseRam.Decide(20000, 6500, 5f, 25f);
+        Assert.True(glance.Through);
+        Assert.Equal(25f - 20000f / 6500, glance.SpeedKept, 3);
+        Assert.False(HouseRam.Decide(20000, 1200, 16.6f, 16.6f).Through); // just under: 19 920
     }
 
     [Fact]

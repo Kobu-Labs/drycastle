@@ -63,20 +63,6 @@ public sealed class HouseReplica
         AwaitingResync = false;
         _catchUp = new HouseCellsCatchUp();
     }
-
-    /// <summary>The R8 layer <paramref name="z"/> of the removed-cell 3D texture (Nx x Ny, x fastest): 255 where a solid cell is removed, else 0.</summary>
-    public void FillRemovedLayer(int z, byte[] into)
-    {
-        var g = Grid;
-        int nx = g.Nx, n = nx * g.Ny, i0 = n * z;
-        if (into.Length != n) throw new ArgumentException($"layer of {n} bytes expected");
-        var cells = g.Cells.Span;
-        for (var k = 0; k < n; k++)
-        {
-            var i = i0 + k;
-            into[k] = cells[i] != 0 && !Cells.Solid(i) ? (byte)255 : (byte)0;
-        }
-    }
 }
 
 /// <summary>
@@ -100,16 +86,6 @@ public static class HouseFrame
     {
         var o = GridToGodot(g, Vector3.Zero);
         return (GridToGodot(g, Vector3.UnitX) - o, GridToGodot(g, Vector3.UnitY) - o, GridToGodot(g, Vector3.UnitZ) - o, o);
-    }
-
-    /// <summary>
-    /// A grid box (min and max corners, grid units) as a Godot box: its centre (map local), its size in metres along its own axes and its yaw about
-    /// Godot +y. The box's axes are grid x, grid z (up) and minus grid y, so the size is (dx, dz, dy) cells times the cell size.
-    /// </summary>
-    public static (Vector3 Centre, Vector3 Size, float Yaw) Box(HouseGrid g, Vector3 min, Vector3 max)
-    {
-        var d = (max - min) * g.Cell;
-        return (GridToGodot(g, (min + max) * 0.5f), new Vector3(d.X, d.Z, d.Y), g.Yaw);
     }
 
     /// <summary>

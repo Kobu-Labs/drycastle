@@ -32,9 +32,8 @@ internal sealed class HouseDestructionServer
     /// <summary>Each house's bounding sphere, map local (z up): a blast far from it skips the exact test.</summary>
     readonly (NVec3 Centre, float Radius)[] _bounds;
     readonly bool[] _dirty;
-    readonly HouseCollider?[] _colliders;
+    readonly HouseVoxelCollider?[] _colliders;
     readonly bool[] _noCollider;
-    readonly HouseColliderBuilder _collider = new();
     /// <summary>A house lost cells (after the op went out): its panes may have lost their frame (<see cref="Panes.GlassServer.HouseChanged"/>).</summary>
     public Action<HouseCells>? Changed { get; set; }
     /// <summary>Every house was made whole (a new round, <c>/houses restore</c>): what hung in their openings goes back (<see cref="HouseDoorServer.RehangAll"/>).</summary>
@@ -42,7 +41,6 @@ internal sealed class HouseDestructionServer
     /// <summary><c>/rubble</c>'s choice for this round; null = house_destruction.json's.</summary>
     bool? _rubbleStays;
 
-    sealed record HouseCollider(CollisionShape3D Node, Shape3D Original);
 
     public HouseDestructionServer(ServerContext ctx, DestructionConfig cfg, bool arenaMode, string mapDir, Drycastle.MapLoader.MapLoader? map, Func<WorldQuery> query)
     {
@@ -51,7 +49,7 @@ internal sealed class HouseDestructionServer
         _houses = grids.Select(g => new HouseCells(g)).ToArray();
         _bounds = grids.Select(Bounds).ToArray();
         _dirty = new bool[_houses.Length];
-        _colliders = new HouseCollider?[_houses.Length];
+        _colliders = new HouseVoxelCollider?[_houses.Length];
         _noCollider = new bool[_houses.Length];
         if (_houses.Length > 0) GD.Print($"server: house destruction on, {_houses.Length} hollow houses");
     }
@@ -123,13 +121,14 @@ internal sealed class HouseDestructionServer
         if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0)
         {
             _dirty[i] = true;
+            ColliderOf(i)?.Mark(result);
             Changed?.Invoke(house);
         }
     }
 
     // ---- rams ----
 
-    readonly List<(int House, CarveOp[] Hole, NVec3 At)> _rammed = new();
+    readonly List<(int House, CarveOp? Hole, NVec3 At)> _rammed = new();
 
     /// <summary>
     /// A vehicle that lost <see cref="ServerCar.LastImpact"/> m/s to something this tick, from <see cref="ServerCar.LastImpactVelocity"/> (HouseRam,
@@ -156,23 +155,22 @@ internal sealed class HouseDestructionServer
             if (NVec3.DistanceSquared(centre, box.Centre) > (radius + reachM) * (radius + reachM)) continue;
             if (HouseRam.Contact(_houses[i], box, dir, rc.ProbeM) is not { } hit) continue;
             var hole = HouseRam.Hole(_houses[i].Grid, box, dir, hit.Front, rc);
-            cost += HouseRam.Cost(_houses[i], hole, _cfg);
+            if (hole is { } h) cost += HouseRam.Cost(_houses[i], [h], _cfg);
             _rammed.Add((i, hole, hit.At));
         }
         if (_rammed.Count == 0) return null;
         var mass = car.BumpBody().Mass;
-        var momentum = mass * car.LastImpact;
-        if (momentum <= cost)
+        var outcome = HouseRam.Decide(cost, mass, car.LastImpact, speed);
+        if (!outcome.Through)
         {
             foreach (var (i, _, at) in _rammed)
-                if (HouseRam.Dent(_houses[i].Grid, at, momentum, cost, rc) is { } dent) ApplyOp(i, dent);
+                if (HouseRam.Dent(_houses[i].Grid, at, mass * car.LastImpact, cost, rc) is { } dent) ApplyOp(i, dent);
             return null;
         }
         foreach (var (i, hole, _) in _rammed)
-            foreach (var op in hole) ApplyOp(i, op);
-        var kept = HouseRam.SpeedThrough(speed, cost, mass);
-        car.Rammed(v * (kept / speed));
-        return speed - kept;
+            if (hole is { } op) ApplyOp(i, op);
+        car.Rammed(v * (outcome.SpeedKept / speed));
+        return outcome.SpeedLost;
     }
 
     /// <summary>The houses that changed this tick get their new collider, each once (called once at the end of the tick).</summary>
@@ -189,20 +187,16 @@ internal sealed class HouseDestructionServer
     // ---- the server's collider ----
 
     /// <summary>
-    /// The house's collision node gets the voxel trimesh of its live cells (<see cref="HouseColliderBuilder"/>, the same as every client's), or its original exact shell back
-    /// once it is whole. The node stays (its body, layers and place in the map), so <see cref="WorldQuery"/> and the splash's line of sight see the holes with no change.
+    /// The house's collider follows its live cells (<see cref="HouseVoxelCollider"/>, the same as every client's): the changed columns of voxel trimeshes, or its
+    /// exact shell back once it is whole. They sit in the house's body, so <see cref="WorldQuery"/> and the splash's line of sight see the holes with no change.
     /// </summary>
-    void RebuildCollider(int i)
-    {
-        if (ColliderOf(i) is not { } col) return;
-        var house = _houses[i];
-        col.Node.Shape = house.Damaged ? _collider.Build(house, col.Node, HouseColliderBuilder.MapToWorld(_map!.Root)) : col.Original;
-    }
+    void RebuildCollider(int i) => ColliderOf(i)?.Update(_houses[i], HouseVoxelCollider.MapToWorld(_map!.Root));
 
     /// <summary>
-    /// The collision node of house <paramref name="i"/> (MapLoader's <c>HouseNodes</c>, Contract 2) and its original shape. A node freed by a reload is looked up again.
+    /// The collider of house <paramref name="i"/> on its collision node (MapLoader's <c>HouseNodes</c>, Contract 2). A node freed by a reload is looked up again (its columns went with it):
+    /// every column is rebuilt.
     /// </summary>
-    HouseCollider? ColliderOf(int i)
+    HouseVoxelCollider? ColliderOf(int i)
     {
         if (_colliders[i] is { } known && GodotObject.IsInstanceValid(known.Node)) return known;
         _colliders[i] = null;
@@ -215,7 +209,9 @@ internal sealed class HouseDestructionServer
             GD.PrintErr($"server: house {id} has no house_{id}_collision in the map; the server keeps its whole collider");
             return null;
         }
-        return _colliders[i] = new HouseCollider(cs, cs.Shape);
+        var col = _colliders[i] = new HouseVoxelCollider(_houses[i].Grid, cs);
+        col.MarkAll();
+        return col;
     }
 
     // ---- rounds and catch-up ----

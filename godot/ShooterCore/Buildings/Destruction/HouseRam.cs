@@ -20,13 +20,16 @@ public readonly record struct RamBox(Vector3 Centre, Vector3 Right, Vector3 Up, 
     public float Extent(Vector3 dir) => Half.X * MathF.Abs(Vector3.Dot(dir, Right)) + Half.Y * MathF.Abs(Vector3.Dot(dir, Up)) + Half.Z * MathF.Abs(Vector3.Dot(dir, Fwd));
 }
 
+/// <summary>What a ram does: <paramref name="Through"/> the wall at <paramref name="SpeedKept"/> m/s, or stopped by it; <paramref name="SpeedLost"/> is what the crash rule reads.</summary>
+public readonly record struct RamOutcome(bool Through, float SpeedKept, float SpeedLost);
+
 /// <summary>Where a vehicle's box meets a house: the mean of the cells it meets and how far ahead of the box's centre the nearest one's face is, along the ram (metres, map local).</summary>
 public readonly record struct RamContact(Vector3 At, float Front);
 
 /// <summary>
 /// A vehicle driven into a hollow house (docs/house-destruction.md "Ramming"). The momentum it loses to the wall (mass times the speed the wall took)
-/// is set against what the wall would take to break: <see cref="RamConfig.MomentumPerCell"/> for every cell of a hole the vehicle's cross-section
-/// would need, times the cell's resist. More than that: the hole is cut and the vehicle goes through, slowed by what the hole took. Less: a dent at the
+/// is set against what the wall would take to break: <see cref="RamConfig.MomentumPerCell"/> for every cell of the hole the vehicle's cross-section
+/// needs (one sphere, <see cref="Hole"/>), times the cell's resist. More than that: the hole is cut and the vehicle goes through, slowed by what the hole took. Less: a dent at the
 /// contact, its radius by the share of the momentum, and the vehicle stops as at any wall. The server decides and sends the ops as carve ops (242); the
 /// clients replay them as any blast's.
 /// </summary>
@@ -61,30 +64,27 @@ public static class HouseRam
     }
 
     /// <summary>
-    /// The hole the vehicle needs to go through: spheres tiling its cross-section square to <paramref name="dir"/> (grown by the margin), centred
-    /// <see cref="RamConfig.DepthM"/> / 2 past the wall's face. Ops that miss the grid are left out.
+    /// The hole the vehicle needs to go through: one sphere whose circle at the wall's face covers its cross-section square to <paramref name="dir"/>
+    /// (grown by the margin), centred <see cref="RamConfig.DepthM"/> / 2 past the face. One op, so the support pass runs once. Null when it misses the grid.
     /// </summary>
-    public static CarveOp[] Hole(HouseGrid g, in RamBox box, Vector3 dir, float front, RamConfig cfg)
+    public static CarveOp? Hole(HouseGrid g, in RamBox box, Vector3 dir, float front, RamConfig cfg)
     {
         var u = MathF.Abs(dir.Z) < 0.9f ? Vector3.Normalize(Vector3.Cross(dir, Vector3.UnitZ)) : box.Right;
         var v = Vector3.Normalize(Vector3.Cross(u, dir));
-        float eu = box.Extent(u) + cfg.MarginM, ev = box.Extent(v) + cfg.MarginM;
-        // circles of radius rho at the centres of an a x b tiling cover it when rho >= half the diagonal
-        var target = MathF.Min(MathF.Min(eu, ev), cfg.MaxSphereM) * MathF.Sqrt(2);
-        int nu = Math.Max(1, (int)MathF.Ceiling(2 * eu / target)), nv = Math.Max(1, (int)MathF.Ceiling(2 * ev / target));
-        while (nu * nv > cfg.MaxOps) { if (nu >= nv) nu--; else nv--; }
-        float a = 2 * eu / nu, b = 2 * ev / nv;
-        var half = cfg.DepthM / 2;
-        var r = MathF.Sqrt((a * a + b * b) / 4 + half * half);
-        var centre = box.Centre + dir * (front + half);
-        var ops = new List<CarveOp>(nu * nv);
-        for (var iv = 0; iv < nv; iv++)
-        for (var iu = 0; iu < nu; iu++)
-        {
-            var at = centre + u * (-eu + a * (iu + 0.5f)) + v * (-ev + b * (iv + 0.5f));
-            if (CarveOp.From(g, at, r) is { } op) ops.Add(op);
-        }
-        return ops.ToArray();
+        float eu = box.Extent(u) + cfg.MarginM, ev = box.Extent(v) + cfg.MarginM, half = cfg.DepthM / 2;
+        return CarveOp.From(g, box.Centre + dir * (front + half), MathF.Sqrt(eu * eu + ev * ev + half * half));
+    }
+
+    /// <summary>
+    /// The ram's outcome: through when the momentum (<paramref name="mass"/> times the <paramref name="impact"/> speed the wall took) is over the
+    /// <paramref name="cost"/> of the holes; the vehicle then keeps <paramref name="speed"/> less cost / mass and loses the rest. Else it stops at the wall:
+    /// a dent, the whole impact lost.
+    /// </summary>
+    public static RamOutcome Decide(float cost, float mass, float impact, float speed)
+    {
+        if (mass * impact <= cost) return new RamOutcome(false, 0, impact);
+        var kept = SpeedThrough(speed, cost, mass);
+        return new RamOutcome(true, kept, speed - kept);
     }
 
     /// <summary>A dent at the contact: <see cref="RamConfig.DentMaxM"/> times the share of the momentum the hole needs. Null when it rounds to nothing.</summary>

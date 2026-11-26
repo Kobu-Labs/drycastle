@@ -46,13 +46,65 @@ public class DamageLookTests
         Assert.Equal(0, l.Near[g.IndexOf(5, 14, 8)]);
     }
 
+    /// <summary>Brute force over the whole grid: Near (a removed cell within one) and Hide (near, or original air within OrphanReach of a removed cell with no live cell within one).</summary>
+    static void AssertLookIsBruteForce(HouseCells c, HouseDamageLook l)
+    {
+        var g = c.Grid;
+        bool Any(int x, int y, int z, int r, Func<int, bool> f)
+        {
+            for (var dz = -r; dz <= r; dz++) for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++)
+                if (g.InBounds(x + dx, y + dy, z + dz) && f(g.IndexOf(x + dx, y + dy, z + dz))) return true;
+            return false;
+        }
+        bool Gone(int j) => g.Original(j) && !c.Solid(j);
+        for (var i = 0; i < g.Count; i++)
+        {
+            var (x, y, z) = g.Coords(i);
+            var near = Any(x, y, z, 1, Gone);
+            var hide = near || (!g.Original(i) && Any(x, y, z, HouseDamageLook.OrphanReach, Gone) && !Any(x, y, z, 1, c.Solid));
+            Assert.True((near ? 1 : 0) == l.Near[i], $"near at {x},{y},{z}");
+            Assert.True((hide ? 255 : 0) == l.Hide[i], $"hide at {x},{y},{z}");
+        }
+    }
+
+    [Fact]
+    public void Update_over_the_holes_box_equals_the_whole_grid_and_forgets_a_smaller_state()
+    {
+        var g = TestHouses.Box(24, 18, 20);
+        var c = new HouseCells(g);
+        var l = new HouseDamageLook(g);
+        void Hole(int cx, int cy, int cz, int r)
+        {
+            for (var i = 0; i < g.Count; i++)
+            {
+                var (x, y, z) = g.Coords(i);
+                if (Math.Abs(x - cx) <= r && Math.Abs(y - cy) <= r && Math.Abs(z - cz) <= r && g.Material(i) != CellMaterial.Foundation) c.Remove(i);
+            }
+        }
+        Hole(1, 9, 6, 1);              // the west wall
+        l.Update(c);
+        AssertLookIsBruteForce(c, l);
+        Hole(22, 16, 12, 2);           // the far corner, by the grid's edge
+        l.Update(c);
+        AssertLookIsBruteForce(c, l);
+        // a resync to a state with only the first hole: the second one's marks go
+        var one = new HouseCells(g);
+        foreach (var i in Enumerable.Range(0, g.Count)) { var (x, y, z) = g.Coords(i); if (Math.Abs(x - 1) <= 1 && Math.Abs(y - 9) <= 1 && Math.Abs(z - 6) <= 1 && g.Material(i) != CellMaterial.Foundation) one.Remove(i); }
+        c.DecodeRemoved(one.EncodeRemoved(), 2);
+        l.Update(c);
+        AssertLookIsBruteForce(c, l);
+        c.Restore();
+        l.Update(c);
+        Assert.All(l.Hide, b => Assert.Equal(0, b));
+    }
+
     [Fact]
     public void Damaged_faces_are_the_near_cells_open_faces_and_the_far_cells_attic_faces()
     {
         var (c, l) = Holed();
         var g = c.Grid;
         var quads = new List<Quad>();
-        HouseMesher.Damaged(c, l.Near, l.Enclosed, l.AnyEnclosed, quads);
+        HouseMesher.Damaged(c, l, quads);
         var got = new HashSet<(int, int)>();
         foreach (var q in quads)
         {

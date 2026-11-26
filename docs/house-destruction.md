@@ -26,7 +26,7 @@ Status: designed 2026-11-26, nothing built. This doc is the contract for paralle
 
 - **Trigger.** The speed a wall took in one tick (`ServerCar.LastImpact`, the number the crash rule reads) is at least `ram.min_speed` (13.9 m/s = 50 km/h). Every vehicle: driven, coasting, flown; not a thrown one (the Bigfoot's), not a towed trailer.
 - **Contact.** The vehicle's upright box (`ContactShape`), shifted up to `probe_m` along the velocity it hit with (`LastImpactVelocity`), meets live cells (not foundation or floor) ahead of its centre.
-- **Cost.** The hole: spheres tiling the box's cross-section square to the velocity, `margin_m` larger on every side, `depth_m` deep past the wall's face, at most `max_ops`. Its cost is `momentum_per_cell` times the resist of every live cell it would remove. A car's hole in a typical outer wall is about 74 cells, so 270 kg m/s a cell is about 20 000.
+- **Cost.** The hole: one sphere whose circle at the wall's face covers the box's cross-section square to the velocity, `margin_m` larger on every side, centred `depth_m` / 2 past the face. One op, so the support pass runs once (a 4-sphere hole cost 55 ms on the biggest house). Its cost is `momentum_per_cell` times the resist of every live cell it would remove. A car's hole in a typical outer wall is about 157 cells, so 130 kg m/s a cell is about 20 000.
 - **Through** (mass times speed lost above the cost, summed over every house it meets): the holes are cut, the vehicle goes on along its velocity, slowed by cost / mass, and the crash rule reads only that loss. A car (1200 kg) goes through from about 60 km/h; a truck, a bus or a Humvee at 50 km/h.
 - **Dent** (less): each house gets one sphere at the contact, `dent_max_m` times the share of the momentum. The vehicle stops as at any wall.
 - **Net.** Only carve ops (242), and the vehicle state the reconciliation already carries. The driver's client predicts the stop and is corrected a round trip later.
@@ -125,10 +125,11 @@ public static class Support                         // WP-B
 }
 
 public readonly record struct Quad(Vector3 Corner, Vector3 U, Vector3 V, Vector3 Normal, byte Palette);  // grid units
-public enum MeshMode { CutFaces, AllFaces }
 public static class HouseMesher                     // WP-C
 {
-    public static void Surface(HouseCells c, MeshMode mode, List<Quad> into);       // greedy, no allocation beyond 'into'
+    public static void Surface(HouseCells c, List<Quad> into);                      // every open face, greedy, no allocation beyond 'into'
+    public static void Surface(HouseCells c, CellBox region, List<Quad> into);      // the same for one region (a collider column)
+    public static void Damaged(HouseCells c, HouseDamageLook look, List<Quad> into); // the client's voxel faces near holes and toward the attic
     public static void Surface(HouseGrid g, ReadOnlySpan<int> cells, List<Quad> into); // a debris piece, all faces
     public static void Boxes(HouseCells c, List<(Vector3 Min, Vector3 Max)> into);  // greedy box cover, for colliders
 }
@@ -255,6 +256,7 @@ public interface IHouseDebris
 - Read this doc, then CLAUDE.md. Edit only the files your WP owns. Anything that needs a contract change goes to the owner first, not into code.
 - Unit tests in ShooterCore.Tests and pipeline pytest only. No running the game, no screenshots. Keep tests focused, not exhaustive.
 - No per-frame allocation on the client paths (mesher into reused lists; texture updates once per house per frame).
+- Cost (as built): the look and the near-hole mesh read only the removed cells' box (plus 4); the attic faces only the attic's box. The collider is columns of 16 x 16 cells (`HouseVoxelCollider`), only the changed ones rebuilt. The client rebuilds the houses of one frame beyond the first within 6 ms and leaves the rest for the next frames; a house with falling parts is rebuilt first, then they fall.
 - Full village map only: `MAP=out/village/map`.
 
 ## Open questions

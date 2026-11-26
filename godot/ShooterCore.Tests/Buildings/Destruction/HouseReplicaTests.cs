@@ -43,22 +43,6 @@ public class HouseReplicaTests
     }
 
     [Fact]
-    public void Removed_layer_marks_removed_solid_cells_only()
-    {
-        var g = TestHouses.Box(6, 5, 7);
-        var r = new HouseReplica(g);
-        var wall = g.IndexOf(1, 2, 3);
-        Assert.True(g.Original(wall));
-        r.Cells.Remove(wall);
-        var layer = new byte[6 * 5];
-        r.FillRemovedLayer(3, layer);
-        Assert.Equal(255, layer[1 + 6 * 2]);
-        Assert.Equal(1, layer.Count(b => b != 0));
-        r.FillRemovedLayer(2, layer);
-        Assert.All(layer, b => Assert.Equal(0, b));
-    }
-
-    [Fact]
     public void Frame_maps_grid_to_godot_and_back()
     {
         var g = TestHouses.Box(8, 8, 8, origin: new Vector3(10, 20, 3), yaw: 0.7f);
@@ -70,12 +54,8 @@ public class HouseReplicaTests
         var (ax, ay, az, o) = HouseFrame.Affine(g);
         Assert.True(Vector3.Distance(godot, o + ax * p.X + ay * p.Y + az * p.Z) < 1e-4f);
         Assert.True(Vector3.Distance(az, new Vector3(0, 0.25f, 0)) < 1e-6f); // grid up is Godot up
-        var (centre, size, yaw) = HouseFrame.Box(g, new Vector3(1, 2, 3), new Vector3(5, 3, 7));
-        Assert.True(Vector3.Distance(centre, HouseFrame.GridToGodot(g, new Vector3(3, 2.5f, 5))) < 1e-4f);
-        Assert.Equal(new Vector3(1f, 1f, 0.25f), size);
-        Assert.Equal(0.7f, yaw);
-        // the box's own x axis (Godot basis rotated by yaw about +y) is grid x
-        var bx = new Vector3(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
+        // grid x is Godot's x axis turned by the yaw about +y
+        var bx = new Vector3(MathF.Cos(0.7f), 0, -MathF.Sin(0.7f));
         Assert.True(Vector3.Distance(bx * 0.25f, ax) < 1e-5f);
     }
 

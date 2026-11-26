@@ -66,3 +66,25 @@ public sealed class HouseGrid
         return Origin + new Vector3(g.X * _cos - g.Y * _sin, g.X * _sin + g.Y * _cos, g.Z);
     }
 }
+
+/// <summary>A box of grid cells, [X0, X1) x [Y0, Y1) x [Z0, Z1). The default is empty.</summary>
+public readonly record struct CellBox(int X0, int Y0, int Z0, int X1, int Y1, int Z1)
+{
+    public static CellBox All(HouseGrid g) => new(0, 0, 0, g.Nx, g.Ny, g.Nz);
+    public bool Empty => X0 >= X1 || Y0 >= Y1 || Z0 >= Z1;
+    /// <summary>Grown by <paramref name="n"/> cells on every side, clipped to the grid.</summary>
+    public CellBox Grow(int n, HouseGrid g) => Empty ? this : new(Math.Max(X0 - n, 0), Math.Max(Y0 - n, 0), Math.Max(Z0 - n, 0), Math.Min(X1 + n, g.Nx), Math.Min(Y1 + n, g.Ny), Math.Min(Z1 + n, g.Nz));
+    public CellBox Union(CellBox o) => Empty ? o : o.Empty ? this : new(Math.Min(X0, o.X0), Math.Min(Y0, o.Y0), Math.Min(Z0, o.Z0), Math.Max(X1, o.X1), Math.Max(Y1, o.Y1), Math.Max(Z1, o.Z1));
+    /// <summary>The box of the cells where <paramref name="set"/> is not 0 (empty when none).</summary>
+    public static CellBox Of(HouseGrid g, ReadOnlySpan<byte> set)
+    {
+        int x0 = int.MaxValue, y0 = int.MaxValue, z0 = int.MaxValue, x1 = -1, y1 = -1, z1 = -1;
+        for (var i = 0; i < set.Length; i++)
+        {
+            if (set[i] == 0) continue;
+            var (x, y, z) = g.Coords(i);
+            x0 = Math.Min(x0, x); x1 = Math.Max(x1, x); y0 = Math.Min(y0, y); y1 = Math.Max(y1, y); z0 = Math.Min(z0, z); z1 = Math.Max(z1, z);
+        }
+        return x1 < 0 ? default : new(x0, y0, z0, x1 + 1, y1 + 1, z1 + 1);
+    }
+}

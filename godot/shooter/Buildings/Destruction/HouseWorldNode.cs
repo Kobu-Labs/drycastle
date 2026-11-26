@@ -11,8 +11,9 @@ namespace Drycastle.Shooter.Buildings.Destruction;
 /// carve ops (242), the catch-up and resync runs (243) and the settings (244). An undamaged house keeps the map's flat material and its exact shell collider;
 /// on its first carve its visual gets the discard shader (an R8 3D texture of the cells it hides near holes, HouseDamageLook), a voxel mesh draws the live cells there
 /// and the attic's inside, and its collider
-/// becomes the voxel trimesh (<see cref="HouseColliderBuilder"/>, the server's too). Texture, mesh and collider are rebuilt at most once per house per frame. Fallen and crumbled cells
-/// go to <see cref="Debris"/> (WP-G), after the collider has its hole. The wire is <see cref="HouseCodec"/>'s. A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
+/// becomes voxel trimesh columns (<see cref="HouseVoxelCollider"/>, the server's too). Texture, mesh and collider are rebuilt at most once per house per frame, and the houses of
+/// one frame beyond the first only within <see cref="RebuildBudgetMs"/> (the rest wait for the next frames). Fallen and crumbled cells go to <see cref="Debris"/> (WP-G) in the frame's
+/// rebuild, after the collider has its hole. The wire is <see cref="HouseCodec"/>'s. A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
 /// One per map, client only: <see cref="Current"/>.
 /// </summary>
 public partial class HouseWorldNode : Node3D
@@ -71,7 +72,11 @@ public partial class HouseWorldNode : Node3D
 
     readonly List<Quad> _quads = new();
     readonly List<NVec3> _pos = new(), _nrm = new();
-    readonly HouseColliderBuilder _collider = new();
+    /// <summary>Fallen parts waiting for their house's collider to get its hole (spawned in the next <see cref="_Process"/>, after the rebuild).</summary>
+    readonly List<(House House, CarveResult Result, NVec3 Blast, uint Seed)> _falls = new();
+
+    /// <summary>The houses rebuilt in one frame beyond the first stop once this much time went (ms): a blast over many houses is spread over frames.</summary>
+    const double RebuildBudgetMs = 6;
 
     sealed class House
     {
@@ -86,7 +91,8 @@ public partial class HouseWorldNode : Node3D
         public readonly MeshInstance3D? Visual;
         /// <summary>The map's collider of the house (its exact shell until the first carve).</summary>
         public readonly CollisionShape3D? Shape;
-        public Shape3D? Shell;
+        /// <summary>The voxel columns that stand in for the shell while the house is damaged (made at the first carve).</summary>
+        public HouseVoxelCollider? Collider;
         public Material? FlatMaterial;
         public ShaderMaterial? Material;
         public ImageTexture3D? Texture;
@@ -96,8 +102,6 @@ public partial class HouseWorldNode : Node3D
         /// <summary>Near-hole cells, hidden cells and the attic (made at the first carve).</summary>
         public HouseDamageLook? Look;
         public ArrayMesh? CutMesh;
-        /// <summary>The voxel collider, in the map's node while swapped.</summary>
-        public ConcavePolygonShape3D? Voxel;
         public bool Swapped, Dirty, ColliderDirty;
         public double ResyncAt;
         public ushort Index => Replica.Grid.Index;
@@ -210,15 +214,9 @@ public partial class HouseWorldNode : Node3D
         if (r != null)
         {
             MarkDirty(h);
-            if (_debris != null && r.Fallen.Count > 0 && h.Replica.Cells.Damaged)
-            {
-                // the hole goes into the collider now, so the falling parts do not start inside the old shell
-                if (!h.Swapped) Swap(h);
-                h.ColliderDirty = false;
-                RebuildCollider(h);
-            }
-            var g = h.Replica.Grid;
-            _debris?.Fall(g, r, g.ToMap(new NVec3(m.Op.Cx, m.Op.Cy, m.Op.Cz) / 4f), (uint)m.House << 16 | m.OpSeq);
+            h.Collider?.Mark(r);
+            // the debris waits for the house's rebuild this frame, so the falling parts do not start inside the old collider
+            if (_debris != null) _falls.Add((h, r, h.Replica.Grid.ToMap(new NVec3(m.Op.Cx, m.Op.Cy, m.Op.Cz) / 4f), (uint)m.House << 16 | m.OpSeq));
         }
         if (outcome == HouseReplica.CarveOutcome.Desync) Desync(h);
     }
@@ -232,9 +230,11 @@ public partial class HouseWorldNode : Node3D
             case CatchUpStep.Done:
                 _awaiting.Remove(h);
                 MarkDirty(h);
+                h.Collider?.MarkAll();
                 break;
             case CatchUpStep.Broken:
                 MarkDirty(h);
+                h.Collider?.MarkAll();
                 Desync(h);
                 break;
         }
@@ -261,6 +261,7 @@ public partial class HouseWorldNode : Node3D
         }
         _dirty.Clear();
         _awaiting.Clear();
+        _falls.Clear();
         _debris?.ResetAll();
     }
 
@@ -290,13 +291,26 @@ public partial class HouseWorldNode : Node3D
             foreach (var h in _awaiting)
                 if (now >= h.ResyncAt) { h.ResyncAt = now + ResyncRetrySeconds; RequestResync?.Invoke(h.Index); }
         }
-        if (_dirty.Count == 0) return;
-        foreach (var h in _dirty)
+        // a house with falling parts first, whatever the budget: its collider gets the hole, then the parts fall
+        if (_falls.Count > 0)
         {
+            foreach (var f in _falls)
+                if (f.House.Dirty) { f.House.Dirty = false; _dirty.Remove(f.House); Rebuild(f.House); }
+            foreach (var f in _falls) _debris?.Fall(f.House.Replica.Grid, f.Result, f.Blast, f.Seed);
+            _falls.Clear();
+        }
+        if (_dirty.Count == 0) return;
+        // the rest within the budget (one at least); the others next frame, in the order they came
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        var done = 0;
+        while (done < _dirty.Count)
+        {
+            var h = _dirty[done++];
             h.Dirty = false;
             Rebuild(h);
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds >= RebuildBudgetMs) break;
         }
-        _dirty.Clear();
+        _dirty.RemoveRange(0, done);
     }
 
     void Rebuild(House h)
@@ -312,7 +326,7 @@ public partial class HouseWorldNode : Node3D
     }
 
     /// <summary>Map local (Godot frame) to world: the map root's transform.</summary>
-    Transform3D MapToWorld => HouseColliderBuilder.MapToWorld(_map.Root);
+    Transform3D MapToWorld => HouseVoxelCollider.MapToWorld(_map.Root);
 
     static Transform3D GridToMap(HouseGrid g)
     {
@@ -349,7 +363,8 @@ public partial class HouseWorldNode : Node3D
             h.Cut = new MeshInstance3D { Name = $"house_{g.Id}_cut", Mesh = h.CutMesh, MaterialOverride = MapLoaderT.SharedFlatMaterial };
             _map.Root.AddChild(h.Cut);
         }
-        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape)) h.Shell = h.Shape.Shape; // the voxel trimesh replaces it at the collider rebuild
+        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape) && (h.Collider == null || !GodotObject.IsInstanceValid(h.Collider.Node)))
+            h.Collider = new HouseVoxelCollider(g, h.Shape); // its columns replace the shell at the collider rebuild
     }
 
     /// <summary>Back to the undamaged look and the shell collider.</summary>
@@ -361,12 +376,8 @@ public partial class HouseWorldNode : Node3D
         h.Material = null; h.Texture = null; h.Layers = null; h.LayerBytes = []; h.FlatMaterial = null;
         if (h.Cut != null && GodotObject.IsInstanceValid(h.Cut)) h.Cut.QueueFree();
         h.Cut = null; h.CutMesh = null;
-        if (h.Shape != null && GodotObject.IsInstanceValid(h.Shape) && h.Shell != null)
-        {
-            h.Shape.Shape = h.Shell;
-            _map.HouseGeometryChanged();
-        }
-        h.Shell = null; h.Voxel = null; h.Look = null;
+        if (h.Collider?.Update(h.Replica.Cells, MapToWorld) == true) _map.HouseGeometryChanged(); // whole: the shell back
+        h.Look = null;
     }
 
     void UpdateTexture(House h)
@@ -387,7 +398,7 @@ public partial class HouseWorldNode : Node3D
         if (h.CutMesh == null || h.Look == null) return;
         var g = h.Replica.Grid;
         _quads.Clear(); _pos.Clear(); _nrm.Clear();
-        HouseMesher.Damaged(h.Replica.Cells, h.Look.Near, h.Look.Enclosed, h.Look.AnyEnclosed, _quads);
+        HouseMesher.Damaged(h.Replica.Cells, h.Look, _quads);
         HouseFrame.Triangles(g, _quads, _pos, _nrm);
         h.CutMesh.ClearSurfaces();
         if (_pos.Count == 0) return;
@@ -409,13 +420,10 @@ public partial class HouseWorldNode : Node3D
         h.CutMesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
     }
 
-    /// <summary>The house's collision node gets the voxel trimesh of its live cells (<see cref="HouseColliderBuilder"/>, as the server builds it).</summary>
+    /// <summary>The house's changed collider columns are rebuilt from its live cells (<see cref="HouseVoxelCollider"/>, as the server builds them).</summary>
     void RebuildCollider(House h)
     {
-        if (h.Shape == null || !GodotObject.IsInstanceValid(h.Shape) || h.Shell == null) return;
-        h.Voxel = _collider.Build(h.Replica.Cells, h.Shape, MapToWorld, h.Voxel);
-        if (h.Shape.Shape != h.Voxel) h.Shape.Shape = h.Voxel;
-        _map.HouseGeometryChanged();
+        if (h.Collider?.Update(h.Replica.Cells, MapToWorld) == true) _map.HouseGeometryChanged();
     }
 
     /// <summary>Compiles the discard shader before the first carve: a speck with its material in front of the camera for half a second.</summary>

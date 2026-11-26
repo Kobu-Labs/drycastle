@@ -71,49 +71,24 @@ public class MesherTests(ITestOutputHelper log)
     }
 
     [Fact]
-    public void One_cell_has_six_faces_and_no_cut_faces()
+    public void One_cell_has_six_faces()
     {
         var c = new HouseCells(Grid(3, 3, 3, (x, y, z) => (byte)(x == 1 && y == 1 && z == 1 ? 1 : 0)));
         var q = new List<Quad>();
-        HouseMesher.Surface(c, MeshMode.AllFaces, q);
+        HouseMesher.Surface(c, q);
         Assert.Equal(6, q.Count);
         Assert.Equal(6, q.Select(f => f.Normal).Distinct().Count());
-        q.Clear();
-        HouseMesher.Surface(c, MeshMode.CutFaces, q);
-        Assert.Empty(q);
     }
 
     [Fact]
     public void Faces_merge_by_palette()
     {
         var q = new List<Quad>();
-        HouseMesher.Surface(new HouseCells(Grid(4, 3, 3, (x, y, z) => (byte)(y == 1 && z == 1 && x is 1 or 2 ? 1 : 0))), MeshMode.AllFaces, q);
+        HouseMesher.Surface(new HouseCells(Grid(4, 3, 3, (x, y, z) => (byte)(y == 1 && z == 1 && x is 1 or 2 ? 1 : 0))), q);
         Assert.Equal(6, q.Count);
         q.Clear();
-        HouseMesher.Surface(new HouseCells(Grid(4, 3, 3, (x, y, z) => (byte)(y == 1 && z == 1 && x is 1 or 2 ? x : 0))), MeshMode.AllFaces, q);
+        HouseMesher.Surface(new HouseCells(Grid(4, 3, 3, (x, y, z) => (byte)(y == 1 && z == 1 && x is 1 or 2 ? x : 0))), q);
         Assert.Equal(10, q.Count);
-    }
-
-    [Fact]
-    public void Cut_faces_only_where_cells_were_removed()
-    {
-        // a 3x3x3 block: the centre removed shows 6 cut faces; a corner removed shows 3; the outside (original air) never shows
-        var g = Grid(5, 5, 5, (x, y, z) => (byte)(x is >= 1 and <= 3 && y is >= 1 and <= 3 && z is >= 1 and <= 3 ? 1 : 0));
-        var c = new HouseCells(g);
-        c.Remove(g.IndexOf(2, 2, 2));
-        var q = new List<Quad>();
-        HouseMesher.Surface(c, MeshMode.CutFaces, q);
-        Assert.Equal(6, q.Count);
-        q.Clear();
-        HouseMesher.Surface(c, MeshMode.AllFaces, q);
-        Assert.Equal(12, q.Count);
-
-        var c2 = new HouseCells(g);
-        c2.Remove(g.IndexOf(1, 1, 1));
-        q.Clear();
-        HouseMesher.Surface(c2, MeshMode.CutFaces, q);
-        Assert.Equal(3, q.Count);
-        Assert.All(q, f => Assert.Equal(1f, f.U.Length() * f.V.Length()));
     }
 
     [Fact]
@@ -125,11 +100,15 @@ public class MesherTests(ITestOutputHelper log)
         for (var i = 0; i < g.Count; i++) if (!far.Solid(i)) c.Remove(i);
         Assert.True(c.Damaged);
         var q = new List<Quad>();
-        HouseMesher.Surface(c, MeshMode.CutFaces, q);
-        Assert.Equal(Expected(g, c.Solid, n => n is { } j && g.Original(j) && !c.Solid(j)), Rasterise(g, q));
+        HouseMesher.Surface(c, q);
+        var whole = Expected(g, c.Solid, n => n is not { } j || !c.Solid(j));
+        Assert.Equal(whole, Rasterise(g, q));
+        // collider columns: the regions that tile the grid give the same faces, none twice
         q.Clear();
-        HouseMesher.Surface(c, MeshMode.AllFaces, q);
-        Assert.Equal(Expected(g, c.Solid, n => n is not { } j || !c.Solid(j)), Rasterise(g, q));
+        for (var y0 = 0; y0 < g.Ny; y0 += 7)
+            for (var x0 = 0; x0 < g.Nx; x0 += 6)
+                HouseMesher.Surface(c, new CellBox(x0, y0, 0, Math.Min(x0 + 6, g.Nx), Math.Min(y0 + 7, g.Ny), g.Nz), q);
+        Assert.Equal(whole, Rasterise(g, q));
     }
 
     [Fact]
@@ -178,18 +157,15 @@ public class MesherTests(ITestOutputHelper log)
         var c = Carved(g, new Vector3(20, 1.5f, 8), 8); // an RPG (2 m) on the front wall
         var q = new List<Quad>(4096);
         var b = new List<(Vector3, Vector3)>(4096);
-        var cut = BestMs(() => { q.Clear(); HouseMesher.Surface(c, MeshMode.CutFaces, q); });
-        var cutN = q.Count;
-        var all = BestMs(() => { q.Clear(); HouseMesher.Surface(c, MeshMode.AllFaces, q); });
+        var all = BestMs(() => { q.Clear(); HouseMesher.Surface(c, q); });
         var allN = q.Count;
         var box = BestMs(() => { b.Clear(); HouseMesher.Boxes(c, b); });
         var roof = Enumerable.Range(0, g.Count).Where(i => g.Material(i) == CellMaterial.Roof).ToArray();
         var piece = BestMs(() => { q.Clear(); HouseMesher.Surface(g, roof, q); });
         var before = GC.GetAllocatedBytesForCurrentThread();
-        q.Clear(); HouseMesher.Surface(c, MeshMode.CutFaces, q); b.Clear(); HouseMesher.Boxes(c, b);
+        q.Clear(); HouseMesher.Surface(c, q); b.Clear(); HouseMesher.Boxes(c, b);
         var alloc = GC.GetAllocatedBytesForCurrentThread() - before;
-        log.WriteLine($"CutFaces {cut:F3} ms ({cutN} quads), AllFaces {all:F3} ms ({allN} quads), Boxes {box:F3} ms ({b.Count} boxes), roof piece {piece:F3} ms ({roof.Length} cells), warm alloc {alloc} B");
-        Assert.True(cut < Budget.Ms(2), $"CutFaces {cut:F3} ms");
+        log.WriteLine($"AllFaces {all:F3} ms ({allN} quads), Boxes {box:F3} ms ({b.Count} boxes), roof piece {piece:F3} ms ({roof.Length} cells), warm alloc {alloc} B");
         Assert.True(box < Budget.Ms(2), $"Boxes {box:F3} ms");
         Assert.Equal(0, alloc);
     }

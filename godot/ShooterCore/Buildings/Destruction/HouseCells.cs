@@ -23,6 +23,28 @@ public sealed class HouseCells
     /// <summary>Whether any cell is removed.</summary>
     public bool Damaged => _removedCount > 0;
 
+    /// <summary>The box of the removed cells (empty when none).</summary>
+    public CellBox RemovedBox()
+    {
+        if (_removedCount == 0) return default;
+        int x0 = int.MaxValue, y0 = int.MaxValue, z0 = int.MaxValue, x1 = -1, y1 = -1, z1 = -1;
+        int nx = Grid.Nx, sxy = Grid.Nx * Grid.Ny;
+        for (var w = 0; w < _removed.Length; w++)
+        {
+            var b = _removed[w];
+            while (b != 0)
+            {
+                var i = (w << 6) + System.Numerics.BitOperations.TrailingZeroCount(b);
+                b &= b - 1;
+                int z = i / sxy, r = i - z * sxy, y = r / nx, x = r - y * nx;
+                if (x < x0) x0 = x; if (x > x1) x1 = x;
+                if (y < y0) y0 = y; if (y > y1) y1 = y;
+                if (z < z0) z0 = z; if (z > z1) z1 = z;
+            }
+        }
+        return new CellBox(x0, y0, z0, x1 + 1, y1 + 1, z1 + 1);
+    }
+
     /// <summary>
     /// Carve (<see cref="Carve"/>), then <see cref="Support.Settle"/> (skipped when the op carved nothing: the state is unchanged), OpSeq++.
     /// The hash is taken after Settle.
