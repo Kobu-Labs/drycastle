@@ -37,6 +37,7 @@ using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Terrain;
 using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
@@ -101,7 +102,7 @@ public partial class NetServer : Node
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     // the village and its animals
-    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; IntelServer _intel = null!; CrateServer _crates = null!;
+    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
@@ -200,13 +201,15 @@ public partial class NetServer : Node
         _sentries = new SentryWorld(_ctx, _targets, _damage.Deal, () => _shot.Query);
         _status = new StatusServer(_ctx, _damage.Deal, Config.Weapons, c => _plantation.GetHigh(c));
         _pounce = new PounceServer(_ctx, () => Config.Demon, _status);
-        _demon = new DemonServer(_ctx, () => Config.Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, _damage.Deal, () => _shot.Query, (at, radius) => _glass.Blast(at, radius), () => _areas.Shelters, Config.Weapons, Config.MapDir, Config.World, _events);
+        _demon = new DemonServer(_ctx, () => Config.Demon, () => _mass, _church, _citizens, _sitters, _status, _pounce, _targets, _damage.Deal, () => _shot.Query, (at, radius) => _blasts.Blast(at, radius, BlastSource.Demon), () => _areas.Shelters, Config.Weapons, Config.MapDir, Config.World, _events);
         _rewind = new PoseRewind(_ctx, _fleet, _targets, _sitters, _pounce, Config.NoLagComp);
         _glass = new GlassServer(_ctx, _fleet, _rewind, Config.Map, Config.GlassData);
+        _houseDestruction = new HouseDestructionServer(_ctx, Config.HouseDestruction, Config.ArenaMode, Config.MapDir, Config.Map, () => _shot.Query);
+        _blasts = new WorldBlasts(_glass, _houseDestruction); // every blast's panes and houses
         _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, Config.World, _diag.Perf.Ticks != null);
         _carDamage = new CarDamage(_ctx, _fleet, _glass, _smoke, Config.Vehicles);
         _rocketCarts = new RocketCarts(_fleet, () => _shot.Query, Config.Vehicles);
-        _rockets = new RocketSim(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _deathPush, _splash, _impacts, _rocketIds, Config.Weapons, _smoke);
+        _rockets = new RocketSim(_ctx, _rewind, _shot, _blasts, _carDamage, _targets, _damage.Deal, _deathPush, _splash, _impacts, _rocketIds, Config.Weapons, _smoke);
         _dummies = new DummyServer(_ctx, _shot, _deathPush, () => _streaks, _progress, Config.Spawns, Config.MatchConfig);
     }
 
@@ -239,7 +242,7 @@ public partial class NetServer : Node
         _gear = new ItemsServer(_ctx, Config.Items, _corpses, () => _shot.Query, car => CarPose.Present(car).Feet);
         _riding = new RidingCorpses(_corpses);
         _seats = new CarSeats(_ctx, _fleet, _riding, _shot, _smoke, () => Config.Vehicles, () => Config.Clock.HourAt(_elapsed), id => _streaks.Rules.ControlOf(id) != null);
-        _carBlast = new CarBlast(_ctx, _fleet, _carDamage, _seats, _riding, _glass, _impacts, _splash, _deathPush, _targets, _damage.Deal, (at, attacker) => _scud.Blast(at, attacker), _smoke, Config.Vehicles);
+        _carBlast = new CarBlast(_ctx, _fleet, _carDamage, _seats, _riding, _blasts, _impacts, _splash, _deathPush, _targets, _damage.Deal, (at, attacker) => _scud.Blast(at, attacker), _smoke, Config.Vehicles);
         _remains = new CorpseServer(_ctx, _corpses, _riding, _seats, _deathPush, _gear, _shot.Query, Config.Water, Config.Weapons, Config.Items, (victim, id, corpse) => _harvester.OnCorpse(victim, id, corpse));
         _bigfoot = new BigfootServer(_ctx, Config.BigfootData, _events, new BigfootTerrain(Config.World, Config.Water), _fleet, _damage.Deal, _deathPush, _rng, Config.Weapons, new BigfootLoot(Config.BigfootData, Config.Items, Config.Weapons, _corpses, _gear), _areas,
             _hunts, () => _gunships, _smoke, CarPose.SeatPos, _progress.Scores, _progress.Award, Config.Levels.Awards.EventWin); // after the corpse book, which follows the same despawns
@@ -263,8 +266,9 @@ public partial class NetServer : Node
         _eventServer.Register(EventBook.Harvester, "harvester event", _harvester.Start, _harvester.End, _harvester.Cancel);
         _eventServer.Register(EventBook.Thieves, "Thieves event", _thieves.Start, _thieves.End, _thieves.Cancel);
         _eventServer.Register(EventBook.Scud, "Scud event", _scudEvent.Start, _scudEvent.End, _scudEvent.Cancel);
-        _gunships = new GunshipServer(_ctx, Config.Killstreaks, Config.Weapons, _targets, _fleet, () => _shot.Query, () => Config.Vehicles, _damage.Deal, _carDamage.Damage, _rockets.LaunchFromGunship, _impacts, _splash, _deathPush, () => _streaks.Rules);
-        _flak = new FlakServer(_ctx, Config.Weapons, _gunships, _targets, _fleet, () => Config.Vehicles, _rng);
+        _gunships = new GunshipServer(_ctx, Config.Killstreaks, Config.Weapons, _targets, _fleet, () => _shot.Query, () => Config.Vehicles, _damage.Deal, _carDamage.Damage, _rockets.LaunchFromGunship, _impacts, _splash, _deathPush, () => _streaks.Rules,
+            (at, radius, source) => _blasts.Carve(new Vector3(at.X, at.Y, at.Z), radius, source));
+        _flak = new FlakServer(_ctx, Config.Weapons, _gunships, _targets, _fleet, () => Config.Vehicles, _rng, (at, radius, source) => _blasts.Carve(new Vector3(at.X, at.Y, at.Z), radius, source));
         _crates = new CrateServer(_ctx, Config.Killstreaks.Rewards, () => _shot.Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
@@ -283,7 +287,9 @@ public partial class NetServer : Node
             _harvester.RoundReset, // the car reset brought the harvester back to its old field: hidden again
             _scudEvent.RoundReset, // the Scud event is over with the round (no reward); the loop below retires its truck and carts
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
-            _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset, rounds.Started);
+            _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset,
+            _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
+            rounds.Started);
         var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Config.Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, Config.WeaponsSmoke, Config.RpgSmoke, _harvester.OnKill, _diag.Loss.Kill, _diag.Loss.Death);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, rounds.Ended, _diag.Loss.RoundStart, _dummies.OnKilled);
         BuildRoster();
@@ -326,7 +332,7 @@ public partial class NetServer : Node
     StreakServer BuildStreaks() => new(_ctx, Config.Killstreaks, _gunships, () => Config.Spawns, _crates.GroundBelow, (streaks, id) =>
         id == MoabStreak.StreakId ? new MoabServer(_ctx, _targets, _hunts, _fleet, _carDamage.Damage, (owner, weapon) => _bigfoot.Hit(owner, weapon), _impacts, _rng).Streak() :
         id == CarePackageRules.StreakId ? _crates.Streak() :
-        id == AttackMissileStreak.StreakId ? new MissileServer(_ctx, Config.Killstreaks, _targets, _shot.WorldHit, () => Config.Vehicles != null, _carDamage.Rockets, (at, radius) => _glass.Blast(at, radius), _damage.Deal, _impacts, _splash, _deathPush).Streak() :
+        id == AttackMissileStreak.StreakId ? new MissileServer(_ctx, Config.Killstreaks, _targets, _shot.WorldHit, () => Config.Vehicles != null, _carDamage.Rockets, (at, radius) => _blasts.Blast(at, radius, BlastSource.Missile), _damage.Deal, _impacts, _splash, _deathPush).Streak() :
         id == TurretStreak.StreakId ? new TurretStreak(Config.Turret.Def, _match.Entities, _sentries) :
         id == AttackHelicopterStreak.StreakId ? new AttackHelicopterServer(_ctx, Config.Killstreaks, _gunships).Streak() :
         id == Ac130Streak.StreakId ? new Ac130Server(_ctx, Config.Killstreaks, _gunships).Streak() :
@@ -360,7 +366,7 @@ public partial class NetServer : Node
     {
         var rigs = new ScudRigs(_ctx, Config.Scud, _fleet);
         var loading = new ScudLoading(_ctx, Config.Scud, _fleet, rigs, _thieves, RocketCarts.SetLoaded);
-        var blast = new ScudBlastServer(_ctx, Config.Scud.Blast, _targets, _splash, _deathPush, _damage.Deal, _hunts, _fleet, () => _areas.Shelters, _bigfoot.Hit, _glass.Blast, _carDamage.Damage, CarPose.HullDistanceNow);
+        var blast = new ScudBlastServer(_ctx, Config.Scud.Blast, _targets, _splash, _deathPush, _damage.Deal, _hunts, _fleet, () => _areas.Shelters, _bigfoot.Hit, (at, radius, glassDamage) => _blasts.Blast(at, radius, BlastSource.Scud, glassDamage), _carDamage.Damage, CarPose.HullDistanceNow);
         _scud = new ScudServer(_ctx, Config.Scud, () => Config.Vehicles, Config.Map, Config.World, Config.Water, () => _fleet.FlightBounds, _fleet, rigs, loading, blast, () => _shot.Query);
         var places = new ScudPlaces(_ctx, Config.Scud, Config.Map, Config.World, _fleet, _rng, Config.Spawns, () => _areas.Shelters, _areas.PickEventSpawn);
         _scudEvent = new ScudEventServer(_ctx, Config.Scud, () => Config.Vehicles, _events, _intel, _rng, _fleet, places, _scud, _rocketCarts.Spawn, _rocketCarts.RemoveAll, _seats.Leave, _progress.Scores, _progress.Award);
@@ -382,6 +388,7 @@ public partial class NetServer : Node
             _rozhlas.SendOnJoin, // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
             _garage.SendOnJoin, // and the garage doors, when they are open
             _houses.SendOnJoin, // and the houses' open doors
+            _houseDestruction.SendOnJoin, // the house destruction settings and every carved house's removed cells
             _harvester.SendOnJoin, // the harvester's job and the bales that burn
             _scud.SendOnJoin, // the Scud trucks' racks and proposals
             _demon.SendOnJoin, // and the demon's pounce, when one is on
@@ -560,6 +567,7 @@ public partial class NetServer : Node
         _lockOn.DetonateHoming();  // homing missiles that have arrived hit their Aircraft now
         _gunships.FlushFx(); // the gunship rounds of this tick, coalesced (#159)
         _glass.Flush();     // the glass panes that changed this tick (ADR 0007)
+        _houseDestruction.Flush(); // the server colliders of the houses carved this tick, each once
         _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
         _status.Flush(); // statuses and burning that changed this tick
         _scoreboard.Flush(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
@@ -624,6 +632,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.SquadAssign } sq && c.Joined) _teams.OnSquadAssign(c, sq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.HuntsRequest or (byte)EventKind.RecordsRequest or (byte)EventKind.PlayerLogRequest } hq && c.Joined) _hunts.OnRequest(c, hq);
         else if (m is EventMsg { Kind: (byte)EventKind.ChatSend } cs) _chat.OnSend(c, cs.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.HouseResync } hr && c.Joined) _houseDestruction.OnResync(c, hr.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.ClientReport } cr) { if (c.Joined) _diag.Metrics.OnClientReport(c, cr.Payload); }
         else if (c.Joined) _profiles.OnMessage(c, m);
     }
@@ -632,6 +641,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction);
     }
 }

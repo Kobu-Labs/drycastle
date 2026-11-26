@@ -43,6 +43,8 @@ public sealed class ServerConfig
     public bool NoLagComp;
     /// <summary>glass.json; the defaults when the host sets none.</summary>
     public GlassConfig GlassData = new();
+    /// <summary>house_destruction.json (docs/house-destruction.md); the defaults when the host sets none.</summary>
+    public Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig HouseDestruction = Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default;
     /// <summary>vehicles.json (run-over numbers, spawn count, car stats): a default table when the host sets none.</summary>
     public VehiclesFile Vehicles = null!;
     /// <summary>Vehicle type of the car smoke arena (vehicles.json id).</summary>
