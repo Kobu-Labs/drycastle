@@ -918,6 +918,25 @@ stateDiagram-v2
 - **Warning**: The target has its red-dot warning; at zero the burst starts if it is still visible, else back to Waiting.
 - **Burst**: One round each round interval while the target stays visible; the last round or a lost target goes back to Waiting.
 
+## House.Debris
+
+A part that fell off a hollow house: one rigid body falling whole, split into pieces on its first hard impact, resting once it sleeps, then sinking away (fade mode) or frozen into the house's rubble mesh (stay mode, leaves the machine).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Falling
+    Falling --> Broken
+    Falling --> Resting
+    Broken --> Resting
+    Resting --> Fading
+    Fading --> [*]
+```
+
+- **Falling**: A whole fallen component, one body. An impact whose speed change is over debris.break_impulse (after a short grace) splits it with Fracture.Split; the body is replaced by its pieces.
+- **Broken**: A piece of a split (entered by every new piece). With debris.second_break a large piece of the first split may split once more on its next hard impact.
+- **Resting**: The body sleeps, or has fallen for too long. Fade mode: frozen, waits debris.fade_after_s (clock). Stay mode: frozen into the house's rubble mesh and freed (leaves the machine).
+- **Fading**: Collision off, sinks and turns transparent over debris.fade_s (clock), then freed. Also how evicted stay rubble (debris.stay_cap_cells) leaves.
+
 ## House.Door
 
 One door or garage door of a hollow house: a player on foot at the doorway opens and closes it with the interact key.
