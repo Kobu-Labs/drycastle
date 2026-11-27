@@ -161,6 +161,7 @@ public sealed partial class GangMember : IWorldEntity
         .Allow(GangMemberState.Aim, GangMemberState.Fire, GangMemberState.Chase, GangMemberState.Posted, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Fire, GangMemberState.Aim, GangMemberState.Chase, GangMemberState.Posted, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Posted, GangMemberState.Aim, GangMemberState.Windup, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Posted, GangMemberState.Guard) // a rider that gets out of its car is no longer posted
         .Allow(GangMemberState.Windup, GangMemberState.Posted)
         .Allow(GangMemberState.Swing, GangMemberState.Posted)
         .FromAnywhere(GangMemberState.Dead)
@@ -188,7 +189,7 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.Load, "Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.")
         .Note(GangMemberState.Aim, "A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.")
         .Note(GangMemberState.Fire, "The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.")
-        .Note(GangMemberState.Posted, "Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.")
+        .Note(GangMemberState.Posted, "Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car); getting out it is Guard.")
         .Note(GangMemberState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.")
         .Build();
 

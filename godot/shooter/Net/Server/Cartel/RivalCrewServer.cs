@@ -50,6 +50,14 @@ internal sealed class RivalCrewServer
     /// <summary>The point on the navigation mesh nearest <paramref name="p"/> (itself without a mesh): where a member added outdoors stands.</summary>
     public NVec3 Snap(NVec3 p) => _gangs.Snap(p);
 
+    /// <summary>A vehicle whose crew shoots from its seats (a chase car, <see cref="ChaseServer"/>): its own hull is not in the way of their sight and rounds. <see cref="Unmount"/> when it carries none.</summary>
+    public void Mount(ServerCar car) => _gangs.Mount(car);
+
+    public void Unmount(ServerCar car) => _gangs.Unmount(car);
+
+    /// <summary>True when no world surface (a wall, cover, a vehicle's hull) lies between the two points: a member's line of sight (the party's sight of a spot).</summary>
+    public bool Clear(NVec3 from, NVec3 to) => _gangs.Clear(from, to);
+
     /// <summary>Removes a crew and every member it still has, the dead too.</summary>
     public void Remove(ThiefGang crew) => _gangs.Roster.Remove(crew);
 

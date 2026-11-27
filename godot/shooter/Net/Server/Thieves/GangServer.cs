@@ -103,7 +103,45 @@ internal sealed class GangServer : IGangWorld
         var d = NVec3.Distance(from, to);
         if (d <= 0) return true;
         var dir = (to - from) / d;
-        return _shot.WorldDistance(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), d) >= d - 0.05f;
+        var origin = new Vector3(from.X, from.Y, from.Z);
+        // the vehicle a rider's crew shoots from, or a viewer sits in, is not in the way of the line, nor is the vehicle the one looked at rides in: a Gunman sees a player in a car (its round then stops on the hull and hurts the car)
+        return _shot.WorldHitSkipping(origin, new Vector3(dir.X, dir.Y, dir.Z), d, out _, MountAt(origin) ?? RidingAt(from), RidingAt(to)) >= d - 0.05f;
+    }
+
+    /// <summary>The vehicle a living player rides who stands at <paramref name="p"/> (their feet within a metre of it, sideways, and up to their eye above), or null.</summary>
+    ServerCar? RidingAt(NVec3 p)
+    {
+        foreach (var c in _ctx.Players.Values)
+        {
+            if (c.Car is not { } car) continue;
+            var f = c.Body.GlobalPosition;
+            var dx = f.X - p.X; var dz = f.Z - p.Z;
+            if (dx * dx + dz * dz <= 0.36f && p.Y >= f.Y - 0.5f && p.Y <= f.Y + 2.5f) return car;
+        }
+        return null;
+    }
+
+    // ---- riders ----
+
+    readonly List<ServerCar> _mounts = new();
+
+    /// <summary>A vehicle whose crew shoots from its seats (a Rival chase car): a member's line of sight and its rounds start inside the hull, which must not stop them (<see cref="MountAt"/>).</summary>
+    public void Mount(ServerCar car) { if (!_mounts.Contains(car)) _mounts.Add(car); }
+
+    /// <summary>The vehicle no longer carries a crew.</summary>
+    public void Unmount(ServerCar car) => _mounts.Remove(car);
+
+    /// <summary>The mounted vehicle a ray that starts at <paramref name="from"/> starts in, or null: its own hull is not in the way of a rider's sight or round.</summary>
+    ServerCar? MountAt(Vector3 from)
+    {
+        foreach (var car in _mounts)
+        {
+            if (car.Destroyed) continue;
+            var p = car.GlobalPosition;
+            var reach = car.HalfLength + 0.5f;
+            if (MathF.Abs(p.X - from.X) <= reach && MathF.Abs(p.Z - from.Z) <= reach && from.Y > p.Y - 0.5f && from.Y < p.Y + car.Def.Height + 1f) return car;
+        }
+        return null;
     }
 
     /// <summary>
@@ -116,6 +154,7 @@ internal sealed class GangServer : IGangWorld
         var w = _weapons.Weapons[wi];
         var range = MathF.Min(s.RangeM * 1.5f, w.Range > 0 ? w.Range : ShotServer.MaxRange); // a little past its range: the target may step back as the round leaves
         var from = new Vector3(s.From.X, s.From.Y, s.From.Z);
+        var own = MountAt(from); // a rider of a moving car shoots out through its own hull
         var targets = _targets.Rent();
         try
         {
@@ -126,7 +165,7 @@ internal sealed class GangServer : IGangWorld
                 var dirs = HitMath.PelletDirections(s.Dir, w.PelletSpread, w.Pellets, s.Seed);
                 var walls = new float[dirs.Length];
                 var cars = new ServerCar?[dirs.Length];
-                for (var i = 0; i < dirs.Length; i++) walls[i] = _shot.WorldHit(from, new Vector3(dirs[i].X, dirs[i].Y, dirs[i].Z), range, out cars[i]);
+                for (var i = 0; i < dirs.Length; i++) walls[i] = _shot.WorldHit(from, new Vector3(dirs[i].X, dirs[i].Y, dirs[i].Z), range, out cars[i], own);
                 _ctx.Broadcast(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(0, (byte)wi, s.From, s.Dir, s.Seed, w.PelletSpread)));
                 foreach (var (id, t) in HitMath.ResolvePellets(w, s.From, dirs, range, walls, targets, s.MemberHitId))
                     if (_ctx.Players.ContainsKey(id)) _deal(s.MemberHitId, SpecialWeapons.Gang, id, t.Damage * s.Weapon.DamageScale, t.Head, false);
@@ -140,7 +179,7 @@ internal sealed class GangServer : IGangWorld
                 foreach (var (car, amount) in carDamage) _carDamage.Bullet(car, amount, 0, SpecialWeapons.Gang);
                 return;
             }
-            var wall = _shot.WorldHit(from, new Vector3(s.Dir.X, s.Dir.Y, s.Dir.Z), range, out var shotCar);
+            var wall = _shot.WorldHit(from, new Vector3(s.Dir.X, s.Dir.Y, s.Dir.Z), range, out var shotCar, own);
             var hit = HitMath.Raycast(s.From, s.Dir, range, wall, targets, s.MemberHitId);
             var end = s.From + s.Dir * (hit?.Distance ?? MathF.Min(wall, range));
             _ctx.Broadcast(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(0, (byte)wi, s.From, end)));

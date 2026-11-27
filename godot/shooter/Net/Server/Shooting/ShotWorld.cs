@@ -118,9 +118,12 @@ internal sealed class ShotWorld
     /// nearer of <see cref="WorldQuery.Wall"/> and <see cref="NearestHull"/>), and which vehicle if it was one. The shooter's own vehicle
     /// (<paramref name="skip"/>) is not in the way.
     /// </summary>
-    public float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null)
+    public float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null) => WorldHitSkipping(from, dir, max, out car, skip, null);
+
+    /// <summary>As <see cref="WorldHit"/> with two vehicles left out (the shooter's own, and the one the target rides in: a line of sight to a rider is not blocked by the vehicle they sit in).</summary>
+    public float WorldHitSkipping(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip, ServerCar? skipToo)
     {
-        var stop = Query.Shot(from, dir, max, skip);
+        var stop = Query.Shot(from, dir, max, skip, skipToo);
         car = stop.Car;
         return stop.Distance;
     }

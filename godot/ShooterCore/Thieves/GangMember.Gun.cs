@@ -24,6 +24,12 @@ public sealed partial class GangMember
     /// <summary>Fights at range: a kind with a gun.</summary>
     public bool Ranged => Weapon != null;
 
+    /// <summary>
+    /// The aim error of its rounds now, degrees, when something else sets it: a Gunman shooting from a moving car (docs/cartel.md "Chase cars") turns each round off its line by up to this instead of the gun's own
+    /// aim_error_deg. Null: the gun's own.
+    /// </summary>
+    public float? AimErrorDeg { get; set; }
+
     /// <summary>The spot it holds (<see cref="Post"/>), or null when it moves about.</summary>
     public GangPost? PostedAt => _post;
 
@@ -40,6 +46,31 @@ public sealed partial class GangMember
         Yaw = facing;
         ClearRoute();
         _fsm.Enter(GangMemberState.Posted);
+    }
+
+    /// <summary>
+    /// Moves a posted member's spot (a rider of a moving car: its post is a seat, GLOSSARY "Chase car"): it stands at <paramref name="at"/> facing <paramref name="facing"/> from now on, in whatever state it is
+    /// in (an Aim or a Fire goes on). Nothing for a member that is not posted, dead or gone.
+    /// </summary>
+    public void MovePost(Vector3 at, float facing)
+    {
+        if (_post == null || !Alive || Ended != null) return;
+        _post = new GangPost(at, facing);
+        Position = Home = at;
+    }
+
+    /// <summary>
+    /// Takes a posted member off its spot: it stands at <paramref name="at"/> facing <paramref name="facing"/> and from now on moves about and fights as any member of its gang does, heading for the gang's post
+    /// (a crew that gets out of its car). Nothing for a member that is not posted, dead or gone.
+    /// </summary>
+    public void Unpost(Vector3 at, float facing)
+    {
+        if (_post == null || !Alive || Ended != null) return;
+        _post = null;
+        Position = at; Yaw = facing;
+        ClearRoute();
+        _stuck.Moved(at);
+        _fsm.Enter(GangMemberState.Guard);
     }
 
     Vector3 Eye => Position + Vector3.UnitY * _d.Sight.EyeM;
@@ -121,7 +152,7 @@ public sealed partial class GangMember
         var from = Position + Vector3.UnitY * gun.MuzzleUpM + ahead * gun.MuzzleAheadM;
         var line = ChestOf(t) - from;
         if (line.LengthSquared() < 1e-6f) return;
-        var dir = AimError(Vector3.Normalize(line), gun.AimErrorDeg, (uint)_rng.Next());
+        var dir = AimError(Vector3.Normalize(line), AimErrorDeg ?? gun.AimErrorDeg, (uint)_rng.Next());
         _world.Shoot(new GangShot(HitId, Weapon!, from, dir, gun.RangeM, t.Id, (uint)_rng.Next()));
     }
 

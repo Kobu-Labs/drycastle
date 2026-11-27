@@ -30,10 +30,10 @@ internal sealed class JobVehicles
 
     /// <summary>
     /// A vehicle of type <paramref name="typeId"/> (vehicles.json id, e.g. "cartel_van") standing at <paramref name="position"/> (on the ground under it: the highest ground under its footprint
-    /// near that height) facing <paramref name="yaw"/>, reserved for <paramref name="riders"/> (null: anybody may get in). Its colour is the type's first. Null when the type does not exist.
+    /// near that height) facing <paramref name="yaw"/>, reserved for <paramref name="riders"/> (null: anybody may get in; empty: nobody). Its colour is the type's first, or the skin <paramref name="colour"/> (an index of the type's skins). Null when the type does not exist.
     /// It is one more vehicle record; it never returns once destroyed when its type says so (the Cartel van: returns false).
     /// </summary>
-    public ServerCar? Spawn(string typeId, NVec3 position, float yaw, IEnumerable<ushort>? riders)
+    public ServerCar? Spawn(string typeId, NVec3 position, float yaw, IEnumerable<ushort>? riders, byte colour = 0)
     {
         var vehicles = _vehicles();
         var kind = vehicles?.Vehicles.FindIndex(v => v.Id == typeId) ?? -1;
@@ -41,7 +41,7 @@ internal sealed class JobVehicles
         var def = vehicles!.Vehicles[kind];
         var space = _world.GetWorld3D().DirectSpaceState;
         var y = ServerCar.RestHeight(space, new Vector3(position.X, position.Y, position.Z), yaw, def.HalfWidth, def.HalfLength, position.Y) ?? position.Y;
-        var car = _fleet.Make(kind, def, 0, new Vector3(position.X, y + 0.02f, position.Z), yaw);
+        var car = _fleet.Make(kind, def, colour, new Vector3(position.X, y + 0.02f, position.Z), yaw);
         if (riders != null) car.Seat.Reserve(riders);
         _active.Add(car);
         GD.Print($"server: Job vehicle {def.Id} {car.Id} at ({position.X:F1},{y:F1},{position.Z:F1}){(riders != null ? ", reserved" : "")}");

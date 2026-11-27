@@ -187,6 +187,9 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     // ---- the tick ----
 
+    /// <summary>Nobody is fought now: the aggro list is emptied (a chase car's crew holds fire while the car is far from the van, docs/cartel.md "Chase cars"). Players attacked on sight, or who hit a member, are fought again from their next sighting or hit.</summary>
+    public void Calm() => _aggro.Clear();
+
     /// <summary>A player hit a member (or ran one over): the Raid fights them for <see cref="GangAggro.ForgetSeconds"/> from now. Only a living player counts.</summary>
     public void NoteHit(ushort player)
     {

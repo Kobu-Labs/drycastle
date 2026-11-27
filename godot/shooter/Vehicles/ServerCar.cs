@@ -386,6 +386,12 @@ public partial class ServerCar : CharacterBody3D
         else Velocity = fwd * State.Speed + new Vector3(0, Velocity.Y, 0);
     }
 
+    /// <summary>
+    /// The inputs of an NPC at the wheel (a Rival chase car's driver, docs/cartel.md "Chase cars"): while nobody sits at the wheel and this is set, the vehicle step drives the car by them every tick, as a player's
+    /// inputs would (<see cref="StepDrive"/>), and the car is hurt by what it hits. Null: nobody drives it (it coasts hands off).
+    /// </summary>
+    public DriveInput? NpcInput;
+
     /// <summary>The brakes are on and the driver's keys ignored (a Scud truck while its rack moves): every drive step is <see cref="DriveInput.Held"/>. The driver's client does the same from the launcher's state.</summary>
     public bool Immobilised;
 
