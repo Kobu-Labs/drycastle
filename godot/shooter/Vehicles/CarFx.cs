@@ -51,6 +51,7 @@ public static class CarFx
         Templates[model] = null;
         var path = Path.GetFullPath(Path.Combine(GamePaths.Assets(), model));
         if (!File.Exists(path)) { GD.PrintErr($"vehicle model not found: {path}; using a box"); return null; }
+        if (Drycastle.MapLoader.MapLoader.TryTakeGltf(path, out var ahead)) return Templates[model] = ahead; // parsed on a worker while the map loaded
         var doc = new GltfDocument();
         var state = new GltfState();
         if (doc.AppendFromFile(path, state) != Error.Ok) { GD.PrintErr($"vehicle model failed to load: {path}"); return null; }

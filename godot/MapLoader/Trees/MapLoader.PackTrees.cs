@@ -226,9 +226,9 @@ public sealed partial class MapLoader
     /// when the pack or the config is simply not (the viewer has no data folder, a machine without the pack), with one warning for a map that is
     /// not rebuilt for it (no <c>base_uv2</c>).
     /// </summary>
-    void PlanPackTrees()
+    void PlanPackTrees(bool free = true)
     {
-        FreePackTrees();
+        if (free) FreePackTrees();
         if (CollisionOnly || !PackTreesEnabled || string.IsNullOrEmpty(TreesJson)) return;
         if (!Godot.FileAccess.FileExists(PackTreeConfigPath)) return;
         if (PackManifestPath(PackTreeConfig.DefaultPack) == null) return; // no nature pack on this machine
@@ -295,6 +295,33 @@ public sealed partial class MapLoader
         Root.AddChild(_packRoot);
         EnsureStreamer();
         GD.Print($"pack trees: {_packModels.Count} models ({_packMaterials.Count} materials), near {cfg.NearM} m (+{cfg.FadeM} m fade), undergrowth near {cfg.Undergrowth.NearM} m (+{cfg.Undergrowth.FadeM} m fade), tiles {cfg.TileM} m, {_packObjs.Length} ground objects, undergrowth kinds per mix: {string.Join(", ", _packUnder.Select(m => $"{m.Mix}:{m.Kinds.Length}"))}");
+    }
+
+    /// <summary>
+    /// Loads, one model per step (the fraction done, 0..1), every pack model InitPackTrees is about to ask for (trees, ground objects, undergrowth, in its order, so the ids are the same),
+    /// so the load can be spread over frames; InitPackTrees then finds them cached. Does nothing where InitPackTrees returns at once.
+    /// </summary>
+    IEnumerable<float> LoadPackModelSteps()
+    {
+        if (_packCfg is not { } cfg || !_packDirs.ContainsKey(PackTreeConfig.DefaultPack) || (_trees.Count == 0 && _packGround == null)) yield break;
+        var entries = new List<PackTreeEntry>();
+        PackModelSets.Build(cfg, e => { entries.Add(e); return null; });
+        if (_packGround != null)
+        {
+            foreach (var kind in _packGround.Objects.Select(o => o.Kind).Distinct())
+            {
+                if (_packGround.BakedOnly.Contains(kind) || !cfg.GroundObjects.Kinds.TryGetValue(kind, out var kc)) continue;
+                entries.AddRange(kc.Models.Where(e => e.Weight > 0));
+            }
+        }
+        if (cfg.Undergrowth.Enabled && _meadow != null)
+            entries.AddRange(cfg.Undergrowth.Mixes.SelectMany(m => m.Kinds).SelectMany(k => k.Models).Where(e => e.Weight > 0));
+        var missing = new List<string>(); // not used: InitPackTrees gives the warning
+        for (var i = 0; i < entries.Count; i++)
+        {
+            PackModelId(entries[i], missing);
+            yield return (i + 1f) / entries.Count;
+        }
     }
 
     /// <summary>Resolves the pack models of every kind of ground object the file has and sorts the objects into tiles. A kind without a model keeps no pack object and, the cut being shared, loses its baked ones inside the radius.</summary>
@@ -415,6 +442,23 @@ public sealed partial class MapLoader
         }
         if (id < 0 && !_packAbsent.Contains(e.Pack) && !missing.Contains(key)) missing.Add(key);
         return id;
+    }
+
+    /// <summary>The files of the pack tree models the configuration names (for the model prefetch); none without pack trees.</summary>
+    IEnumerable<string> PackModelPaths()
+    {
+        if (_packCfg is not { } cfg) return Array.Empty<string>();
+        var paths = new List<string>();
+        PackModelSets.Build(cfg, e =>
+        {
+            if (_packDirs.TryGetValue(e.Pack, out var dir))
+            {
+                var file = _packFiles.TryGetValue(e.Pack, out var files) && files.TryGetValue(e.Name, out var f) ? f : null;
+                paths.Add(file != null && File.Exists(Path.Combine(dir, file)) ? Path.Combine(dir, file) : Path.Combine(dir, e.Name + ".glb"));
+            }
+            return null;
+        });
+        return paths;
     }
 
     PackModelMesh? LoadPackModel(string pack, string name, string? file)

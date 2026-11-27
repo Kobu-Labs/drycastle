@@ -2,6 +2,8 @@ using Godot;
 using Drycastle.MapLoader.Trees;
 using Drycastle.MapLoader.Vegetation;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 /// <summary>
@@ -145,9 +147,33 @@ public sealed partial class MapLoader
     }
 
     /// <summary>Builds the sheet of every chunk and plant kind: one picture and material per kind, one mesh per chunk.</summary>
+    /// <summary>The sheets being made on a worker thread (<see cref="MakeCropSheets"/>), attached at the end of the load (<see cref="AttachCropSheets"/>).</summary>
+    System.Threading.Tasks.Task<List<(Node3D Parent, MeshInstance3D Node)>>? _cropSheetsJob;
+
+    /// <summary>Starts making the sheets on a worker thread: the grids, the painted pictures and the meshes touch no node in the tree.</summary>
     void BuildCropSheets(List<(Node3D Parent, CropGroup Group)> groups)
     {
         if (groups.Count == 0) return;
+        PlantCutParam(); FlatMaterial(); // anything lazily made on first use is made here, not on the worker
+        _cropSheetsJob = System.Threading.Tasks.Task.Run(() => { var t = LoadTimers.Start(); var r = MakeCropSheets(groups); LoadTimers.Lap("worker.crop_sheets", t); return r; });
+    }
+
+    /// <summary>Puts the sheets the worker made under their chunks (main thread).</summary>
+    IEnumerable<float> AttachCropSheets()
+    {
+        if (_cropSheetsJob is not { } job) yield break;
+        foreach (var w in WaitFor(job, 0f)) yield return w;
+        _cropSheetsJob = null;
+        foreach (var (parent, node) in job.GetAwaiter().GetResult())
+        {
+            parent.AddChild(node);
+            _cropSheets.Add(node);
+        }
+    }
+
+    List<(Node3D Parent, MeshInstance3D Node)> MakeCropSheets(List<(Node3D Parent, CropGroup Group)> groups)
+    {
+        var made = new List<(Node3D, MeshInstance3D)>();
         var cellM = CropSettings.SheetCellM;
         var grids = groups.Select(g => (g.Parent, g.Group, Grid: new CropSheetGrid(g.Group.Instances, cellM))).ToList();
         var materials = new Dictionary<string, (ShaderMaterial Material, float Full, float LiftM)>();
@@ -207,9 +233,9 @@ public sealed partial class MapLoader
                 Position = origin,
                 CastShadow = GeometryInstance3D.ShadowCastingSetting.Off,
             };
-            parent.AddChild(node);
-            _cropSheets.Add(node);
+            made.Add((parent, node));
         }
+        return made;
     }
 
     /// <summary>A seed from a kind's name that is the same on every run (string hashes are not).</summary>

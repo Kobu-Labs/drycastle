@@ -35,21 +35,36 @@ public partial class WaterSurfaces : Node3D
     }
 
     /// <summary>Adds the surfaces of <paramref name="water"/> under <paramref name="parent"/>. Nothing is built for a dry map or headless runs.</summary>
-    public static WaterSurfaces? Attach(Node parent, Water water)
+    public static WaterSurfaces? Attach(Node parent, Water water, Parts? parts = null)
     {
         if (water.Bodies.Count == 0 || DisplayServer.GetName() == "headless") return null;
         var node = new WaterSurfaces { Name = "WaterSurfaces" };
         parent.AddChild(node);
-        node.Build(water);
+        node.Build(parts ?? Prepare(water));
         return node;
     }
 
-    void Build(Water water)
+    /// <summary>What a water surface is made of before it is drawn: per body its mesh and depth texture. <see cref="Prepare"/> makes it on any thread.</summary>
+    public sealed record Parts(Shader Shader, List<(WaterBody Body, ArrayMesh? Mesh, ImageTexture Depth, Vector2 Origin, Vector2 InvSize)> Bodies);
+
+    /// <summary>The meshes and depth textures of <paramref name="water"/>; touches no node, so it can run on a worker thread while the map loads.</summary>
+    public static Parts Prepare(Water water)
     {
-        var shader = LoadShader();
+        var list = new List<(WaterBody, ArrayMesh?, ImageTexture, Vector2, Vector2)>();
         foreach (var body in water.Bodies)
         {
             var mesh = body.Grid != null ? GridMesh(body) : OutlineMesh(body);
+            var depth = DepthTexture(body, out var origin, out var invSize);
+            list.Add((body, mesh, depth, origin, invSize));
+        }
+        return new Parts(LoadShader(), list);
+    }
+
+    void Build(Parts parts)
+    {
+        var shader = parts.Shader;
+        foreach (var (body, mesh, depth, origin, invSize) in parts.Bodies)
+        {
             if (mesh == null) { GD.PrintErr($"water: body {body.Id} has no triangulable outline, not drawn"); continue; }
             var pal = WaterPalettes.For(body);
             // drawn before every other transparent thing, so ripple rings, splashes and glass over the water are not covered by it
@@ -57,7 +72,7 @@ public partial class WaterSurfaces : Node3D
             mat.SetShaderParameter("shallow_colour", pal.Shallow);
             mat.SetShaderParameter("deep_colour", pal.Deep);
             mat.SetShaderParameter("flow", pal.Flow);
-            mat.SetShaderParameter("depth_tex", DepthTexture(body, out var origin, out var invSize));
+            mat.SetShaderParameter("depth_tex", depth);
             mat.SetShaderParameter("depth_origin", origin);
             mat.SetShaderParameter("depth_inv_size", invSize);
             mat.SetShaderParameter("wave_amp", WaterPalettes.WaveAmplitude(body));

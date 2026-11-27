@@ -2,6 +2,8 @@ using System.Text.Json;
 using Godot;
 using Drycastle.MapLoader.Objects;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 // Placed objects, the dynamic per-parcel props swap (parcel-run fragments) and their bookkeeping.
@@ -166,11 +168,16 @@ public sealed partial class MapLoader
     {
         List<PlacedObject> list;
         List<CableSpec> cables;
-        using (var doc = JsonDocument.Parse(File.ReadAllText(path)))
-        {
-            list = ParseObjects(doc.RootElement.GetProperty("objects"));
-            cables = ParseCables(doc.RootElement);
-        }
+        var tp = LoadTimers.Start();
+        if (_objectsAhead is { } ahead) { (list, cables) = ahead; _objectsAhead = null; }
+        else
+            using (var doc = JsonDocument.Parse(File.ReadAllText(path)))
+            {
+                list = ParseObjects(doc.RootElement.GetProperty("objects"));
+                cables = ParseCables(doc.RootElement);
+            }
+        LoadTimers.Lap("objects.parse", tp);
+        // the copies of the templates are made here, not on a worker: copying them on a worker was measured 6 to 20 times slower
         var n = 0;
         foreach (var o in list)
         {
@@ -179,7 +186,7 @@ public sealed partial class MapLoader
             AddObject(o);
             yield return (float)++n / list.Count;
         }
-        SetCables(cables); // after the poles they hang from
+        var tcb = LoadTimers.Start(); SetCables(cables); LoadTimers.Lap("objects.cables", tcb); // after the poles they hang from
     }
 
     Node3D ObjectsContainer()
@@ -437,11 +444,108 @@ public sealed partial class MapLoader
 
     static Node3D? LoadGltf(string path)
     {
+        if (TryTakeGltf(path, out var ahead)) return ahead;
+        return ParseGltf(path);
+    }
+
+    static Node3D? ParseGltf(string path)
+    {
         var doc = new GltfDocument();
         var state = new GltfState();
         var err = doc.AppendFromFile(path, state);
         if (err != Error.Ok) throw new InvalidDataException($"glTF load failed ({err}): {path}");
         return doc.GenerateScene(state) as Node3D;
+    }
+
+    /// <summary>glTF files being parsed ahead on a worker thread, by full path (<see cref="PrefetchGltf"/>).</summary>
+    static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Threading.Tasks.Task<Node3D?>> GltfAhead = new();
+
+    /// <summary>Set by <see cref="StopPrefetch"/> (and never cleared: it is for quitting): the glTF worker parses no further file.</summary>
+    static volatile bool GltfStop;
+
+    /// <summary>The glTF worker tasks, for <see cref="StopPrefetch"/> to wait for.</summary>
+    static readonly List<System.Threading.Tasks.Task> GltfWorkers = new();
+
+    /// <summary>
+    /// Starts parsing glTF files on a worker thread, one after another, so the loader (and the game's model caches) find them parsed:
+    /// <see cref="TryTakeGltf"/> hands each one out once. A file already asked for is not parsed twice.
+    /// </summary>
+    public static void PrefetchGltf(IEnumerable<string> paths)
+    {
+        var todo = new List<(string Path, System.Threading.Tasks.TaskCompletionSource<Node3D?> Done)>();
+        foreach (var p in paths.Select(Path.GetFullPath).Distinct())
+        {
+            if (!File.Exists(p)) continue;
+            var tcs = new System.Threading.Tasks.TaskCompletionSource<Node3D?>(System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);
+            if (GltfAhead.TryAdd(p, tcs.Task)) todo.Add((p, tcs));
+        }
+        if (todo.Count == 0) return;
+        var worker = System.Threading.Tasks.Task.Factory.StartNew(() =>
+        {
+            foreach (var (p, done) in todo)
+            {
+                if (GltfStop) { done.TrySetCanceled(); continue; } // the game is closing: leave the rest unparsed
+                var t = LoadTimers.Start();
+                try { done.SetResult(ParseGltf(p)); }
+                catch (Exception e) { done.SetException(e); }
+                LoadTimers.Lap("worker.gltf_small", t);
+            }
+        }, System.Threading.Tasks.TaskCreationOptions.LongRunning);
+        lock (GltfWorkers) { GltfWorkers.RemoveAll(t => t.IsCompleted); GltfWorkers.Add(worker); }
+    }
+
+    /// <summary>The scene a prefetch parsed for <paramref name="path"/> (waits for it); false when none was asked for, or it failed (the caller then parses, and reports, itself).</summary>
+    public static bool TryTakeGltf(string path, out Node3D? scene)
+    {
+        scene = null;
+        if (!GltfAhead.TryRemove(Path.GetFullPath(path), out var task)) return false;
+        ((IAsyncResult)task).AsyncWaitHandle.WaitOne();
+        if (!task.IsCompletedSuccessfully) return false;
+        scene = task.Result;
+        return true;
+    }
+
+    /// <summary>The file an asset's template is read from, or null (unknown asset, or no file named); <paramref name="prefab"/>: a private pack prefab.</summary>
+    string? TemplatePath(string asset, out bool prefab)
+    {
+        if (_assetManifest == null) ReadAssetManifest();
+        _assetManifest!.TryGetValue(asset, out var entry);
+        prefab = entry is { Prefab: true, Root: not null };
+        if (prefab) return Path.Combine(entry!.Root!, entry.File);
+        if (asset.StartsWith("prim:")) return Path.Combine(_mapDir, "prims", asset["prim:".Length..] + ".glb");
+        if (asset.StartsWith("pack:") && entry != null && entry.File != "" && (entry.Root ?? AssetsDir) is { } assetRoot) return Path.Combine(assetRoot, entry.File);
+        return null;
+    }
+
+    /// <summary>The own model file of a placed object inside the map folder, or null.</summary>
+    string? OwnModelPath(PlacedObject o)
+    {
+        if (string.IsNullOrEmpty(o.Model)) return null;
+        var path = Path.GetFullPath(Path.Combine(_mapDir, o.Model));
+        return path.StartsWith(Path.GetFullPath(_mapDir) + Path.DirectorySeparatorChar) && File.Exists(path) ? path : null;
+    }
+
+    /// <summary>Starts parsing the files of these assets' templates on a worker thread (the game's vehicle models of the private packs). Main thread.</summary>
+    public void PrefetchAssetModels(IEnumerable<string> assets) => PrefetchGltf(assets.Select(a => TemplatePath(a, out _)).OfType<string>().ToList());
+
+    /// <summary>objects.json as read for the model prefetch (taken by the object build), or null.</summary>
+    (List<PlacedObject> Objects, List<CableSpec> Cables)? _objectsAhead;
+
+    /// <summary>Reads objects.json and starts parsing the models its objects need (asset templates, own models) on a worker thread.</summary>
+    void PrefetchObjectModels(string objectsPath, IEnumerable<string> morePaths)
+    {
+        var paths = new List<string>(); // the objects' files first (needed first), then the pack trees' (needed last)
+        if (File.Exists(objectsPath))
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(objectsPath));
+            var list = ParseObjects(doc.RootElement.GetProperty("objects"));
+            _objectsAhead = (list, ParseCables(doc.RootElement));
+            foreach (var asset in list.Select(o => o.Asset).Distinct())
+                if (TemplatePath(asset, out _) is { } p) paths.Add(p);
+            if (!CollisionOnly) foreach (var o in list) if (OwnModelPath(o) is { } own) paths.Add(own);
+        }
+        paths.AddRange(morePaths);
+        PrefetchGltf(paths);
     }
 
     // ---- parcel-run fragments ----
