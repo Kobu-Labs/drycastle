@@ -15,7 +15,7 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
 /// What a Heist kind brings to the template (docs/cartel.md "Heists"): its objective's place, the area the Cartel van must stand in to load there, and the words of its filling. The Harvest's is the
-/// Contact's plantation; the Trap house heist plugs in its house the same way (<see cref="HeistServer.Begin"/>).
+/// Contact's plantation; the Trap house heist (<see cref="TrapHouseJobKind"/>) plugs in its house the same way (<see cref="HeistServer.Begin"/>).
 /// </summary>
 internal interface IHeistGoal
 {
@@ -27,6 +27,10 @@ internal interface IHeistGoal
     NVec3 Centre { get; }
     /// <summary>The ground point stands in the objective's area (the van loads there; leaving it with the minimum stops the Assaults).</summary>
     bool InArea(NVec3 p);
+    /// <summary>The tracker line now, given the template's (<paramref name="line"/>): the template's by default; a trap house adds its safe's Drill.</summary>
+    string Line(Heist heist, string line) => line;
+    /// <summary>The marker now, given the template's (<paramref name="marker"/>): the template's by default; a trap house points at its safe while the Drill runs.</summary>
+    NVec3? Marker(Heist heist, NVec3? marker) => marker;
     /// <summary>The Job ended: what the kind put in the world goes (a trap house is stripped).</summary>
     void End() { }
 }
@@ -206,15 +210,15 @@ internal sealed class HeistRun : IJobObjective, ICargoVolume
 
     public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Loaded, Heist.Min) : 0;
 
-    public string Objective(Job job) => Heist.Line(Goal.Place, Goal.FillLine);
+    public string Objective(Job job) => Goal.Line(Heist, Heist.Line(Goal.Place, Goal.FillLine));
 
-    public System.Numerics.Vector3? Marker(Job job) => Heist.Marker switch
+    public System.Numerics.Vector3? Marker(Job job) => Goal.Marker(Heist, Heist.Marker switch
     {
         HeistMarker.Objective => Goal.Centre,
         HeistMarker.Van => CarCargo.Centre(_van) ?? VanFeet,
         HeistMarker.Drop => _drop,
-        _ => null,
-    };
+        _ => (NVec3?)null,
+    });
 
     public void End(Job job)
     {

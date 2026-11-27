@@ -301,6 +301,7 @@ public partial class NetServer : Node
         _heists = new HeistServer(_ctx, Config.Cartel, _cartel, new MatchJobParties(_match), _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
+        _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
         BuildVehicles();
         BuildShooting();
         var rounds = new RoundHooks(_streaks, _gunships, _flak, _progress, _bigfoot, _thieves);

@@ -842,7 +842,7 @@ One task a giver hands out, with an objective, a reward and a way to fail, run b
 _Avoid_: quest, mission, task, Event (a Job is not one)
 
 **Heist**:
-A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a Drop point far from the objective is reserved; the van's bay takes only the party's Duffels; the Heist succeeds when the van stops within the drop radius with at least the minimum loaded (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The Trap house heist is planned.
+A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a Drop point far from the objective is reserved; the van's bay takes only the party's Duffels; the Heist succeeds when the van stops within the drop radius with at least the minimum loaded (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The second is the **Trap house heist** (#496): a Trap house is the objective, its product and cash Duffels lie on its tables and its safe takes a Drill; numbers in `jobs.trap_house`, `/cartel job trap_house [tier]`.
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
@@ -874,7 +874,7 @@ A Gang member of the Rival crew who fights at range with a gun (a pistol, an SMG
 _Avoid_: shooter, bot
 
 **Trap house**:
-A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job (by room type, from its floor plan and a seed; tables and crates are solid), its defenders posted in its rooms, a safe inside; stripped again when the Job ends. The dressing is built (`trap_house.json`, `/traphouse`); the Heist is planned (#437).
+A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job (by room type, from its floor plan and a seed; tables and crates are solid), its defenders posted in its rooms, a safe inside; stripped again when the Job ends. Built (#496): the dressing (`trap_house.json`, `/traphouse`) and the Trap house heist that takes one (`cartel.json` `jobs.trap_house`).
 _Avoid_: stash house, drug den, hideout
 
 **Rival dealer**:
@@ -882,5 +882,5 @@ The target of a Hit: a Gang member of the Rival crew standing outdoors at a Hit 
 _Avoid_: target (alone), boss (that is the Gang boss)
 
 **Drill**:
-What a Job's player sets on a Trap house's safe to open it: a party player holds the interact key at the safe to set it, it runs a while (by tier) and jams one to three times at random moments, a party player holds the key again to fix each jam, and through, the safe opens and cash Duffels lie by it for the party. Built (#496: machine `Drill.Run`, `trap_house.json` `drill`, `/drill`); the Trap house Heist that arms it is planned (#437).
+What a Job's player sets on a Trap house's safe to open it: a party player holds the interact key at the safe to set it, it runs a while (by tier) and jams one to three times at random moments, a party player holds the key again to fix each jam, and through, the safe opens and cash Duffels lie by it for the party. Built (#496: machine `Drill.Run`, `trap_house.json` `drill`, `/drill`); the Trap house heist arms it at its start.
 _Avoid_: hack, timer

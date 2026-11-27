@@ -102,6 +102,44 @@
       // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
       "fill_hold_seconds": 3,
       "area_margin_m": 25
+    },
+    // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0046). A random hollow
+    // house with road access (trap_house.json choice) is dressed for the job and stripped after; the Rival crew holds it, product and cash duffels lie on its tables, its safe takes the
+    // Drill (trap_house.json drill: run time, jams, cash duffels by tier). Every per-tier array has one number per tier, tier 1 first; "extra member" as harvest's.
+    "trap_house": {
+      "name": "Trap house",
+      // seconds: the job's timer per tier, a safety: it fails when they run out.
+      "seconds": [900, 870, 840, 810, 780],
+      // min / max duffels as harvest's (never more than the van's bay takes). Only a house whose tables have at least the minimum's duffel spots is taken (the safe is a bonus); the tables
+      // hold the maximum less the safe's cash duffels (never fewer than the minimum, never more than the spots); the open safe's cash duffels load like the rest.
+      "min_duffels": [2, 2, 3, 3, 3],
+      "min_per_extra_member": 0,
+      "max_duffels": [4, 5, 6, 7, 8],
+      "max_per_extra_member": 1,
+      "bonus_respect_per_duffel": 15,
+      // Posted defenders (the Rival crew holding the house, on the dressing's posts: they turn and shoot, never walk): defender_gunmen and defender_enforcers per tier, plus
+      // defender_gunmen_per_extra_member Gunmen per extra member, at most max_defenders and never more than the house has posts (Gunmen kept first).
+      "defender_gunmen": [2, 2, 3, 3, 4],
+      "defender_enforcers": [1, 2, 2, 3, 3],
+      "defender_gunmen_per_extra_member": 1,
+      "max_defenders": 10,
+      // area_m: the objective's area, where the van loads and the Assaults go on: within this of the house's centre or of the road spot where the van parks (its door's nearest road).
+      "area_m": 20,
+      // Assaults, the Cartel van and the Drop point (from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded.
+      "grace_seconds": [60, 55, 50, 45, 40],
+      "assault_interval_seconds": [100, 90, 80, 70, 60],
+      "assault_gunmen": [1, 2, 2, 3, 3],
+      "assault_enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_extra_member": 1,
+      "max_crew": 8,
+      "max_assaults_alive": 3,
+      "van_type": "cartel_van",
+      "van_spawn_min_m": 8,
+      "van_load_margin_m": 0.35,
+      "drop_min_m": 300,
+      "drop_apart_m": 40,
+      "drop_radius_m": 10,
+      "drop_stop_mps": 1
     }
   }
 }
