@@ -285,6 +285,20 @@ stateDiagram-v2
 - **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
 - **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
+## Cargo.Doors
+
+The cargo doors of a vehicle (boot lid, hatch, van rear doors): shut, or open until somebody shuts them.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Open
+    Open --> Closed
+```
+
+- **Closed**: The start state, and what a spawn, a reset or a respawn of the vehicle leaves. A throw into the cargo area is refused (it falls beside the vehicle).
+- **Open**: A player on foot at the access point pressed the interact key. Stays open while the vehicle drives; a throw loads, the key at the access point shuts it.
+
 ## Cartel.Membership
 
 Whether a player works for the Cartel: an outsider until they join at the Contact, a member who runs Jobs and earns Respect, or quit with rank and Respect frozen until they rejoin.
@@ -640,7 +654,7 @@ stateDiagram-v2
 
 ## Duffel.Place
 
-A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a cargo volume (the Cartel van's back).
+A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a vehicle's cargo volume.
 
 ```mermaid
 stateDiagram-v2
@@ -651,13 +665,13 @@ stateDiagram-v2
     Carried --> Loaded
     Flying --> Lying
     Flying --> Loaded
-    Loaded --> [*]
+    Loaded --> Carried
 ```
 
 - **Lying**: On the ground, or on a Job's pallet spot (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
 - **Carried**: On a party player's back: no sprint, slower by its weight. One press of the throw key throws it at once (Flying); the carrier's death, a seat or leaving the party puts it down where they were (Lying).
-- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.
-- **Loaded**: In a cargo volume, counted by its owner; it stays there until the Job removes it.
+- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall, or a cargo volume that does not accept it (shut doors, full, not its party's, a bed met from the side), stops it and it falls straight down beside.
+- **Loaded**: In a vehicle's cargo volume, on the first free slot, drawn there and fixed to the vehicle. A party player with empty hands at the open cargo area takes the last loaded one out (Carried); the vehicle's destruction, retirement or reset, or the Job's end, removes it.
 
 ## Editor.Shape
 

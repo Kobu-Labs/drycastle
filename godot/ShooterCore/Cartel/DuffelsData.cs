@@ -33,6 +33,8 @@ public sealed class DuffelsFile : IVersioned
     public double MaxFlightSeconds { get; set; } = 5;
     /// <summary>Metres a flying Duffel is kept off a wall it struck before it falls straight down.</summary>
     public double WallGapM { get; set; } = 0.2;
+    /// <summary>Metres a vehicle's cargo box is grown by for a Duffel: a throw that lands against the open doors still loads; a throw that meets the grown box and is not accepted falls beside it.</summary>
+    public double CargoMarginM { get; set; } = 0.35;
     public DuffelView View { get; set; } = new();
 
     public static DuffelsFile Parse(string json) => DataFile.Parse<DuffelsFile>(json, "duffels.json").Validate();
@@ -65,6 +67,7 @@ public sealed class DuffelsFile : IVersioned
         if (!(LiftDeg is > 0 and < 90)) throw new DataFileException("duffels.json: lift_deg must be between 0 and 90");
         if (!(MinElevationDeg < MaxElevationDeg && MinElevationDeg > -90 && MaxElevationDeg < 90)) throw new DataFileException("duffels.json: min_elevation_deg must be below max_elevation_deg, both within 90");
         if (!double.IsFinite(HandAheadM) || HandAheadM < 0) throw new DataFileException("duffels.json: hand_ahead_m must be 0 or more");
+        if (!double.IsFinite(CargoMarginM) || CargoMarginM < 0) throw new DataFileException("duffels.json: cargo_margin_m must be 0 or more");
         if (!double.IsFinite(WallGapM) || WallGapM < 0) throw new DataFileException("duffels.json: wall_gap_m must be 0 or more");
         if (View.Back.Length != 3 || View.Box.Length != 3) throw new DataFileException("duffels.json: view.back and view.box need 3 numbers");
         Pos(View.Scale, "view.scale");

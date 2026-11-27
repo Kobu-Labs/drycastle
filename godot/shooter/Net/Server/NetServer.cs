@@ -107,6 +107,7 @@ public partial class NetServer : Node
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     DuffelServer _duffels = null!;
+    CargoServer _cargo = null!;
     DrillServer _drills = null!;
     // the village and its animals
     SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; FenceDestructionServer _fences = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
@@ -288,7 +289,8 @@ public partial class NetServer : Node
         _crates = new CrateServer(_ctx, Config.Killstreaks.Rewards, () => _shot.Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         _duffels = new DuffelServer(_ctx, Config.Duffels, () => _shot.Query, _seats.EnterableCar, _crates.AnyInReach); // the cartel's Duffels (#494): world entity 62
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null, c => _cartel.ContactInReach(c));
+        _cargo = new CargoServer(_ctx, _fleet, _duffels.Book, Config.Duffels); // every live cargo vehicle takes Duffels; its doors are worked with the interact key (docs/cartel.md "Cargo vehicles")
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null, c => _cartel.ContactInReach(c), _cargo.DoorsInReach);
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _drills = new DrillServer(_ctx, _trapHouses, _duffels, keys, _sitters, _pounce, _streaks); // the Drills on the Trap houses' safes (#496): events 62-64
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
@@ -299,7 +301,7 @@ public partial class NetServer : Node
         _cartel.Register(new DeliveryJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
         _cartel.Register(new HitJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
-        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
+        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, _cargo, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
@@ -340,7 +342,7 @@ public partial class NetServer : Node
         var pellets = new PelletFan(_ctx, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _wildlife, Config.Vehicles, _rng, baleShot);
         _shots = new ShotServer(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _sentries, _wildlife, _lockOn, _rockets, pellets, _impacts, _smoke, Config.Vehicles, _rng, Config.Turret.KnifeDamage, Config.WeaponsSmoke,
             baleShot, new LagCompLog(Config.PerfOut, Config.PerfLagComp, _ctx, _rewind, _shot, _targets).Shot);
-        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, (c, use) => { _plantation.Use(c, use); _drills.Use(c, use); }, _scud.UseKey, _duffels, Config.KillY);
+        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, (c, use) => { _plantation.Use(c, use); _drills.Use(c, use); }, _scud.UseKey, _duffels, _cargo, Config.KillY);
         _snapshots = new SnapshotServer(_ctx, _fleet, _sitters, _dummies, _rockets, Config.Vehicles, _diag.Perf.AuditTick, _diag.Loss.LogStates);
     }
 
@@ -428,6 +430,7 @@ public partial class NetServer : Node
             _rozhlas.SendOnJoin, // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
             _garage.SendOnJoin, // and the garage doors, when they are open
             _houses.SendOnJoin, // and the houses' open doors
+            c => _cargo.SendOnJoin(c), // and the cargo vehicles' doors, when they are open
             _houseDestruction.SendOnJoin, // the house destruction settings and every carved house's removed cells
             _trapHouses.SendOnJoin, // every dressed Trap house's props
             _fences.SendOnJoin, // the broken pieces of the thin fences

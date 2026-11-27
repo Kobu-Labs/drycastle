@@ -26,6 +26,8 @@ internal sealed class JobTracker
     /// <summary>The interact key's binding the line was last written with, and its name.</summary>
     Binding? _interactKey;
     string _interactName = "";
+    Binding? _throwKey;
+    string _throwName = "";
 
     public JobTracker(Control root, MapMarkers markers)
     {
@@ -60,6 +62,8 @@ internal sealed class JobTracker
         _markers.Job = t.Marker;
         var key = GameSettings.Current.Keys.Get("interact");
         if (_interactKey != key) { _interactKey = key; _interactName = InputBindings.Name(key); _revision = -1; } // rebound: the line names the new key
+        var throwKey = GameSettings.Current.Keys.Get("duffel_throw");
+        if (_throwKey != throwKey) { _throwKey = throwKey; _throwName = InputBindings.Name(throwKey); _revision = -1; }
         if (t.Revision != _revision) { _revision = t.Revision; _second = -1; Write(t); }
         if (t.Phase != TrackerPhase.Running) return;
         var s = (int)MathF.Ceiling(t.SecondsLeft);
@@ -79,7 +83,7 @@ internal sealed class JobTracker
             HudUi.Tint(_title, null);
             HudUi.Set(_title, kind);
             HudUi.Set(_tier, Strings.F("cartel.track.tier", j.Tier));
-            HudUi.Set(_line, JobText.Fill(t.Line, _interactName));
+            HudUi.Set(_line, JobText.Fill(t.Line, _interactName, _throwName));
             _line.Visible = t.Line.Length > 0; // empty: the kind's name says it all
             _time.Visible = true;
             HudUi.Set(_note, NoRespect(j.Flags) is { } why and not NoRespectReason.Sandbox ? Strings.T(CartelWords.NoRespect.Key(why)) // sandbox: the panel says it, the leader line stays

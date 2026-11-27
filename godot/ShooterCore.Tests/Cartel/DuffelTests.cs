@@ -4,6 +4,8 @@ using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using Drycastle.ShooterCore.Weapons;
 
 namespace Drycastle.ShooterCore.Tests.Cartel;
 
@@ -40,16 +42,13 @@ public class DuffelTests
         public float? GroundY(Vector3 at, float up, float down) => at.Y - down <= 0 && 0 <= at.Y + up ? 0 : null;
     }
 
-    /// <summary>An axis-aligned box that takes the Duffels of one party.</summary>
-    sealed class FakeVolume : ICargoVolume
+    /// <summary>A cargo box 2 m wide, 1.5 m tall and 4 m long standing 6 m in front of the origin (z -8 to -4), open, for the Duffels of one party (null: any).</summary>
+    static VehicleCargo Box(IReadOnlySet<ushort>? party, ushort vehicle = 0x4001)
     {
-        public Vector3 Min, Max;
-        public IReadOnlySet<ushort>? Party;
-        public readonly List<Duffel> Loaded = new();
-
-        public bool Contains(Vector3 p) => p.X >= Min.X && p.Y >= Min.Y && p.Z >= Min.Z && p.X <= Max.X && p.Y <= Max.Y && p.Z <= Max.Z;
-        public bool Accepts(Duffel d) => ReferenceEquals(d.Party, Party);
-        public void Load(Duffel d) => Loaded.Add(d);
+        var def = new VehicleCargoVolumeDef { Centre = new[] { 0f, 0.75f, 0f }, Size = new[] { 2f, 1.5f, 4f }, Capacity = 2 };
+        var bay = new VehicleCargo(vehicle, def, () => new VehiclePose(new Vector3(0, 0, -6), 0, 0, 0, 0), (float)Data.CargoMarginM);
+        bay.Restrict(party);
+        return bay;
     }
 
     static (DuffelBook Book, WorldEntityManager Entities, FlatWorld World) NewBook()
@@ -209,15 +208,18 @@ public class DuffelTests
     {
         var (book, entities, _) = NewBook();
         var party = new HashSet<ushort> { 1 };
-        var van = new FakeVolume { Min = new Vector3(-1, 0, -8), Max = new Vector3(1, 1.5f, -4), Party = party };
+        var van = Box(party);
         book.AddVolume(van);
         var d = book.Give(DuffelKind.Weed, party, 1, Vector3.Zero)!;
         book.Throw(1, Eye, 0, 0); // about 8 m: through the box (the volume is met on the way)
         Fly(entities);
         Assert.Equal(DuffelState.Loaded, d.State);
         Assert.Same(van, d.Volume);
-        Assert.Equal(new[] { d }, van.Loaded);
+        Assert.Same(d, van.In(0));
+        Assert.Equal(1, van.Loaded);
         Assert.Equal(1, book.LoadedIn(van));
+        Assert.Equal(van.Vehicle, d.Owner); // the wire: the owner field is the vehicle, the state byte's high bits the slot
+        Assert.Equal(0, DuffelRules.SlotOf(entities.StateOf(d.Id)!.Value.State));
         Assert.Null(book.Pickable(1, d.Position)); // a loaded one is not picked up
     }
 
@@ -225,13 +227,14 @@ public class DuffelTests
     public void A_volume_of_another_party_does_not_take_it()
     {
         var (book, entities, _) = NewBook();
-        var van = new FakeVolume { Min = new Vector3(-1, 0, -8), Max = new Vector3(1, 1.5f, -4), Party = new HashSet<ushort> { 9 } };
+        var van = Box(new HashSet<ushort> { 9 });
         book.AddVolume(van);
         var d = book.Give(DuffelKind.Weed, new HashSet<ushort> { 1 }, 1, Vector3.Zero)!;
         book.Throw(1, Eye, 0, 0);
         Fly(entities);
         Assert.Equal(DuffelState.Lying, d.State);
-        Assert.Empty(van.Loaded);
+        Assert.Equal(0, van.Loaded);
+        Assert.True(MathF.Abs(d.Position.X) >= 1.3f, "it met the box, was not taken, and fell beside it");
     }
 
     [Fact]
@@ -239,12 +242,12 @@ public class DuffelTests
     {
         var (book, _, _) = NewBook();
         var party = new HashSet<ushort> { 1 };
-        var van = new FakeVolume { Min = new Vector3(-1, 0, -1), Max = new Vector3(1, 1.5f, 1), Party = party };
+        var van = Box(party);
         book.AddVolume(van);
-        var d = book.Give(DuffelKind.Cash, party, 1, Vector3.Zero)!;
-        book.Drop(1, new Vector3(0, 0.2f, 0));
+        var d = book.Give(DuffelKind.Cash, party, 1, new Vector3(0, 0, -6))!;
+        book.Drop(1, new Vector3(0, 0.2f, -6)); // inside the box
         Assert.Equal(DuffelState.Lying, d.State);
-        Assert.Empty(van.Loaded);
+        Assert.Equal(0, van.Loaded);
     }
 
     [Fact]

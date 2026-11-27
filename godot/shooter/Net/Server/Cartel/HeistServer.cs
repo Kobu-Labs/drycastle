@@ -38,7 +38,7 @@ internal interface IHeistGoal
 /// <summary>
 /// The Heist template on the server (GLOSSARY "Heist", "Cartel van", "Assault"; docs/cartel.md "Heists", "Cartel van", "Assaults"): a kind's <see cref="IJobKind.Begin"/> calls <see cref="Begin"/> with its
 /// numbers (<see cref="HeistData"/>) and its <see cref="IHeistGoal"/>, and gets the objective (<see cref="HeistRun"/>): the Cartel van on the road beside the Contact reserved for the party, a Drop point
-/// far from the objective, the van's bay as the party's cargo volume (<see cref="VanBay"/>), the Assaults (<see cref="HeistAssaults"/>) of the Rival crew on the Raid vans' roads, and all of it removed at the end. The Harvest (<see cref="HarvestJobKind"/>)
+/// far from the objective, the van's bay as the party's cargo volume (<see cref="VehicleCargo"/>, restricted to the party), the Assaults (<see cref="HeistAssaults"/>) of the Rival crew on the Raid vans' roads, and all of it removed at the end. The Harvest (<see cref="HarvestJobKind"/>)
 /// is registered here; the Trap house heist registers its own kind on the same services.
 /// </summary>
 internal sealed class HeistServer
@@ -50,10 +50,10 @@ internal sealed class HeistServer
 
     /// <param name="vehicles">The Job vehicles (built after the Cartel; asked at a Job's start).</param>
     /// <param name="ground">The terrain height under (x, z) (the map's, or its mean height off it).</param>
-    public HeistServer(ServerContext ctx, CartelFile data, CartelServer cartel, IJobParties parties, DuffelServer duffels, Func<JobVehicles> vehicles, RaidServer raids, RivalCrewServer rivals,
+    public HeistServer(ServerContext ctx, CartelFile data, CartelServer cartel, IJobParties parties, DuffelServer duffels, CargoServer cargo, Func<JobVehicles> vehicles, RaidServer raids, RivalCrewServer rivals,
         Func<CartelMap> map, Func<ZonePolygons> polygons, Func<float, float, float> ground, Random rng)
     {
-        Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
+        Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; Cargo = cargo; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
         Harvest = new HarvestJobKind(this, data);
         cartel.Register(Harvest);
     }
@@ -62,6 +62,8 @@ internal sealed class HeistServer
     public CartelServer Cartel { get; }
     public IJobParties Parties { get; }
     public DuffelServer Duffels { get; }
+    /// <summary>The cargo vehicles: the Cartel van's bay is one of them.</summary>
+    public CargoServer Cargo { get; }
     public RaidServer Raids { get; }
     public JobVehicles Vehicles => _vehicles();
     public Func<CartelMap> Map { get; }
@@ -85,6 +87,7 @@ internal sealed class HeistServer
         if (CartelSpots.Claim(job, book, Map(), CartelZones.DropKind, _rng, goal.Centre, goal.Place, data.DropMinM, data.DropApartM, out refusal) is not { } drop) return null;
         var (at, yaw) = VanSpot(contact, data.VanSpawnMinM);
         if (Vehicles.Spawn(data.VanType, at, yaw, members) is not { } van) { refusal = "The Cartel van cannot be put down."; return null; }
+        if (Cargo.BayOf(van) == null) { Vehicles.Remove(van); refusal = "The Cartel van has no cargo volume."; return null; }
         var capacity = CarCargo.Capacity(van);
         var heist = new Heist(HeistRules.MinDuffels(data, job.Tier, members.Count, capacity), HeistRules.MaxDuffels(data, job.Tier, members.Count, capacity),
             HeistRules.GraceSeconds(data, job.Tier), HeistRules.IntervalSeconds(data, job.Tier));
@@ -139,7 +142,7 @@ internal sealed class HeistServer
 
 /// <summary>
 /// One running Heist's objective on the server (the template, <see cref="Heist"/> for its phase and Assault clock): the van's riders follow the Job's party (<see cref="Job.Party"/>), it feeds the
-/// facts of the Cartel van each tick, launches the Assaults when due and takes out the spent ones (<see cref="HeistAssaults"/>), and owns the van's bay (<see cref="VanBay"/>). It succeeds when the
+/// facts of the Cartel van each tick, launches the Assaults when due and takes out the spent ones (<see cref="HeistAssaults"/>), and counts the van's bay (<see cref="VehicleCargo"/>). It succeeds when the
 /// van stops at the Drop point with the minimum loaded, fails when the van is destroyed, and its end removes the van, the party's Duffels and the Assaults.
 /// </summary>
 internal sealed class HeistRun : IJobObjective
@@ -147,7 +150,7 @@ internal sealed class HeistRun : IJobObjective
     readonly HeistServer _s;
     readonly ServerCar _van;
     readonly NVec3 _drop;
-    readonly VanBay _bay;
+    readonly VehicleCargo _bay;
     Change<HeistPhase> _told;
     /// <summary>The party's version the van's riders were last set from (the van was put down with the party at the start).</summary>
     Change<int> _riders;
@@ -158,9 +161,11 @@ internal sealed class HeistRun : IJobObjective
         _told.Update(heist.Phase);
         _riders.Update(job.Party.Version);
         Assaults = new HeistAssaults(data.MaxAssaultsAlive);
-        _bay = new VanBay(this, van, data.VanLoadMarginM);
+        _bay = s.Cargo.BayOf(van)!; // the van's bay is a cargo volume like every vehicle's; this Job's van takes only its party's Duffels, and counts them
+        _bay.Restrict(job.Party);
+        _bay.MarginM = data.VanLoadMarginM;
+        _bay.DuffelLoaded += OnLoaded;
         van.Exploded += OnExploded;
-        s.Duffels.Book.AddVolume(_bay);
     }
 
     public Job Job { get; }
@@ -204,6 +209,14 @@ internal sealed class HeistRun : IJobObjective
             if (_s.Ctx.Players.TryGetValue(id, out var c) && !c.IsBot) _s.Ctx.ChatTo(c, ChatLineKind.Info, text);
     }
 
+    /// <summary>A Duffel took a slot in the van's bay: the party hears the milestones (the minimum, the maximum); the tracker line carries the count.</summary>
+    void OnLoaded(Duffel duffel)
+    {
+        var loaded = _bay.Loaded; // counted by the bay itself (the one count): a Duffel taken out lowers it, a reset of the van empties it
+        if (loaded == Heist.Max) Tell($"All {loaded} duffels are loaded: drive the van to the drop point and stop there.");
+        else if (loaded == Heist.Min) Tell($"{loaded} loaded, enough for the drop: drive the van there, or load up to {Heist.Max} for more Respect.");
+    }
+
     /// <summary>The van blew up: the party hears why before the Job fails on its next step (the failure line alone says only that the objective was lost).</summary>
     void OnExploded(ServerCar car, ushort attacker)
     {
@@ -230,46 +243,12 @@ internal sealed class HeistRun : IJobObjective
     public void End(Job job)
     {
         _van.Exploded -= OnExploded;
-        _s.Duffels.Book.RemoveVolume(_bay);
+        _bay.DuffelLoaded -= OnLoaded;
+        _bay.Restrict(null);
         var duffels = _s.Duffels.Book.RemoveParty(Party);
         foreach (var raid in Assaults.TakeAll()) _s.Raids.Remove(raid);
         _s.Vehicles.Remove(_van);
         Goal.End();
         GD.Print($"server: {job} over: {Heist.Phase}, {Heist.Loaded} loaded, {Assaults.Sent} Assault(s); van, {duffels} duffel(s) and crews removed");
-    }
-}
-
-/// <summary>
-/// The Cartel van's bay as the party's cargo volume (docs/cartel.md "Cartel van"): only the party's Duffels, while the van stands and the bay has room (vehicles.json cargo_volume capacity). It keeps
-/// the one count of what went in, raised as each Duffel loads; the vehicle keeps none, so a van put back on the road after a fall out of the world still holds its load and takes no second one.
-/// The party hears the milestones (the minimum, the maximum); the tracker line carries the count.
-/// </summary>
-internal sealed class VanBay : ICargoVolume
-{
-    readonly HeistRun _run;
-    readonly ServerCar _van;
-    readonly float _margin;
-    readonly int _capacity;
-
-    /// <param name="marginM">The bay takes a Duffel this much outside its volume too (van_load_margin_m: the closed rear doors).</param>
-    public VanBay(HeistRun run, ServerCar van, float marginM)
-    {
-        _run = run; _van = van; _margin = marginM;
-        _capacity = CarCargo.Capacity(van);
-    }
-
-    /// <summary>The Duffels loaded so far.</summary>
-    public int Loaded { get; private set; }
-
-    public bool Contains(System.Numerics.Vector3 point) => CarCargo.Contains(_van, point, _margin);
-
-    public bool Accepts(Duffel duffel) => ReferenceEquals(duffel.Party, _run.Party) && !_van.Destroyed && Loaded < _capacity;
-
-    public void Load(Duffel duffel)
-    {
-        Loaded++;
-        var h = _run.Heist;
-        if (Loaded == h.Max) _run.Tell($"All {Loaded} duffels are loaded: drive the van to the drop point and stop there.");
-        else if (Loaded == h.Min) _run.Tell($"{Loaded} loaded, enough for the drop: drive the van there, or load up to {h.Max} for more Respect.");
     }
 }

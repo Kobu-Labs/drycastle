@@ -17,7 +17,7 @@ public interface IDeliveryWorld
 
 /// <summary>
 /// The Delivery (docs/cartel.md "Simple jobs", #494): its Duffel lies on a free spot of the Cartel pallet by the Contact (<see cref="CartelPallet"/>), for the party to pick up; a party player carrying it who stands within <c>radius_m</c> of the Job's Drop point and
-/// holds the interact key <c>hold_seconds</c> (<see cref="InteractHold"/>) hands it over: success. A dropped Duffel lies for any of the party to pick up (the leader's death still fails the Job; so does the Duffel's loss, whatever made it: <see cref="JobFailReason.Objective"/>). A start needs a pallet on the map and a free spot on it (<see cref="CartelWords.Start"/>: "The pallet is full."); the spot is held until the Job ends. The
+/// holds the interact key <c>hold_seconds</c> (<see cref="InteractHold"/>) hands it over: success. A dropped Duffel lies for any of the party to pick up; one loaded in a vehicle is taken out at its open cargo area (<see cref="DuffelBook.TakeOut"/>) and handed over the same way (the leader's death still fails the Job; so does the Duffel's loss, whatever made it: <see cref="JobFailReason.Objective"/>). A start needs a pallet on the map and a free spot on it (<see cref="CartelWords.Start"/>: "The pallet is full."); the spot is held until the Job ends. The
 /// drop point is at least <c>min_contact_m</c> from the Contact and <c>apart_m</c> from every point another Job holds (<see cref="CartelSpots"/>). The Duffel belongs to the Job's party
 /// (<see cref="Job.Party"/>). When it ends, whichever way, its Duffel goes (<see cref="DuffelBook.RemoveParty"/>, which unburdens its carrier).
 /// Numbers in cartel.json <c>jobs.delivery</c>.
@@ -134,11 +134,12 @@ public sealed class DeliveryJobKind : IJobKind
         public void End(Job job) => _k._world.Duffels.RemoveParty(_party);
 
         public string Objective(Job job) => !Present ? ""
+            : Duffel.State == DuffelState.Loaded ? $"Drive the duffel to the drop point, take it out ({JobText.Throw}) and hand it over"
             : Duffel.State != DuffelState.Carried ? (OnPallet ? "Take the duffel from the pallet" : "Pick the duffel up")
             : CarrierAtDrop() != 0 ? $"Hold {JobText.Interact} to hand the duffel over"
             : "Take the duffel to the drop point";
 
-        /// <summary>The pallet spot (the Duffel's own position) until a party player carries it, then the drop point.</summary>
-        public Vector3? Marker(Job job) => !Present ? null : Duffel.State == DuffelState.Carried ? Drop : Duffel.Position;
+        /// <summary>The pallet spot (the Duffel's own position) until a party player carries it or it is loaded in a vehicle (where it lies then is not where it is), then the drop point.</summary>
+        public Vector3? Marker(Job job) => !Present ? null : Duffel.State is DuffelState.Carried or DuffelState.Loaded ? Drop : Duffel.Position;
     }
 }
