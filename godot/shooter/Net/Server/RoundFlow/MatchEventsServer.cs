@@ -1,9 +1,10 @@
 using Godot;
+using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Match;
 
 namespace Drycastle.Shooter.Net.Server.RoundFlow;
 
-/// <summary>The match's events on the server: the order is the match's, this is the table of what each one sets off. A round's end and start, a player's life (<see cref="LifeEvents"/>) and the scoreboard (<see cref="ScoreboardServer"/>).</summary>
+/// <summary>The match's events on the server: the order is the match's, this is the table of what each one sets off. A round's end and start, a player's life (<see cref="LifeEvents"/>), the scoreboard (<see cref="ScoreboardServer"/>) and a squad's new leader (told to the squad).</summary>
 internal sealed class MatchEventsServer
 {
     readonly ServerContext _ctx;
@@ -39,6 +40,9 @@ internal sealed class MatchEventsServer
             case PlayerTeamChanged tc: _life.TeamChanged(tc); break;
             case TargetKilled tk: _targetKilled(tk); break;
             case PlayerDied d: _life.Died(d); break;
+            case SquadLeaderChanged lc: // #494: the squad hears who leads it now
+                foreach (var (id, text) in SquadRules.LeaderTold(_ctx.Match, lc)) if (_ctx.Players.TryGetValue(id, out var c)) _ctx.ChatTo(c, ChatLineKind.Info, text);
+                break;
         }
     }
 

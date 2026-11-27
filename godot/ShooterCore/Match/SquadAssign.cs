@@ -103,6 +103,21 @@ public static class SquadRules
         if (match.Get(id) is not { } me || me.Team == Teams.None) return new[] { "Join a team first: a squad is part of a team." };
         var squads = match.SquadsOf(me.Team);
         if (squads.Count == 0) return new[] { "Your team has no squads. /squad create [name] starts one." };
-        return squads.Select((s, i) => $"{i + 1}. {match.SquadNameOf(s)} ({match.SquadMembers(s).Count}/{Squads.MaxMembers}): {string.Join(", ", match.SquadMembers(s).Select(p => p.Name))}{(s == me.Squad ? " (yours)" : "")}").ToList();
+        return squads.Select((s, i) =>
+        {
+            var members = match.SquadMembers(s); // the leader first
+            var names = members.Select(p => p.Id == match.SquadLeader(s) ? $"{p.Name} (leader)" : p.Name);
+            return $"{i + 1}. {match.SquadNameOf(s)} ({members.Count}/{Squads.MaxMembers}): {string.Join(", ", names)}{(s == me.Squad ? " (yours)" : "")}";
+        }).ToList();
+    }
+
+    /// <summary>
+    /// Who is told what when a squad's leader changed (#494): a handover (the leader left) tells the members left, the new leader in their own words. Creation and a squad that is gone say nothing
+    /// (the creator's own answer and the leaver's already do).
+    /// </summary>
+    public static IReadOnlyList<(ushort Id, string Text)> LeaderTold(MatchSim match, SquadLeaderChanged e)
+    {
+        if (e.From == 0 || e.To == 0 || match.Get(e.To) is not { } leader) return Array.Empty<(ushort, string)>();
+        return match.SquadMembers(e.Squad).Select(p => (p.Id, p.Id == e.To ? "You lead the squad now." : $"{leader.Name} leads the squad now.")).ToList();
     }
 }

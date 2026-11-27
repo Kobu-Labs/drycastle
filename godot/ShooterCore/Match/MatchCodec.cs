@@ -34,6 +34,7 @@ public sealed record DeathMsg(ushort Victim, ushort Killer, float RespawnDelay, 
 ///   MatchState: u8 phase, f32 timeRemaining, u8 nWinners, u16*n ids, u8 nRows, rows (u16 id, u8 nameLen, name, u16 kills, u16 deaths, u16 ping)
 ///     then an optional team tail (older messages end after the rows): u8 mode, u16 scoreA, u16 scoreB, u8 per row in row order (bits 0-1 team, bit 2 sandbox, bit 3 bot)
 ///       then an optional squad tail (#379; older messages end after the team tail): u8 squad per row in row order, u8 nSquads, squads (u8 id, u8 nameLen, name)
+///         then an optional leader tail (#494; older messages end after the squad tail): u16 leader per squad in squad order
 ///   Kill: u16 killer, u16 victim, u8 weapon          (killer == victim: suicide)
 ///   Spawn: u16 id, f32 x, y, z, f32 protectionSeconds
 ///   Death: u16 victim, u16 killer, f32 respawnDelay
@@ -83,6 +84,7 @@ public static class MatchCodec
             if (nb.Length > MaxSquadNameBytes) nb = nb[..MaxSquadNameBytes];
             w.Write(q.Id); w.Write((byte)nb.Length); w.Write(nb);
         }
+        foreach (var q in squads) w.Write(q.Leader);
         return ms.ToArray();
     }
 
@@ -114,6 +116,8 @@ public static class MatchCodec
                     for (var i = 0; i < rows.Count; i++) rows[i] = rows[i] with { Squad = r.ReadByte() };
                     squads = new List<SquadName>();
                     for (int i = 0, n = r.ReadByte(); i < n; i++) squads.Add(new SquadName(r.ReadByte(), ReadName(r)));
+                    if (r.BaseStream.Position < r.BaseStream.Length) // the leader tail; absent from older servers
+                        for (var i = 0; i < squads.Count; i++) squads[i] = squads[i] with { Leader = r.ReadUInt16() };
                 }
             }
             return new MatchStateMsg(phase, t, winners, rows, mode, scoreA, scoreB, squads);
@@ -212,6 +216,14 @@ public sealed class ClientMatchState
         foreach (var q in Squads) if (q.Id == squad) return q.Name;
         return "";
     }
+    /// <summary>The leader of a squad (#494), 0 for none or an older server.</summary>
+    public ushort LeaderOf(byte squad)
+    {
+        foreach (var q in Squads) if (q.Id == squad) return q.Leader;
+        return 0;
+    }
+    /// <summary>The player leads their squad (false in no squad).</summary>
+    public bool IsSquadLeader(ushort id) => SquadOf(id) is var s && s != 0 && LeaderOf(s) == id;
     /// <summary>Two different players in the same squad (a squad is within a team, so they are friends too).</summary>
     public bool AreSquadMates(ushort a, ushort b) => IsTeamMode && a != b && SquadOf(a) is var s && s != 0 && s == SquadOf(b);
     /// <summary>Two different players on the same real team (never in free-for-all).</summary>

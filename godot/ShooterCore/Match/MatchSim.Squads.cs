@@ -21,27 +21,49 @@ public enum SquadResult : byte
     NotInSquad,
 }
 
-/// <summary>A squad as the scoreboard lists it: id (never 0) and name. Members are the rows that carry the id.</summary>
-public readonly record struct SquadName(byte Id, string Name);
+/// <summary>A squad as the scoreboard lists it: id (never 0), name and leader (#494; 0 from an older server). Members are the rows that carry the id.</summary>
+public readonly record struct SquadName(byte Id, string Name, ushort Leader = 0);
 
 /// <summary>
-/// Squads (#379, GLOSSARY "Squad"): an opt-in tag inside a team, kept on <see cref="MatchPlayer.Squad"/>. Up to <see cref="Squads.MaxMembers"/> humans, no leader, one squad per player
+/// A squad's leader changed (#494): <paramref name="From"/> 0 when the squad was just created, <paramref name="To"/> 0 when it is gone (its last member left, or a mode change
+/// cleared every squad). Otherwise the leader left and the longest-standing member took over. Raised at once, inside the call that changed the membership.
+/// </summary>
+public sealed record SquadLeaderChanged(byte Squad, ushort From, ushort To) : MatchEvent;
+
+/// <summary>
+/// Squads (#379, GLOSSARY "Squad"): an opt-in tag inside a team, kept on <see cref="MatchPlayer.Squad"/>. Up to <see cref="Squads.MaxMembers"/> humans, one squad per player
 /// (joining or creating leaves the old one), a squad with no member is gone. Team deathmatch only; a player sees and joins the own team's squads. Friend logic (<see cref="AreFriends"/>),
 /// scoring and colours do not look at squads. A team change, a mode change and leaving the match clear a membership.
+/// The leader (#494, ADR 0045 §5) is the longest-standing member (<see cref="MatchPlayer.SquadSince"/>): the creator, then whoever joined first after them.
+/// It is derived, never stored, so every way out of a squad hands it on; <see cref="SquadLeaderChanged"/> says when it moved.
 /// </summary>
 public sealed partial class MatchSim
 {
     readonly SortedDictionary<byte, string> _squadNames = new();
     byte _lastSquad;
+    /// <summary>Counts joins (creating counts), so <see cref="MatchPlayer.SquadSince"/> orders a squad's members by seniority.</summary>
+    ulong _squadJoins;
 
     /// <summary>Every squad, in id order. Rebuilt for the scoreboard message.</summary>
-    public IReadOnlyList<SquadName> SquadList => _squadNames.Select(kv => new SquadName(kv.Key, kv.Value)).ToList();
+    public IReadOnlyList<SquadName> SquadList => _squadNames.Select(kv => new SquadName(kv.Key, kv.Value, SquadLeader(kv.Key))).ToList();
 
     /// <summary>The name of a squad, "" when there is none by that id.</summary>
     public string SquadNameOf(byte squad) => _squadNames.GetValueOrDefault(squad, "");
 
-    /// <summary>The members of a squad, in id order.</summary>
-    public IReadOnlyList<MatchPlayer> SquadMembers(byte squad) => squad == 0 ? Array.Empty<MatchPlayer>() : _players.Values.Where(p => p.Squad == squad).ToList();
+    /// <summary>The members of a squad, longest-standing first (so the leader first).</summary>
+    public IReadOnlyList<MatchPlayer> SquadMembers(byte squad) => squad == 0 ? Array.Empty<MatchPlayer>() : _players.Values.Where(p => p.Squad == squad).OrderBy(p => p.SquadSince).ToList();
+
+    /// <summary>The leader of a squad (#494): its longest-standing member. 0 when there is no such squad.</summary>
+    public ushort SquadLeader(byte squad)
+    {
+        if (squad == 0) return 0;
+        MatchPlayer? best = null;
+        foreach (var p in _players.Values) if (p.Squad == squad && (best == null || p.SquadSince < best.SquadSince)) best = p;
+        return best?.Id ?? 0;
+    }
+
+    /// <summary>The player leads their squad. False for someone in no squad (a solo player is not a leader).</summary>
+    public bool IsSquadLeader(ushort id) => _players.TryGetValue(id, out var p) && p.Squad != 0 && SquadLeader(p.Squad) == id;
 
     /// <summary>The squads of a team, in id order (empty outside team deathmatch).</summary>
     public IReadOnlyList<byte> SquadsOf(byte team) =>
@@ -74,7 +96,8 @@ public sealed partial class MatchSim
         if (next == 0) return SquadResult.Full;
         DropSquad(p);
         _squadNames[next] = clean;
-        p.Squad = squad = next;
+        Enter(p, squad = next);
+        Emit(new SquadLeaderChanged(next, 0, p.Id));
         Emit(new ScoreboardChanged());
         return SquadResult.Ok;
     }
@@ -89,7 +112,7 @@ public sealed partial class MatchSim
         if (members.Count > 0 && members[0].Team != p.Team) return SquadResult.WrongTeam;
         if (members.Count >= Squads.MaxMembers) return SquadResult.Full;
         DropSquad(p);
-        p.Squad = squad;
+        Enter(p, squad); // the newest member: never the leader of a squad that has one
         Emit(new ScoreboardChanged());
         return SquadResult.Ok;
     }
@@ -104,19 +127,34 @@ public sealed partial class MatchSim
         return SquadResult.Ok;
     }
 
-    /// <summary>Takes the player out of their squad (no event), and the squad off the books when nobody is left in it. The callers that change a player's team or remove them use this.</summary>
+    void Enter(MatchPlayer p, byte squad)
+    {
+        p.Squad = squad;
+        p.SquadSince = ++_squadJoins;
+    }
+
+    /// <summary>
+    /// Takes the player out of their squad (no scoreboard event), and the squad off the books when nobody is left in it. The callers that change a player's team or remove them use this.
+    /// A leader who goes hands the squad on: <see cref="SquadLeaderChanged"/> to the next-longest-standing member, or to 0 when the squad is gone.
+    /// </summary>
     void DropSquad(MatchPlayer p)
     {
         var squad = p.Squad;
         if (squad == 0) return;
+        var led = SquadLeader(squad) == p.Id;
         p.Squad = 0;
-        if (!_players.Values.Any(o => o.Squad == squad)) _squadNames.Remove(squad);
+        p.SquadSince = 0;
+        var next = SquadLeader(squad);
+        if (next == 0) _squadNames.Remove(squad);
+        if (led) Emit(new SquadLeaderChanged(squad, p.Id, next));
     }
 
     void ClearSquads()
     {
-        foreach (var p in _players.Values) p.Squad = 0;
+        var gone = _squadNames.Keys.Select(s => (s, SquadLeader(s))).ToList();
+        foreach (var p in _players.Values) { p.Squad = 0; p.SquadSince = 0; }
         _squadNames.Clear();
+        foreach (var (s, leader) in gone) Emit(new SquadLeaderChanged(s, leader, 0));
     }
 
     /// <summary>The next unused id after the last one handed out (ids are never 0); 0 when all 255 are in use.</summary>
