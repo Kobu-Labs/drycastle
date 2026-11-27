@@ -15,6 +15,8 @@ internal interface IPlantationFill
 {
     /// <summary>The seconds this player's hold takes when the Job owns it, or null: the plantation as always (High).</summary>
     double? HoldSecondsFor(ServerClient c);
+    /// <summary>The Job owns this player's hold but it cannot complete now (a Harvest player who carries a Duffel, or whose harvest is all filled): the hold does not count at all, so neither a Duffel nor High.</summary>
+    bool Blocks(ServerClient c);
     /// <summary>The player's hold completed (once per hold).</summary>
     void Completed(ServerClient c);
 }
@@ -51,7 +53,7 @@ internal sealed class PlantationServer
     /// </summary>
     public void Use(ServerClient c, bool useDown)
     {
-        var counts = !c.IsBot && c.Joined && _areas.ZonePolygons.Has(PlantationRules.Kind) && HoldCounts(c);
+        var counts = !c.IsBot && c.Joined && _areas.ZonePolygons.Has(PlantationRules.Kind) && HoldCounts(c) && Fill?.Blocks(c) != true;
         var fill = counts ? Fill?.HoldSecondsFor(c) : null; // a Harvest's player fills a Duffel instead
         if (!c.PlantHold.Tick(useDown, counts, 1.0 / Wire.TickRate, fill ?? _data.HoldSeconds)) return;
         if (fill != null) Fill!.Completed(c);

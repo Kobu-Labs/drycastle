@@ -6,7 +6,7 @@ namespace Drycastle.Shooter.Thieves;
 
 /// <summary>
 /// What a member wears, each a <see cref="BoneAttachment3D"/> on the skeleton (docs/events/thieves/08, thieves.json <c>gang.view.dress</c>): the Enforcer's pipe in the right hand, a lit cigarette at the mouth of one
-/// member in three, the Gang boss's gold chain at the neck, and the speaker on the hip (put on by <see cref="MountSpeaker"/> when the audio says the member has one). Offsets are in the rest pose's axes from the bone's
+/// member in three, the Thieves' Gang boss's gold chain at the neck (not the Rival dealer's), and the speaker on the hip (put on by <see cref="MountSpeaker"/> when the audio says the member has one). Offsets are in the rest pose's axes from the bone's
 /// origin, so a bone's own roll does not matter; the pipe's grip alone is in its hand bone's frame (the pack's weapon convention). A prop whose file is missing is left out (the pipe is a stick then).
 /// </summary>
 public sealed partial class GangMemberView
@@ -38,7 +38,7 @@ public sealed partial class GangMemberView
         var d = _view.Dress;
         if (GangLook.Smokes(_view, _look) && SyntyLib.Instance(d.Cigarette.Model, d.Cigarette.Atlas) is { } cig)
             Mount(d.Cigarette.Bone, RestAt(d.Cigarette.Bone, d.Cigarette.Offset, d.Cigarette.RotationDeg), cig, "Cigarette");
-        if (_kind == GangMemberKind.GangBoss && _chainModel != "" && ModelLib.Instance(_chainModel) is { } chain)
+        if (_kind == GangMemberKind.GangBoss && !_rival && _chainModel != "" && ModelLib.Instance(_chainModel) is { } chain) // the Rival dealer leaves no chain, so he wears none
         {
             chain.Scale = Vector3.One * d.Chain.Scale;
             Mount(d.Chain.Bone, RestAt(d.Chain.Bone, d.Chain.Offset, d.Chain.RotationDeg), chain, "Chain");

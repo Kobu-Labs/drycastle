@@ -35,11 +35,13 @@
     }
   },
   // Client only. models: a Gunman's body (assets-private/synty/glb), by look number; the atlas is the Thieves' pick (thieves.json gang.view.atlases). gunman_color: its capsule without the pack.
+  // tint: multiplies every Rival member's body (the atlas; the capsule of an Enforcer or dealer), so the crew reads apart from the Thieves.
   // grip: the gun in the right hand (position, rotation x y z w in the hand bone's frame; the model turned and shifted onto it), the pipe's grip to start with: nudge it here.
   // aim: the right hand forward at the shoulder while it aims and fires (the carry overlay's arm IK: rest-pose axes, its right hand is -X, up +Y, forward +Z).
   "view": {
     "models": ["gang_enforcer_01", "gang_thief_01"],
     "gunman_color": "#3b4656",
+    "tint": "#8aa6e0",
     "grip": { "bone": "Hand_R", "position": [-0.0879, 0.0391, 0.0163], "rotation": [-0.4785, -0.3531, 0.3529, 0.7224], "model_rotation_deg": [0, 0, 0], "model_offset": [0, 0, 0] },
     "aim": { "right": [-0.2, 1.4, 0.45], "elbow_down": 0.4, "elbow_out": 0.3, "hand_roll_deg": 0 }
   }

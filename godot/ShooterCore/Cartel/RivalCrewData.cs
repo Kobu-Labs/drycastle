@@ -43,6 +43,7 @@ public sealed class RivalCrewFile : IVersioned
         if (View.Models.Count == 0) throw new DataFileException($"{F}: view.models lists at least one model");
         if (View.Grip.Position.Length != 3 || View.Grip.Rotation.Length != 4 || View.Grip.ModelRotationDeg.Length != 3 || View.Grip.ModelOffset.Length != 3)
             throw new DataFileException($"{F}: view.grip: position 3 numbers, rotation 4, model_rotation_deg 3, model_offset 3");
+        if (!System.Text.RegularExpressions.Regex.IsMatch(View.Tint, "^#[0-9a-fA-F]{6}$")) throw new DataFileException($"{F}: view.tint is an html colour (#rrggbb)");
         if (View.Aim.Right is { Length: not 3 } || View.Aim.Left is { Length: not 3 }) throw new DataFileException($"{F}: view.aim: right and left are three numbers");
         return this;
     }
@@ -81,11 +82,16 @@ public sealed class RivalEnforcer
     public float Hits { get; set; } = 8.75f;
 }
 
-/// <summary>How a Gunman is drawn (client only): its models (by look number, as the Thieves' kinds), its capsule colour without the pack, the gun's grip in the right hand, and the arm pose while it aims and fires.</summary>
+/// <summary>
+/// How the Rival crew is drawn (client only): the Gunman's models (by look number, as the Thieves' kinds), its capsule colour without the pack, the gun's grip in the right hand, the arm pose while
+/// it aims and fires, and the tint every member's body takes so the crew reads apart from the Thieves (the client knows a Rival member by bit 7 of the hp byte, <see cref="GangRules.RivalOf"/>).
+/// </summary>
 public sealed class RivalCrewView
 {
     public List<string> Models { get; set; } = new() { "gang_enforcer_01", "gang_thief_01" };
     public string GunmanColor { get; set; } = "#3b4656";
+    /// <summary>Multiplies the atlas of every Rival member's body (html colour), and the capsule colour of its Enforcers and Gang bosses without the pack.</summary>
+    public string Tint { get; set; } = "#8aa6e0";
     public GangGrip Grip { get; set; } = new();
     /// <summary>The right hand forward at the shoulder while it aims and fires (the carry overlay's arm IK, <see cref="CarryPoseData"/>: rest-pose axes, its right hand is -X, forward +Z).</summary>
     public CarryPoseData Aim { get; set; } = new() { Right = new[] { -0.2f, 1.4f, 0.45f }, ElbowDown = 0.4f, ElbowOut = 0.3f };

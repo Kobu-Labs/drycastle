@@ -27,6 +27,7 @@ public sealed partial class GangMemberView : Node3D
     readonly GangMemberKind _kind;
     readonly ushort _look;
     readonly string _chainModel;
+    readonly bool _rival;
     readonly Node3D _pivot = new() { Name = "Pivot" };   // scaled and leaned: the body hangs under it
     Node3D? _model;
     Skeleton3D? _skeleton;
@@ -37,17 +38,21 @@ public sealed partial class GangMemberView : Node3D
     bool _femn;
     Tween? _lean;
 
-    GangMemberView(ThievesFile data, GangMemberKind kind, ushort look, string chainModel)
+    GangMemberView(ThievesFile data, GangMemberKind kind, ushort look, string chainModel, bool rival)
     {
-        _data = data; _cfg = data.Gang; _view = data.Gang.View; _kind = kind; _look = look; _chainModel = chainModel;
+        _data = data; _cfg = data.Gang; _view = data.Gang.View; _kind = kind; _look = look; _chainModel = chainModel; _rival = rival;
     }
 
     public GangMemberKind Kind => _kind;
 
-    /// <summary>A body for a member of <paramref name="kind"/> and look number <paramref name="look"/>. <paramref name="chainModel"/>: the model path of the Gold chain Item (items.json), which the Gang boss wears.</summary>
-    public static GangMemberView Make(ThievesFile data, GangMemberKind kind, ushort look, string chainModel = "")
+    /// <summary>
+    /// A body for a member of <paramref name="kind"/> and look number <paramref name="look"/>. <paramref name="chainModel"/>: the model path of the Gold chain Item (items.json), which the Thieves' Gang
+    /// boss wears. <paramref name="rival"/>: a member of the Rival crew (<see cref="GangRules.RivalOf"/>), tinted rival_crew.json <c>view.tint</c> so it reads apart from the Thieves, and its Gang boss
+    /// (the Rival dealer, who leaves no chain) wears none.
+    /// </summary>
+    public static GangMemberView Make(ThievesFile data, GangMemberKind kind, ushort look, string chainModel = "", bool rival = false)
     {
-        var v = new GangMemberView(data, kind, look, chainModel);
+        var v = new GangMemberView(data, kind, look, chainModel, rival);
         v.Build();
         return v;
     }
@@ -59,6 +64,7 @@ public sealed partial class GangMemberView : Node3D
         var file = GangLook.Model(_view, _kind, _look);
         _femn = GangLook.IsFemn(_view, file);
         _model = SyntyLib.Instance(file, GangLook.Atlas(_view, _look));
+        if (_model != null && _rival) Tint(_model, Color.FromHtml(_data.RivalCrew.View.Tint)); // before the dress: only the body takes the crew's colour
         if (_model != null) BuildModel();
         else BuildCapsule();
         if (_kind == GangMemberKind.Enforcer) AddPipe();
@@ -102,6 +108,7 @@ public sealed partial class GangMemberView : Node3D
         var v = _view;
         var h = v.CapsuleHeightM;
         var colour = Color.FromHtml(_kind switch { GangMemberKind.Enforcer => v.EnforcerColor, GangMemberKind.GangBoss => v.GangBossColor, GangMemberKind.Gunman => _data.RivalCrew.View.GunmanColor, _ => v.ThiefColor });
+        if (_rival && _kind != GangMemberKind.Gunman) colour *= Color.FromHtml(_data.RivalCrew.View.Tint); // a Rival Enforcer or dealer is not the Thieves' (the dealer not gold)
         var mat = new StandardMaterial3D { AlbedoColor = colour, Roughness = 0.9f };
         _capsule = new MeshInstance3D { Name = "Capsule", Mesh = new CapsuleMesh { Radius = 0.3f, Height = h }, MaterialOverride = mat, Position = new Vector3(0, h / 2, 0) };
         _pivot.AddChild(_capsule);
@@ -112,6 +119,25 @@ public sealed partial class GangMemberView : Node3D
             Position = new Vector3(0, h * 0.82f, -0.3f),
         };
         _pivot.AddChild(nose);
+    }
+
+    /// <summary>The atlas materials tinted for the Rival crew, one per atlas and tint (every Rival member of an atlas shares it).</summary>
+    static readonly Dictionary<(Material, Color), StandardMaterial3D> Tinted = new();
+
+    /// <summary>Multiplies the albedo of every surface of <paramref name="model"/> by <paramref name="tint"/> (the atlas stays: the pack's look, in the crew's colour).</summary>
+    static void Tint(Node3D model, Color tint)
+    {
+        foreach (var m in model.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>())
+        {
+            if (m.MaterialOverride is not StandardMaterial3D atlas) continue;
+            if (!Tinted.TryGetValue((atlas, tint), out var mat))
+            {
+                mat = (StandardMaterial3D)atlas.Duplicate();
+                mat.AlbedoColor = atlas.AlbedoColor * tint;
+                Tinted[(atlas, tint)] = mat;
+            }
+            m.MaterialOverride = mat;
+        }
     }
 
     /// <summary>

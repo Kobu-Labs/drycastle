@@ -46,6 +46,10 @@ public class HeistTests
         Assert.Contains("max_duffels is below", Assert.Throws<DataFileException>(() => d.Validate("jobs.harvest", 5)).Message);
         d = new HarvestData { MaxCrew = 16 };
         Assert.Contains("max_crew", Assert.Throws<DataFileException>(() => d.Validate("jobs.harvest", 5)).Message);
+        d = new HarvestData { FillHoldSeconds = 0 };
+        Assert.Contains("fill_hold_seconds", Assert.Throws<DataFileException>(() => d.Validate("jobs.harvest", 5)).Message);
+        d = new HarvestData { AreaMarginM = float.NaN };
+        Assert.Contains("area_margin_m", Assert.Throws<DataFileException>(() => d.Validate("jobs.harvest", 5)).Message);
     }
 
     [Fact]

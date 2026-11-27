@@ -131,7 +131,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
     public GangMember? Add(GangMemberKind kind, Vector3 at, float yaw)
     {
         if (_ids.Allocate() is not { } hit) { Log?.Invoke("gang: every hit id is in use, no member spawned"); return null; }
-        var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post, Work = _work };
+        var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post, Work = _work, Rival = Crew == GangCrew.RivalCrew };
         member.Died += OnDied;
         member.Boarded += OnBoarded;
         if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; member.Boarded -= OnBoarded; _ids.Release(hit); return null; }
