@@ -311,13 +311,15 @@ public struct DuffelThrowKey
     }
 }
 
-/// <summary>Why the server refused a Duffel action, sent to the player (<see cref="EventKind.DuffelNotice"/>); the client words it.</summary>
+/// <summary>Why the server refused a Duffel action or a seat in the Cartel van, sent to the player (<see cref="EventKind.DuffelNotice"/>); the client words it (a toast).</summary>
 public enum DuffelNotice : byte
 {
     /// <summary>A carrier tried to take a vehicle seat.</summary>
     NoSeat = 0,
     /// <summary>The player carries one already (one per player).</summary>
     CarryingOne = 1,
+    /// <summary>A player outside a Heist's crew tried to get into its Cartel van (a reserved vehicle, <see cref="Vehicles.VehicleSeat.Reserve"/>).</summary>
+    VanReserved = 2,
 }
 
 /// <summary>The Duffel events' payloads: a notice (u8 <see cref="DuffelNotice"/>) and the Duffel in reach (u16 world entity id, 0 none).</summary>
@@ -328,7 +330,7 @@ public static class DuffelCodec
     public static bool TryDecodeNotice(ReadOnlySpan<byte> p, out DuffelNotice notice)
     {
         notice = default;
-        if (p.Length < 1 || p[0] > (byte)DuffelNotice.CarryingOne) return false;
+        if (p.Length < 1 || p[0] > (byte)DuffelNotice.VanReserved) return false;
         notice = (DuffelNotice)p[0];
         return true;
     }

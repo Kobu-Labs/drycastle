@@ -331,6 +331,8 @@ public class DuffelTests
     {
         Assert.True(DuffelCodec.TryDecodeNotice(DuffelCodec.EncodeNotice(DuffelNotice.NoSeat), out var n));
         Assert.Equal(DuffelNotice.NoSeat, n);
+        Assert.True(DuffelCodec.TryDecodeNotice(DuffelCodec.EncodeNotice(DuffelNotice.VanReserved), out n));
+        Assert.Equal(DuffelNotice.VanReserved, n);
         Assert.False(DuffelCodec.TryDecodeNotice(new byte[] { 200 }, out _));
         Assert.True(DuffelCodec.TryDecodeReach(DuffelCodec.EncodeReach(513), out var id));
         Assert.Equal((ushort)513, id);

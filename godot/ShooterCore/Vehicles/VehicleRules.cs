@@ -183,9 +183,6 @@ public sealed class VehicleSeat
     /// <summary>Whether <paramref name="player"/> may take a seat: anybody unless the vehicle is reserved, then only the reserved riders.</summary>
     public bool Admits(ushort player) => player != 0 && (_reserved == null || _reserved.Contains(player));
 
-    /// <summary>What a player who is not admitted is told (the interact key on a reserved vehicle).</summary>
-    public const string RefusedText = "This vehicle is reserved for its crew.";
-
     public bool IsBlocked(int seat) => _blocked[seat];
     public void Block(int seat) => _blocked[seat] = true;
     public void Unblock(int seat) => _blocked[seat] = false;
