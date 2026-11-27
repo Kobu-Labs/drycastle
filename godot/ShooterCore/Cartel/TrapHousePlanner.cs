@@ -24,7 +24,7 @@ public sealed record TrapHouseDressing(string House, IReadOnlyList<TrapProp> Pro
 
 /// <summary>
 /// Dresses a hollow house as a Trap house (#496, ADR 0046), pure: from its floor plan (rooms, room types, doors, links) and a seed, the props of trap_house.json by room type, the safe,
-/// the posted defenders' spots and the Duffel spots on the tables. The same house, data and seed give the same dressing. Nothing stands within <c>door_clear_m</c> of a doorway, a
+/// the posted defenders' spots (<see cref="DefenderPosts"/>) and the Duffel spots on the tables. The same house, data and seed give the same dressing. Nothing stands within <c>door_clear_m</c> of a doorway, a
 /// door or garage door, or a link between rooms, so every way through the house stays open; props stay inside their room and apart. A prop with no room for it is left out.
 /// </summary>
 public static class TrapHousePlanner
@@ -45,8 +45,7 @@ public static class TrapHousePlanner
         readonly Random _rng;
         readonly List<(Vector2 A, Vector2 B)> _openings;
         readonly List<Placed> _placed = new();
-        readonly Dictionary<string, int> _depth = new();
-        readonly Dictionary<string, Vector2> _entrance = new();
+        readonly IReadOnlyDictionary<string, int> _depth;
         /// <summary>The openings near the room being dressed (within its box and the clearance).</summary>
         List<(Vector2 A, Vector2 B)> _near = new();
 
@@ -54,8 +53,8 @@ public static class TrapHousePlanner
         {
             _house = house; _data = data; _c = data.Clearance;
             _rng = new Random(unchecked((int)Hash(house.Id) ^ seed * 16777619));
-            _openings = house.Doors.Select(d => (d.A, d.B)).Concat(house.Rooms.SelectMany(r => r.Links.Select(l => (l.P, l.Q)))).ToList();
-            Ways();
+            _openings = Openings(house);
+            _depth = DefenderPosts.Ways(house).Depth;
         }
 
         public TrapHouseDressing Dress()
@@ -81,16 +80,24 @@ public static class TrapHousePlanner
                 var right = new Vector2(p.Front.Y, -p.Front.X);
                 foreach (var s in k.DuffelSpots) duffels.Add(new DuffelSpot(_house.ToGodot(p.Centre + right * s[0] + p.Front * s[1], k.Up), Yaw(p.Front), k.Duffel));
             }
-            return new TrapHouseDressing(_house.Id, props, Posts(), safe, duffels);
+            var footprints = _placed.Where(p => !p.High).Select(p => new PropFootprint(p.Centre, p.Radius, p.Foot)).ToList();
+            return new TrapHouseDressing(_house.Id, props, DefenderPosts.Plan(_house, footprints, _data, _rng), safe, duffels);
         }
 
-        /// <summary>The safe against a wall of the first room type of safe.rooms that has room, the deepest room first; placed before anything else.</summary>
+        /// <summary>
+        /// The safe against a wall of the first room type of safe.rooms that has room, the deepest room first; placed before anything else. Its footprint for the rest of the dressing
+        /// is the floor its open door pays out on too (<see cref="SafeKeepOut"/>), so the cash Duffels never lie in a wall or under a prop.
+        /// </summary>
         SafeSpot? Safe()
         {
             var kind = _data.KindOf(_data.Safe.Prop);
+            var keepOut = SafeKeepOut(_data);
             foreach (var room in _data.Safe.Rooms.SelectMany(t => _house.Rooms.Where(r => r.Type == t).OrderByDescending(r => _depth.GetValueOrDefault(r.Id))))
             {
-                if (Place(room, kind, TrapPlace.Wall) is not { } s) continue;
+                Near(room);
+                var spots = Wall(room, _data.Props[kind], kind, false, keepOut);
+                if (spots.Count == 0) continue;
+                var s = spots[_rng.Next(spots.Count)];
                 _placed.Add(s);
                 var k = _data.Props[kind];
                 return new SafeSpot(_house.ToGodot(s.Centre, 0), Yaw(s.Front), _house.ToGodot(s.Centre + s.Front * (k.Depth / 2 + _data.Safe.StandM), 0), room.Id);
@@ -120,13 +127,7 @@ public static class TrapHousePlanner
             return spots.Count == 0 ? null : spots[_rng.Next(spots.Count)];
         }
 
-        void Near(PlanRoom room)
-        {
-            var poly = room.Polygon;
-            var m = _c.DoorClearM + _c.TagDoorGapM;
-            float x0 = poly.Min(p => p.X) - m, x1 = poly.Max(p => p.X) + m, y0 = poly.Min(p => p.Y) - m, y1 = poly.Max(p => p.Y) + m;
-            _near = _openings.Where(o => MathF.Max(o.A.X, o.B.X) >= x0 && MathF.Min(o.A.X, o.B.X) <= x1 && MathF.Max(o.A.Y, o.B.Y) >= y0 && MathF.Min(o.A.Y, o.B.Y) <= y1).ToList();
-        }
+        void Near(PlanRoom room) => _near = NearOpenings(_openings, room.Polygon, _c.DoorClearM + _c.TagDoorGapM);
 
         bool Free(Vector2 centre, float radius, Vector2[] foot)
         {
@@ -137,20 +138,25 @@ public static class TrapHousePlanner
             return true;
         }
 
-        List<Placed> Wall(PlanRoom room, TrapPropKind k, int kind, bool high)
+        /// <param name="keepOut">
+        /// The floor the prop holds, when more than its own footprint (across, depth from the wall; the prop stands at its back, in the middle): it must lie in the room and free, and stays
+        /// the prop's footprint for what comes after.
+        /// </param>
+        List<Placed> Wall(PlanRoom room, TrapPropKind k, int kind, bool high, Vector2? keepOut = null)
         {
             var list = new List<Placed>();
             var poly = room.Polygon;
             var ccw = PlanGeometry.SignedArea(poly) > 0;
-            var radius = new Vector2(k.Across, k.Depth).Length() / 2;
+            var (across, depth) = keepOut is { } ko ? (MathF.Max(ko.X, k.Across), MathF.Max(ko.Y, k.Depth)) : (k.Across, k.Depth);
+            var radius = new Vector2(across / 2, MathF.Max(k.Depth / 2, depth - k.Depth / 2)).Length(); // from the prop's centre to the far corners of what it holds
             for (int i = 0, j = poly.Length - 1; i < poly.Length; j = i++)
             {
                 var a = poly[j]; var b = poly[i];
                 var len = Vector2.Distance(a, b);
-                if (len < k.Across + 2 * _c.WallGapM) continue;
+                if (len < across + 2 * _c.WallGapM) continue;
                 var dir = (b - a) / len;
                 var inward = ccw ? new Vector2(-dir.Y, dir.X) : new Vector2(dir.Y, -dir.X);
-                for (var t = k.Across / 2 + _c.WallGapM; t <= len - k.Across / 2 - _c.WallGapM + 1e-4f; t += _c.StepM)
+                for (var t = across / 2 + _c.WallGapM; t <= len - across / 2 - _c.WallGapM + 1e-4f; t += _c.StepM)
                 {
                     if (high)
                     {
@@ -158,7 +164,7 @@ public static class TrapHousePlanner
                         continue;
                     }
                     var centre = a + dir * t + inward * (_c.WallGapM + k.Depth / 2);
-                    var foot = PlanGeometry.Rect(centre, inward, k.Across, k.Depth);
+                    var foot = PlanGeometry.Rect(a + dir * t + inward * (_c.WallGapM + depth / 2), inward, across, depth);
                     if (PlanGeometry.Within(foot, poly) && Free(centre, radius, foot)) list.Add(new Placed(kind, centre, inward, foot, radius, room.Id, false));
                 }
             }
@@ -185,86 +191,46 @@ public static class TrapHousePlanner
             var fronts = new[] { along, new Vector2(-along.Y, along.X) };
             var radius = new Vector2(k.Across, k.Depth).Length() / 2;
             var halfMin = MathF.Min(k.Across, k.Depth) / 2;
-            float x0 = poly.Min(p => p.X), x1 = poly.Max(p => p.X), y0 = poly.Min(p => p.Y), y1 = poly.Max(p => p.Y);
-            for (var x = x0; x <= x1; x += _c.StepM)
-                for (var y = y0; y <= y1; y += _c.StepM)
+            foreach (var centre in GridSpots(poly, _c.StepM, _c.CentreWallGapM + halfMin)) // nearer the wall cannot keep the way round
+                foreach (var front in fronts)
                 {
-                    var centre = new Vector2(x, y);
-                    if (!PlanGeometry.Inside(poly, centre) || PlanGeometry.ToOutline(poly, centre) < _c.CentreWallGapM + halfMin) continue; // cannot keep the way round
-                    foreach (var front in fronts)
-                    {
-                        var foot = PlanGeometry.Rect(centre, front, k.Across, k.Depth);
-                        if (PlanGeometry.Within(foot, poly) && PlanGeometry.AreaToOutline(foot, poly) >= _c.CentreWallGapM && Free(centre, radius, foot))
-                            list.Add(new Placed(kind, centre, front, foot, radius, room.Id, false));
-                    }
+                    var foot = PlanGeometry.Rect(centre, front, k.Across, k.Depth);
+                    if (PlanGeometry.Within(foot, poly) && PlanGeometry.AreaToOutline(foot, poly) >= _c.CentreWallGapM && Free(centre, radius, foot))
+                        list.Add(new Placed(kind, centre, front, foot, radius, room.Id, false));
                 }
             return list;
         }
+    }
 
-        /// <summary>Posted defenders' spots, round-robin over the rooms: the first of every room, then the second.</summary>
-        List<DefenderPost> Posts()
-        {
-            var q = _data.Posts;
-            var perRoom = new List<List<DefenderPost>>();
-            foreach (var room in _house.Rooms)
-            {
-                if (q.PerRoom == 0 || room.AreaM2 < q.MinRoomM2 || q.SkipTypes.Contains(room.Type) || !_entrance.TryGetValue(room.Id, out var way)) continue;
-                Near(room);
-                var poly = room.Polygon;
-                var spots = new List<(Vector2 P, float Score)>();
-                float x0 = poly.Min(p => p.X), x1 = poly.Max(p => p.X), y0 = poly.Min(p => p.Y), y1 = poly.Max(p => p.Y);
-                for (var x = x0; x <= x1; x += _c.StepM)
-                    for (var y = y0; y <= y1; y += _c.StepM)
-                    {
-                        var p = new Vector2(x, y);
-                        if (!PlanGeometry.Inside(poly, p) || PlanGeometry.ToOutline(poly, p) < q.WallGapM) continue;
-                        if (_near.Any(o => PlanGeometry.PointSegment(p, o.A, o.B) < _c.DoorClearM)) continue;
-                        if (_placed.Any(f => !f.High && Vector2.Distance(p, f.Centre) < f.Radius + q.PropGapM && (PlanGeometry.Inside(f.Foot, p) || PlanGeometry.ToOutline(f.Foot, p) < q.PropGapM))) continue;
-                        spots.Add((p, Vector2.Distance(p, way) + _rng.NextSingle() * _c.StepM));
-                    }
-                var mine = new List<DefenderPost>();
-                var taken = new List<Vector2>();
-                foreach (var (p, _) in spots.OrderByDescending(s => s.Score))
-                {
-                    if (mine.Count >= q.PerRoom) break;
-                    if (taken.Any(t => Vector2.Distance(t, p) < q.ApartM)) continue;
-                    taken.Add(p);
-                    var look = way - p;
-                    mine.Add(new DefenderPost(_house.ToGodot(p, 0), look.LengthSquared() > 1e-6f ? Yaw(Vector2.Normalize(look)) : 0, room.Id));
-                }
-                if (mine.Count > 0) perRoom.Add(mine);
-            }
-            var all = new List<DefenderPost>();
-            for (var i = 0; perRoom.Any(r => r.Count > i); i++) all.AddRange(perRoom.Where(r => r.Count > i).Select(r => r[i]));
-            return all;
-        }
+    /// <summary>The safe's keep-out on the floor (across, depth from the wall): the widest row of cash Duffels any tier pays out (<see cref="DrillRules.CashSpots"/>), a spread for each, out to as far past them as they lie off its face.</summary>
+    public static Vector2 SafeKeepOut(TrapHouseFile data)
+    {
+        var k = data.Props[data.KindOf(data.Safe.Prop)];
+        var d = data.Drill;
+        return new Vector2(MathF.Max(k.Across, d.CashDuffels.Max() * d.DuffelSpreadM), k.Depth + 2 * d.DuffelOutM);
+    }
 
-        /// <summary>
-        /// Each room's depth (links from the room the front door opens into) and its way in: the middle of the link it is reached by, or, for the front room, of its front door (else
-        /// its garage door). A room no way reaches has neither.
-        /// </summary>
-        void Ways()
-        {
-            var doors = _house.Doors.ToDictionary(d => d.Id);
-            var queue = new Queue<PlanRoom>();
-            foreach (var r in _house.Rooms)
+    /// <summary>Every way through a house: its doors and the links between its rooms.</summary>
+    internal static List<(Vector2 A, Vector2 B)> Openings(HouseFloorPlan house) =>
+        house.Doors.Select(d => (d.A, d.B)).Concat(house.Rooms.SelectMany(r => r.Links.Select(l => (l.P, l.Q)))).ToList();
+
+    /// <summary>The openings that reach within <paramref name="margin"/> of <paramref name="poly"/>'s box: the only ones a spot in it can come near.</summary>
+    internal static List<(Vector2 A, Vector2 B)> NearOpenings(List<(Vector2 A, Vector2 B)> openings, Vector2[] poly, float margin)
+    {
+        float x0 = poly.Min(p => p.X) - margin, x1 = poly.Max(p => p.X) + margin, y0 = poly.Min(p => p.Y) - margin, y1 = poly.Max(p => p.Y) + margin;
+        return openings.Where(o => MathF.Max(o.A.X, o.B.X) >= x0 && MathF.Min(o.A.X, o.B.X) <= x1 && MathF.Max(o.A.Y, o.B.Y) >= y0 && MathF.Min(o.A.Y, o.B.Y) <= y1).ToList();
+    }
+
+    /// <summary>The points of a <paramref name="step"/> grid over <paramref name="poly"/>'s box that lie inside it, at least <paramref name="wallGap"/> from its outline; x outer, y inner.</summary>
+    internal static IEnumerable<Vector2> GridSpots(Vector2[] poly, float step, float wallGap)
+    {
+        float x0 = poly.Min(p => p.X), x1 = poly.Max(p => p.X), y0 = poly.Min(p => p.Y), y1 = poly.Max(p => p.Y);
+        for (var x = x0; x <= x1; x += step)
+            for (var y = y0; y <= y1; y += step)
             {
-                var door = r.Doors.Concat(r.GarageDoors).Select(id => doors.GetValueOrDefault(id)).FirstOrDefault(d => d != null);
-                if (door == null) continue;
-                _depth[r.Id] = 0; _entrance[r.Id] = (door.A + door.B) / 2;
-                queue.Enqueue(r);
+                var p = new Vector2(x, y);
+                if (PlanGeometry.Inside(poly, p) && PlanGeometry.ToOutline(poly, p) >= wallGap) yield return p;
             }
-            while (queue.Count > 0)
-            {
-                var r = queue.Dequeue();
-                foreach (var l in r.Links)
-                {
-                    if (_depth.ContainsKey(l.To) || _house.Room(l.To) is not { } next) continue;
-                    _depth[l.To] = _depth[r.Id] + 1; _entrance[l.To] = (l.P + l.Q) / 2;
-                    queue.Enqueue(next);
-                }
-            }
-        }
     }
 
     /// <summary>32-bit FNV-1a of a house id: the same on every process (string.GetHashCode is not).</summary>
@@ -277,8 +243,8 @@ public static class TrapHousePlanner
 }
 
 /// <summary>
-/// The Trap house events: <see cref="Net.EventKind.TrapHouseDressed"/> (u8 id length, the house id in UTF-8, u16 prop count, then per prop u8 kind, u8 variant, f32 x, y, z (Godot)
-/// and u16 yaw (a turn in 65536 steps), all little endian) and <see cref="Net.EventKind.TrapHouseStripped"/> (u8 id length, the house id).
+/// The Trap house events: <see cref="Net.EventKind.TrapHouseDressed"/> (the house id (<see cref="HouseIdWire"/>: u8 length, UTF-8), u16 prop count, then per prop u8 kind, u8 variant, f32 x, y, z (Godot)
+/// and u16 yaw (a turn in 65536 steps), all little endian) and <see cref="Net.EventKind.TrapHouseStripped"/> (the house id alone).
 /// </summary>
 public static class TrapHouseCodec
 {
@@ -286,11 +252,9 @@ public static class TrapHouseCodec
 
     public static byte[] EncodeDressed(string house, IReadOnlyList<TrapProp> props)
     {
-        var id = Id(house);
+        var id = HouseIdWire.Bytes(house);
         var o = new byte[1 + id.Length + 2 + props.Count * PropBytes];
-        o[0] = (byte)id.Length;
-        id.CopyTo(o, 1);
-        var at = 1 + id.Length;
+        var at = HouseIdWire.Write(o, 0, id);
         BinaryPrimitives.WriteUInt16LittleEndian(o.AsSpan(at), (ushort)props.Count);
         at += 2;
         foreach (var p in props)
@@ -308,9 +272,7 @@ public static class TrapHouseCodec
 
     public static (string House, TrapProp[] Props)? DecodeDressed(byte[] payload)
     {
-        if (payload.Length < 1 || payload.Length < 1 + payload[0] + 2) return null;
-        var house = Encoding.UTF8.GetString(payload, 1, payload[0]);
-        var at = 1 + payload[0];
+        if (HouseIdWire.Read(payload, 0, out var at) is not { } house || payload.Length < at + 2) return null;
         var n = BinaryPrimitives.ReadUInt16LittleEndian(payload.AsSpan(at));
         at += 2;
         if (payload.Length != at + n * PropBytes) return null;
@@ -322,22 +284,7 @@ public static class TrapHouseCodec
         return (house, props);
     }
 
-    public static byte[] EncodeStripped(string house)
-    {
-        var id = Id(house);
-        var o = new byte[1 + id.Length];
-        o[0] = (byte)id.Length;
-        id.CopyTo(o, 1);
-        return o;
-    }
+    public static byte[] EncodeStripped(string house) => HouseIdWire.Encode(house);
 
-    public static string? DecodeStripped(byte[] payload) =>
-        payload.Length >= 1 && payload.Length == 1 + payload[0] ? Encoding.UTF8.GetString(payload, 1, payload[0]) : null;
-
-    static byte[] Id(string house)
-    {
-        var id = Encoding.UTF8.GetBytes(house);
-        if (id.Length > 255) throw new ArgumentException($"house id '{house}' is longer than 255 bytes");
-        return id;
-    }
+    public static string? DecodeStripped(byte[] payload) => HouseIdWire.Decode(payload);
 }
