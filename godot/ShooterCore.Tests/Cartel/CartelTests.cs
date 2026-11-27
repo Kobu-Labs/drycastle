@@ -162,5 +162,31 @@ public class CartelTests
 
         Assert.True(CartelCodec.TryDecodeRankUp(CartelCodec.EncodeRankUp(300, 4), out var who, out var rank));
         Assert.Equal((300, 4), (who, (int)rank));
+
+        var guest = job with { Flags = CartelJobFlags.Guest | CartelJobFlags.Leader };
+        Assert.True(CartelCodec.TryDecodeJob(CartelCodec.EncodeJob(guest), out var guest2));
+        Assert.Equal(guest, guest2);
+
+        var no = new CartelRefusalMsg(CartelAction.StartJob, (byte)JobStartRefusal.CannotBegin, "No drop point is free now: another job holds every one.");
+        Assert.True(CartelCodec.TryDecodeRefusal(CartelCodec.EncodeRefusal(no), out var no2));
+        Assert.Equal(no, no2);
+        Assert.False(CartelCodec.TryDecodeRefusal(new byte[] { 9, 0, 0 }, out _));
+        Assert.False(CartelCodec.TryDecodeRefusal(new byte[] { 1, 0, 4, 65 }, out _)); // the words are cut short
+    }
+
+    [Fact]
+    public void EveryReasonHasOneKeyAndOneText()
+    {
+        Assert.Equal("Time ran out", CartelRules.Words(JobFailReason.Timer));
+        Assert.Equal("cartel.fail.timer", CartelWords.Fail.Key(JobFailReason.Timer));
+        Assert.Equal("Tiers go from 1 to 5.", CartelRules.Words(JobStartRefusal.UnknownTier, CartelFile.Default, 9));
+        Assert.Equal(CartelWords.Join.Text(CartelJoinRefusal.Guest), CartelRules.Words(CartelJoinRefusal.Guest));
+        foreach (var r in Enum.GetValues<JobFailReason>()) Assert.NotEmpty(CartelWords.Fail.Text(r));
+        foreach (var r in Enum.GetValues<JobStartRefusal>().Where(r => r is not (JobStartRefusal.None or JobStartRefusal.CannotBegin)))
+            Assert.NotEqual(CartelWords.Start.Key(JobStartRefusal.None), CartelWords.Start.Key(r)); // its own words, not the fallback's
+        var keys = CartelWords.Entries.Select(e => e.Key).ToList();
+        Assert.Equal(keys.Count, keys.Distinct().Count()); // one key, one text: the client registers them all
+        Assert.Equal(NoRespectReason.Guest, CartelRules.NoRespect(false, stored: false, sandbox: true, null));
+        Assert.Equal(NoRespectReason.Sandbox, CartelRules.NoRespect(false, true, sandbox: true, new CartelStanding()));
     }
 }

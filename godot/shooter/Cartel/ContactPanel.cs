@@ -13,7 +13,8 @@ namespace Drycastle.Shooter.Cartel;
 /// around it, the mouse released, the legs working, firing not. What it shows is <see cref="ContactPanelModel"/>'s: a member reads their Cartel rank, their Respect and the bar
 /// to the next rank, the job list by kind and tier (a locked tier is disabled and says the rank it needs), Start for the picked job and tier (the leader's; anyone else reads why
 /// not, "Your leader starts jobs"), and Quit with a confirmation; anyone else reads what the Cartel is and Join (a guest reads why not). It rebuilds when the standing, the Job,
-/// the leadership or the round changes; the server checks every request again and says a refusal in the chat. A started Job closes the panel.
+/// the leadership or the round changes; the server checks every request again and answers a refusal, which the panel shows in Start's reason line (Join's, for an outsider) until it
+/// rebuilds again, with the error sound. A started Job closes the panel.
 /// </summary>
 public sealed partial class ContactPanel : Control
 {
@@ -22,7 +23,9 @@ public sealed partial class ContactPanel : Control
     readonly VBoxContainer _body;
     readonly Button _close;
     PanelFade _fade;
-    (CartelStatusMsg? Status, TrackerPhase Phase, int Job, bool Leads, bool Round, bool Admin)? _shown;
+    (CartelStatusMsg? Status, TrackerPhase Phase, int Job, bool Leads, bool Round, bool Admin, int Refusals)? _shown;
+    /// <summary>The refusals already shown (<see cref="CartelClient.RefusalCount"/>): a newer one shows in the next build only.</summary>
+    int _refusalsSeen;
     (string Kind, int Tier)? _pick;
     /// <summary>Where the panel's footer is: Start and Quit, or the question whether to quit.</summary>
     ContactFooter _footer = ContactFooter.Start;
@@ -67,6 +70,7 @@ public sealed partial class ContactPanel : Control
         if (IsOpen) return;
         _footer = ContactFooter.Start;
         _shown = null; // built fresh: the standing may have changed while it was shut
+        _refusalsSeen = _cartel.RefusalCount; // a refusal from before it opened is old news
         _fade.Show(GameSettings.Current.ReduceMotion);
         Visible = true;
         MouseBehaviorRecursive = MouseBehaviorRecursiveEnum.Inherited;
@@ -139,12 +143,22 @@ public sealed partial class ContactPanel : Control
     {
         foreach (var c in _body.GetChildren()) { _body.RemoveChild(c); c.QueueFree(); }
         _firstFocus = null; _picked = null;
+        var refused = NewRefusal();
         if (!m.Loaded) { _body.AddChild(Text(Strings.T("cartel.loading"), "HudDim")); return; }
-        if (m.IsMember) Member(m);
-        else Outsider(m);
+        if (m.IsMember) Member(m, refused);
+        else Outsider(m, refused);
     }
 
-    void Member(ContactPanelModel m)
+    /// <summary>The server's refusal that came since the last build (its words, once), else null; it sounds the error.</summary>
+    string? NewRefusal()
+    {
+        if (_cartel.RefusalCount == _refusalsSeen || _cartel.Refusal is not { } r) return null;
+        _refusalsSeen = _cartel.RefusalCount;
+        Sfx.Ui("ui.error");
+        return r.Words;
+    }
+
+    void Member(ContactPanelModel m, string? refused)
     {
         _body.AddChild(Text(Strings.T("cartel.rank.caption"), "HudSmall", upper: true));
         _body.AddChild(Text(m.RankName, "HudHead"));
@@ -176,7 +190,7 @@ public sealed partial class ContactPanel : Control
         var start = new Button
         {
             Text = pick != null ? Strings.F("cartel.start", pick.Name, _pick!.Value.Tier) : Strings.T("cartel.start.pick"),
-            ThemeTypeVariation = "MenuPrimary", FocusMode = FocusModeEnum.All, Disabled = m.StartBlock != ContactStartBlock.None || pick == null,
+            ThemeTypeVariation = "MenuPrimary", FocusMode = FocusModeEnum.All, Disabled = m.StartBlock != JobStartRefusal.None || pick == null,
         };
         start.Pressed += () =>
         {
@@ -185,7 +199,7 @@ public sealed partial class ContactPanel : Control
             _cartel.Request(new CartelRequest(CartelAction.StartJob, s.Kind, (byte)s.Tier));
         };
         foot.AddChild(start);
-        var why = Text(BlockWords(m.StartBlock), "HudDim");
+        var why = refused != null ? Text(refused, "HudWarn") : Text(BlockWords(m.StartBlock), "HudDim"); // the server's refusal until the next build, else what the panel foresees
         why.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         why.SizeFlagsVertical = SizeFlags.ShrinkCenter;
         why.AutowrapMode = TextServer.AutowrapMode.WordSmart;
@@ -214,12 +228,12 @@ public sealed partial class ContactPanel : Control
         _firstFocus = no;
     }
 
-    void Outsider(ContactPanelModel m)
+    void Outsider(ContactPanelModel m, string? refused)
     {
         _body.AddChild(Text(Strings.T("cartel.about"), "HudTextSmall", wrap: true));
         _body.AddChild(Text(Strings.T("cartel.about.squad"), "HudDim", wrap: true));
         if (m.Membership == CartelMembership.Quit) _body.AddChild(Text(Strings.F("cartel.quit.was", m.RankName, m.Respect), "HudTextSmall", wrap: true));
-        if (m.Guest) _body.AddChild(Text(Strings.T("cartel.guest"), "HudWarn", wrap: true));
+        if (m.Guest) _body.AddChild(Text(Strings.T(CartelWords.Join.Key(CartelJoinRefusal.Guest)), "HudWarn", wrap: true));
         _body.AddChild(Gap());
         var join = new Button
         {
@@ -228,6 +242,7 @@ public sealed partial class ContactPanel : Control
         };
         join.Pressed += () => { Sfx.Ui("ui.accept"); _cartel.Request(new CartelRequest(CartelAction.Join)); };
         _body.AddChild(join);
+        if (refused != null) _body.AddChild(Text(refused, "HudWarn", wrap: true));
         _firstFocus = join.Disabled ? _close : join;
     }
 
@@ -253,15 +268,10 @@ public sealed partial class ContactPanel : Control
         return b;
     }
 
-    static string BlockWords(ContactStartBlock b) => b switch
-    {
-        ContactStartBlock.NotMember => Strings.T("cartel.block.notmember"),
-        ContactStartBlock.NotLeader => Strings.T("cartel.block.notleader"),
-        ContactStartBlock.NoRound => Strings.T("cartel.block.noround"),
-        ContactStartBlock.JobRunning => Strings.T("cartel.block.running"),
-        ContactStartBlock.Loading => Strings.T("cartel.loading"),
-        _ => " ", // the line keeps its place: the footer does not move when a reason comes or goes
-    };
+    /// <summary>Why Start is not offered, in the server's words (<see cref="CartelWords.Start"/>); a blank line when it is.</summary>
+    static string BlockWords(JobStartRefusal b) => b == JobStartRefusal.None
+        ? " " // the line keeps its place: the footer does not move when a reason comes or goes
+        : Strings.T(CartelWords.Start.Key(b));
 
     static Label Text(string text, string variation, bool upper = false, bool wrap = false) => new()
     {

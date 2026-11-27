@@ -38,25 +38,33 @@ public enum CartelJobFlags : byte
     NotMember = 2,
     /// <summary>The receiver leads it (starts it; their death fails it).</summary>
     Leader = 4,
+    /// <summary>The receiver is a guest (no saved profile): they earn nothing and cannot join, so they are not told to (the tracker says why instead).</summary>
+    Guest = 8,
 }
 
-/// <summary>
-/// The receiver's Job (<see cref="Net.EventKind.CartelJob"/>): sent to its party when it starts, when the party or its leader changes, and when it ends (then once, with the
-/// end state, the reason and what the receiver was paid). <see cref="JobId"/> 0 is "no job" (the receiver left the party).
-/// </summary>
 /// <summary>
 /// The objective of the receiver's Job (<see cref="Net.EventKind.CartelObjective"/>): the HUD tracker's line (empty: the kind's name only) and where the party's marker points
 /// (Godot axes; null: no marker). Sent to the party when either changes and to a member who joins it midway; the Job's end (<see cref="CartelJobMsg"/>) clears it.
 /// </summary>
 public readonly record struct CartelObjectiveMsg(int JobId, string Line, Vector3? Marker);
 
+/// <summary>
+/// The Contact refused a request (<see cref="Net.EventKind.CartelRefused"/>): the action asked, the refusal's code (a <see cref="CartelJoinRefusal"/> for join and quit, a
+/// <see cref="JobStartRefusal"/> for a start) and the words the player reads.
+/// </summary>
+public readonly record struct CartelRefusalMsg(CartelAction Action, byte Code, string Words);
+
+/// <summary>
+/// The receiver's Job (<see cref="Net.EventKind.CartelJob"/>): sent to its party when it starts, when the party, its leader or the receiver's flags change, and when it ends (then once, with the
+/// end state, the reason and what the receiver was paid). <see cref="JobId"/> 0 is "no job" (the receiver left the party).
+/// </summary>
 public readonly record struct CartelJobMsg(int JobId, JobState State, JobFailReason Reason, string Kind, byte Tier, ushort Leader, float SecondsLeft, int RespectPaid, CartelJobFlags Flags)
 {
     public static readonly CartelJobMsg None = new(0, 0, JobFailReason.None, "", 0, 0, 0, 0, CartelJobFlags.None);
 }
 
 /// <summary>
-/// The Cartel's wire (protocol history: "vNEXT (Cartel profile + Job core)", "vNEXT (Contact panel + HUD)"). Kinds 33-37: <see cref="Net.EventKind.CartelRequest"/> (client to server),
+/// The Cartel's wire (protocol history: v88, v89). Kinds 33-38: <see cref="Net.EventKind.CartelRequest"/> (client to server), <see cref="Net.EventKind.CartelRefused"/> (server to a player),
 /// <see cref="Net.EventKind.CartelStatus"/>, <see cref="Net.EventKind.CartelJob"/> (server to a player), <see cref="Net.EventKind.CartelRankUp"/> (server to everyone), <see cref="Net.EventKind.CartelObjective"/> (server to a Job's party).
 /// Little endian throughout. A decode of a short or bad payload is false.
 /// </summary>
@@ -163,6 +171,26 @@ public static class CartelCodec
         var m = new Vector3(BinaryPrimitives.ReadSingleLittleEndian(d[5..]), BinaryPrimitives.ReadSingleLittleEndian(d[9..]), BinaryPrimitives.ReadSingleLittleEndian(d[13..]));
         if (d[4] == 1 && !(float.IsFinite(m.X) && float.IsFinite(m.Y) && float.IsFinite(m.Z))) return false;
         o = new CartelObjectiveMsg(BinaryPrimitives.ReadInt32LittleEndian(d), Encoding.UTF8.GetString(d.Slice(18, d[17])), d[4] == 1 ? m : null);
+        return true;
+    }
+
+    /// <summary>u8 action, u8 code, u8 words length, words (UTF-8, cut at <see cref="MaxLineBytes"/> on a character boundary).</summary>
+    public static byte[] EncodeRefusal(CartelRefusalMsg r)
+    {
+        var words = Encoding.UTF8.GetBytes(r.Words ?? "");
+        var n = Math.Min(words.Length, MaxLineBytes);
+        while (n > 0 && n < words.Length && (words[n] & 0xC0) == 0x80) n--; // never split a character
+        var b = new byte[3 + n];
+        b[0] = (byte)r.Action; b[1] = r.Code; b[2] = (byte)n;
+        words.AsSpan(0, n).CopyTo(b.AsSpan(3));
+        return b;
+    }
+
+    public static bool TryDecodeRefusal(ReadOnlySpan<byte> d, out CartelRefusalMsg r)
+    {
+        r = default;
+        if (d.Length < 3 || d[0] is < (byte)CartelAction.Join or > (byte)CartelAction.StartJob || d.Length != 3 + d[2]) return false;
+        r = new CartelRefusalMsg((CartelAction)d[0], d[1], Encoding.UTF8.GetString(d.Slice(3, d[2])));
         return true;
     }
 

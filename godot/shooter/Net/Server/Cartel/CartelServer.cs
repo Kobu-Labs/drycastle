@@ -9,11 +9,11 @@ using Drycastle.ShooterServer.Persistence;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// The Cartel on the server (docs/cartel.md, ADR 0045, #494): joining and quitting, the Jobs and what they pay. A player asks at the Contact (<see cref="EventKind.CartelRequest"/>:
-/// join, quit, start a Job); the rules are ShooterCore's (<see cref="CartelRules"/>, <see cref="CartelStanding"/>, <see cref="JobBook"/>). Membership and Respect live on the Profile
-/// and are written through the store's write queue; a guest cannot join, a bot never does, a sandbox player runs Jobs and earns nothing. Who runs a Job is
-/// <see cref="IJobParties"/>'s (ffa: solo; tdm: the Squad and its leader). Kinds of Job plug in with <see cref="Register"/>; the test kind is built in. Each player is told their
-/// standing (<see cref="EventKind.CartelStatus"/>) and their Job (<see cref="EventKind.CartelJob"/>); a rank-up goes to everyone (<see cref="EventKind.CartelRankUp"/> and a chat line).
+/// The Cartel on the server (docs/cartel.md, ADR 0045, #494): the Contact's requests, the Jobs and what they pay. A player asks at the Contact (<see cref="EventKind.CartelRequest"/>:
+/// join, quit, start a Job); the rules are ShooterCore's (<see cref="CartelRules"/>, <see cref="JobBook"/>); a refusal is a chat line and, for a request from the panel, the
+/// refusal event (<see cref="EventKind.CartelRefused"/>) the panel shows. Membership, Respect and the standing are <see cref="CartelMembers"/>'; who is told what about the running
+/// Jobs is <see cref="JobFeed"/>'s (<see cref="EventKind.CartelJob"/>, <see cref="EventKind.CartelObjective"/>), sent here. Who runs a Job is <see cref="IJobParties"/>'s (ffa: solo;
+/// tdm: the Squad and its leader). Kinds of Job plug in with <see cref="Register"/>; the test kind is built in, for admins only. No Job outlives its round: the end screen fails them.
 /// </summary>
 internal sealed class CartelServer
 {
@@ -22,21 +22,27 @@ internal sealed class CartelServer
 
     readonly ServerContext _ctx;
     readonly CartelFile _data;
-    readonly IProgressionStore? _store;
     readonly IJobParties _parties;
     readonly IContactSite _contact;
+    readonly Func<ServerClient, bool> _isAdmin;
+    readonly CartelMembers _members;
     readonly JobBook _book = new();
     readonly List<JobEnded> _ended = new();
-    /// <summary>What each running Job's party was last told: its leader and members (a change is sent again; a member who left is told "no job").</summary>
-    readonly Dictionary<int, (ushort Leader, ushort[] Members)> _told = new();
-    /// <summary>What each running Job's party was last sent of its objective (<see cref="EventKind.CartelObjective"/>): the line and the marker. A party change sends it again to all.</summary>
-    readonly Dictionary<int, (string Line, System.Numerics.Vector3? Marker)> _objectiveSent = new();
+    readonly JobFeed _feed;
+    readonly List<JobFeedMessage> _outbox = new();
+    /// <summary>The humans the feed tells (a bot reads nothing), filled each tick.</summary>
+    readonly List<ushort> _receivers = new();
+    readonly Func<Job, ushort, byte> _flagsOf;
 
     /// <param name="parties">Who runs a Job (<see cref="MatchJobParties"/>).</param>
     /// <param name="contact">Where the Contact stands; <see cref="MapContactSite"/>, the map's placed Contact.</param>
-    public CartelServer(ServerContext ctx, CartelFile data, IProgressionStore? store, IJobParties parties, IContactSite contact)
+    /// <param name="isAdmin">The chat's admin check: only an admin may start the test kind (it pays for nothing done).</param>
+    public CartelServer(ServerContext ctx, CartelFile data, IProgressionStore? store, IJobParties parties, IContactSite contact, Func<ServerClient, bool> isAdmin)
     {
-        _ctx = ctx; _data = data; _store = store; _parties = parties; _contact = contact;
+        _ctx = ctx; _data = data; _parties = parties; _contact = contact; _isAdmin = isAdmin;
+        _members = new CartelMembers(ctx, data, store);
+        _feed = new JobFeed(data.MarkerResendM);
+        _flagsOf = FlagsOf;
         Register(new TestJobKind(data));
     }
 
@@ -46,14 +52,20 @@ internal sealed class CartelServer
     /// <summary>Adds a kind of Job (Delivery, the heists, Hit: their own packages).</summary>
     public void Register(IJobKind kind) => _book.Register(kind);
 
-    /// <summary>Once a tick: the Jobs step (objectives, timers, leaders); what ended is paid; a party that changed is told.</summary>
+    /// <summary>Once a tick: the Jobs step (objectives, timers, leaders); what ended is paid; the parties are told what changed. Out of a running round every Job fails.</summary>
     public void Tick(float dt)
     {
         if (_book.Running.Count == 0) return;
+        if (_ctx.Match.Phase != MatchPhase.Running)
+        {
+            // the end screen (or waiting for players): the round is over, so are its Jobs, at once rather than at the next round's reset
+            _book.FailAll(JobFailReason.RoundReset, _parties, _ended);
+            Settle();
+            return;
+        }
         _book.Tick(dt, _parties, _ended);
         Settle();
-        TellParties();
-        TellObjectives();
+        Tell();
     }
 
     /// <summary>The player stands in reach of the map's Contact (false on a map without one): his panel has the interact key there, not the plantation's hold.</summary>
@@ -75,7 +87,7 @@ internal sealed class CartelServer
     }
 
     /// <summary>Join: the player's standing.</summary>
-    public void SendOnJoin(ServerClient c) => SendStatus(c);
+    public void SendOnJoin(ServerClient c) => _members.SendStatus(c);
 
     /// <summary>A request from the Contact.</summary>
     public void OnRequest(ServerClient c, byte[] payload)
@@ -96,59 +108,67 @@ internal sealed class CartelServer
     }
 
     /// <summary>False (and the player told) when the map has no Contact, or the player is out of his reach (the admin's command skips the reach).</summary>
-    bool ContactAnswers(ServerClient c, bool admin)
+    bool ContactAnswers(ServerClient c, bool admin, CartelAction action)
     {
-        if (!_contact.Present) { _ctx.ChatTo(c, ChatLineKind.Error, "This map has no Cartel."); return false; }
+        var start = action == CartelAction.StartJob;
+        if (!_contact.Present)
+        {
+            if (start) Refuse(c, action, (byte)JobStartRefusal.NoCartel, CartelWords.Start.Text(JobStartRefusal.NoCartel), admin);
+            else Refuse(c, action, (byte)CartelJoinRefusal.NoCartel, CartelWords.Join.Text(CartelJoinRefusal.NoCartel), admin);
+            return false;
+        }
         if (admin || AtContact(c)) return true;
-        _ctx.ChatTo(c, ChatLineKind.Error, "Talk to the Contact for that.");
+        if (start) Refuse(c, action, (byte)JobStartRefusal.FarFromContact, CartelWords.Start.Text(JobStartRefusal.FarFromContact), admin);
+        else Refuse(c, action, (byte)CartelJoinRefusal.FarFromContact, CartelWords.Join.Text(CartelJoinRefusal.FarFromContact), admin);
         return false;
+    }
+
+    /// <summary>A refused request: a chat line, and for the panel's request the refusal event its panel shows (the admin's command has only the chat).</summary>
+    void Refuse(ServerClient c, CartelAction action, byte code, string words, bool admin)
+    {
+        _ctx.ChatTo(c, ChatLineKind.Error, words);
+        if (!admin) _ctx.SendEvent(c, EventKind.CartelRefused, CartelCodec.EncodeRefusal(new CartelRefusalMsg(action, code, words)));
     }
 
     void Join(ServerClient c, bool admin)
     {
-        if (!ContactAnswers(c, admin)) return;
-        var why = CartelRules.CanJoin(c.IsBot, c.Profile?.Persist == true, c.Profile?.Cartel);
-        if (why != CartelJoinRefusal.None) { _ctx.ChatTo(c, ChatLineKind.Error, CartelRules.Words(why)); return; }
-        var p = c.Profile!;
-        p.Cartel.Join();
-        _ = _store?.Profiles.SetCartelMembershipAsync(p.DbId, p.Cartel.Membership);
-        SendStatus(c);
-        _ctx.ChatTo(c, ChatLineKind.Info, $"You work for the Cartel: {RankName(p.Cartel)}, {p.Cartel.Respect} Respect.");
-        GD.Print($"server: {c.Name} #{c.Id} joined the Cartel ({p.Cartel.Respect} Respect)");
+        if (!ContactAnswers(c, admin, CartelAction.Join)) return;
+        var why = _members.Join(c);
+        if (why != CartelJoinRefusal.None) Refuse(c, CartelAction.Join, (byte)why, CartelRules.Words(why), admin);
     }
 
     void Quit(ServerClient c, bool admin)
     {
-        if (!ContactAnswers(c, admin)) return;
-        if (c.Profile is not { Cartel.IsMember: true } p) { _ctx.ChatTo(c, ChatLineKind.Error, "You do not work for the Cartel."); return; }
-        p.Cartel.Quit();
-        if (p.Persist) _ = _store?.Profiles.SetCartelMembershipAsync(p.DbId, p.Cartel.Membership);
+        if (!ContactAnswers(c, admin, CartelAction.Quit)) return;
+        var why = _members.Quit(c);
+        if (why != CartelJoinRefusal.None) { Refuse(c, CartelAction.Quit, (byte)why, CartelRules.Words(why), admin); return; }
         _book.LeaderQuit(c.Id, _parties, _ended); // the Job they lead fails
         Settle();
-        SendStatus(c);
-        _ctx.ChatTo(c, ChatLineKind.Info, $"You quit the Cartel. Your rank ({RankName(p.Cartel)}) and Respect wait for your return.");
-        GD.Print($"server: {c.Name} #{c.Id} quit the Cartel");
     }
 
     void StartJob(ServerClient c, string kindId, int tier, bool admin)
     {
-        if (!ContactAnswers(c, admin)) return;
+        if (!ContactAnswers(c, admin, CartelAction.StartJob)) return;
         var kind = _book.Kind(kindId);
+        if (kind?.Id == TestJobKind.KindId && !_isAdmin(c)) kind = null; // it pays a tier's Respect for 20 s of nothing: admins only, the panel's request too
         var owner = _parties.OwnerOf(c.Id);
         var members = _parties.MembersOf(owner);
         var standing = c.Profile?.Cartel;
         var facts = new JobStartFacts(c.IsBot, standing?.IsMember == true, _parties.LeaderOf(owner) == c.Id, kind != null, tier, standing?.Rank(_data) ?? 0,
             _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin);
         var why = CartelRules.CanStart(_data, facts);
-        if (why != JobStartRefusal.None) { _ctx.ChatTo(c, ChatLineKind.Error, CartelRules.Words(why, _data, tier)); return; }
-        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, out var refusal) is not { } job) { _ctx.ChatTo(c, ChatLineKind.Error, refusal ?? "The job cannot start now."); return; }
-        TellParties();
-        TellObjectives();
+        if (why != JobStartRefusal.None) { Refuse(c, CartelAction.StartJob, (byte)why, CartelRules.Words(why, _data, tier), admin); return; }
+        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, out var refusal) is not { } job)
+        {
+            Refuse(c, CartelAction.StartJob, (byte)JobStartRefusal.CannotBegin, refusal ?? CartelWords.Start.Text(JobStartRefusal.CannotBegin), admin);
+            return;
+        }
+        Tell();
         foreach (var m in members)
         {
             if (!_ctx.Players.TryGetValue(m, out var mc) || mc.IsBot) continue;
             _ctx.ChatTo(mc, ChatLineKind.Info, $"{c.Name} started the job {kind!.Name} (tier {tier}): {job.Seconds:F0} s.");
-            if (mc.Profile?.Cartel.IsMember != true) _ctx.ChatTo(mc, ChatLineKind.Info, "Join the Cartel at the Contact to earn Respect from jobs.");
+            if (CartelMembers.FlagsOf(mc).HasFlag(CartelJobFlags.NotMember)) _ctx.ChatTo(mc, ChatLineKind.Info, CartelWords.NoRespect.Text(NoRespectReason.NotMember)); // a guest cannot join: not told to
         }
         GD.Print($"server: {c.Name} #{c.Id} started {job}{(admin ? " (admin)" : "")}");
     }
@@ -160,103 +180,51 @@ internal sealed class CartelServer
         foreach (var e in _ended)
         {
             var job = e.Job;
-            _told.Remove(job.Id);
-            _objectiveSent.Remove(job.Id);
+            _feed.Forget(job.Id);
             var reward = e.Succeeded ? CartelRules.Reward(_data, job) : 0;
             foreach (var m in e.Members)
             {
                 if (!_ctx.Players.TryGetValue(m, out var mc) || mc.IsBot) continue;
                 var paid = 0;
-                if (e.Succeeded && Earns(mc)) paid = Grant(mc, reward);
-                _ctx.SendEvent(mc, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(job, mc, paid)));
-                _ctx.ChatTo(mc, ChatLineKind.Info, !e.Succeeded ? $"Job failed: {CartelRules.Words(job.Reason)}."
-                    : paid > 0 ? $"Job done: +{paid} Respect." : $"Job done. You earn no Respect: {NoRespectWhy(mc)}");
+                if (e.Succeeded && CartelMembers.Earns(mc)) paid = _members.Grant(mc, reward);
+                _ctx.SendEvent(mc, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(job, (CartelJobFlags)FlagsOf(job, m), paid)));
+                _ctx.ChatTo(mc, ChatLineKind.Info, !e.Succeeded ? $"Job failed. {CartelWords.Fail.Text(job.Reason)}."
+                    : paid > 0 ? $"Job done: +{paid} Respect." : $"Job done. {CartelWords.NoRespect.Text(CartelMembers.NoRespect(mc))}");
             }
-            GD.Print($"server: {job} ended{(e.Succeeded ? $", {reward} Respect each to {e.Members.Count(m => _ctx.Players.TryGetValue(m, out var o) && Earns(o))} member(s)" : $": {job.Reason}")}");
+            GD.Print($"server: {job} ended{(e.Succeeded ? $", {reward} Respect each to {e.Members.Count(m => _ctx.Players.TryGetValue(m, out var o) && CartelMembers.Earns(o))} member(s)" : $": {job.Reason}")}");
         }
         _ended.Clear();
     }
 
-    static string NoRespectWhy(ServerClient c) =>
-        c.Profile?.Persist != true ? "guests have no saved profile." : c.Sandbox ? "sandbox mode earns nothing." : "join the Cartel at the Contact to earn it.";
-
-    static bool Earns(ServerClient c) => CartelRules.Earns(c.IsBot, c.Profile?.Persist == true, c.Sandbox, c.Profile?.Cartel);
-
-    /// <summary>Adds Respect to a member, writes it through the store's queue, tells them and, on a rank-up, everyone. What was added.</summary>
-    int Grant(ServerClient c, int amount)
+    /// <summary>Sends what the feed says changed: a Job to a member (joined, new leader, new flags), "no job" to a leaver, the objective to the party.</summary>
+    void Tell()
     {
-        var p = c.Profile!;
-        var change = p.Cartel.AddRespect(amount, _data);
-        if (change.Added > 0 && p.Persist) _ = _store?.Profiles.AddRespectAsync(p.DbId, change.Added);
-        SendStatus(c, change.RankedUp);
-        if (change.RankedUp)
+        _receivers.Clear();
+        foreach (var c in _ctx.Roster) if (!c.IsBot) _receivers.Add(c.Id);
+        _outbox.Clear();
+        _feed.Tick(_book.Running, _parties, _receivers, _flagsOf, _outbox);
+        foreach (var m in _outbox)
         {
-            _ctx.Broadcast(EventKind.CartelRankUp, CartelCodec.EncodeRankUp(c.Id, (byte)change.After));
-            _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} is now a {_data.Ranks[change.After].Name} of the Cartel.");
-            GD.Print($"server: {c.Name} #{c.Id} rose to {_data.Ranks[change.After].Id}");
-        }
-        return change.Added;
-    }
-
-    /// <summary>Tells each running Job's party when it changed (a member came or went, a new leader); one who went is told "no job" unless another Job has them now.</summary>
-    void TellParties()
-    {
-        foreach (var job in _book.Running)
-        {
-            var members = _parties.MembersOf(job.Owner).ToArray();
-            if (_told.TryGetValue(job.Id, out var was) && was.Leader == job.Leader && was.Members.AsSpan().SequenceEqual(members)) continue;
-            _told[job.Id] = (job.Leader, members);
-            _objectiveSent.Remove(job.Id); // the objective goes again to everyone, a member who joined midway among them
-            foreach (var m in members)
-                if (_ctx.Players.TryGetValue(m, out var mc) && !mc.IsBot) _ctx.SendEvent(mc, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(job, mc, 0)));
-            if (was.Members == null) continue;
-            foreach (var gone in was.Members)
-                if (Array.IndexOf(members, gone) < 0 && _book.Involving(gone, _parties) == null && _ctx.Players.TryGetValue(gone, out var gc) && !gc.IsBot)
-                    _ctx.SendEvent(gc, EventKind.CartelJob, CartelCodec.EncodeJob(CartelJobMsg.None));
+            if (!_ctx.Players.TryGetValue(m.To, out var to)) continue;
+            switch (m.Kind)
+            {
+                case JobFeedKind.Job: _ctx.SendEvent(to, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(m.Job!, (CartelJobFlags)m.Flags, 0))); break;
+                case JobFeedKind.NoJob: _ctx.SendEvent(to, EventKind.CartelJob, CartelCodec.EncodeJob(CartelJobMsg.None)); break;
+                case JobFeedKind.Objective: _ctx.SendEvent(to, EventKind.CartelObjective, CartelCodec.EncodeObjective(new CartelObjectiveMsg(m.Job!.Id, m.Line, m.Marker))); break;
+            }
         }
     }
 
-    /// <summary>
-    /// Sends each running Job's party its objective line and marker (<see cref="IJobObjective.Objective"/>, <see cref="IJobObjective.Marker"/>) when the line changed, the marker
-    /// came or went or moved more than <see cref="CartelFile.MarkerResendM"/>, or the party changed (<see cref="TellParties"/> forgets what was sent).
-    /// </summary>
-    void TellObjectives()
+    /// <summary>The receiver's flags for a Job: theirs (<see cref="CartelMembers.FlagsOf"/>) and whether they lead it.</summary>
+    byte FlagsOf(Job job, ushort player)
     {
-        foreach (var job in _book.Running)
-        {
-            var line = job.Objective.Objective(job) ?? "";
-            var marker = job.Objective.Marker(job);
-            if (_objectiveSent.TryGetValue(job.Id, out var was) && was.Line == line && SameMarker(was.Marker, marker)) continue;
-            _objectiveSent[job.Id] = (line, marker);
-            var payload = CartelCodec.EncodeObjective(new CartelObjectiveMsg(job.Id, line, marker));
-            foreach (var m in _parties.MembersOf(job.Owner))
-                if (_ctx.Players.TryGetValue(m, out var mc) && !mc.IsBot) _ctx.SendEvent(mc, EventKind.CartelObjective, payload);
-        }
+        var flags = _ctx.Players.TryGetValue(player, out var c) ? CartelMembers.FlagsOf(c) : CartelJobFlags.None;
+        if (job.Leader == player) flags |= CartelJobFlags.Leader;
+        return (byte)flags;
     }
 
-    bool SameMarker(System.Numerics.Vector3? a, System.Numerics.Vector3? b) =>
-        a is { } x ? b is { } y && System.Numerics.Vector3.Distance(x, y) <= _data.MarkerResendM : b == null;
-
-    static CartelJobMsg JobMsg(Job job, ServerClient to, int paid)
-    {
-        var flags = CartelJobFlags.None;
-        if (Earns(to)) flags |= CartelJobFlags.Earns;
-        if (to.Profile?.Cartel.IsMember != true) flags |= CartelJobFlags.NotMember;
-        if (job.Leader == to.Id) flags |= CartelJobFlags.Leader;
-        return new CartelJobMsg(job.Id, job.State, job.Reason, job.Kind.Id, (byte)job.Tier, job.Leader, Math.Max(0, job.SecondsLeft), paid, flags);
-    }
-
-    void SendStatus(ServerClient c, bool rankedUp = false)
-    {
-        if (c.IsBot || c.Profile is not { } p) return;
-        var flags = CartelStatusFlags.None;
-        if (!p.Persist) flags |= CartelStatusFlags.Guest;
-        if (c.Sandbox) flags |= CartelStatusFlags.Sandbox;
-        if (rankedUp) flags |= CartelStatusFlags.RankedUp;
-        _ctx.SendEvent(c, EventKind.CartelStatus, CartelCodec.EncodeStatus(new CartelStatusMsg(p.Cartel.Membership, p.Cartel.Respect, (byte)p.Cartel.Rank(_data), flags)));
-    }
-
-    string RankName(CartelStanding s) => _data.Ranks[s.Rank(_data)].Name;
+    static CartelJobMsg JobMsg(Job job, CartelJobFlags flags, int paid) =>
+        new(job.Id, job.State, job.Reason, job.Kind.Id, (byte)job.Tier, job.Leader, Math.Max(0, job.SecondsLeft), paid, flags);
 
     /// <summary>
     /// "/cartel join | quit | respect &lt;n&gt; | job &lt;kind&gt; [tier] | status" (admin, for testing, on themselves): join or quit anywhere, add Respect (a rank-up is announced as
@@ -273,8 +241,8 @@ internal sealed class CartelServer
                 if (rest.Length != 1 || !int.TryParse(rest[0], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) || n > MaxGrant)
                 { _ctx.ChatTo(c, ChatLineKind.Error, $"Say how much: /cartel respect <0 to {MaxGrant}>."); break; }
                 if (c.Profile is not { Cartel.IsMember: true } p) { _ctx.ChatTo(c, ChatLineKind.Error, "Join the Cartel first: /cartel join."); break; }
-                var added = Grant(c, n);
-                _ctx.ChatTo(c, ChatLineKind.Info, $"+{added} Respect: {p.Cartel.Respect} now, {RankName(p.Cartel)}.");
+                var added = _members.Grant(c, n);
+                _ctx.ChatTo(c, ChatLineKind.Info, $"+{added} Respect: {p.Cartel.Respect} now, {_members.RankName(p.Cartel)}.");
                 break;
             case "job":
                 var tier = 1;
@@ -284,7 +252,7 @@ internal sealed class CartelServer
                 break;
             case "status":
                 var s = c.Profile?.Cartel ?? new CartelStanding();
-                _ctx.ChatTo(c, ChatLineKind.Info, $"Cartel: {s.Membership}, {s.Respect} Respect, {RankName(s)}, tiers up to {_data.HighestTier(s.Rank(_data))}. {_book.Running.Count} job(s) running.");
+                _ctx.ChatTo(c, ChatLineKind.Info, $"Cartel: {s.Membership}, {s.Respect} Respect, {_members.RankName(s)}, tiers up to {_data.HighestTier(s.Rank(_data))}. {_book.Running.Count} job(s) running.");
                 if (_book.Involving(c.Id, _parties) is { } job) _ctx.ChatTo(c, ChatLineKind.Info, $"Your job: {job.Kind.Name} tier {job.Tier}, led by {_ctx.NameOf(job.Leader)}, {Math.Max(0, job.SecondsLeft):F0} s left.");
                 break;
         }

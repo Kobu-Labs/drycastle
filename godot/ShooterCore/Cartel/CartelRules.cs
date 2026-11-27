@@ -2,10 +2,28 @@ using Drycastle.ShooterCore.Jobs;
 
 namespace Drycastle.ShooterCore.Cartel;
 
-/// <summary>Why a player could not join the Cartel.</summary>
-public enum CartelJoinRefusal : byte { None, Bot, Guest, AlreadyMember }
+/// <summary>Why the Contact refused a join or a quit. The refusal event (<see cref="Net.EventKind.CartelRefused"/>) carries the byte: do not renumber.</summary>
+public enum CartelJoinRefusal : byte
+{
+    None,
+    Bot,
+    Guest,
+    AlreadyMember,
+    /// <summary>A quit from a player who does not work for the Cartel.</summary>
+    NotMember,
+    /// <summary>The map has no Contact.</summary>
+    NoCartel,
+    /// <summary>Out of the Contact's reach.</summary>
+    FarFromContact,
+}
 
-/// <summary>Why a Cartel Job was not started, checked in this order (<see cref="CartelRules.CanStart"/>).</summary>
+/// <summary>Why a party member earns no Respect from a Job (<see cref="CartelRules.NoRespect"/>); None: they earn.</summary>
+public enum NoRespectReason : byte { None, Bot, Guest, Sandbox, NotMember }
+
+/// <summary>
+/// Why a Cartel Job was not started, checked in this order (<see cref="CartelRules.CanStart"/>; <see cref="NoCartel"/> before all, <see cref="CannotBegin"/> after all). The refusal event
+/// (<see cref="Net.EventKind.CartelRefused"/>) carries the byte: do not renumber.
+/// </summary>
 public enum JobStartRefusal : byte
 {
     None,
@@ -24,6 +42,10 @@ public enum JobStartRefusal : byte
     OwnerBusy,
     /// <summary>Someone of the party is on another Job.</summary>
     MateBusy,
+    /// <summary>The map has no Contact.</summary>
+    NoCartel,
+    /// <summary>The kind could not begin (no drop point free, no house free...): its own words go with it.</summary>
+    CannotBegin,
 }
 
 /// <summary>What <see cref="CartelRules.CanStart"/> needs to know about a start request; the server gathers it.</summary>
@@ -46,16 +68,14 @@ public static class CartelRules
         return standing.IsMember ? CartelJoinRefusal.AlreadyMember : CartelJoinRefusal.None;
     }
 
-    public static string Words(CartelJoinRefusal r) => r switch
-    {
-        CartelJoinRefusal.Bot => "Bots do not work for the Cartel.",
-        CartelJoinRefusal.Guest => "The Cartel only takes players with a saved profile: guests cannot join.",
-        CartelJoinRefusal.AlreadyMember => "You already work for the Cartel.",
-        _ => "",
-    };
+    public static string Words(CartelJoinRefusal r) => CartelWords.Join.Text(r);
 
     /// <summary>A party member earns a Job's Respect: a Cartel member with a stored Profile, not a bot, not in sandbox mode. Everyone else shares the objective and earns nothing.</summary>
-    public static bool Earns(bool bot, bool stored, bool sandbox, CartelStanding? standing) => !bot && stored && !sandbox && standing is { IsMember: true };
+    public static bool Earns(bool bot, bool stored, bool sandbox, CartelStanding? standing) => NoRespect(bot, stored, sandbox, standing) == NoRespectReason.None;
+
+    /// <summary>Why the member earns no Respect (in this order: a bot, a guest, sandbox mode, not in the Cartel); None when they earn.</summary>
+    public static NoRespectReason NoRespect(bool bot, bool stored, bool sandbox, CartelStanding? standing) =>
+        bot ? NoRespectReason.Bot : !stored ? NoRespectReason.Guest : sandbox ? NoRespectReason.Sandbox : standing is { IsMember: true } ? NoRespectReason.None : NoRespectReason.NotMember;
 
     /// <summary>What a finished Job pays each earning member: the tier's Respect, plus what its objective adds (a heist's duffels).</summary>
     public static int Reward(CartelFile data, Job job) => data.RespectFor(job.Tier) + Math.Max(0, job.Objective?.BonusRespect ?? 0);
@@ -77,29 +97,11 @@ public static class CartelRules
 
     public static string Words(JobStartRefusal r, CartelFile data, int tier) => r switch
     {
-        JobStartRefusal.Bot => "Bots do not run jobs.",
-        JobStartRefusal.NotMember => "Join the Cartel at the Contact first.",
-        JobStartRefusal.NotLeader => "Your leader starts jobs.",
-        JobStartRefusal.UnknownKind => "The Cartel has no such job.",
-        JobStartRefusal.UnknownTier => $"Tiers go from 1 to {data.Tiers.Count}.",
-        JobStartRefusal.TierLocked => data.Tier(tier) is { } t ? $"Tier {tier} needs the rank {data.Ranks[data.RankIndex(t.Rank)].Name}." : "That tier is locked.",
-        JobStartRefusal.NoRound => "Jobs start while a round runs.",
-        JobStartRefusal.Dead => "You cannot start a job while dead.",
-        JobStartRefusal.FarFromContact => "Jobs are started at the Contact.",
-        JobStartRefusal.OwnerBusy => "Your job is still running.",
-        JobStartRefusal.MateBusy => "Someone in your squad is on another job.",
-        _ => "",
+        JobStartRefusal.UnknownTier => CartelWords.Start.Text(r, data.Tiers.Count),
+        JobStartRefusal.TierLocked => data.Tier(tier) is { } t ? CartelWords.Start.Text(r, tier, data.Ranks[data.RankIndex(t.Rank)].Name) : CartelWords.Start.Text(JobStartRefusal.CannotBegin),
+        _ => CartelWords.Start.Text(r),
     };
 
     /// <summary>The line a failed Job's party reads.</summary>
-    public static string Words(JobFailReason r) => r switch
-    {
-        JobFailReason.Timer => "time ran out",
-        JobFailReason.RoundReset => "the round ended",
-        JobFailReason.LeaderQuit => "the leader quit the Cartel",
-        JobFailReason.Death => "the leader died",
-        JobFailReason.Abandoned => "nobody is left to run it",
-        JobFailReason.Objective => "the objective was lost",
-        _ => "it failed",
-    };
+    public static string Words(JobFailReason r) => CartelWords.Fail.Text(r);
 }

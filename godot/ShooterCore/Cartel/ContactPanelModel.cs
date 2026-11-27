@@ -2,21 +2,6 @@ using System.Text.Json;
 
 namespace Drycastle.ShooterCore.Cartel;
 
-/// <summary>Why the Contact panel's Start is not offered (shown in words instead of the button working), in the server's order of checks (<see cref="CartelRules.CanStart"/>).</summary>
-public enum ContactStartBlock : byte
-{
-    None,
-    /// <summary>The player's standing has not come yet.</summary>
-    Loading,
-    NotMember,
-    /// <summary>In a Squad, only its leader starts a Job ("Your leader starts jobs").</summary>
-    NotLeader,
-    /// <summary>The round is not running.</summary>
-    NoRound,
-    /// <summary>The player's party runs a Job already.</summary>
-    JobRunning,
-}
-
 /// <summary>One tier of a kind on the Contact's list: open to the player's rank, or locked with the rank it needs (its name), and the Respect it pays.</summary>
 public readonly record struct ContactTier(int Tier, bool Open, string NeedsRank, int Respect);
 
@@ -26,13 +11,14 @@ public sealed record ContactJob(string Kind, string Name, IReadOnlyList<ContactT
 /// <summary>
 /// What the Contact panel shows (docs/cartel.md "Contact"; GLOSSARY "Contact"), from cartel.json, the player's standing (<see cref="CartelStatusMsg"/>) and the match: for a member
 /// the rank, the Respect and the bar to the next rank, and the job list by kind and tier (the test kind only for admins; a tier above the rank locked, with the rank it
-/// needs); for anyone else what the Cartel is and Join. Start is the leader's (a solo player, or the Squad's leader) and only with no Job running. Pure: the panel draws it,
-/// the server checks every request again.
+/// needs); for anyone else what the Cartel is and Join. Start is the leader's (a solo player, or the Squad's leader) and only with no Job running: <see cref="StartBlock"/> is the
+/// server's refusal the panel can foresee (None: Start is offered; the server's order of checks, worded by <see cref="CartelWords.Start"/>), and nothing is offered until
+/// <see cref="Loaded"/>. Pure: the panel draws it, the server checks every request again and answers a refusal (<see cref="Net.EventKind.CartelRefused"/>).
 /// </summary>
 public sealed record ContactPanelModel(
     bool Loaded, CartelMembership Membership, bool Guest, bool Sandbox,
     string RankName, int Respect, string? NextRankName, int RespectToNext, float BarFraction,
-    IReadOnlyList<ContactJob> Jobs, ContactStartBlock StartBlock)
+    IReadOnlyList<ContactJob> Jobs, JobStartRefusal StartBlock)
 {
     public bool IsMember => Membership == CartelMembership.Member;
 
@@ -50,12 +36,11 @@ public sealed record ContactPanelModel(
         var jobs = KindsOf(data, admin)
             .Select(k => new ContactJob(k.Id, k.Name, data.Tiers.Select(t => new ContactTier(t.Tier, data.TierOpen(t.Tier, rank), data.Ranks[data.RankIndex(t.Rank)].Name, t.Respect)).ToList()))
             .ToList();
-        var block = status == null ? ContactStartBlock.Loading
-            : s.Membership != CartelMembership.Member ? ContactStartBlock.NotMember
-            : !leader ? ContactStartBlock.NotLeader
-            : !roundRunning ? ContactStartBlock.NoRound
-            : jobRunning ? ContactStartBlock.JobRunning
-            : ContactStartBlock.None;
+        var block = s.Membership != CartelMembership.Member ? JobStartRefusal.NotMember
+            : !leader ? JobStartRefusal.NotLeader
+            : !roundRunning ? JobStartRefusal.NoRound
+            : jobRunning ? JobStartRefusal.OwnerBusy
+            : JobStartRefusal.None;
         return new ContactPanelModel(status != null, s.Membership, s.Flags.HasFlag(CartelStatusFlags.Guest), s.Flags.HasFlag(CartelStatusFlags.Sandbox),
             data.Ranks[rank].Name, s.Respect, next?.Name, next == null ? 0 : Math.Max(0, next.Respect - s.Respect), fraction, jobs, block);
     }

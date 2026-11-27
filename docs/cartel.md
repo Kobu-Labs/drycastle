@@ -32,7 +32,8 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - **ffa**: solo only. Squads stay team-deathmatch only.
 - **tdm**: the squad. Squads gain a **leader**: the creator; when the leader leaves, the longest-standing member takes over, and the running job goes with them. The leader is marked in the Squads screen and on the scoreboard. A player in no squad runs jobs alone.
 - Only the leader starts a job. The reward goes to every squad member at the moment of success, wherever they are (a member who joined midway gets it, one who left does not).
-- A squad mate who is not in the cartel shares the objective and can help, earns nothing, and gets the hint "Join the cartel at the Contact".
+- A squad mate who is not in the cartel shares the objective and can help, earns nothing, and gets the hint "Join the cartel at the Contact" (a guest, who cannot join, reads why instead: no saved profile). Joining midway turns the hint off at once (the Job message goes again when a member's flags change).
+- A player is in one party at most: a solo player who joins a squad leaves their solo job (it fails, nobody left to run it).
 - One running job per squad (or solo player). Many jobs can run at once, beside any Event. Two jobs never share a drop point, a target spot or a house.
 - Only the job's players see its markers and tracker. Everyone sees the duffels on carriers' bodies. Outsiders can interfere by shooting; they get nothing special.
 
@@ -45,7 +46,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 
 ## Failure
 
-- A job fails when its timer runs out (a safety for heists, the pressure for simple jobs), at a round reset, or when the leader quits the cartel.
+- A job fails when its timer runs out (a safety for heists, the pressure for simple jobs), when the round ends (at the end screen, not at the next round) or resets, or when the leader quits the cartel.
 - Death fails it: solo, the player's death; in a squad, the **leader's** death (other members respawn and carry on; a carried duffel drops where they fell).
 - Heists also fail when the Cartel van is destroyed.
 - No Respect penalty, no cooldown. A job's NPCs, duffels and van are removed when it ends.
@@ -58,12 +59,13 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - E opens a non-pausing panel (as the Hunter's Log): join / quit, rank and Respect bar, the job list by tier (locked tiers show the rank they need), Start (leader only; others see "Your leader starts jobs"). UI follows `docs/standards/ui-ux.md` and the `ui-work` skill.
 - During a job: a HUD tracker (objective line, timer) and a marker on the minimap and in the world.
 - Built (#494, round 2): the server sends a Job's party its objective line and marker (`IJobObjective.Objective` / `Marker`) as event 37 `CartelObjective` when either changes (the marker when it moved `marker_resend_m`) and again to all after a party change. The Contact's key is `KeyCompetitor.Contact` (his reach keeps the plantation's hold off it); the client gives him the key after every other prompt (`CartelClient`), and his panel is `Cartel/ContactPanel.cs` over `ContactPanelModel` (ShooterCore). The tracker is `CartelTracker` (machine `Cartel.Tracker`), drawn by `HeadsUp/Prompts/JobTracker.cs`; the marker is `MapMarkers.Job` (a star, `MapGlyphs.Job`, `Maps/JobMarker.cs`). A rank-up (event 36) is a toast for everyone. Not screenshot-checked yet.
+- Built (review fixes, protocol 89): who is told what each tick is `ShooterCore/Jobs/JobFeed` (unit-tested), membership and Respect `CartelMembers`, the Contact's requests `CartelServer`. A refused join, quit or start answers the panel with event 38 `CartelRefused` (the refusal's code and words), shown in Start's (or Join's) reason line until the next build. Every reason (a failure, a refused start, join or quit, why no Respect) has one key and one text in `CartelWords` (ShooterCore), which the server writes and the client registers. The test kind starts only for an admin. Server text that names the interact key writes `{interact}` (`JobText`); the tracker shows the bound key.
 
 ## Simple jobs (v1)
 
 - **Delivery**: carry one duffel from the Contact to a drop point before the timer runs out.
 - **Hit**: kill a Rival dealer who stands outdoors at a random spot (zone kind `cartel_hit`) with a few guards (Gunmen and Enforcers). The guards attack the job's players on sight within a radius and ignore everyone else unless attacked. The target dying by anyone's hand is success.
-- Built (#494, #497): `DeliveryJobKind` and `HitJobKind` (ShooterCore/Cartel, cartel.json `jobs.delivery`, `jobs.hit`), points claimed by `CartelSpots` (book key `cartel_drop:<i>` / `cartel_hit:<i>`), the party a live `JobPartySet`, the server's world `CartelJobWorld`. Delivery: a `product` Duffel in the leader's hands; hold E 2 s within 4 m of the drop point. Hit: the dealer is the Rival crew's Gang boss (no new kind), guards on a ring round him; marker on the spot, then on him (`Hit.Target`). Test with `/cartel job delivery|hit [tier]`.
+- Built (#494, #497): `DeliveryJobKind` and `HitJobKind` (ShooterCore/Cartel, cartel.json `jobs.delivery`, `jobs.hit`), points claimed by `CartelSpots` (book key `cartel_drop:<i>` / `cartel_hit:<i>`), the party a live `JobPartySet`, the server's world `CartelJobWorld`. Delivery: a `product` Duffel in the leader's hands; hold the interact key 2 s within 4 m of the drop point (the client's prompt "Hold <key>: hand the duffel over" and the hold ring, `CartelClient`, from `jobs.delivery` `radius_m` / `hold_seconds`). Hit: the dealer is the Rival crew's Gang boss (no new kind), guards on a ring round him; marker on the spot, then on him (`Hit.Target`). Test with `/cartel job delivery|hit [tier]`.
 
 ## Heists (v1)
 

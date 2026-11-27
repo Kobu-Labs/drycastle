@@ -108,7 +108,7 @@ public class ContactPanelTests
         var outsider = ContactPanelModel.Build(Shipped, new CartelStatusMsg(CartelMembership.Outsider, 0, 0, CartelStatusFlags.Guest), admin: false, leader: true, jobRunning: false, roundRunning: true);
         Assert.False(outsider.IsMember);
         Assert.True(outsider.Guest);
-        Assert.Equal(ContactStartBlock.NotMember, outsider.StartBlock);
+        Assert.Equal(JobStartRefusal.NotMember, outsider.StartBlock);
 
         var respect = 1500; // a Dealer, halfway to Sicario (1000 to 3000)
         var m = ContactPanelModel.Build(Shipped, new CartelStatusMsg(CartelMembership.Member, respect, (byte)Shipped.RankFor(respect), CartelStatusFlags.None), false, true, false, true);
@@ -116,7 +116,7 @@ public class ContactPanelTests
         Assert.Equal("Sicario", m.NextRankName);
         Assert.Equal(1500, m.RespectToNext);
         Assert.Equal(0.25f, m.BarFraction, 3);
-        Assert.Equal(ContactStartBlock.None, m.StartBlock);
+        Assert.Equal(JobStartRefusal.None, m.StartBlock);
         Assert.DoesNotContain(m.Jobs, j => j.Kind == TestJobKind.KindId); // only admins see the test kind
         var admin = ContactPanelModel.Build(Shipped, new CartelStatusMsg(CartelMembership.Member, respect, 1, CartelStatusFlags.None), true, true, false, true);
         var test = Assert.Single(admin.Jobs, j => j.Kind == TestJobKind.KindId);
@@ -134,11 +134,11 @@ public class ContactPanelTests
     public void StartIsTheLeadersWithARoundAndNoJobRunning()
     {
         var s = new CartelStatusMsg(CartelMembership.Member, 0, 0, CartelStatusFlags.None);
-        Assert.Equal(ContactStartBlock.Loading, ContactPanelModel.Build(Shipped, null, false, true, false, true).StartBlock);
-        Assert.Equal(ContactStartBlock.NotLeader, ContactPanelModel.Build(Shipped, s, false, leader: false, false, true).StartBlock);
-        Assert.Equal(ContactStartBlock.NoRound, ContactPanelModel.Build(Shipped, s, false, true, false, roundRunning: false).StartBlock);
-        Assert.Equal(ContactStartBlock.JobRunning, ContactPanelModel.Build(Shipped, s, false, true, jobRunning: true, true).StartBlock);
-        Assert.Equal(ContactStartBlock.NotMember, ContactPanelModel.Build(Shipped, s with { Membership = CartelMembership.Quit }, false, true, false, true).StartBlock);
+        Assert.False(ContactPanelModel.Build(Shipped, null, false, true, false, true).Loaded); // nothing is offered until the standing came
+        Assert.Equal(JobStartRefusal.NotLeader, ContactPanelModel.Build(Shipped, s, false, leader: false, false, true).StartBlock);
+        Assert.Equal(JobStartRefusal.NoRound, ContactPanelModel.Build(Shipped, s, false, true, false, roundRunning: false).StartBlock);
+        Assert.Equal(JobStartRefusal.OwnerBusy, ContactPanelModel.Build(Shipped, s, false, true, jobRunning: true, true).StartBlock);
+        Assert.Equal(JobStartRefusal.NotMember, ContactPanelModel.Build(Shipped, s with { Membership = CartelMembership.Quit }, false, true, false, true).StartBlock);
     }
 
     [Fact]
