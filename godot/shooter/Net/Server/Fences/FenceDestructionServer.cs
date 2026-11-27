@@ -217,11 +217,11 @@ internal sealed class FenceDestructionServer
 
     // ---- admin commands ----
 
-    /// <summary>"/fences restore": every fence whole now, for everyone.</summary>
+    /// <summary>"/fences restore": every fence whole now, for everyone; the result to the admin only.</summary>
     public void ChatFences(ServerClient c, IReadOnlyList<string> args)
     {
         if (!On) { _ctx.ChatTo(c, ChatLineKind.Error, "Fence destruction is off on this map."); return; }
         RestoreAll();
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} restored every fence.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} restored every fence.");
     }
 }
