@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Net.Bots;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Match;
@@ -45,7 +46,7 @@ internal sealed class RaidServer
     /// <param name="runOver">The vehicles' run-over rule: sweeps a footprint over the live targets (the van's own crew is spared).</param>
     /// <param name="crash">The one crash rule: a vehicle that lost speed to a bump.</param>
     public RaidServer(ServerContext ctx, ThievesFile data, ThievesEvent wave, GangServer gangs, Drycastle.MapLoader.MapLoader? map, Node3D world, Fleet fleet, Func<VehiclesFile?> vehicles,
-        Func<BotNav?> nav, Func<FlightBounds> bounds, Func<NVec2?> churchDoorway, Random rng, Action<RunOverSweep, Func<ushort, bool>?> runOver, Action<ServerCar, float, ushort> crash)
+        Func<BotNav?> nav, Func<FlightBounds> bounds, Func<NVec2?> churchDoorway, Random rng, Action<RunOverSweep, Func<ushort, bool>?> runOver, Action<ServerCar, float, ushort> crash, OpenGround? open = null)
     {
         _ctx = ctx; _data = data; _world = world; _fleet = fleet; _vehicles = vehicles; _runOver = runOver; _crash = crash;
         RaidVanRules.Register(WorldEntityRegistry.Shared);
@@ -55,7 +56,7 @@ internal sealed class RaidServer
         Roster.Honked += r => ctx.Broadcast(EventKind.ThievesFx, ThievesFxCodec.Encode(new ThievesFxMsg(ThievesFxKind.Honk, r.Van.Position + NVec3.UnitY, r.VanEntity)));
         Roster.RaidOver += r => GD.Print($"server: Thieves Raid over: its van was {(r.Van.State == RaidVanState.Destroyed ? "destroyed" : "driven off")}, {r.Boarded} of the crew boarded");
         Roster.LootReturned += (r, n) => { if (n > 0) GD.Print($"server: Thieves: {n} Loot of a destroyed van goes back to its places"); };
-        _launcher = new RaidLauncher(ctx, data, wave, Roster, map, nav, bounds, churchDoorway, rng);
+        _launcher = new RaidLauncher(ctx, data, wave, Roster, map, nav, bounds, churchDoorway, rng, open);
     }
 
     public RaidRoster Roster { get; }
@@ -68,7 +69,7 @@ internal sealed class RaidServer
     /// <summary>The roads a van may use (a Heist puts its Cartel van on the spot nearest the Contact).</summary>
     public RoadGraph Roads => _launcher.Roads;
 
-    /// <summary>A Heist's Assault: see <see cref="RaidLauncher.LaunchAssault"/>.</summary>
+    /// <summary>A Heist's Assault (its van drives the roads, then across open ground to its target): see <see cref="RaidLauncher.LaunchAssault"/>.</summary>
     public Raid? LaunchAssault(NVec2 target, IReadOnlyList<NVec2> used, IReadOnlyList<GangMemberKind> order, ThiefGang gang, NVec3 post) => _launcher.LaunchAssault(target, used, order, gang, post);
 
     /// <summary>Removes one Raid (a Heist's Assault when its Job ends): its van, its crew, the dead too.</summary>

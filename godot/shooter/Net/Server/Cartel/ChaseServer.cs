@@ -25,9 +25,9 @@ internal sealed class ChaseServer
     readonly Func<RoadGraph> _roads;
     readonly List<ChaseFleet> _fleets = new();
 
-    public ChaseServer(ServerContext ctx, Func<JobVehicles> vehicles, RivalCrewServer rivals, Func<RoadGraph> roads, Func<float, float, float> ground, Random rng)
+    public ChaseServer(ServerContext ctx, Func<JobVehicles> vehicles, RivalCrewServer rivals, Func<RoadGraph> roads, Func<float, float, float> ground, OpenGround open, Random rng)
     {
-        _ctx = ctx; _vehicles = vehicles; Rivals = rivals; _roads = roads; Ground = ground; Rng = rng;
+        _ctx = ctx; _vehicles = vehicles; Rivals = rivals; _roads = roads; Ground = ground; Open = open; Rng = rng;
     }
 
     public JobVehicles Vehicles => _vehicles();
@@ -35,6 +35,8 @@ internal sealed class ChaseServer
     /// <summary>The roads the Raid vans drive (the chase cars drive them too).</summary>
     public RoadGraph Roads => _roads();
     public Func<float, float, float> Ground { get; }
+    /// <summary>What is open ground for a car (cartel.json off_road): where a chase car may stand and drive besides the roads.</summary>
+    public OpenGround Open { get; }
     public Random Rng { get; }
 
     /// <summary>The chase cars of a Heist that has begun: it listens to the van leaving the objective and reaching the drop.</summary>
@@ -153,14 +155,18 @@ internal sealed class ChaseFleet
     string? TrySpawn()
     {
         var roads = _s.Roads;
-        if (roads.IsEmpty) return "the map has no road for it";
         var van = Flat(_run.VanFeet);
+        var off = _s.Open.Numbers;
         var cars = new List<NVec2>();
         foreach (var u in _units) if (u.Where is { } p) cars.Add(p);
         var party = _run.Party;
-        if (ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng) is not { } spot)
-            return $"no road behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
-        if (ChaseUnit.Spawn(_s, _run, _d, spot) is not { } unit) return "the car could not be put down";
+        // any open drivable ground behind the van (not only a road), with a way from it to the van
+        var spot = ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng,
+            open: p => _s.Open.Spot(p, off.CarHalfWidthM),
+            reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null);
+        if (spot is not { } fit)
+            return $"no open ground behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
+        if (ChaseUnit.Spawn(_s, _run, _d, fit) is not { } unit) return "the car could not be put down";
         _units.Add(unit);
         _run.Tell("A Rival car is after the van!");
         return null;

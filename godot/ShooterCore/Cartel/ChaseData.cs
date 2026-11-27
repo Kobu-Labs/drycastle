@@ -19,37 +19,54 @@ public sealed class ChaseData
     /// <summary>A due car that found no spot asks again this soon (the interval starts when one is put down).</summary>
     public float SpawnRetrySeconds { get; set; } = 3;
 
-    /// <summary>The Gunmen in one car per tier (tier 1 first), plus <see cref="GunmenPerExtraMember"/> per party member beyond the first, at most <see cref="MaxGunmen"/> (1 to 3: the car has a driver and three more seats). The driver is a Rival Enforcer.</summary>
-    public int[] Gunmen { get; set; } = { 1, 1, 2, 2, 3 };
+    /// <summary>The Gunmen in one car per tier (tier 1 first), plus <see cref="GunmenPerExtraMember"/> per party member beyond the first, at most <see cref="MaxGunmen"/> (1 to 3: the car has a driver and three more seats). The driver is a Rival Enforcer, the car's one melee member: a full car is 4, an Enforcer and 3 Gunmen.</summary>
+    public int[] Gunmen { get; set; } = { 3, 3, 3, 3, 3 };
     public int GunmenPerExtraMember { get; set; } = 1;
     public int MaxGunmen { get; set; } = 3;
 
-    /// <summary>A car is put down on a road at least <see cref="SpawnPlayerMinM"/> from every player, out of the party's sight, apart from the other chase cars (<see cref="SpawnApartM"/>), on the van's way back from the objective: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind the van, the nearest road within <see cref="SpawnRoadM"/> of it.</summary>
+    /// <summary>A car is put down on open drivable ground (a road, a field, a meadow: nothing solid, no water) at least <see cref="SpawnPlayerMinM"/> from every player, out of the party's sight, apart from the other chase cars (<see cref="SpawnApartM"/>), behind the van: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind it, on the nearest road within <see cref="SpawnRoadM"/> of a trail point or on open ground at the point itself or <see cref="SpawnSpreadM"/> to either side of it.</summary>
     public float SpawnPlayerMinM { get; set; } = 150;
     public float SpawnBackMinM { get; set; } = 150;
     public float SpawnBackMaxM { get; set; } = 500;
     public float SpawnRoadM { get; set; } = 30;
     public float SpawnApartM { get; set; } = 25;
+    public float SpawnSpreadM { get; set; } = 40;
 
     /// <summary>The Gunmen shoot from the windows only while the car is within <see cref="ShootRangeM"/> of the van; while it moves faster than <see cref="MovingMps"/> every round is turned off its line by up to <see cref="MovingAimErrorDeg"/> instead of the gun's own aim error.</summary>
     public float ShootRangeM { get; set; } = 40;
     public float MovingAimErrorDeg { get; set; } = 9;
     public float MovingMps { get; set; } = 2;
 
-    /// <summary>The car stops and the crew gets out when the van is slower than <see cref="StopSpeedMps"/> within <see cref="StopWithinM"/> of it, when its driver is dead (it rolls; <see cref="StopSeconds"/> at most), when it has made no 1 m for <see cref="StalledSeconds"/>, or, with the van off the road, when it reached the road point nearest the van (<see cref="ArriveM"/>).</summary>
+    /// <summary>The car stops and the crew gets out when the van is slower than <see cref="StopSpeedMps"/> within <see cref="StopWithinM"/> of it, when its driver is dead (it rolls; <see cref="StopSeconds"/> at most), or when it has made no 1 m for <see cref="StalledSeconds"/> (after it tried to get free).</summary>
     public float StopSpeedMps { get; set; } = 5;
     public float StopWithinM { get; set; } = 30;
     public float StopSeconds { get; set; } = 12;
     public float StalledSeconds { get; set; } = 6;
-    public float ArriveM { get; set; } = 8;
-    /// <summary>The van is off the road when no road is within this of it.</summary>
-    public float OffRoadM { get; set; } = 15;
+    /// <summary>A car wedged (under 1 m/s, the van beyond <see cref="FollowM"/>) for <see cref="UnstickAfterSeconds"/> backs out for <see cref="ReverseSeconds"/>, steering as to turn its nose to its way, and drives on; the count of tries goes back to 0 once it has driven 3 s at 3 m/s; after <see cref="MaxUnsticks"/> tries it stops at <see cref="StalledSeconds"/> as before.</summary>
+    public float UnstickAfterSeconds { get; set; } = 2.5f;
+    public float ReverseSeconds { get; set; } = 1.5f;
+    public int MaxUnsticks { get; set; } = 3;
 
-    /// <summary>How it drives: it keeps <see cref="FollowM"/> from the van (it slows below that and never aims at the van's body), speeds up by <see cref="CatchUpGain"/> per metre of gap, at most <see cref="MaxSpeedMps"/>; the way is planned again every <see cref="RepathSeconds"/>.</summary>
+    /// <summary>
+    /// A crew on foot whose van is more than <see cref="RemountM"/> away (its nearest living member) and pulling away (the gap grows faster than <see cref="PullMps"/>, smoothed) for <see cref="RemountConfirmSeconds"/> walks back
+    /// to its car and gets in (the seats as they were), if the car is not wrecked, no player sits in it and the driver lives; the walk is given <see cref="RemountSeconds"/> and, when it fails, tried again after
+    /// <see cref="RemountRetrySeconds"/>.
+    /// </summary>
+    public float RemountM { get; set; } = 60;
+    public float PullMps { get; set; } = 1.5f;
+    public float RemountConfirmSeconds { get; set; } = 1;
+    public float RemountSeconds { get; set; } = 30;
+    public float RemountRetrySeconds { get; set; } = 10;
+
+    /// <summary>
+    /// How it drives: it keeps <see cref="FollowM"/> from the van (it slows below that and never aims at the van's body), speeds up by <see cref="CatchUpGain"/> per metre of gap, at most <see cref="MaxSpeedMps"/>; the way
+    /// (the roads where they bring it closer, open ground where that is shorter: <see cref="OffRoadData"/>) is planned again every <see cref="RepathSeconds"/>. The speed is an NPC's input only: 84 km/h, 1.4 times the loaded Cartel van's
+    /// 60 km/h; the car type's own top speed (44.4 m/s) is above it, so it is no allowance on the drive model; the car a player drives is not limited by it.
+    /// </summary>
     public float FollowM { get; set; } = 14;
     public float CatchUpGain { get; set; } = 1;
-    public float MaxSpeedMps { get; set; } = 38;
-    public float RepathSeconds { get; set; } = 1;
+    public float MaxSpeedMps { get; set; } = 23.33f; // 84 km/h
+    public float RepathSeconds { get; set; } = 1.5f;
 
     /// <summary>A car more than <see cref="GiveUpM"/> from the van for <see cref="GiveUpSeconds"/> gives up and is removed with its crew.</summary>
     public float GiveUpM { get; set; } = 250;
@@ -58,8 +75,8 @@ public sealed class ChaseData
     /// <summary>A destroyed car's wreck lies this long, then goes (before the type's destroyed_return_time brings it back).</summary>
     public float WreckSeconds { get; set; } = 20;
 
-    /// <summary>The crew sits in the car as standing figures, their feet this far below the seat's point (so the torso is at the window, the legs in the body); stepping out they stand this far beyond the door side.</summary>
-    public float SeatDropM { get; set; } = 0.5f;
+    /// <summary>The crew sits in the car (drawn with the seated pose, the pelvis this far above the feet: thieves.json van.view seat_pelvis_m), their feet this far below the seat's point so the hips are on it; stepping out they stand this far beyond the door side.</summary>
+    public float SeatDropM { get; set; } = 0.42f;
     public float ExitSideM { get; set; } = 0.7f;
 
     /// <summary>Checks the numbers; <paramref name="what"/> names the section (<c>jobs.harvest.chase</c>).</summary>
@@ -74,25 +91,30 @@ public sealed class ChaseData
         if (MaxAlive < 1) throw Bad("max_alive must be at least 1");
         foreach (var (v, name) in new[]
         {
-            (FirstAfterSeconds, "first_after_seconds"), (SpawnRetrySeconds, "spawn_retry_seconds"), (SpawnBackMinM, "spawn_back_min_m"), (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"),
+            (FirstAfterSeconds, "first_after_seconds"), (SpawnRetrySeconds, "spawn_retry_seconds"), (SpawnBackMinM, "spawn_back_min_m"), (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (SpawnSpreadM, "spawn_spread_m"),
             (MovingAimErrorDeg, "moving_aim_error_deg"), (MovingMps, "moving_mps"), (StalledSeconds, "stalled_seconds"), (SeatDropM, "seat_drop_m"), (ExitSideM, "exit_side_m"),
         })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
         foreach (var (v, name) in new[]
         {
             (IntervalSeconds, "interval_seconds"), (SpawnBackMaxM, "spawn_back_max_m"), (SpawnRoadM, "spawn_road_m"), (ShootRangeM, "shoot_range_m"), (StopSpeedMps, "stop_speed_mps"), (StopWithinM, "stop_within_m"),
-            (StopSeconds, "stop_seconds"), (ArriveM, "arrive_m"), (OffRoadM, "off_road_m"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"),
+            (StopSeconds, "stop_seconds"), (UnstickAfterSeconds, "unstick_after_seconds"), (ReverseSeconds, "reverse_seconds"), (RemountM, "remount_m"), (PullMps, "pull_mps"), (RemountConfirmSeconds, "remount_confirm_seconds"), (RemountSeconds, "remount_seconds"), (RemountRetrySeconds, "remount_retry_seconds"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"),
             (GiveUpM, "give_up_m"), (GiveUpSeconds, "give_up_seconds"), (WreckSeconds, "wreck_seconds"),
         })
             if (!float.IsFinite(v) || v <= 0) throw Bad($"{name} must be more than 0");
         if (SpawnBackMaxM < SpawnBackMinM) throw Bad("spawn_back_max_m is below spawn_back_min_m");
+        if (MaxUnsticks < 0) throw Bad("max_unsticks must be 0 or more");
         if (GiveUpM <= StopWithinM) throw Bad("give_up_m must be more than stop_within_m");
+        if (RemountM >= GiveUpM) throw Bad("remount_m must be less than give_up_m (the crew walks back before it is given up)");
     }
 }
 
 /// <summary>The rules of a Heist's chase cars that are plain numbers (docs/cartel.md "Chase cars").</summary>
 public static class ChaseRules
 {
+    /// <summary>A car's whole crew for a party of <paramref name="size"/>: the driver (an Enforcer, the one melee member) and its Gunmen.</summary>
+    public static int Crew(ChaseData d, int tier, int size) => 1 + Gunmen(d, tier, size);
+
     /// <summary>The Gunmen in one car for a party of <paramref name="size"/>: the tier's plus gunmen_per_extra_member for each member past the first, 1 to max_gunmen.</summary>
     public static int Gunmen(ChaseData d, int tier, int size) =>
         Math.Clamp(CartelTiers.Of(d.Gunmen, tier) + d.GunmenPerExtraMember * Math.Max(0, size - 1), 1, d.MaxGunmen);
@@ -103,10 +125,6 @@ public static class ChaseRules
     /// </summary>
     public static float FollowSpeed(ChaseData d, float gapM, float vanSpeed) =>
         Math.Clamp(vanSpeed + (gapM - d.FollowM) * d.CatchUpGain, 0f, d.MaxSpeedMps);
-
-    /// <summary>The speed the car wants on the way to the road point nearest an off-road van, <paramref name="distanceM"/> from it: braking for the stop (about 6 m/s squared), at least a crawl, at most max_speed_mps.</summary>
-    public static float ApproachSpeed(ChaseData d, float distanceM) =>
-        Math.Clamp(MathF.Sqrt(2f * 6f * MathF.Max(0f, distanceM - d.ArriveM)), 3f, d.MaxSpeedMps);
 
     /// <summary>The aim error of a Gunman's round now: moving_aim_error_deg while the car moves faster than moving_mps, else null (the gun's own).</summary>
     public static float? AimErrorDeg(ChaseData d, float carSpeed) => MathF.Abs(carSpeed) > d.MovingMps ? d.MovingAimErrorDeg : null;

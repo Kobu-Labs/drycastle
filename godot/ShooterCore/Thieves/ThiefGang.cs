@@ -88,6 +88,8 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     /// <summary>Raised once per member that reached the van's door (it ended there: ticket 03).</summary>
     public event Action<GangMember>? Boarded;
+    /// <summary>A member called back to its car (<see cref="GangMember.Remount"/>) reached the door: the car seats it.</summary>
+    public event Action<GangMember>? Mounted;
 
     /// <summary>Error log for members that could not spawn (the entity cap, no free hit id). Null means silent.</summary>
     public Action<string>? Log { get; set; }
@@ -134,7 +136,8 @@ public sealed class ThiefGang : IGangHits, IDisposable
         var member = new GangMember(_cfg, kind, _world, at, yaw, (ushort)_rng.Next(ushort.MaxValue + 1), hit, _rng.Next()) { Home = _post, Work = _work, Rival = Crew == GangCrew.RivalCrew };
         member.Died += OnDied;
         member.Boarded += OnBoarded;
-        if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; member.Boarded -= OnBoarded; _ids.Release(hit); return null; }
+        member.Mounted += OnMounted;
+        if (_entities.Spawn(member) is not { } entity) { member.Died -= OnDied; member.Boarded -= OnBoarded; member.Mounted -= OnMounted; _ids.Release(hit); return null; }
         _members.Add(member);
         _byHit[hit] = member;
         _entityOfHit[hit] = entity;
@@ -143,10 +146,10 @@ public sealed class ThiefGang : IGangHits, IDisposable
     }
 
     /// <summary>Puts one member in the world posted at <paramref name="at"/>, facing <paramref name="facing"/> (<see cref="GangMember.Post"/>: a trap house defender, no navigation mesh needed). Null when the world has no room.</summary>
-    public GangMember? AddPosted(GangMemberKind kind, Vector3 at, float facing)
+    public GangMember? AddPosted(GangMemberKind kind, Vector3 at, float facing, bool seat = false)
     {
         var m = Add(kind, at, facing);
-        m?.Post(at, facing);
+        m?.Post(at, facing, seat);
         return m;
     }
 
@@ -408,11 +411,13 @@ public sealed class ThiefGang : IGangHits, IDisposable
 
     void OnBoarded(GangMember m) => Boarded?.Invoke(m);
 
+    void OnMounted(GangMember m) => Mounted?.Invoke(m);
+
     void OnDespawned(WorldDespawned d)
     {
         if (!_hitOfEntity.Remove(d.Id, out var hit)) return;
         _entityOfHit.Remove(hit);
-        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; m.Boarded -= OnBoarded; m.Remove(d.Reason); } // Remove lets go of the target it had claimed
+        if (_byHit.Remove(hit, out var m)) { _members.Remove(m); m.Died -= OnDied; m.Boarded -= OnBoarded; m.Mounted -= OnMounted; m.Remove(d.Reason); } // Remove lets go of the target it had claimed
         _ids.Release(hit);
     }
 

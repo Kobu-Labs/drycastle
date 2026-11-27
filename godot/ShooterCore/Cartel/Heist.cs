@@ -267,11 +267,11 @@ public class HeistData
     /// <summary>The first Assault comes this long after the van reaches the objective, the next every interval, per tier.</summary>
     public float[] GraceSeconds { get; set; } = { 60, 55, 50, 45, 40 };
     public float[] AssaultIntervalSeconds { get; set; } = { 100, 90, 80, 70, 60 };
-    /// <summary>One Assault's crew per tier (Gunmen and Enforcers of the Rival crew), plus Gunmen per party member beyond the first; at most max_crew a van.</summary>
-    public int[] AssaultGunmen { get; set; } = { 1, 2, 2, 3, 3 };
-    public int[] AssaultEnforcers { get; set; } = { 2, 2, 3, 3, 4 };
+    /// <summary>One Assault's crew per tier (Gunmen and Enforcers of the Rival crew), plus Gunmen per party member beyond the first; at most max_crew a van, its Enforcers kept first. A van carries 5: 1 melee (an Enforcer) and 4 Gunmen.</summary>
+    public int[] AssaultGunmen { get; set; } = { 4, 4, 4, 4, 5 };
+    public int[] AssaultEnforcers { get; set; } = { 1, 1, 1, 1, 1 };
     public int GunmenPerExtraMember { get; set; } = 1;
-    public int MaxCrew { get; set; } = 8;
+    public int MaxCrew { get; set; } = 6;
     /// <summary>No new Assault while this many of the Heist's are still in the fight (a crew member alive or still in its van: <see cref="HeistAssaults.InFight"/>); the clock goes on.</summary>
     public int MaxAssaultsAlive { get; set; } = 3;
     /// <summary>The vehicle type the Heist puts down (vehicles.json), on the road spot nearest the Contact at least van_spawn_min_m from him.</summary>
@@ -359,9 +359,17 @@ public static class HeistRules
     /// <summary>Respect on top of the tier's: each Duffel loaded above the minimum pays bonus_respect_per_duffel times the tier.</summary>
     public static int Bonus(HeistData d, int tier, int loaded, int min) => d.BonusRespectPerDuffel * Math.Max(0, loaded - min) * Math.Max(1, tier);
 
-    /// <summary>One Assault's crew for a party of <paramref name="size"/>: the tier's Gunmen plus gunmen_per_extra_member for each extra member, and its Enforcers, Gunmen first within max_crew.</summary>
-    public static (int Gunmen, int Enforcers) AssaultCrew(HeistData d, int tier, int size) =>
-        CrewRules.Split(CartelTiers.Of(d.AssaultGunmen, tier), d.GunmenPerExtraMember, CartelTiers.Of(d.AssaultEnforcers, tier), 0, size, d.MaxCrew);
+    /// <summary>
+    /// One Assault's crew for a party of <paramref name="size"/>: the tier's Enforcers (the melee: 1 a van), kept first, and its Gunmen plus gunmen_per_extra_member for each extra member in what is left of max_crew
+    /// (a bigger squad adds Gunmen, never a second melee member).
+    /// </summary>
+    public static (int Gunmen, int Enforcers) AssaultCrew(HeistData d, int tier, int size)
+    {
+        var cap = Math.Max(0, d.MaxCrew);
+        var enforcers = Math.Min(cap, CartelTiers.Of(d.AssaultEnforcers, tier));
+        var gunmen = Math.Min(cap - enforcers, CartelTiers.Of(d.AssaultGunmen, tier) + d.GunmenPerExtraMember * Math.Max(0, size - 1));
+        return (gunmen, enforcers);
+    }
 
     /// <summary>The Job timer of a tier.</summary>
     public static float Seconds(HeistData d, int tier) => CartelTiers.Of(d.Seconds, tier);

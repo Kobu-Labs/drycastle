@@ -116,6 +116,7 @@ public partial class NetServer : Node
     // events and killstreaks
     RivalCrewServer _rivals = null!;
     RaidServer _raidVans = null!; // the Thieves' Raid vans, also a Heist's Assaults
+    OpenGround _openGround = null!; // what is open ground for the Rival crew's vehicles (Assault vans' last stretch, chase cars)
     HeistServer _heists = null!;
     ReceiverServer _receivers = null!;
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
@@ -304,7 +305,7 @@ public partial class NetServer : Node
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
         _receivers = new ReceiverServer(_ctx, Config.Cartel, _duffels.Book, _trapHouses, () => _areas.Cartel, () => _fleet.FlightBounds, Config.Water, (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, (float)Config.Duffels.CargoMarginM, _rng); // the Heists' drops (docs/cartel.md "Receivers"): world entity 59
         _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, _cargo, _receivers, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
-            (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
+            (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _openGround, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
         _trapHouses.Held = h => _cartel.Jobs.IsReserved(TrapHouseHeistRules.Key(h)); // the admin's /traphouse and /drill leave a running Job's house alone
@@ -389,8 +390,9 @@ public partial class NetServer : Node
         var phase = new ThievesEvent();
         var gangs = new GangServer(_ctx, Config.ThievesData, Config.Weapons, Config.Items, _corpses, _damage.Deal, () => _navMesh.Mesh, _navMesh.NextTicket, () => _walkers, _progress.Scores, _progress.Award, _shot, _targets, _impacts, _carDamage, _glass);
         _rivals = new RivalCrewServer(_ctx, Config.ThievesData, gangs); // the cartel's Rival crew: Gang members on the same roster
+        _openGround = new OpenGround(() => _shot.Query, Config.Water, (x, z) => Config.Map?.GroundHeight(x, z) ?? float.NaN, Config.Cartel.OffRoad);
         var raids = new RaidServer(_ctx, Config.ThievesData, phase, gangs, Config.Map, Config.World, _fleet, () => Config.Vehicles, () => _navMesh.Mesh, () => _fleet.FlightBounds,
-            () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash);
+            () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash, _openGround);
         _raidVans = raids;
         var loot = new LootServer(_ctx, Config.ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Config.Map, () => _navMesh.Mesh, Config.ArenaMode, Config.MapDir);
         var payout = new ThievesPayout(_ctx, Config.ThievesData, Config.Levels.Awards.EventWin, Config.Items, Config.Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, _progress.Scores, _progress.Award, gangs.Roster, raids.Roster);
