@@ -117,7 +117,6 @@ internal sealed class DemonServer
     {
         GD.PrintErr($"server: demon: {why}");
         _church.DoorsFor(DoorReason.DemonFailed);
-        _ctx.ChatToAll(ChatLineKind.System, "", $"The demon could not start ({why}). The church doors are open; /event current end ends the Mass.");
     }
 
     /// <summary>The event is over (ended, concluded, a new round): the demon, its fireballs and the fight's state go; the doors open for whoever is locked in.</summary>
@@ -409,6 +408,6 @@ internal sealed class DemonServer
         if (_citizens.Church?.Pastor == null || !_church.Exists) { _ctx.ChatTo(c, ChatLineKind.Error, "The church has no pastor spot or doorway: export the map again."); return; }
         mass.Event.ForceTurn();
         if (!Active) { mass.Event.End(); return; } // StartFailed has told everyone why
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} turned the pastor into the demon.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} turned the pastor into the demon.");
     }
 }

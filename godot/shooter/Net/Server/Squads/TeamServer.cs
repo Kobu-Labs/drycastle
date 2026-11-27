@@ -26,7 +26,7 @@ internal sealed class TeamServer
         // a sandbox player dropped on a team: sandbox mode ends first (it has no team), then the move
         if (a is { Action: TeamAction.Move, Team: Teams.A or Teams.B } && _ctx.Match.IsTeamMode && _ctx.Players.TryGetValue(a.Id, out var target) && target.Sandbox) _sandbox.SetSandbox(target, false);
         if (TeamAssignRules.Apply(_ctx.Match, a, c.Name) is not { } line) return;
-        _ctx.ChatToAll(ChatLineKind.System, "", line);
+        _ctx.ChatTo(c, ChatLineKind.Info, line);
         GD.Print($"server: {c.Name} #{c.Id} team {a.Action} {a.Id} {a.Team}");
     }
 

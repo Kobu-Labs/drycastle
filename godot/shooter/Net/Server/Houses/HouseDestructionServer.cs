@@ -276,7 +276,7 @@ internal sealed class HouseDestructionServer
     {
         if (!On) { _ctx.ChatTo(c, ChatLineKind.Error, "House destruction is off on this map."); return; }
         RestoreAll();
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} restored every house.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} restored every house.");
     }
 
     /// <summary>"/rubble [fade|stay]": the rubble mode for the rest of the round (D8), sent to everyone; no argument tells it.</summary>
@@ -285,6 +285,6 @@ internal sealed class HouseDestructionServer
         if (args.Count == 0) { _ctx.ChatTo(c, ChatLineKind.Info, $"Rubble {(RubbleStays ? "stays" : "fades")} this round."); return; }
         _rubbleStays = args[0] == "stay";
         if (On) _ctx.Broadcast(EventKind.HouseSettings, HouseCodec.EncodeSettings(new HouseSettingsMsg(RubbleStays, Reset: false)));
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} set rubble to {(RubbleStays ? "stay" : "fade")} for this round.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} set rubble to {(RubbleStays ? "stay" : "fade")} for this round.");
     }
 }
