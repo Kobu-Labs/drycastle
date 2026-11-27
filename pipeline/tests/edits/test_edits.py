@@ -632,6 +632,70 @@ def test_custom_sections_carry_their_own_fence_style(ws) -> None:
     assert got and all(s["column"] == "brick_red" and s["colour"] == "#9a8064" for s in got)
 
 
+def test_house_colour_takes_the_wall_colour_of_the_largest_house(ws) -> None:
+    cfg = {**FENCE, "probability": 0.0}
+    sq = lambda x, y, s: {"exterior": [[x, y], [x + s, y], [x + s, y + s], [x, y + s]], "holes": []}  # noqa: E731
+    houses = [
+        {"id": "b1", "parcel": "P-0001", "footprint": sq(60, 60, 4), "wall_colour": [10, 20, 30]},
+        {"id": "b2", "parcel": "P-0001", "footprint": sq(70, 70, 8), "wall_colour": [200, 100, 50]},  # the largest
+    ]
+    ws = {**ws, "buildings": houses}
+    got = fences(ws, {"P-0001": resolve_fence({"type": "concrete", "house_colour": True, "colour": "#123456"})}, cfg=cfg)
+    assert got and all(s["colour"] == "#c86432" for s in got)
+    # no house on the parcel: the fence's own colour
+    got = fences(ws, {"P-0002": resolve_fence({"type": "brick_white", "house_colour": True, "colour": "#123456"})}, cfg=cfg)
+    assert got and all(s["colour"] == "#123456" for s in got)
+    # a group member without a house takes the group's
+    spec = resolve_fence(None, {"mode": "custom", "type": "brick_red", "house_colour": True})
+    got = fences(ws, {"P-0001": spec, "P-0002": spec}, groups={"G-0001": ["P-0001", "P-0002"]}, cfg=cfg)
+    assert {s["parcel"] for s in got} == {"P-0001", "P-0002"} and all(s["colour"] == "#c86432" for s in got)
+    # a type that cannot take it (picket) ignores the key
+    assert not resolve_fence({"type": "picket", "house_colour": True}).house_colour
+    assert resolve_fence({"house_colour": False}, {"type": "concrete", "house_colour": True}).house_colour is False
+
+
+def test_sides_give_one_side_its_own_type_or_no_fence(ws) -> None:
+    from drycastle_pipeline.edits.schema import validate
+
+    cfg = {**FENCE, "probability": 0.0}
+    plain = fences(ws, {"P-0001": resolve_fence({"type": "picket"})}, cfg=cfg)
+    south = lambda s: s["a"][1] == 40 and s["b"][1] == 40  # noqa: E731  (P-0001 is the box (40, 40)-(95, 100))
+    assert any(south(s) for s in plain)
+    spec = resolve_fence({"type": "picket", "sides": [{"at": [60, 39], "type": "brick_red"}]})
+    got = fences(ws, {"P-0001": spec}, cfg=cfg)
+    assert got and all((s["type"] == "brick_red") == south(s) for s in got)
+    assert all(s["height_m"] == 1.8 for s in got if south(s)) and all(s["height_m"] == 1.0 for s in got if not south(s))
+    # no fence on that side; the rest keeps the fence's
+    spec = resolve_fence({"type": "picket", "sides": [{"at": [60, 39], "mode": "none"}]})
+    got = fences(ws, {"P-0001": spec}, cfg=cfg)
+    assert got and not any(s["a"][1] == 40 or s["b"][1] == 40 for s in got if abs(s["a"][1] - s["b"][1]) < 1e-6)
+    assert all(s["type"] == "picket" for s in got)
+    # a group: sides of its outer edge, on the member that owns it
+    spec = resolve_fence(None, {"mode": "custom", "type": "wire", "sides": [{"at": [120, 101], "type": "concrete"}]})
+    got = fences(ws, {"P-0001": spec, "P-0002": spec}, groups={"G-0001": ["P-0001", "P-0002"]}, cfg=cfg)
+    north = [s for s in got if s["a"][1] == 100 and s["b"][1] == 100]
+    assert north and all(s["type"] == "concrete" for s in north) and {s["parcel"] for s in north} == {"P-0001", "P-0002"}
+    assert all(s["type"] == "wire" for s in got if s not in north)
+    # validation
+    ok = {"version": 1, "parcels": {"P-0001": {"fence": {"sides": [{"at": [1, 2], "mode": "none"}]}}}}
+    assert validate(ok) == []
+    for side in ({"mode": "none", "type": "wire", "at": [1, 2]}, {"type": "wire"}, {"at": [1, 2], "mode": "auto"}, {"at": [1, 2], "type": "x"}):
+        assert any(".sides.0" in e for e in validate({"version": 1, "parcels": {"P-0001": {"fence": {"sides": [side]}}}})), side
+
+
+def test_house_colour_is_validated() -> None:
+    from drycastle_pipeline.edits.schema import validate
+
+    ok = {"version": 1, "parcels": {"P-0001": {"fence": {"type": "concrete", "house_colour": True}}}}
+    assert validate(ok) == []
+    bad = {"version": 1, "parcels": {"P-0001": {"fence": {"type": "picket", "house_colour": True}}}}
+    assert any("house_colour" in e for e in validate(bad))
+    bad = {"version": 1, "parcels": {"P-0001": {"fence": {"house_colour": "yes"}}}}
+    assert any("house_colour" in e for e in validate(bad))
+    bad = {"version": 1, "parcels": {"P-0001": {"fence": {"mode": "none", "house_colour": True}}}}
+    assert any("house_colour" in e for e in validate(bad))
+
+
 def test_roundtrip_fixture_is_canonical():
     """tests/fixtures/edits_roundtrip.json is the file the Godot editor's C# writer must reproduce byte for
     byte (`make viewer-editor-smoke`); it must stay exactly what dump_text writes for its own content."""

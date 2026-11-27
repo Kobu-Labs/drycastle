@@ -10,7 +10,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 
 from drycastle_pipeline.edits.mcp.base import check_num
 from drycastle_pipeline.edits.mcp.ids import GROUP_ID, PARCEL_ID
-from drycastle_pipeline.edits.schema import COLUMN_TYPES, FENCE_TYPES, Edits
+from drycastle_pipeline.edits.schema import COLUMN_TYPES, FENCE_TYPES, HOUSE_COLOUR_TYPES, Edits
 
 
 class FenceTools:
@@ -57,12 +57,14 @@ class FenceTools:
         colour: str | None = None,
         gaps: list[dict] | None = None,
         column: str | None = None,
+        house_colour: bool | None = None,
+        sides: list[dict] | None = None,
     ) -> dict:
         """Set the fence of a parcel or property group (see the registered tool description)."""
         kind, tid = self._fence_target(target)
         custom = {
             "type": type, "column": column, "height_m": height_m, "thickness_m": thickness_m,
-            "colour": colour, "gaps": gaps,
+            "colour": colour, "house_colour": house_colour, "gaps": gaps, "sides": sides,
         }
         custom = {k: v for k, v in custom.items() if v is not None}
         if mode is None and not custom:
@@ -86,6 +88,15 @@ class FenceTools:
                 check_num(key, custom[key], positive=True)
         if "colour" in custom and not re.fullmatch(r"#[0-9a-fA-F]{6}", str(custom["colour"])):
             raise ToolError(f'colour must look like "#rrggbb" (got {colour!r})')
+        if "house_colour" in custom:
+            if not isinstance(house_colour, bool):
+                raise ToolError(f"house_colour must be true or false (got {house_colour!r})")
+            if house_colour and "type" in custom and custom["type"] not in HOUSE_COLOUR_TYPES:
+                raise ToolError(f"house_colour works with type {', '.join(HOUSE_COLOUR_TYPES[:3])} only (got {type!r})")
+        if "sides" in custom:
+            if not isinstance(sides, list) or not all(isinstance(s, dict) and isinstance(s.get("at"), (list, tuple)) and len(s["at"]) == 2 for s in sides):
+                raise ToolError('sides must be a list of {"at": [x, y], "mode"?: "none", type?, column?, height_m?, thickness_m?, colour?, house_colour?}')
+            custom["sides"] = [{**s, "at": [check_num("sides.at", s["at"][0]), check_num("sides.at", s["at"][1])]} for s in sides]
         if "gaps" in custom:
             custom["gaps"] = self._gaps(custom["gaps"], kind, tid)
         warnings: list[str] = []
@@ -155,7 +166,10 @@ def register(server: Any, tools: Any) -> None:
         "brick_red | brick_white | stone | concrete: other columns than the type's own, e.g. picket "
         "between brick_red piers), `height_m`, `thickness_m`, `colour` (\"#rrggbb\": a tint; it is the "
         "paint of picket, wire and concrete, while brick and stone have their own colours and default "
-        "to white) and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
+        "to white), `house_colour` (true: brick_red, brick_white and concrete take the wall colour of the "
+        "parcel's house, else the group's; no house: `colour` applies), `sides` (one side between two corners "
+        "looks different: list of {\"at\": [x, y] near that side, \"mode\": \"none\" for no fence there, or any of type, "
+        "column, height_m, thickness_m, colour, house_colour}; replaces the whole list) and `gaps` (gates: list of {\"at\": [x, y] or \"front\", \"width_m\": n}) are "
         "custom-only: giving any of them without a mode means custom; combining them with mode "
         "auto/none is an error. Given keys are merged into the existing fence entry. A parcel that "
         "is in a group gets an override on top of the group's fence (a warning says so)."))
@@ -168,8 +182,10 @@ def register(server: Any, tools: Any) -> None:
         colour: str | None = None,
         gaps: list[dict] | None = None,
         column: str | None = None,
+        house_colour: bool | None = None,
+        sides: list[dict] | None = None,
     ) -> dict:
-        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps, column)
+        return tools.set_fence(target, mode, type, height_m, thickness_m, colour, gaps, column, house_colour, sides)
 
     @server.tool(description="Remove the fence edit of a parcel or group so the rules (or the group's fence) apply again.")
     def reset_fence(target: str) -> dict:
