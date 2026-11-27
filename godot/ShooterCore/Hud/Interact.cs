@@ -9,6 +9,8 @@ public enum InteractOwner
     None,
     /// <summary>A landed care package: hold to open (ticket #143).</summary>
     Crate,
+    /// <summary>A lying Duffel the player may pick up (the server says which, <see cref="Net.EventKind.DuffelReach"/>): a press takes it. After the crate, before a ground item and the corpse: a carrier's Duffel falls on their corpse.</summary>
+    Duffel,
     /// <summary>A ground item nearer than any corpse: tap to take (#267).</summary>
     GroundItem,
     /// <summary>A corpse: hold to take the weapon, tap for the chooser.</summary>
@@ -18,15 +20,16 @@ public enum InteractOwner
 }
 
 /// <summary>
-/// Arbitration of the interact key between the things on foot that listen to it, in one place: the care package first, then a ground item (when it is nearer
+/// Arbitration of the interact key between the things on foot that listen to it, in one place: the care package first, then a Duffel in reach, then a ground item (when it is nearer
 /// than the corpse and the chooser is not up), then the corpse, then, last of all, the plantation. Vehicles, the door gun and the Mass seat have their own state (a seat, a mode) and
 /// are not candidates here: the prompt chain in NetClient.PromptLine puts them before these (turret, vehicle, Mass, then crate, ground item, corpse).
 /// </summary>
 public static class InteractArbiter
 {
-    public static InteractOwner Owner(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen, bool insidePlantation = false)
+    public static InteractOwner Owner(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen, bool insidePlantation = false, bool duffelInReach = false)
     {
         if (crateInReach) return InteractOwner.Crate;
+        if (duffelInReach) return InteractOwner.Duffel;
         if (groundItemInReach && groundItemNearest && !chooserOpen) return InteractOwner.GroundItem;
         if (corpseInReach) return InteractOwner.Corpse;
         if (insidePlantation) return InteractOwner.Plantation;
@@ -37,8 +40,8 @@ public static class InteractArbiter
     /// The corpse prompt shows when the corpse owns the key and the chooser is not up. The old chain also showed it while a crate was in reach and its hold ran
     /// (the crate's own prompt steps aside then), saying "hold to take the rifle" while the key was opening the crate.
     /// </summary>
-    public static bool CorpseShowsPrompt(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen) =>
-        !chooserOpen && Owner(crateInReach, groundItemInReach, groundItemNearest, corpseInReach, chooserOpen) == InteractOwner.Corpse;
+    public static bool CorpseShowsPrompt(bool crateInReach, bool groundItemInReach, bool groundItemNearest, bool corpseInReach, bool chooserOpen, bool duffelInReach = false) =>
+        !chooserOpen && Owner(crateInReach, groundItemInReach, groundItemNearest, corpseInReach, chooserOpen, duffelInReach: duffelInReach) == InteractOwner.Corpse;
 }
 
 /// <summary>

@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BotRoster;
 using Drycastle.Shooter.Net.Server.BigfootEvent;
 using Drycastle.Shooter.Net.Server.BusGarage;
+using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Careers;
@@ -105,6 +106,7 @@ public partial class NetServer : Node
     JobVehicles _jobVehicles = null!;
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
+    DuffelServer _duffels = null!;
     // the village and its animals
     SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
@@ -279,7 +281,8 @@ public partial class NetServer : Node
         _flak = new FlakServer(_ctx, Config.Weapons, _gunships, _targets, _fleet, () => Config.Vehicles, _rng, (at, radius, source) => _blasts.Carve(new Vector3(at.X, at.Y, at.Z), radius, source));
         _crates = new CrateServer(_ctx, Config.Killstreaks.Rewards, () => _shot.Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
+        _duffels = new DuffelServer(_ctx, Config.Duffels, () => _shot.Query, _seats.EnterableCar, _crates.AnyInReach); // the cartel's Duffels (#494): world entity 62
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null);
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
         // the Cartel's Jobs (#494): parties from the match (Squads and their leaders), the map's placed Contact
@@ -300,6 +303,7 @@ public partial class NetServer : Node
             _scudEvent.RoundReset, // the Scud event is over with the round (no reward); the loop below retires its truck and carts
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
             _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset,
+            _duffels.RoundStart, // nobody carries a Duffel into a new round
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
             _cartel.RoundReset, // every running Job fails
             _trapHouses.RoundStart, // no Job outlives the round: every Trap house stripped
@@ -317,7 +321,7 @@ public partial class NetServer : Node
         var pellets = new PelletFan(_ctx, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _wildlife, Config.Vehicles, _rng, baleShot);
         _shots = new ShotServer(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _sentries, _wildlife, _lockOn, _rockets, pellets, _impacts, _smoke, Config.Vehicles, _rng, Config.Turret.KnifeDamage, Config.WeaponsSmoke,
             baleShot, new LagCompLog(Config.PerfOut, Config.PerfLagComp, _ctx, _rewind, _shot, _targets).Shot);
-        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, _plantation.Use, _scud.UseKey, Config.KillY);
+        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, _plantation.Use, _scud.UseKey, _duffels, Config.KillY);
         _snapshots = new SnapshotServer(_ctx, _fleet, _sitters, _dummies, _rockets, Config.Vehicles, _diag.Perf.AuditTick, _diag.Loss.LogStates);
     }
 
@@ -579,6 +583,7 @@ public partial class NetServer : Node
     {
         _status.Tick(dt); // burns tick
         _plantation.Tick(dt); // highs run out
+        _duffels.Tick(); // carried Duffels follow their carriers; a carrier who died drops one where they fell
         _gunships.TickShells();  // shells whose tracer has arrived burst now (#162)
         _flak.Tick();    // flak shells that have arrived burst now
         _lockOn.StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
@@ -661,5 +666,6 @@ public partial class NetServer : Node
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
         ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses);
+        _chat.Register("duffel", _duffels.ChatCommand); // TEST: a Duffel in the admin's hands (#494)
     }
 }

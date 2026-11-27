@@ -114,6 +114,8 @@ public sealed class ServerConfig
     public PlantationFile Plantation = PlantationFile.Default;
     /// <summary>cartel.json (the host sets it from the data directory; the shipped defaults otherwise): ranks, tiers, each kind of Job's numbers.</summary>
     public CartelFile Cartel = CartelFile.Default;
+    /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
+    public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     /// <summary>bigfoot.json: every number of the fight.</summary>
     public BigfootFile BigfootData = new();
     /// <summary>Every number of the harvester event; the host may replace it.</summary>

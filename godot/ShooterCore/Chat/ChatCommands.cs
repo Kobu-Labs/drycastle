@@ -123,6 +123,7 @@ public static class ChatCommands
         new("cartel", "TEST: the Cartel, for yourself: join or quit anywhere, add Respect (respect <n>), start a Job of a kind at any tier anywhere (job <kind> [tier], e.g. job test 2), or show your standing (status)",
             new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("value", ChatArgKind.Text, false) }),
         new("traphouse", "TEST: dress a hollow house as a Trap house now, for everyone: the nearest to you (no argument, or nearest) or one by building id (w...); off strips every one", new[] { new ChatArg("house", ChatArgKind.Text, false) }),
+        new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: hold the throw key to throw it, tap it to put it down", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
 
@@ -166,6 +167,7 @@ public static class ChatCommands
             },
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "cartel" => new[] { ("join", "join the Cartel (no Contact needed)"), ("quit", "quit the Cartel: rank and Respect are kept"), ("respect", "add that much Respect (a rank-up is announced)"), ("job", "start a Job: the kind, then the tier (1 by default; any tier)"), ("status", "your membership, Respect, rank and Job") },
+            ChatArgKind.Choice when cmd.Name == "duffel" => new[] { ("weed", "light: a long throw, a little slower"), ("cash", "medium"), ("product", "heavy: a short throw, much slower") },
             ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
             ChatArgKind.Text when cmd.Name == "traphouse" => new[] { ("nearest", "the hollow house nearest to you"), ("off", "strip every Trap house") },
             ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },

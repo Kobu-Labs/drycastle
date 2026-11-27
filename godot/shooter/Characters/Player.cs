@@ -155,6 +155,9 @@ public partial class Player : CharacterBody3D
     /// <summary>The hands hold something that is not the weapon (raised binoculars): fire and aim are not read.</summary>
     public bool HandsBusy { get; set; }
 
+    /// <summary>A load that changes how the body moves (a carried Duffel: no sprint, slower), applied to every input of the shared step: set by the server from what the player carries, by the client from what it is told.</summary>
+    public MoveBurden Burden { get; set; } = MoveBurden.None;
+
     /// <summary>Iron-sight aim-in (#237): the camera eases to <see cref="IronSightFovScale"/> of the normal FOV. Scopes (<see cref="ZoomFov"/>) take precedence.</summary>
     public bool IronSightZoom { get; set; }
 
@@ -463,6 +466,7 @@ public partial class Player : CharacterBody3D
         if (!HandsBusy && Input.IsActionPressed("throw_grenade")) b |= MoveButtons.Throw;
         if (Input.IsActionPressed("interact")) b |= MoveButtons.Use;
         if (Input.IsActionPressed("headlights")) b |= MoveButtons.Headlights;
+        if (Input.IsActionPressed("duffel_throw")) b |= MoveButtons.DuffelThrow; // read only while a Duffel is carried (DuffelThrowKey)
         if (!HandsBusy && Input.IsActionPressed("killstreak")) b |= MoveButtons.Killstreak; // Q marks an animal while the binoculars are up
         if (_state.OnLadder) b &= ~MoveButtons.Fire; // no firing with both hands on a ladder
         var captured = Input.MouseMode == Input.MouseModeEnum.Captured;
@@ -531,7 +535,7 @@ public partial class Player : CharacterBody3D
             SetStanceShape(_state.Stance);
             return;
         }
-        MovementStep.Step(ref _state, input, dt);
+        MovementStep.Step(ref _state, Burden.Apply(input), dt); // a carried Duffel: no sprint, slower (the same on the server and in the replay)
         SetStanceShape(_state.Stance);
         Prof.End(Prof.S.MoveLogic, pt);
 

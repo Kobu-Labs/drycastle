@@ -60,6 +60,8 @@ public class GameData
     public ScudFile Scud { get; init; } = ScudFile.Default;
     /// <summary>plantation.json (the marijuana plantation: hold and high times, the nausea and the looks of a high player). The shipped defaults when the file is absent.</summary>
     public PlantationFile Plantation { get; init; } = PlantationFile.Default;
+    /// <summary>duffels.json (the Duffels of the cartel's Jobs: kinds, weights, the throw, the props). Read by the host after <see cref="Parse"/>; the shipped defaults when the file is absent.</summary>
+    public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels { get; set; } = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     /// <summary>companions.json (the Companions a player can own). Empty when the file is absent.</summary>
     public CompanionsFile Companions { get; init; } = new();
     /// <summary>cartel.json (the Cartel: ranks, tiers, each kind of Job's numbers; docs/cartel.md). The shipped defaults when the file is absent.</summary>

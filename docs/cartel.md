@@ -139,5 +139,5 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 
 ## Left to implementation
 
-- The duffel throw key (rebindable, clear of the existing binds).
+- The duffel throw key (rebindable, clear of the existing binds): X, `duffel_throw` (#494).
 - Every number (`cartel.json`), the Contact's model, the prop list and the Assault mix.

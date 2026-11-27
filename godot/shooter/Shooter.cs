@@ -327,6 +327,7 @@ public partial class Shooter : Node3D
                 World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), Report = { PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080") }, Sandbox = { Requested = SandboxAsked(_cfg) }, KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
+            client.Duffels = _data.Duffels;
             client.OnFailed = (why, joined) =>
             {
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
@@ -392,6 +393,7 @@ public partial class Shooter : Node3D
         var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("cartel.json"));
         // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
         if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
+        if (Godot.FileAccess.FileExists("res://data/duffels.json")) data.Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Parse(Read("duffels.json")); // the cartel's Duffels (#494)
         var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
         if (System.IO.File.Exists(privateShapes)) data.Shapes.Merge(AnimalShapes.Load(privateShapes));
         return data;
@@ -516,6 +518,7 @@ public partial class Shooter : Node3D
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
+        config.Duffels = _data.Duffels;
         var server = new NetServer { Config = config };
         if (config.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
         if (config.AdminTokens.Count > 0) GD.Print($"server: {config.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");

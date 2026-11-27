@@ -308,6 +308,10 @@ public enum EventKind : byte
     ScudImpact = 84,
     /// <summary>Server to the crew of a truck: why a command did nothing or a proposal ended (<see cref="ScudNoticeCode"/>).</summary>
     ScudNotice = 85,
+    /// <summary>Server to one player: why a Duffel action was refused (<see cref="Drycastle.ShooterCore.Cartel.DuffelCodec"/>: u8 <see cref="Drycastle.ShooterCore.Cartel.DuffelNotice"/>); the client words it. Kinds 42-46 belong to the Duffels (#494).</summary>
+    DuffelNotice = 42,
+    /// <summary>Server to one player: the lying Duffel their interact key would pick up now (<see cref="Drycastle.ShooterCore.Cartel.DuffelCodec"/>: u16 world entity id, 0 none), sent when it changes. Only the server knows a Duffel's party, so the prompt and the key's owner follow this.</summary>
+    DuffelReach = 43,
 }
 
 public abstract record ReliableMsg;
@@ -439,6 +443,7 @@ public static class Wire
     //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
+    //   vNEXT (Duffels, #494): world entity type 62 (Duffel: state byte state bits 0-1 + kind bits 2-3, owner field the carrier); events 42 DuffelNotice and 43 DuffelReach (server to one player); input button bit 8192 DuffelThrow
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
     //   vNEXT (Cartel profile + Job core): events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec)
     //   vNEXT (Squad leader): the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494)
