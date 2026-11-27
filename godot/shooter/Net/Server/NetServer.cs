@@ -117,6 +117,7 @@ public partial class NetServer : Node
     RivalCrewServer _rivals = null!;
     RaidServer _raidVans = null!; // the Thieves' Raid vans, also a Heist's Assaults
     HeistServer _heists = null!;
+    ReceiverServer _receivers = null!;
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
     EventServer _eventServer = null!; GunshipServer _gunships = null!; FlakServer _flak = null!; StreakServer _streaks = null!; LockOnServer _lockOn = null!;
     ScoreboardServer _scoreboard = null!; MatchEventsServer _matchEvents = null!;
@@ -290,7 +291,7 @@ public partial class NetServer : Node
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         _duffels = new DuffelServer(_ctx, Config.Duffels, () => _shot.Query, _seats.EnterableCar, _crates.AnyInReach); // the cartel's Duffels (#494): world entity 62
         _cargo = new CargoServer(_ctx, _fleet, _duffels.Book, Config.Duffels); // every live cargo vehicle takes Duffels; its doors are worked with the interact key (docs/cartel.md "Cargo vehicles")
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null, c => _cartel.ContactInReach(c), _cargo.DoorsInReach);
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null, c => _cartel.ContactInReach(c), _cargo.DoorsInReach, c => _receivers.InReach(c));
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _drills = new DrillServer(_ctx, _trapHouses, _duffels, keys, _sitters, _pounce, _streaks); // the Drills on the Trap houses' safes (#496): events 62-64
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
@@ -301,7 +302,8 @@ public partial class NetServer : Node
         _cartel.Register(new DeliveryJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
         _cartel.Register(new HitJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
-        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, _cargo, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
+        _receivers = new ReceiverServer(_ctx, Config.Cartel, _duffels.Book, _trapHouses, () => _areas.Cartel, () => _fleet.FlightBounds, Config.Water, (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, (float)Config.Duffels.CargoMarginM, _rng); // the Heists' drops (docs/cartel.md "Receivers"): world entity 59
+        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, _cargo, _receivers, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
@@ -322,6 +324,7 @@ public partial class NetServer : Node
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
             _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset,
             _duffels.RoundStart, // nobody carries a Duffel into a new round
+            _receivers.RoundStart, // the match cleared the entities: no Receiver is left
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
             _cartel.RoundReset, // every running Job fails
             _drills.RoundStart, // and no Drill on a safe
@@ -342,7 +345,7 @@ public partial class NetServer : Node
         var pellets = new PelletFan(_ctx, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _wildlife, Config.Vehicles, _rng, baleShot);
         _shots = new ShotServer(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _sentries, _wildlife, _lockOn, _rockets, pellets, _impacts, _smoke, Config.Vehicles, _rng, Config.Turret.KnifeDamage, Config.WeaponsSmoke,
             baleShot, new LagCompLog(Config.PerfOut, Config.PerfLagComp, _ctx, _rewind, _shot, _targets).Shot);
-        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, (c, use) => { _plantation.Use(c, use); _drills.Use(c, use); }, _scud.UseKey, _duffels, _cargo, Config.KillY);
+        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, (c, use) => { _plantation.Use(c, use); _drills.Use(c, use); }, _scud.UseKey, _duffels, _cargo, _receivers, Config.KillY);
         _snapshots = new SnapshotServer(_ctx, _fleet, _sitters, _dummies, _rockets, Config.Vehicles, _diag.Perf.AuditTick, _diag.Loss.LogStates);
     }
 
@@ -609,6 +612,7 @@ public partial class NetServer : Node
         _status.Tick(dt); // burns tick
         _plantation.Tick(dt); // highs run out
         _duffels.Tick(); // carried Duffels follow their carriers; a carrier who died drops one where they fell
+        _receivers.Tick(); // the party is told what their key would do at a Receiver's Cartel man
         _drills.Tick(dt); // the Drills on the safes run, jam and open; the players near are told
         _gunships.TickShells();  // shells whose tracer has arrived burst now (#162)
         _flak.Tick();    // flak shells that have arrived burst now

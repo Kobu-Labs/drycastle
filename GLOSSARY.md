@@ -858,7 +858,7 @@ One task a giver hands out, with an objective, a reward and a way to fail, run b
 _Avoid_: quest, mission, task, Event (a Job is not one)
 
 **Heist**:
-A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a Drop point far from the objective is reserved; the van's bay takes only the party's Duffels; the Heist succeeds when the van stops within the drop radius with at least the minimum loaded (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The second is the **Trap house heist** (#496): a Trap house is the objective, its product and cash Duffels lie on its tables and its safe takes a Drill; numbers in `jobs.trap_house`, `/cartel job trap_house [tier]`.
+A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van, drive it to the drop and unload it there while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, at the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a **Receiver** far from the objective is chosen and reserved as the drop; the van's bay takes only the party's Duffels; the party carries or throws them from the van into the Receiver; the Heist succeeds the moment the Receiver is sent off with at least the minimum on it (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel on it above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The second is the **Trap house heist** (#496): a Trap house is the objective, its product and cash Duffels lie on its tables and its safe takes a Drill; numbers in `jobs.trap_house`, `/cartel job trap_house [tier]`.
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
@@ -878,15 +878,31 @@ The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare pan
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:
-A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). A Delivery's carrier hands it over by holding the interact key within the drop radius. A Job claims its point in the Job book (`CartelSpots`): at least a data distance from the Contact and apart from every point another running Job holds (cartel.json `jobs.delivery`, #494).
+A place drawn on the map where a Delivery's Duffel is handed over, which ends the Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). A Delivery's carrier hands it over by holding the interact key within the drop radius. A Heist has no Drop point: its drop is a **Receiver**. A Job claims its point in the Job book (`CartelSpots`): at least a data distance from the Contact and apart from every point another running Job holds (cartel.json `jobs.delivery`, #494).
 _Avoid_: secure zone, delivery spot
+
+**Receiver**:
+The drop of a Heist (Harvest and Trap house): one of three kinds, drawn at random among those the map has (`cartel.json` `receivers.weights`) and put down for the Job far from its objective: a **Stash house**, a **helicopter** (the utility helicopter on a landing spot, rotors already turning, an NPC pilot in it) or a **boat** (the Battle Royale boat at a mooring on the west river, an NPC boatman aboard). Not a vehicle: nobody can enter it, hurt it or push it; its pilot, boatman or buyer is a Cartel man (a Gang Warfare character, as the Contact is drawn) who cannot be hurt. It is a cargo volume of the Duffels that takes only its Job's party's, carried or thrown in from the Cartel van, never gives one back, and keeps them safe. It is sent off with at least the minimum on it: a helicopter or boat leaves by itself once every Duffel of the Job is on board, or when the leader presses the interact key at the pilot or boatman; a Stash house's buyer takes the bags when the leader presses it. A helicopter climbs and flies off over the nearest map edge, a boat sails its placed route to the edge (scripted, no physics, every client sees it), then it is removed. Machine `Receiver.Run`; `ShooterCore/Cartel/Receiver.cs`, `ReceiverServer`; protocol 94.
+_Avoid_: drop point (that is the Delivery's), buyer vehicle
+
+**Stash house**:
+A hollow house a Heist's Receiver stands in: one with road access, nobody inside and no Job holding it (the Trap house's choice), far from the objective. The server puts a Cartel pallet down for the Job just inside its door (just outside when no floor spot is free) with a buyer NPC beside it; the bags are thrown or carried onto the pallet (up to 15, stacked) and the leader presses the interact key at the buyer to finish. It is not dressed (no props); it goes with the Job.
+_Avoid_: safe house, trap house (that is the Rival crew's, dressed and defended)
+
+**Landing spot**:
+Where a helicopter Receiver stands: a pad drawn as a zone of kind `cartel_heli` (a Runtime zone exported as an outline; the mean point, the nose toward the middle of the first edge), on open flat ground. A Job claims one in the book as it claims a Drop point.
+_Avoid_: helipad, heli zone
+
+**Mooring**:
+Where a boat Receiver lies and the way it leaves: a line drawn as a zone of kind `cartel_boat` (a Runtime zone exported as an outline whose points keep their order): the first point is the mooring on the river, its bow toward the second, the rest is the route down the river to the map's edge.
+_Avoid_: dock, harbour
 
 **Hit spot**:
 Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of the `cartel_hit` zones (a Runtime zone), drawn on open ground, claimed as a Drop point is (cartel.json `jobs.hit`, #497).
 _Avoid_: target spot, hit zone
 
 **Assault**:
-A van of the Rival crew that comes in to attack a Heist's objective: a Raid van (its road driving, ADR 0021) in from the map's edge to the road stop nearest the objective, which never drives off; its crew (Gunmen and Enforcers, by tier and squad size) gets out, heads for the objective and attacks the Job's players on sight, and fights on by a wrecked van. The first comes a grace time after the Cartel van reaches the objective, then one every interval (machine `Heist.Assaults`), none while the van is away with the minimum loaded (no chase), at most a few in the fight at once; its Job removes what is left at its end. Built (#495).
+A van of the Rival crew that comes in to attack a Heist's objective: a Raid van (its road driving, ADR 0021) in from the map's edge to the road stop nearest the objective, which never drives off; its crew (Gunmen and Enforcers, by tier and squad size) gets out, heads for the objective and attacks the Job's players on sight, and fights on by a wrecked van. The first comes a grace time after the Cartel van reaches the objective, then one every interval (machine `Heist.Assaults`), none while the van is on the road with the minimum loaded (no chase yet), and again at the drop (the first about 20 s after the van arrived in its area, then every interval, to the Heist's end), at most a few in the fight at once; its Job removes what is left at its end. Built (#495; at the drop, #437 drops).
 _Avoid_: wave, attack, Raid
 
 **Rival crew**:

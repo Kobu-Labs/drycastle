@@ -10,7 +10,7 @@ from drycastle_pipeline.core.rules import load_section
 from drycastle_pipeline.edits.mcp.base import read_edits
 from drycastle_pipeline.edits.mcp.ids import RULE_ZONE_ID, next_id
 from drycastle_pipeline.edits.schema import Edits
-from drycastle_pipeline.edits.zones import KIND_NAMES, PLANTATION, PLAYER_SPAWN, RULE_KEYS
+from drycastle_pipeline.edits.zones import KIND_NAMES, PLAYER_SPAWN, POLYGON_KINDS, RULE_KEYS
 from drycastle_pipeline.edits.zones import kind_rows as zone_kind_rows
 from drycastle_pipeline.edits.zones import rules as zone_rules
 
@@ -118,7 +118,7 @@ class ZoneTools:
             rows.append({
                 **{k: row[k] for k in ("name", "label", "group", "where_ground")},
                 "zones": len(self._zone_entries(edits, row["name"])),
-                "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else "none: the export writes its polygons (zone_polygons.json), the game tests who stands inside" if row["name"] == PLANTATION else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
+                "points": "none: read by the props stage as spawn candidates" if row["name"] == PLAYER_SPAWN else "none: the export writes its polygons (zone_polygons.json): the game tests who stands inside the plantation, reads a helicopter pad's mean point and a boat's line of points" if row["name"] in POLYGON_KINDS else {k: rule[k] for k in RULE_KEYS if k in rule} or "no rule in rules.yaml zones",
             })
         return {"summary": f"{len(rows)} zone kinds", "kinds": rows}
 

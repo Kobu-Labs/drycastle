@@ -3,7 +3,7 @@
 A **zone kind** says what an area means in play: ``bigfoot`` (the event may start there), ``scud`` (the Scud event hides its truck
 there), ``player_spawn`` (players may
 spawn there), one kind per wild species (``deer`` ... that species may live there), ``cartel_drop`` and ``cartel_hit`` (the
-cartel's Drop points and Hit spots, docs/cartel.md). The kinds are a fixed catalog in code
+cartel's Drop points and Hit spots, docs/cartel.md), ``cartel_heli`` and ``cartel_boat`` (a Heist's helicopter pads and boat moorings with their routes, exported as outlines like the plantation). The kinds are a fixed catalog in code
 (:data:`KINDS`): a kind needs something in the pipeline or the game that reads it, so a new kind is one entry here, its
 section in ``rules.yaml`` ``zones`` and the code that reads it. The editor shows the catalog from ``parcels.json``
 ``zone_kinds``.
@@ -56,11 +56,6 @@ POLYGONS_FILE_NAME = "zone_polygons.json"
 PLAYER_SPAWN = "player_spawn"
 #: Players hold the interact key inside one to get high (``Net/Server/Highs/PlantationServer.cs``); exported as polygons, not points.
 PLANTATION = "plantation"
-#: The kinds with no density rule (no ``zone_points.json`` entry): ``player_spawn`` is read by the props stage, the others are
-#: exported as polygons.
-NO_POINT_KINDS = (PLAYER_SPAWN, PLANTATION)
-#: The kinds whose polygons the export writes to ``zone_polygons.json`` for the server.
-POLYGON_KINDS = (PLANTATION,)
 BIGFOOT = "bigfoot"
 #: The Scud event's truck hides at one of the points of this kind (``NetServer.PickEventSpawn("scud")``); with no zone drawn the server falls back to open ground.
 SCUD = "scud"
@@ -68,6 +63,16 @@ SCUD = "scud"
 CARTEL_DROP = "cartel_drop"
 #: The cartel's Hit spots: a Hit job's Rival dealer stands outdoors with his guards at one of these points.
 CARTEL_HIT = "cartel_hit"
+#: The cartel's helicopter landing spots (docs/cartel.md "Receivers"): a drawn pad, exported as an outline. The helicopter stands on its mean point, its nose toward the middle of its first edge.
+CARTEL_HELI = "cartel_heli"
+#: The cartel's boat moorings (docs/cartel.md "Receivers"): a drawn line, exported as an outline whose points are kept in the order they were drawn. The first point is the mooring (the bow toward the second), the rest the route down the river to the map's edge.
+CARTEL_BOAT = "cartel_boat"
+
+#: The kinds with no density rule (no ``zone_points.json`` entry): ``player_spawn`` is read by the props stage, the others are
+#: exported as polygons.
+NO_POINT_KINDS = (PLAYER_SPAWN, PLANTATION, CARTEL_HELI, CARTEL_BOAT)
+#: The kinds whose polygons the export writes to ``zone_polygons.json`` for the server.
+POLYGON_KINDS = (PLANTATION, CARTEL_HELI, CARTEL_BOAT)
 
 #: The wildlife species that are zone kinds. They must match the species ids of godot/shooter/data/animals.json
 #: (a test checks it); the server spawns a species at the points of its kind.
@@ -105,6 +110,8 @@ KINDS: tuple[ZoneKind, ...] = (
     ZoneKind(PLANTATION, "Plantation", "player", PLANTATION_TINT),
     ZoneKind(CARTEL_DROP, "Cartel drop point", "cartel", CARTEL_TINT),
     ZoneKind(CARTEL_HIT, "Cartel hit spot", "cartel", CARTEL_TINT),
+    ZoneKind(CARTEL_HELI, "Cartel helicopter pad", "cartel", CARTEL_TINT),
+    ZoneKind(CARTEL_BOAT, "Cartel boat mooring and route", "cartel", CARTEL_TINT),
     *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in (*WILDLIFE, *FLOCKS)),
 )
 KIND_NAMES = tuple(k.name for k in KINDS)

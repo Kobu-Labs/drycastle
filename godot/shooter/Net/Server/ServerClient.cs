@@ -116,6 +116,8 @@ internal sealed class ServerClient
     public ushort DuffelReach;
     /// <summary>What this player was last told their throw key would take out of a cargo vehicle (<see cref="EventKind.DuffelTake"/>): the vehicle's id in bits 8 up, the kind plus one in the low byte; 0 none.</summary>
     public uint DuffelTake;
+    /// <summary>What this player was last told their interact key would do at a Receiver's Cartel man (<see cref="EventKind.ReceiverReach"/>): the Receiver's entity id in bits 16 up, the ask in bits 8-15, how many are on board in the low byte; 0 none.</summary>
+    public uint ReceiverReach;
     /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (<c>Scuds/ScudLoading.cs</c>).</summary>
     public readonly ScudReloadKey ReloadKey = new();
     /// <summary>The interact key's hold at the rozhlas dictation table (RozhlasSetServer.cs).</summary>

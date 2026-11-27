@@ -1052,6 +1052,12 @@ zones:
     max_points: 300
     building_clearance_m: 6
     water_clearance_m: 5
+  # Helicopter landing spots (docs/cartel.md "Receivers"): a drawn pad, no points and no numbers here: the export writes the outlines (zone_polygons.json, like the plantation). The helicopter stands on the
+  # outline's mean point, its nose toward the middle of the first edge drawn (the first two points), so draw a pad of open flat ground (a field, 20 m or more clear of trees, fences, buildings and water; the rotor is 13.4 m across).
+  cartel_heli: {}
+  # Boat moorings (docs/cartel.md "Receivers"): a drawn line, not an area: the first point is where the boat lies on the river (the bow toward the second), the rest is the route down the river to the map's edge,
+  # kept in the order drawn (the outline's closing edge is not part of it). Exported as outlines like the plantation's; no points, no numbers.
+  cartel_boat: {}
   # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
   # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
   deer: &wildlife_rule

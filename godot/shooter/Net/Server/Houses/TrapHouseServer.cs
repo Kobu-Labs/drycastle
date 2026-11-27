@@ -52,11 +52,13 @@ internal sealed class TrapHouseServer
     /// <summary>Where the living players' feet are (no house with one inside is taken).</summary>
     List<NVec3> Feet() => _ctx.Players.Values.Where(c => c.Joined && _ctx.IsAlive(c.Id)).Select(c => c.Body.GlobalPosition.ToNumerics()).ToList();
 
-    /// <summary>The houses a Trap house Job may take now: road access for the van, not dressed (a Job's house is dressed while it runs), nobody inside.</summary>
+    /// <summary>The houses a Job may take now: road access for the van, not dressed (a Trap house Job's house is dressed while it runs), not held by a running Job (a stash house is held and not dressed), nobody inside.</summary>
     public List<TrapHouseCandidate> Candidates()
     {
         if (Node is not { } node) return new List<TrapHouseCandidate>();
-        return TrapHouseChoice.Candidates(node.Houses, Roads(node.Data), node.Data.Choice.RoadMaxM, _dressed.Keys, Feet());
+        var inUse = new HashSet<string>(_dressed.Keys);
+        foreach (var h in node.Houses) if (Held(h.Id)) inUse.Add(h.Id);
+        return TrapHouseChoice.Candidates(node.Houses, Roads(node.Data), node.Data.Choice.RoadMaxM, inUse, Feet());
     }
 
     /// <summary>

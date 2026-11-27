@@ -31,25 +31,30 @@ public sealed partial class ContactView : Node3D
         return view;
     }
 
-    void Build()
+    void Build() => AddChild(Figure(_look));
+
+    /// <summary>
+    /// The figure of a Cartel man (the Contact; a Receiver's pilot, boatman or buyer): a node holding the Gang Warfare character in its atlas playing its idle clip, or without the private pack a capsule with a nose
+    /// on the side he faces. His feet are on the node's origin and he faces its forward (-Z). A look only.
+    /// </summary>
+    public static Node3D Figure(ContactLook look)
     {
-        var pivot = new Node3D { Name = "Pivot", Scale = Vector3.One * _look.Scale };
-        AddChild(pivot);
-        if (SyntyLib.Instance(_look.Model, _look.Atlas) is { } model)
+        var pivot = new Node3D { Name = "Pivot", Scale = Vector3.One * look.Scale };
+        if (SyntyLib.Instance(look.Model, look.Atlas) is { } model)
         {
             model.RotationDegrees = new Vector3(0, 180, 0); // the pack faces +Z, the node's forward is -Z
             pivot.AddChild(model);
-            if (_look.Idle == "" || SyntyLib.Clip(_look.Idle) is not { } clip) return;
+            if (look.Idle == "" || SyntyLib.Clip(look.Idle) is not { } clip) return pivot;
             var lib = new AnimationLibrary();
-            lib.AddAnimation(_look.Idle, clip);
+            lib.AddAnimation(look.Idle, clip);
             var anim = new AnimationPlayer { Name = "Clips" };
             model.AddChild(anim); // root node "..": the tracks are Skeleton3D:Bone under the model
             anim.AddAnimationLibrary("", lib);
-            anim.Play(_look.Idle);
-            return;
+            anim.Play(look.Idle);
+            return pivot;
         }
-        var h = _look.CapsuleHeightM;
-        var colour = Color.FromHtml(_look.CapsuleColour);
+        var h = look.CapsuleHeightM;
+        var colour = Color.FromHtml(look.CapsuleColour);
         pivot.AddChild(new MeshInstance3D
         {
             Name = "Capsule", Mesh = new CapsuleMesh { Radius = 0.3f, Height = h },
@@ -60,5 +65,6 @@ public sealed partial class ContactView : Node3D
             Name = "Nose", Mesh = new BoxMesh { Size = new Vector3(0.16f, 0.1f, 0.2f) },
             MaterialOverride = new StandardMaterial3D { AlbedoColor = colour.Darkened(0.55f), Roughness = 0.9f }, Position = new Vector3(0, h * 0.82f, -0.3f),
         });
+        return pivot;
     }
 }
