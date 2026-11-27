@@ -116,7 +116,6 @@ internal sealed class HarvesterServer
         _sendAt = 0;
         var at = N(car.GlobalPosition);
         said = HarvesterRules.SpawnedText(field.Id, at);
-        _ctx.ChatToAll(ChatLineKind.System, "", $"A harvester has started on field {field.Id}. Keep clear of the reel.");
         GD.Print($"server: harvester started on {field.Id} ({field.Type}, {field.Area:F0} m2), {plan.Passes.Count} passes of {plan.TotalCutM:F0} m, at ({at.X:F1},{at.Y:F1},{at.Z:F1}), driver #{driver.Id}");
         return true;
     }
@@ -204,7 +203,7 @@ internal sealed class HarvesterServer
     public void End(ServerClient c)
     {
         if (!Running) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the harvester event.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} ended the harvester event.");
         Finish(HarvesterPhase.Gone, $"ended by {c.Name}");
     }
 
@@ -212,7 +211,7 @@ internal sealed class HarvesterServer
     public void Cancel(ServerClient c)
     {
         if (!Running) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the harvester event.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} cancelled the harvester event.");
         if (_car is { } car) Retire(car);
         Finish(HarvesterPhase.Stopped, $"cancelled by {c.Name}");
     }
@@ -275,7 +274,6 @@ internal sealed class HarvesterServer
         if (!_ctx.IsAlive(driver.Id) || car.Seat.Occupant(0) != driver.Id)
         {
             Finish(HarvesterPhase.Stopped, "its driver was killed");
-            _ctx.ChatToAll(ChatLineKind.System, "", "The harvester's driver is dead. The machine is up for grabs.");
             return;
         }
         var cmd = _brain.Tick(dt, new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), car.State.Yaw, car.State.Speed);

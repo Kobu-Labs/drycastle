@@ -51,7 +51,6 @@ internal sealed class ThievesPayout
         var paid = _credit.Settle(won, id => _ctx.Players.ContainsKey(id) && _scores(id));
         if (paid.Count == 0) return;
         _awardXp(paid.Select(id => new XpGrant(id, _winXp, XpReason.EventWin)).ToList());
-        _ctx.ChatToAll(ChatLineKind.System, "", "Took part: " + string.Join(", ", paid.Select(id => _ctx.NameOf(id)).Take(8)) + (paid.Count > 8 ? " and others." : "."));
         GD.Print($"server: Thieves reward paid to {string.Join(",", paid)}");
     }
 

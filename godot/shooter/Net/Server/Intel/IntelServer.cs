@@ -59,13 +59,13 @@ internal sealed class IntelServer
         {
             if (!_board.Events.Any(e => e.Id == IntelMock.TestId)) { _ctx.ChatTo(c, ChatLineKind.Info, "There is no test event on the intel screen."); return; }
             Withdraw(IntelMock.TestId);
-            _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} took the test event off the intel screen.");
+            _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} took the test event off the intel screen.");
             return;
         }
         System.Numerics.Vector2? where = null;
         if (_ctx.IsAlive(c.Id)) { var p = c.Body.GlobalPosition; where = new System.Numerics.Vector2(p.X, p.Z); }
         Announce(IntelMock.Test(_ctx.Now, where));
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} announced a test event.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} announced a test event.");
         _ctx.ChatTo(c, ChatLineKind.Info, $"Test event on the intel screen at the base: it begins in {IntelMock.LeadSeconds / 60:0.#} minutes" + (where == null ? "." : ", at your position now.") + " /event intel clear takes it off.");
     }
 }

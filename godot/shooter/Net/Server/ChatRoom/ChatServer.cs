@@ -48,7 +48,7 @@ internal sealed class ChatServer
         if (!c.Chat.TryTake(_ctx.Now)) { _ctx.ChatTo(c, ChatLineKind.Error, "You are sending messages too fast."); return; }
         if (text[0] == '/') { Run(c, text); return; }
         GD.Print($"server: chat {c.Name}: {text}");
-        _ctx.ChatToAll(ChatLineKind.Player, c.Name, text);
+        _ctx.ChatToAll(c.Name, text);
     }
 
     void Run(ServerClient c, string text)

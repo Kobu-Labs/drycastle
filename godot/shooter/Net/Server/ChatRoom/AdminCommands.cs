@@ -67,7 +67,7 @@ internal sealed class AdminCommands
         var changed = mode != match.Mode;
         match.Restart(mode);
         var name = mode == MatchMode.TeamDeathmatch ? "team deathmatch" : "free-for-all";
-        _ctx.ChatToAll(ChatLineKind.System, "", changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
+        _ctx.ChatTo(c, ChatLineKind.Info, changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
         GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
     }
 
@@ -119,6 +119,6 @@ internal sealed class AdminCommands
             said = set.Frozen == true ? $"froze the time at {Shown()}" : "set the time running again";
         }
         _ctx.Broadcast(EventKind.ClockSet, ChatEvents.EncodeClock(new ClockChange(_clock(), _ctx.Tick)));
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} {said}.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} {said}.");
     }
 }
