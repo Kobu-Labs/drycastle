@@ -11,7 +11,7 @@ Every texture repeats seamlessly in both directions. The style is flat: a few to
 little noise, so the textures sit next to the flat-colour map. Two kinds:
 
 * coloured   (brick_red, brick_white, stone, dirt, gravel, leaf_litter, moss, mud, puddle, soil_rows, dike_gravel): carry their own colours; a white tint shows them as drawn.
-* tintable   (concrete, picket, wire): near-white, shaded only; the mesh's vertex colour is the paint.
+* tintable   (concrete, picket, wire, plain): near-white, shaded only; the mesh's vertex colour is the paint.
 
 ``TEXTURES`` below is the single list: id, size in pixels, the size of one repeat in metres, and the
 drawing function. ``assets/manifest.json`` (``textures``) repeats id, file, tile_m, alpha, tintable and
@@ -181,6 +181,11 @@ def concrete(w, h):
             line.append((*grey(v), 255))
         out.append(line)
     return out
+
+
+def plain(w, h):
+    """Pure white, no cut-outs: a surface that shows its tint exactly (the box of an untyped fence section)."""
+    return [[(255, 255, 255, 255)] * w for _ in range(h)]
 
 
 def picket(w, h):
@@ -464,6 +469,7 @@ TEXTURES = [
     ("concrete", (256, 256), (2.0, 2.0), True, concrete),
     ("picket", (256, 256), (0.5, 0.0), True, picket),
     ("wire", (256, 256), (0.5, 0.5), True, wire),
+    ("plain", (4, 4), (1.0, 0.0), True, plain),
     ("dirt", (256, 256), (2.0, 2.0), False, dirt),
     ("gravel", (256, 256), (1.0, 1.0), False, gravel),
     ("leaf_litter", (256, 256), (1.5, 1.5), False, leaf_litter),

@@ -45,6 +45,8 @@ public sealed class ServerConfig
     public GlassConfig GlassData = new();
     /// <summary>house_destruction.json (docs/house-destruction.md); the defaults when the host sets none.</summary>
     public Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig HouseDestruction = Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default;
+    /// <summary>fence_destruction.json (docs/fence-destruction.md); the defaults when the host sets none.</summary>
+    public Drycastle.ShooterCore.Fences.FenceDestructionConfig FenceDestruction = Drycastle.ShooterCore.Fences.FenceDestructionConfig.Default;
     /// <summary>vehicles.json (run-over numbers, spawn count, car stats): a default table when the host sets none.</summary>
     public VehiclesFile Vehicles = null!;
     /// <summary>Vehicle type of the car smoke arena (vehicles.json id).</summary>

@@ -16,7 +16,7 @@ from drycastle_pipeline.core.textures import (
 from drycastle_pipeline.edits.schema import COLUMN_TYPES, FENCE_TYPES, parse
 from drycastle_pipeline.export.gltf import build_chunk_scene, parcel_props_nodes
 from drycastle_pipeline.props.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
-from drycastle_pipeline.props.propmeshes import fence_meshes, parcel_props_meshes
+from drycastle_pipeline.props.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes
 
 PROPS = load_section("props")
 FENCE = PROPS["fences"]
@@ -89,8 +89,11 @@ def test_style_tables_cover_the_schema() -> None:
 def test_every_type_builds_its_texture_and_flat_parts(ftype: str) -> None:
     flat, textured = styled_fence_meshes(run(ftype), FENCE)
     style = FENCE_STYLES[ftype]
-    assert style.texture in textured and flat.face_count > 0  # posts or caps
+    thin = style.panel == "sheet"
+    assert style.texture in textured and (("plain" in textured and flat.face_count == 0) if thin else flat.face_count > 0)  # posts (plain texture: they break) or caps
     for tid, mesh in textured.items():
+        if thin and tid == "plain":
+            continue  # the posts: their own colour
         assert mesh.tris.shape == (mesh.face_count, 3, 3) and mesh.uvs.shape == (mesh.face_count, 3, 2)
         assert np.isfinite(mesh.tris).all() and np.isfinite(mesh.uvs).all()
         want = FENCE_TYPES[ftype]["colour"]
@@ -102,15 +105,18 @@ def test_every_type_builds_its_texture_and_flat_parts(ftype: str) -> None:
     assert min(float(m.tris[..., 2].min()) for m in textured.values()) < 0  # sunk into the ground
 
 
-def test_untyped_sections_stay_plain_boxes() -> None:
+def test_untyped_sections_are_boxes_of_the_plain_texture() -> None:
     plain = [{k: v for k, v in s.items() if k != "type"} for s in run("picket")]
-    styled_flat, styled_textured = styled_fence_meshes(plain, FENCE)
-    assert styled_flat.face_count == 0 and styled_textured == {}
+    box = fence_mesh(plain, FENCE)  # the box they were drawn as before
     flat, textured = fence_meshes(plain, FENCE)
-    assert flat.face_count == 10 * len(plain) and textured == {}
+    assert flat.face_count == 0 and set(textured) == {"plain"}
+    mesh = textured["plain"]
+    assert mesh.face_count == 10 * len(plain) and (mesh.colours == box.colours[0]).all()
+    assert np.allclose(mesh.tris.min(axis=(0, 1)), box.tris.min(axis=(0, 1))) and np.allclose(mesh.tris.max(axis=(0, 1)), box.tris.max(axis=(0, 1)))
+    assert not texture("plain").alpha and texture("plain").tintable
     # the rules can give every rule fence a type
     flat, textured = fence_meshes(plain, {**FENCE, "type": "wire"})
-    assert set(textured) == {"wire"} and flat.face_count > 0
+    assert set(textured) == {"wire", "plain"} and flat.face_count == 0  # its posts are the plain texture's
 
 
 def test_sheet_is_two_sided_and_follows_the_slope() -> None:
@@ -142,7 +148,7 @@ def test_wall_tops_are_level_and_the_pattern_runs_on_through_a_run() -> None:
 def test_columns_stand_at_joints_and_can_be_swapped() -> None:
     own = styled_fence_meshes(run("picket", n=2), FENCE)
     # 3 m sections, a post every 2 m at most: both ends, the joint and one inside each section
-    assert own[0].face_count == 5 * 10 and set(own[1]) == {"picket"}
+    assert own[0].face_count == 0 and own[1]["plain"].face_count == 5 * 10 and set(own[1]) == {"picket", "plain"}
     flat, textured = styled_fence_meshes(run("picket", n=2, column="brick_red"), FENCE)
     assert set(textured) == {"picket", "brick_red"}
     piers = textured["brick_red"]

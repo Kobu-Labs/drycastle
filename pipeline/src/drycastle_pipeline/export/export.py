@@ -116,6 +116,7 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
+# (0.16.0 adds its destruction keys, see there.)
 # (no bump) NORMAL on every drawn mesh of the chunk files, clutter_meshes.glb and prims (the face normal, flat shading);
 # collision meshes have none. Maps built before this shade with one constant normal (lights cut off by heading).
 # 0.15.0: house destruction (docs/house-destruction.md): every hollow house is its own house_<bid>_visual and house_<bid>_collision node
@@ -124,7 +125,19 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # collides with the houses but cannot swap them; a map without the file has no destruction. (A node-layout change: the minor part.)
 # The manifest's file_sha256 names the sha256 of every file of `files`, so the build hash the join check compares (MapLoader.BuildHash)
 # covers them too: a client with another house_voxels.bin is refused at join instead of never matching the server's houses.
-MAP_VERSION_BASE = "0.15.0"
+# 0.16.0: destroyable fences (docs/fence-destruction.md). Every fences.json section gains kind (plain, picket, wire, wall),
+# thickness_m and colour, a thin one also pieces, piece_m, piece0_m, uv and collider (the props_collision node that holds it), a
+# wall one grid ("fence_<index>"); version stays 1 (the thieves' FenceBook ignores the keys). The panel of a thin section carries
+# TEXCOORD_1 = (index + 0.5, (metres along from a - piece0_m) / piece_m) on every vertex in its textured node (picket, wire and the
+# new library texture "plain", which draws the box of a section without a type: it was a flat box of the props mesh), so the game
+# hides a broken piece by the floor of the second. A wall section (brick, stone, concrete types) leaves the props, props_tex_*
+# and props_collision nodes: house_fence_<index:05d>_visual (flat parts), _visual_tex_<texture> and _collision (closed boxes of
+# the wall and the piers it owns), in the chunk of its midpoint, and house_voxels.bin gets a grid "fence_<index:05d>" for it
+# (materials 7 brick, 8 stone, 9 concrete). A loader that does not know them draws no walls and no pieces' texture coordinate.
+# 0.16.1: a thin section's posts (wood, metal) break with the piece they stand in: they leave the flat props node for its
+# props_tex_plain node (plain texture, their colour as tint) with TEXCOORD_1 = (index + 0.5, that piece + 0.5), and fences.json gains
+# posts ([along_m, width_m, z0, z1, colour] each) on the section a post breaks with (at a joint: the first section that met it).
+MAP_VERSION_BASE = "0.16.1"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",
@@ -238,10 +251,26 @@ def _write_scene_docs(scene, out_dir: Path, rules_path: Path, chunk_m: float, fi
     write_optional(out_dir, "ground_objects.json", objects, files, "ground_objects")
 
 
-def _copy_work_files(work_dir: Path, out_dir: Path, files: dict) -> None:
-    """The props and detail stages' files, copied as they are: fences, lamps, clutter (with its meshes), crops, meadow."""
-    # fence sections (props stage): the game server hops pets over them
-    _copy_work_file(work_dir, out_dir, "fences.json", "fences.json", "fences", files)
+def _write_fences(work_dir: Path, out_dir: Path, scene, files: dict) -> None:
+    """fences.json: the props stage's file with each section's destruction keys (kind, pieces, uv, collider, grid: ``scene.fence_docs``)
+    added; no props stage file: none (a stale one is removed)."""
+    path = work_dir / "fences.json"
+    if not path.is_file():
+        (out_dir / "fences.json").unlink(missing_ok=True)
+        return
+    doc = json.loads(path.read_text())
+    if scene.fence_docs:  # the sections are the props.json ones, in the same order: the index is the position
+        if len(doc["fences"]) != len(scene.props["fences"]):
+            raise ValueError("work/fences.json and work/props.json disagree on the fence sections; rerun the props stage")
+        doc["fences"] = [{**f, **scene.fence_docs.get(i, {})} for i, f in enumerate(doc["fences"])]
+    (out_dir / "fences.json").write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    files["fences"] = "fences.json"
+
+
+def _copy_work_files(work_dir: Path, out_dir: Path, scene, files: dict) -> None:
+    """The props and detail stages' files: fences (with the export's keys), lamps, clutter (with its meshes), crops, meadow."""
+    # fence sections (props stage): the game server hops pets over them and breaks them (the export adds the keys it decides)
+    _write_fences(work_dir, out_dir, scene, files)
     # street lamp positions (props stage): the game builds the lamps from them
     _copy_work_file(work_dir, out_dir, "lamps.json", "lamps.json", "lamps", files, clear_stale=False)
     # clutter instances (detail stage), with the one mesh per kind they are drawn with
@@ -452,7 +481,7 @@ def run_export(
         write_graves(out_dir)
     prims = write_primitives(out_dir)
     _write_scene_docs(scene, out_dir, rules_path, float(parcels_doc["chunk_size_m"]), files)
-    _copy_work_files(work_dir, out_dir, files)
+    _copy_work_files(work_dir, out_dir, scene, files)
     _write_interior_docs(scene, out_dir, files)
     voxels.write_file(out_dir, scene.house_voxels, files)
 

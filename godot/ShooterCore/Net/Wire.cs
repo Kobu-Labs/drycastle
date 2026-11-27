@@ -213,6 +213,10 @@ public enum EventKind : byte
     HouseSettings = 244,
     /// <summary>Client to server: a house's state differs from the server's (op seq or hash), send its <see cref="HouseCells"/> (u16 house).</summary>
     HouseResync = 249,
+    /// <summary>Server to everyone: the pieces of one thin fence section that broke this tick and the push of their fall (<see cref="Drycastle.ShooterCore.Fences.FenceCodec"/>: u16 section, u64 pieces, i8 push x, i8 push z, u8 speed * 10; docs/fence-destruction.md Contract 4). Kinds 224-229 belong to fence destruction.</summary>
+    FenceBreak = 224,
+    /// <summary>Server to a joiner (every section with a broken piece), or to everyone at a new round or /fences restore (reset): the broken masks of the thin fence sections (<see cref="Drycastle.ShooterCore.Fences.FenceCodec"/>; at most 200 bytes a message).</summary>
+    FenceSync = 225,
     /// <summary>Server to everyone, and to a joiner when the doors are open: the church doors opened (1) or closed (0), one byte (<see cref="ChurchDoorCodec"/>, ADR 0019). Kinds 210-219 belong to the church.</summary>
     ChurchDoor = 210,
     /// <summary>Server to everyone, and to a joiner: the Holy Mass as it is now (<see cref="MassStateMsg"/>, <see cref="MassCodec"/>): phase, chant on or off, the pastor's kills, where the chant is, and once at the start the bells. Kinds 210-219 belong to the Holy Mass.</summary>
@@ -427,7 +431,8 @@ public static class Wire
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
-    public const byte ProtocolVersion = 87;
+    //   v88 fence destruction (docs/fence-destruction.md): events 224 FenceBreak and 225 FenceSync
+    public const byte ProtocolVersion = 88;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

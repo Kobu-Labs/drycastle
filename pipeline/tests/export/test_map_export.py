@@ -34,7 +34,7 @@ def test_chunk_glb_has_all_node_groups(ws) -> None:
         "terrain",
         "terrain_collision",
     } <= set(names)
-    assert any(n.startswith("parcel_") and n.endswith("_props") for n in names)
+    assert any(n.startswith("parcel_") and n.endswith("_props_tex_plain") for n in names)  # untyped fences: a textured box
     tris = manifest["chunks"][0]["triangles"]
     for name in names:
         geom = scene.geometry[scene.graph[name][1]]
@@ -86,10 +86,14 @@ def test_roads_json_spawns_json_and_manifest(ws) -> None:
     assert not any("time" in k or "date" in k for k in manifest)
 
 
-def test_fences_json_is_copied_from_the_props_stage_and_a_stale_one_goes(ws) -> None:
+def test_fences_json_is_the_props_stage_file_plus_the_export_keys_and_a_stale_one_goes(ws) -> None:
     manifest = export(ws)
     assert manifest["files"]["fences"] == "fences.json"
-    assert (ws["out"] / "fences.json").read_bytes() == (ws["work"] / "fences.json").read_bytes()
+    work = json.loads((ws["work"] / "fences.json").read_text())
+    out = json.loads((ws["out"] / "fences.json").read_text())
+    assert out["fences"] and len(out["fences"]) == len(work["fences"])
+    for w, o in zip(work["fences"], out["fences"], strict=True):
+        assert {k: o[k] for k in w} == w and o["kind"] == "plain" and 1 <= o["pieces"] <= 64
     (ws["work"] / "fences.json").unlink()
     manifest = export(ws)
     assert "fences" not in manifest["files"] and not (ws["out"] / "fences.json").exists()
@@ -127,7 +131,7 @@ def test_props_are_per_parcel_nodes_with_unchanged_totals(ws) -> None:
     props = json.loads((ws["work"] / "props.json").read_text())
     pcfg = load_section("props", DEFAULT_RULES)
     ids = sorted({x["parcel"] for x in props["fences"] + props["trees"] if x.get("parcel")})
-    assert ids and all(f"parcel_{i}_props" in tris for i in ids)
+    assert ids and all(f"parcel_{i}_props" in tris or f"parcel_{i}_props_tex_plain" in tris for i in ids)
     # triangle totals equal what the merged chunk-level nodes held before
     # (typed fences add flat posts and caps to the visual; their textured parts are separate nodes)
     want_visual = fence_meshes(props["fences"], pcfg["fences"])[0].face_count + trees_mesh(

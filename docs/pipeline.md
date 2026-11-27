@@ -363,8 +363,9 @@ flat coping and matching piers. Columns stand at every section joint and run end
 (`none`, `wood_post`, `metal_post`, `brick_red`, `brick_white`, `stone`, `concrete`), e.g. picket
 between brick piers. The colour is a tint: picket, wire and concrete are near-white textures, so the
 colour is their paint; brick and stone carry their own colours and default to white. Custom (hand-edited)
-fences always have a type (default `picket`); rule fences stay plain boxes unless `props.fences.type` is
-set in `rules.yaml`. The collision box of a section is unchanged.
+fences always have a type (default `picket`); rule fences stay plain boxes (the white `plain` texture of the library: a box that
+shows its tint) unless `props.fences.type` is set in `rules.yaml`. The collision box of a thin section is unchanged. A wall type
+(`brick_red`, `brick_white`, `stone_wall`, `concrete`) is not in the props at all: it is a house-destruction object (see Fence sections).
 
 The textures are a library, not part of the fences: `assets/manifest.json` `textures` lists each one (id,
 PNG under `assets/`, `tile_m` = the size of one repeat in metres, `alpha`, `tintable`, mean colour), and
@@ -402,16 +403,20 @@ lamp nodes: run `make fetch --force` once, then `make normalise` and `make props
 builds the pole, the head and the light from primitives, so the viewer ignores them.
 
 **Fence sections (`fences.json`).** The fences are baked into the chunk GLBs, but the game server also needs where they
-stand (a gang member hops a pet's fence, `docs/events/thieves/05-pets.md`). The props stage writes the sections that
-`make_fences` produced (the same list as `fences` of `work/props.json`) to `data/village/work/fences.json`; the export copies it to
-`out/village/map/fences.json` (`files.fences`; no map version bump; absent when the map has no props stage output, a stale
-file is deleted; a loader that does not know it, or a map without it, means "no fence data"). Format, version 1:
+stand (a gang member hops a pet's fence, `docs/events/thieves/05-pets.md`) and how they break (`docs/fence-destruction.md`). The props
+stage writes the sections that `make_fences` produced (the same list as `fences` of `work/props.json`) to
+`data/village/work/fences.json`; the export adds the keys only it can know (what each section is drawn as, its pieces, where its
+collider is: map 0.16.0) and writes `out/village/map/fences.json` (`files.fences`; absent when the map has no props stage output, a stale
+file is deleted; a loader that does not know it, or a map without it, means "no fence data"). Format, version 1 (keys are only
+ever added):
 
 ```json
 {"version": 1,
  "axes": "local metres, x east, y north, z up (elevation of the ground at each end); height_m above that",
  "fences": [{"parcel": "P-0412", "group": "G-0003", "a": [12.5, 40.0], "b": [16.25, 40.0], "za": 187.1, "zb": 187.2,
-             "height_m": 1.2, "type": null}]}
+             "height_m": 1.2, "type": "picket", "kind": "picket", "thickness_m": 0.08, "colour": "#8a6a47",
+             "pieces": 31, "piece_m": 0.125, "piece0_m": -0.01875, "uv": [25.0, 2.0, 0.004, 0.996],
+             "collider": "parcel_P-0412_props_collision"}]}
 ```
 
 One entry per section (a straight piece of at most `props.fences.section_m`, in parcel ID order, along each fence line in order):
@@ -422,6 +427,31 @@ One entry per section (a straight piece of at most `props.fences.section_m`, in 
 is one line round the members' outer edge, each piece owned by its member parcel. The gate gap and the stretches
 cleared of buildings and roads are simply missing: the sections are the fence that stands. `make parcel-run` (the editor's live
 regeneration) does not rewrite it; run `make map-update` (or `make props export`) after changing fences.
+
+Keys added by the export (`export/scene.py` `fence_docs`; the position of a section in the list is its **index**, the id the game uses
+everywhere): `kind` (`plain` = no type, `picket`, `wire` or `wall`), `thickness_m` and `colour` (`#rrggbb`, the tint) as drawn. A *thin*
+section (plain, picket, wire) breaks in equal strips, its **pieces**, and also has `pieces` (1 to 64), `piece_m` (their width,
+metres along a to b), `piece0_m` (where piece 0 starts, metres from a, at most 0; piece j covers
+`[piece0_m + j piece_m, piece0_m + (j + 1) piece_m]` clipped to the section), `uv` (`[u at a, u per metre, v at the bottom, v at the top]`:
+the texture coordinates its panel is drawn with), `posts` (map 0.16.1, absent when none: the posts that break and fall with one of its pieces,
+`[along_m from a, width_m, z0, z1, "#rrggbb"]` each; a joint's post is the first section's; they are drawn in the `plain` textured node
+with that piece's TEXCOORD_1) and `collider` (the `props_collision` node that holds its box:
+`parcel_<ID>_props_collision`, or `props_collision@<ix>,<iy>` for a fence with no parcel in chunk ix, iy; `null` when the
+`props.fences.collision` rule is off, as it is in the village profile). A picket piece is one board: the run-continuous along that the
+panel's u uses puts the piece edges in the middle of the gaps between boards (the first piece may start before a), a wire piece is
+0.5 m and a plain one 0.25 m, uniform from a. A *wall* section (brick, stone, concrete types) has `grid`, its grid id in
+`house_voxels.bin` (`fence_<index:05d>`).
+
+The panel of a thin section carries the piece in the mesh too: every vertex of its textured node (`<base>_tex_picket`, `_wire` or
+`_plain`) has TEXCOORD_1 = (index + 0.5, (metres from a along the section - `piece0_m`) / `piece_m`), so the floor of y is the piece
+(`props/fencestyles.py` `section_docs` and `_Pieces`; `core/textures.py` `TexturedMesh.uv2`; `export_glb` renames trimesh's `_UV2`).
+The posts of a thin section stay in the flat `props` node. A wall section is out of `props`, `props_tex_*` and `props_collision`: per
+section a flat `house_fence_<index:05d>_visual` (caps, flat posts), `house_fence_<index:05d>_visual_tex_<texture>` and
+`house_fence_<index:05d>_collision` (closed boxes of the wall and the piers it owns; always written, whatever the collision rule says),
+in the chunk of its midpoint. A pier at a joint of connected walls belongs to the lowest index and is drawn and built once. Each
+wall also has a voxel grid in `house_voxels.bin` (`props/fencewalls.py`: 0.25 m cells in the section's own frame, +x from a to b,
++y to its left, one cell thick at least, foundation under the ground line and in the lowest layer; materials 7 brick, 8 stone,
+9 concrete).
 
 **Satellite dishes** (`edits/dishes.py`, `scripts/models/make_satellite_dish_model.py`; the Thieves event steals them, `docs/events/thieves/06-dishes.md`).
 The model is a generated household dish, 0.7 m across, on a short wall arm (`python3 -I scripts/models/make_satellite_dish_model.py`
@@ -778,10 +808,11 @@ and `parcel_<ID>_collision` (extruded footprint, no roof detail) for each parcel
 vertex); `roads`; `parcel_<ID>_props` (that parcel's fences and trees, visual) and
 `parcel_<ID>_props_collision` (its fences, only when the `fences.collision` rule is on), placed in
 the parcel's own chunk file so one parcel's props can be swapped at runtime; `parcel_<ID>_props_tex_<texture id>`
-(map 0.7.0: the textured parts of that parcel's typed fences, one node per texture; it carries UVs and a tint as
+(map 0.7.0: the textured parts of that parcel's fences, one node per texture, `plain` being the box of an untyped fence since 0.16.0; it carries UVs and a tint as
 vertex colour, and no image: the loader draws a node named `<node>_tex_<id>` with texture `<id>` of the asset
 library, and the manifest's `textures` lists the ids the map uses); `patch_<ID>` (see Ground patches); `props` and
-`props_collision` remain only for items without a parcel (the orthophoto trees). The manifest says
+`props_collision` remain only for items without a parcel (the orthophoto trees). A fence wall (brick, stone, concrete types; map 0.16.0)
+has `house_fence_<index>_visual`, `_visual_tex_<texture id>` and `_collision` nodes of its own (Fence sections). The manifest says
 `"props_layout": "per_parcel"`; `map_version` went from `0.1.0` to `0.2.0` for this node-layout
 change (pre-1.0, a node-layout change bumps the minor part). Also
 `parcels.json` (ID, cadastral reference, kind, polygon and anchor in local metres with x east and

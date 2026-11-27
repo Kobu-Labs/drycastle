@@ -47,8 +47,8 @@ from drycastle_pipeline.core.mesh import solid_polygons as _polygons
 CELL_M = 0.25
 FILE_NAME = "house_voxels.bin"
 MAGIC, VERSION = b"HVOX", 1
-AIR, FOUNDATION, FLOOR, WALL, PARTITION, CEILING, ROOF = range(7)
-MATERIALS = ("air", "foundation", "floor", "wall", "partition", "ceiling", "roof")
+AIR, FOUNDATION, FLOOR, WALL, PARTITION, CEILING, ROOF, BRICK, STONE, CONCRETE = range(10)  # the last three: fence walls (props/fencewalls.py)
+MATERIALS = ("air", "foundation", "floor", "wall", "partition", "ceiling", "roof", "brick", "stone", "concrete")
 MAX_PALETTE = 64
 FOUNDATION_COLOUR = (112, 108, 102)
 SKIN_MAX_CELLS = 8  # the roof skin is at most this many cells deep where the roof steps (a fitted roof's step wall)
@@ -167,6 +167,25 @@ def write_file(out_dir: Path, houses: list[HouseGrid], files: dict) -> None:
 
 def _f32(v: float) -> float:
     return float(np.float32(v))
+
+
+def palette_of(mat: np.ndarray, colour: np.ndarray) -> tuple[list[tuple[int, int, int, int]], np.ndarray]:
+    """The palette (entry 0 = air; sorted: same input, same bytes) and the flat palette index of every cell, from the
+    material (nz, ny, nx) and colour (nz, ny, nx, 3) of each. Too many colours (> MAX_PALETTE): each material keeps its first."""
+    keys = mat.astype(np.uint32) << 24 | colour[..., 0].astype(np.uint32) << 16 | colour[..., 1].astype(np.uint32) << 8 | colour[..., 2]
+    keys[mat == AIR] = 0
+    uniq, inv = np.unique(keys, return_inverse=True)
+    if len(uniq) + (uniq[0] != 0) > MAX_PALETTE:
+        first: dict[int, int] = {}
+        for kk in uniq.tolist():
+            first.setdefault(kk >> 24, kk)
+        keys = np.array([first[kk >> 24] for kk in uniq.tolist()], np.uint32)[inv]
+        uniq, inv = np.unique(keys, return_inverse=True)
+    palette = [(kk >> 24 & 0xFF, kk >> 16 & 0xFF, kk >> 8 & 0xFF, kk & 0xFF) for kk in uniq.tolist()]
+    if palette[0][0] != AIR:
+        palette.insert(0, (AIR, 0, 0, 0))
+        inv = inv + 1
+    return palette, inv
 
 
 def _tops(tris: np.ndarray, nx: int, ny: int) -> tuple[np.ndarray, np.ndarray]:
@@ -530,19 +549,7 @@ def voxelise(bid: str, b: dict, d, ins, visual: Mesh, dz: float = 0.0, plan=None
         colour[on_roof] = np.broadcast_to(visual.colours[np.maximum(full_tri, 0)][None], colour.shape)[on_roof]
     kept = att & (mat != AIR)
     colour[kept] = att_colour[kept]  # steps, balconies, gutters: the colour of their faces
-    keys = mat.astype(np.uint32) << 24 | colour[..., 0].astype(np.uint32) << 16 | colour[..., 1].astype(np.uint32) << 8 | colour[..., 2]
-    keys[mat == AIR] = 0
-    uniq, inv = np.unique(keys, return_inverse=True)
-    if len(uniq) + (uniq[0] != 0) > MAX_PALETTE:  # too many colours: each material in its first one
-        first: dict[int, int] = {}
-        for kk in uniq.tolist():
-            first.setdefault(kk >> 24, kk)
-        keys = np.array([first[kk >> 24] for kk in uniq.tolist()], np.uint32)[inv]
-        uniq, inv = np.unique(keys, return_inverse=True)
-    palette = [(kk >> 24 & 0xFF, kk >> 16 & 0xFF, kk >> 8 & 0xFF, kk & 0xFF) for kk in uniq.tolist()]
-    if palette[0][0] != AIR:
-        palette.insert(0, (AIR, 0, 0, 0))
-        inv = inv + 1
+    palette, inv = palette_of(mat, colour)
     return HouseGrid(bid, origin, yaw, _f32(cell), palette, inv.reshape(nz, ny, nx).astype(np.uint8))
 
 

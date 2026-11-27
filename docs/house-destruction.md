@@ -10,7 +10,7 @@ Status: designed 2026-11-26, nothing built. This doc is the contract for paralle
 | D1 | **Hidden voxel grid.** Every hollow house gets a grid of 0.25 m cells in its own frame. The smooth mesh stays. A carved cell is discarded from it in the shader, and the exposed cut faces of the cells around it are drawn as voxels. *Assumed, not confirmed by the owner (with D2).* |
 | D2 | Cell size **0.25 m** (a player is about 7 cells tall; a 0.3 m wall is 1 to 2 cells). |
 | D3 | Only **explosives** carve: rockets, grenades, cannon and flak rounds with a blast, missiles, the Scud, the MOAB, vehicle blasts. Small-calibre bullets never carve. |
-| D4 | **Hollow houses only.** Landmarks (church, office, garages, bunkers) and solid houses stay as they are. |
+| D4 | **Hollow houses only.** Landmarks (church, office, garages, bunkers) and solid houses stay as they are. The brick, stone and concrete fences are grids of this file too (`fence_<index>`, materials brick, stone, concrete; docs/fence-destruction.md, ADR 0045). |
 | D5 | **Server-authoritative and deterministic.** The server sends carve ops. Carving, support and detach are pure integer functions of the cells in ShooterCore, run the same way by the server and every client. The server never sends collapse results. |
 | D6 | **Structure: detach, then load.** A part with no path to the foundation falls. A cell carrying more than its material's strength crumbles (a one-cell neck under a roof fails). Repeat until stable. |
 | D7 | **Debris is client-side cosmetic.** A falling part is one Jolt rigid body. On its first hard impact it is split into Voronoi pieces. The server has no debris, and debris collides with nobody. |

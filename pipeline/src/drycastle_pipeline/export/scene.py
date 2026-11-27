@@ -37,6 +37,8 @@ from drycastle_pipeline.ground.areas import (
     with_parcel_types,
 )
 from drycastle_pipeline.ground.patches import node_name, patch_meshes, plan_patches
+from drycastle_pipeline.props.fencestyles import resolve, section_docs, wall_parts
+from drycastle_pipeline.props.fencewalls import grid_id, wall_grid, wall_nodes
 from drycastle_pipeline.props.propmeshes import (
     fence_mesh,
     fence_meshes,
@@ -173,7 +175,8 @@ class MapScene:
     urad: dict | None = None  # the inside of the municipal office, see office_interior.urad_info
     garage: dict | None = None  # the bus garage's doorway, bay and parking place, see garage.garage_info
     interiors: list[dict] = field(default_factory=list)  # the houses with an inside: room and doorways, see buildings/interior.py
-    house_voxels: list = field(default_factory=list)  # their hidden voxel grids (house_voxels.bin), see buildings/voxels.py
+    house_voxels: list = field(default_factory=list)  # their hidden voxel grids (house_voxels.bin), see buildings/voxels.py; and the fence walls' (props/fencewalls.py)
+    fence_docs: dict[int, dict] = field(default_factory=dict)  # by section index: what the export adds to fences.json (kind, pieces, uv, collider, grid, ...)
     water: WaterPlan | None = None  # the water bodies (water.json) and the terrain they are carved into, with a terrain
 
     def chunks(self) -> list[Chunk]:
@@ -460,7 +463,8 @@ def _add_props(scene: MapScene, work_dir: Path, parcels_doc: dict, rules_path: P
     if not scene.props:
         return
     pcfg = load_section("props", rules_path)
-    fences = [{**s, "za": s["za"] * k, "zb": s["zb"] * k} for s in scene.props["fences"]]
+    fcfg = pcfg["fences"]
+    fences = [{**s, "index": i, "za": s["za"] * k, "zb": s["zb"] * k} for i, s in enumerate(scene.props["fences"])]  # the index is the position in fences.json
     trees = [{**tr, "z": tr["z"] * k} for tr in scene.props["trees"]]
     scene.trees = trees
     if "ground_objects" in scene.props:  # props.json of a run before map 0.13.0 has none: no file, no meshes
@@ -470,17 +474,20 @@ def _add_props(scene: MapScene, work_dir: Path, parcels_doc: dict, rules_path: P
     def owned(it: dict) -> bool:  # OSM trees have no parcel (null or absent): chunk level
         return it.get("parcel") in chunk_of_parcel
 
-    by_parcel_f = _group([s for s in fences if owned(s)], lambda s: s["parcel"])
+    walls = [s for s in fences if resolve(s, fcfg).kind == "wall"]  # not in the props: house destruction objects of their own
+    thin = [s for s in fences if resolve(s, fcfg).kind != "wall"]
+    by_parcel_f = _group([s for s in thin if owned(s)], lambda s: s["parcel"])
     by_parcel_t = _group([t for t in trees if owned(t)], lambda t: t["parcel"])
     for pid in sorted(set(by_parcel_f) | set(by_parcel_t)):
         visual, collision, textured = parcel_props_meshes(
             by_parcel_f.get(pid, []), by_parcel_t.get(pid, []), pcfg
         )
+        _note_fences(scene, by_parcel_f.get(pid, []), fcfg, f"parcel_{pid}_props_collision")
         if visual.face_count or collision.face_count or textured:
             scene.parcel_props.setdefault(chunk_of_parcel[pid], []).append(
                 (pid, visual, collision, textured)
             )
-    by_fence = _group([s for s in fences if not owned(s)], lambda s: _chunk(s["a"], chunk_m))
+    by_fence = _group([s for s in thin if not owned(s)], lambda s: _chunk(s["a"], chunk_m))
     by_tree = _group(
         [t for t in trees if not owned(t)], lambda t: _chunk((t["x"], t["y"]), chunk_m)
     )
@@ -495,8 +502,27 @@ def _add_props(scene: MapScene, work_dir: Path, parcels_doc: dict, rules_path: P
         _put(scene, "props", {key: visual})
         for tid, mesh in textured.items():
             _put(scene, tex_node_name("props", tid), {key: mesh})
-        if pcfg["fences"]["collision"]:
-            _put(scene, "props_collision", {key: fence_mesh(by_fence.get(key, []), pcfg["fences"], True)})
+        if fcfg["collision"]:
+            _put(scene, "props_collision", {key: fence_mesh(by_fence.get(key, []), fcfg, True)})
+        _note_fences(scene, by_fence.get(key, []), fcfg, f"props_collision@{key[0]},{key[1]}")
+    _add_fence_walls(scene, walls, fcfg, chunk_m)
+
+
+def _note_fences(scene: MapScene, sections: list[dict], fcfg: dict, collider: str) -> None:
+    """``scene.fence_docs`` of thin sections drawn (and collided with) together: their fences.json keys, and the collision node that
+    holds them (null: the rules' props.fences.collision is off, as in the village profile, and there is none)."""
+    for i, doc in section_docs(sections, fcfg).items():
+        scene.fence_docs[i] = {**doc, "collider": collider if fcfg["collision"] else None}
+
+
+def _add_fence_walls(scene: MapScene, walls: list[dict], fcfg: dict, chunk_m: float) -> None:
+    """The wall sections: ``house_fence_<index>_*`` nodes in the chunk of each one's midpoint and a grid each (props/fencewalls.py)."""
+    docs = section_docs(walls, fcfg)
+    for i, part in wall_parts(walls, fcfg).items():
+        a, b = part.spec.a, part.spec.b
+        scene.nodes.setdefault(_chunk(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), chunk_m), {}).update(wall_nodes(part))
+        scene.house_voxels.append(wall_grid(part.spec))
+        scene.fence_docs[i] = {**docs[i], "grid": grid_id(i)}
 
 
 def build_scene(

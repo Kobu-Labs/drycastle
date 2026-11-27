@@ -97,7 +97,7 @@ def test_parcels_and_manifest(workspace) -> None:
     assert [p["id"] for p in parcels] == ["P-0001", "P-0002", "P-0003"]
     assert parcels[0]["buildings"] == ["w1"] and parcels[2]["buildings"] == []
     m = json.loads((out / "manifest.json").read_text())
-    assert m["map_version"] == "0.15.0-village"
+    assert m["map_version"] == "0.16.1-village"
     # every data file hashed, so the join check's build hash (the manifest's) covers house_voxels.bin and the rest
     assert m["file_sha256"].keys() == m["files"].keys()
     assert all(m["file_sha256"][k] == hashlib.sha256((out / f).read_bytes()).hexdigest() for k, f in m["files"].items())
@@ -132,7 +132,7 @@ def test_map_manifest_and_lighter_props(tmp_path) -> None:
     ws = make_workspace(tmp_path)
     run_props(ws["work"], DEFAULT_RULES)
     m = run_export(ws["work"], tmp_path / "map", ws["raw"], DEFAULT_RULES, ws["overrides"])
-    assert m["map_version"] == "0.15.0-village"
+    assert m["map_version"] == "0.16.1-village"
     # the map's props carry no collision: fences and trees are lighter than a full build
     assert not any(n.endswith("props_collision") for c in m["chunks"] for n in c["triangles"])
     # the export is byte-deterministic too

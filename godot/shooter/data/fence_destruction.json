@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "_note": "Fence destruction (docs/fence-destruction.md Contract 5), the thin fences (plain, picket, wire): piece_hp of one piece and what one round does to the piece it stops on (bullet_damage). blast: radius = splash radius * radius_share, damage at the centre falling off linearly. ram: a vehicle that loses min_speed m/s to a thin fence in one tick: its momentum (mass * speed lost) against momentum_per_hp * the hit points left of the pieces its box touches (shifted probe_m along its velocity); more breaks them all and it goes on, less damages them and it stops. debris: the falling pieces on the clients; the rubble mode (fade or stay) is house destruction's. Walls (brick, stone, concrete) are house_destruction.json materials.",
+  "enabled": true,
+  "kinds": {
+    "plain":  { "piece_hp": 100, "bullet_damage": 50 },
+    "picket": { "piece_hp": 100, "bullet_damage": 50 },
+    "wire":   { "piece_hp": 100, "bullet_damage": 20 }
+  },
+  "blast": { "radius_share": 1.0, "damage": 400 },
+  "ram": { "enabled": true, "min_speed": 2.0, "momentum_per_hp": 2.0, "probe_m": 0.5 },
+  "debris": { "max_bodies": 96, "max_distance_m": 120, "fade_after_s": 20, "fade_s": 2, "stay_cap": 3000, "push_speed": 2.5 }
+}

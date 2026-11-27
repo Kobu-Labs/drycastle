@@ -3,6 +3,7 @@ using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fences;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Items;
@@ -37,6 +38,8 @@ public class GameData
     public GlassConfig Glass { get; init; } = new();
     /// <summary>house_destruction.json (voxel destruction of the hollow houses, docs/house-destruction.md). Defaults when the file is absent.</summary>
     public DestructionConfig HouseDestruction { get; init; } = DestructionConfig.Default;
+    /// <summary>fence_destruction.json (the thin fences' pieces, docs/fence-destruction.md). Defaults when the file is absent.</summary>
+    public FenceDestructionConfig FenceDestruction { get; init; } = FenceDestructionConfig.Default;
     /// <summary>animals.json (the species of wildlife and livestock and their rules). Empty when the file is absent.</summary>
     public AnimalsFile Animals { get; init; } = new();
     /// <summary>animal_shapes.json (the hit shapes of the wild species, baked from their models), with the private packs' species merged in by the host. Empty when absent: every animal is its body box.</summary>
@@ -79,7 +82,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string fenceDestructionJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -109,6 +112,7 @@ public class GameData
             Plantation = plantationJson == "" ? PlantationFile.Default : PlantationFile.Parse(plantationJson),
             Companions = companionsJson == "" ? new() : CompanionsFile.Parse(companionsJson).CheckAgainst(animals),
             HouseDestruction = houseDestructionJson == "" ? DestructionConfig.Default : DestructionConfig.Parse(houseDestructionJson),
+            FenceDestruction = fenceDestructionJson == "" ? FenceDestructionConfig.Default : FenceDestructionConfig.Parse(fenceDestructionJson),
         };
     }
 
@@ -143,6 +147,7 @@ public class GameData
             Plantation = File.Exists(Path.Combine(dir, "plantation.json")) ? PlantationFile.Load(Path.Combine(dir, "plantation.json")) : PlantationFile.Default,
             Companions = File.Exists(Path.Combine(dir, "companions.json")) ? CompanionsFile.Load(Path.Combine(dir, "companions.json")).CheckAgainst(animals) : new(),
             HouseDestruction = File.Exists(Path.Combine(dir, "house_destruction.json")) ? DestructionConfig.Load(Path.Combine(dir, "house_destruction.json")) : DestructionConfig.Default,
+            FenceDestruction = File.Exists(Path.Combine(dir, "fence_destruction.json")) ? FenceDestructionConfig.Load(Path.Combine(dir, "fence_destruction.json")) : FenceDestructionConfig.Default,
         };
     }
 }
