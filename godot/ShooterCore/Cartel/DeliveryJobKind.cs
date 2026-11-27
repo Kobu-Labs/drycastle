@@ -11,8 +11,6 @@ public interface IDeliveryWorld
     DuffelBook Duffels { get; }
     /// <summary>A Duffel of the party in this player's hands (the server burdens the body and tells a player who carries one already); null when it could not.</summary>
     Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier);
-    /// <summary>Takes the party's Duffels out of the world and unburdens their carriers.</summary>
-    void RemoveParty(IReadOnlySet<ushort> party);
     /// <summary>Where a living player on foot stands; null otherwise (dead, gone, in a vehicle).</summary>
     Vector3? Feet(ushort player);
     /// <summary>Whether the player holds the interact key now (its last input).</summary>
@@ -22,7 +20,8 @@ public interface IDeliveryWorld
 /// <summary>
 /// The Delivery (docs/cartel.md "Simple jobs", #494): the leader gets one Duffel at the Contact for the party; a party player carrying it who stands within <c>radius_m</c> of the Job's Drop point and
 /// holds the interact key <c>hold_seconds</c> (<see cref="InteractHold"/>) hands it over: success. A dropped Duffel lies for any of the party to pick up (the leader's death still fails the Job). The
-/// drop point is at least <c>min_contact_m</c> from the Contact and <c>apart_m</c> from every point another Job holds (<see cref="CartelSpots"/>). When it ends, whichever way, its Duffel goes.
+/// drop point is at least <c>min_contact_m</c> from the Contact and <c>apart_m</c> from every point another Job holds (<see cref="CartelSpots"/>). The Duffel belongs to the Job's party
+/// (<see cref="Job.Party"/>). When it ends, whichever way, its Duffel goes (<see cref="DuffelBook.RemoveParty"/>, which unburdens its carrier).
 /// Numbers in cartel.json <c>jobs.delivery</c>.
 /// </summary>
 public sealed class DeliveryJobKind : IJobKind
@@ -45,23 +44,22 @@ public sealed class DeliveryJobKind : IJobKind
 
     readonly Data _data;
     readonly DuffelKind _duffel;
-    readonly IJobParties _parties;
     readonly Func<CartelMap> _map;
     readonly Random _rng;
     readonly IDeliveryWorld _world;
 
-    public DeliveryJobKind(CartelFile file, IJobParties parties, Func<CartelMap> map, Random rng, IDeliveryWorld world)
+    public DeliveryJobKind(CartelFile file, Func<CartelMap> map, Random rng, IDeliveryWorld world)
     {
         _data = Read(file);
         _duffel = DuffelRules.Parse(_data.Duffel)!.Value;
-        _parties = parties; _map = map; _rng = rng; _world = world;
+        _map = map; _rng = rng; _world = world;
     }
 
     /// <summary>cartel.json <c>jobs.delivery</c>, checked (the client reads it too: the hand-over's radius and hold for its prompt and ring).</summary>
     public static Data Read(CartelFile file)
     {
         var data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.delivery");
-        CartelSpots.CheckPerTier(data.Seconds, file, "jobs.delivery.seconds");
+        CartelTiers.Check(data.Seconds, file.Tiers.Count, "cartel.json: jobs.delivery.seconds", CartelTiers.Positive, "more than 0");
         if (DuffelRules.Parse(data.Duffel) == null) throw new DataFileException($"cartel.json: jobs.delivery.duffel '{data.Duffel}' is not weed, cash or product");
         void Positive(float v, string what) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"cartel.json: jobs.delivery.{what} must be more than 0"); }
         Positive(data.RadiusM, "radius_m"); Positive(data.HoldSeconds, "hold_seconds");
@@ -72,25 +70,25 @@ public sealed class DeliveryJobKind : IJobKind
     public string Id => KindId;
     public string Name => _data.Name;
     public Data Numbers => _data;
-    public float Seconds(int tier) => CartelSpots.OfTier(_data.Seconds, tier);
+    public float Seconds(int tier) => CartelTiers.Of(_data.Seconds, tier);
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {
-        if (CartelSpots.Claim(job, book, _map(), CartelZones.DropKind, _rng, _data.MinContactM, _data.ApartM, out refusal) is not { } drop) return null;
-        var party = new JobPartySet(_parties, job.Owner);
-        if (_world.Give(_duffel, party, job.Leader) is not { } duffel) { refusal = "No duffel for you: you carry one already, or the world is full."; return null; }
-        return new Run(this, party, duffel, drop);
+        var map = _map();
+        if (CartelSpots.Claim(job, book, map, CartelZones.DropKind, _rng, map.Contact?.Position, "the Contact", _data.MinContactM, _data.ApartM, out refusal) is not { } drop) return null;
+        if (_world.Give(_duffel, job.Party, job.Leader) is not { } duffel) { refusal = "No duffel for you: you carry one already, or the world is full."; return null; }
+        return new Run(this, job.Party, duffel, drop);
     }
 
     /// <summary>One Delivery's state: its Duffel, its drop point and the hold under way there.</summary>
     public sealed class Run : IJobObjective
     {
         readonly DeliveryJobKind _k;
-        readonly JobPartySet _party;
+        readonly JobParty _party;
         InteractHold _hold;
         ushort _holder;
 
-        internal Run(DeliveryJobKind kind, JobPartySet party, Duffel duffel, Vector3 drop)
+        internal Run(DeliveryJobKind kind, JobParty party, Duffel duffel, Vector3 drop)
         {
             _k = kind; _party = party; Duffel = duffel; Drop = drop;
         }
@@ -117,7 +115,7 @@ public sealed class DeliveryJobKind : IJobKind
             return _hold.Tick(_k._world.UseHeld(at), true, dt, _k._data.HoldSeconds) ? JobStep.Succeeded : JobStep.Running;
         }
 
-        public void End(Job job) => _k._world.RemoveParty(_party);
+        public void End(Job job) => _k._world.Duffels.RemoveParty(_party);
 
         public string Objective(Job job) => !Present ? ""
             : Duffel.State != DuffelState.Carried ? "Pick the duffel up"

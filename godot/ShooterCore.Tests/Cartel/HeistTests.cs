@@ -81,8 +81,45 @@ public class HeistTests
         Assert.Equal((1, 2), HeistRules.AssaultCrew(d, 1, 1));
         Assert.Equal((5, 3), HeistRules.AssaultCrew(d, 4, 3));
         Assert.Equal((6, 2), HeistRules.AssaultCrew(d, 5, 4)); // 6 Gunmen, room for 2 of the 4 Enforcers
-        var order = HeistRules.CrewOrder(2, 3);
+        var order = CrewRules.Order(2, 3);
         Assert.Equal(new[] { GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Enforcer }, order);
+    }
+
+    [Fact]
+    public void OneCrewFormulaAndOneOrderServeEveryKind()
+    {
+        // the per-member terms both count: a Hit scales its Enforcers per mate too, an Assault and a house do not (0)
+        Assert.Equal((4, 5), CrewRules.Split(1, 1, 2, 1, 4, 10));
+        Assert.Equal((4, 2), CrewRules.Split(1, 1, 2, 0, 4, 10));
+        Assert.Equal((3, 0), CrewRules.Split(5, 0, 2, 0, 1, 3)); // Gunmen first within the cap
+        Assert.Equal((0, 0), CrewRules.Split(2, 1, 2, 1, 3, -1)); // no room at all
+        // the ring of a Rival dealer's guards used its own interleave: the one order gives the same for every split
+        for (var g = 0; g <= 6; g++)
+            for (var e = 0; e <= 6; e++)
+            {
+                var ring = new List<GangMemberKind>();
+                int gs = 0, es = 0;
+                for (var i = 0; i < g + e; i++)
+                {
+                    var k = gs < g && (es >= e || gs <= es) ? GangMemberKind.Gunman : GangMemberKind.Enforcer;
+                    if (k == GangMemberKind.Gunman) gs++; else es++;
+                    ring.Add(k);
+                }
+                Assert.Equal(ring, CrewRules.Order(g, e));
+            }
+    }
+
+    [Fact]
+    public void ATiersNumberIsItsEntryAndTheListsAreChecked()
+    {
+        var a = new[] { 10, 20, 30 };
+        Assert.Equal(10, CartelTiers.Of(a, 1));
+        Assert.Equal(30, CartelTiers.Of(a, 3));
+        Assert.Equal(30, CartelTiers.Of(a, 9)); // past the list: the last
+        Assert.Equal(10, CartelTiers.Of(a, 0));
+        CartelTiers.Check(a, 3, "x", CartelTiers.Count, "0 or more");
+        Assert.Contains("one number per tier (5)", Assert.Throws<DataFileException>(() => CartelTiers.Check(a, 5, "x", CartelTiers.Count, "0 or more")).Message);
+        Assert.Contains("every number must be more than 0", Assert.Throws<DataFileException>(() => CartelTiers.Check(new[] { 1f, 0f }, 2, "x", CartelTiers.Positive, "more than 0")).Message);
     }
 
     [Fact]
@@ -178,15 +215,15 @@ public class HeistTests
     sealed class DropKind(CartelMap map, Vector3 from, float minM, float apartM) : IJobKind
     {
         public Vector3? Got;
+        public string? Why;
         public string Id => "drop";
         public string Name => "Drop";
         public float Seconds(int tier) => 60;
         public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
         {
-            refusal = null;
-            Got = JobDrops.Reserve(map, book, job, new Random(1), from, minM, apartM);
-            if (Got == null) { refusal = "none"; return null; }
-            return new Obj();
+            Got = CartelSpots.Claim(job, book, map, CartelZones.DropKind, new Random(1), from, "the objective", minM, apartM, out refusal);
+            Why = refusal;
+            return Got == null ? null : new Obj();
         }
         sealed class Obj : IJobObjective { public JobStep Step(Job job, float dt) => JobStep.Running; }
     }
@@ -201,16 +238,32 @@ public class HeistTests
         var got = new List<Vector3>();
         for (ushort p = 1; p <= 3; p++)
         {
-            var job = book.Start("cartel", kind, 1, JobOwner.Solo(p), p, out _);
+            var job = book.Start("cartel", kind, 1, JobOwner.Solo(p), p, new NoParties(), out _);
             if (job != null) got.Add(kind.Got!.Value);
         }
         Assert.Equal(2, got.Count); // (10,0,0) is too near, 500 and 520 are too close to share
         Assert.DoesNotContain(new Vector3(10, 0, 0), got);
         Assert.Contains(new Vector3(0, 0, 900), got);
-        Assert.Equal(2, JobDrops.Held(map, book).Count());
+        Assert.Equal("No drop point 300 m or more from the objective is free now: another job holds every one.", kind.Why);
+        Assert.Equal(2, CartelSpots.Held(book, map).Count);
         var ended = new List<JobEnded>();
         book.FailAll(JobFailReason.RoundReset, new NoParties(), ended);
-        Assert.Empty(JobDrops.Held(map, book)); // released with the Jobs
+        Assert.Empty(CartelSpots.Held(book, map)); // released with the Jobs
+    }
+
+    [Fact]
+    public void AHeistsDropRefusalSaysWhetherTheMapHasNoneNoneFarEnoughOrNoneFree()
+    {
+        string? Why(CartelMap map, float minM)
+        {
+            var book = new JobBook();
+            var kind = new DropKind(map, Vector3.Zero, minM, 40);
+            book.Register(kind);
+            Assert.Null(book.Start("cartel", kind, 1, JobOwner.Solo(1), 1, new NoParties(), out var why));
+            return why;
+        }
+        Assert.Equal("This map has no drop point.", Why(CartelMap.Empty, 300));
+        Assert.Equal("No drop point is far enough from the objective on this map.", Why(MapWithDrops(new Vector3(10, 0, 0)), 300));
     }
 
     [Fact]

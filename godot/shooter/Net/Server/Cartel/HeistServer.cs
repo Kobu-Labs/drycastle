@@ -81,19 +81,15 @@ internal sealed class HeistServer
     public HeistRun? Begin(Job job, JobBook book, HeistData data, IHeistGoal goal, ContactPose contact, out string? refusal)
     {
         refusal = null;
-        var members = Parties.MembersOf(job.Owner);
-        if (JobDrops.Reserve(Map(), book, job, _rng, goal.Centre, data.DropMinM, data.DropApartM) is not { } drop)
-        {
-            refusal = $"No drop point is free {data.DropMinM:F0} m or more from {goal.Place}.";
-            return null;
-        }
+        var members = job.Party;
+        if (CartelSpots.Claim(job, book, Map(), CartelZones.DropKind, _rng, goal.Centre, goal.Place, data.DropMinM, data.DropApartM, out refusal) is not { } drop) return null;
         var (at, yaw) = VanSpot(contact, data.VanSpawnMinM);
         if (Vehicles.Spawn(data.VanType, at, yaw, members) is not { } van) { refusal = "The Cartel van cannot be put down."; return null; }
         var capacity = CarCargo.Capacity(van);
         var heist = new Heist(HeistRules.MinDuffels(data, job.Tier, members.Count, capacity), HeistRules.MaxDuffels(data, job.Tier, members.Count, capacity),
             HeistRules.GraceSeconds(data, job.Tier), HeistRules.IntervalSeconds(data, job.Tier));
         GD.Print($"server: {job}: Cartel van {van.Id} at ({at.X:F0},{at.Z:F0}), drop at ({drop.X:F0},{drop.Z:F0}), {heist.Min} to {heist.Max} duffels");
-        return new HeistRun(this, job, data, goal, van, drop, heist, members);
+        return new HeistRun(this, job, data, goal, van, drop, heist);
     }
 
     /// <summary>The Cartel van is not put down this close to another vehicle (a second squad's van standing on the road spot nearest the Contact).</summary>
@@ -113,28 +109,36 @@ internal sealed class HeistServer
         return (new NVec3(p.X, Ground(p.X, p.Y), p.Y), contact.YawDeg * MathF.PI / 180f);
     }
 
-    /// <summary>An Assault is due for <paramref name="run"/>: a Rival crew van to the objective, hostile to the party, unless max_assaults_alive of the Heist's are still in the fight (<see cref="HeistAssaults.MaySend"/>).</summary>
-    public void LaunchAssault(HeistRun run)
+    /// <summary>
+    /// An Assault is due for <paramref name="run"/> (its clock, or an admin's <c>/cartel assault</c>): a Rival crew van to the objective, hostile to the party, unless max_assaults_alive of the
+    /// Heist's are still in the fight (<see cref="HeistAssaults.MaySend"/>). Null when it was sent; else why not.
+    /// </summary>
+    public string? LaunchAssault(HeistRun run)
     {
         var assaults = run.Assaults;
-        if (!assaults.MaySend) { GD.Print($"server: {run.Job}: an Assault is due, {assaults.InFightCount} still fight: none sent"); return; }
+        if (!assaults.MaySend)
+        {
+            GD.Print($"server: {run.Job}: an Assault is due, {assaults.InFightCount} still fight: none sent");
+            return $"No Assault sent: {assaults.InFightCount} of this heist's are still in the fight (max_assaults_alive {run.Data.MaxAssaultsAlive}).";
+        }
         var (gunmen, enforcers) = HeistRules.AssaultCrew(run.Data, run.Job.Tier, run.Party.Count);
         var party = run.Party;
         var centre = run.Goal.Centre;
-        var crew = _rivals.NewCrew(centre, p => party.Contains(p));
+        var crew = _rivals.NewCrew(centre, party.Contains);
         var used = assaults.Stops.Append(new NVec2(run.VanFeet.X, run.VanFeet.Z)).ToList(); // not on top of the Cartel van (a Raid van shoves cars aside)
-        if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, HeistRules.CrewOrder(gunmen, enforcers), crew, centre) is not { } raid)
+        if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, CrewRules.Order(gunmen, enforcers), crew, centre) is not { } raid)
         {
             _rivals.Remove(crew);
-            return;
+            return "No Assault sent: no Rival crew van could be put on the road now.";
         }
         assaults.Add(raid);
         run.Tell($"A Rival crew van is coming to {run.Goal.Place}!");
+        return null;
     }
 }
 
 /// <summary>
-/// One running Heist's objective on the server (the template, <see cref="Heist"/> for its phase and Assault clock): it keeps the party (the Duffels' party set and the van's riders), feeds the
+/// One running Heist's objective on the server (the template, <see cref="Heist"/> for its phase and Assault clock): the van's riders follow the Job's party (<see cref="Job.Party"/>), it feeds the
 /// facts of the Cartel van each tick, launches the Assaults when due and takes out the spent ones (<see cref="HeistAssaults"/>), and owns the van's bay (<see cref="VanBay"/>). It succeeds when the
 /// van stops at the Drop point with the minimum loaded, fails when the van is destroyed, and its end removes the van, the party's Duffels and the Assaults.
 /// </summary>
@@ -143,15 +147,16 @@ internal sealed class HeistRun : IJobObjective
     readonly HeistServer _s;
     readonly ServerCar _van;
     readonly NVec3 _drop;
-    readonly HashSet<ushort> _party = new();
     readonly VanBay _bay;
     Change<HeistPhase> _told;
+    /// <summary>The party's version the van's riders were last set from (the van was put down with the party at the start).</summary>
+    Change<int> _riders;
 
-    public HeistRun(HeistServer s, Job job, HeistData data, IHeistGoal goal, ServerCar van, NVec3 drop, Heist heist, IEnumerable<ushort> members)
+    public HeistRun(HeistServer s, Job job, HeistData data, IHeistGoal goal, ServerCar van, NVec3 drop, Heist heist)
     {
         _s = s; Job = job; Data = data; Goal = goal; _van = van; _drop = drop; Heist = heist;
-        _party.UnionWith(members);
         _told.Update(heist.Phase);
+        _riders.Update(job.Party.Version);
         Assaults = new HeistAssaults(data.MaxAssaultsAlive);
         _bay = new VanBay(this, van, data.VanLoadMarginM);
         van.Exploded += OnExploded;
@@ -162,8 +167,8 @@ internal sealed class HeistRun : IJobObjective
     public HeistData Data { get; }
     public IHeistGoal Goal { get; }
     public Heist Heist { get; }
-    /// <summary>The party now: the set the Duffels of this Heist belong to (one set, kept in step with the owner's members).</summary>
-    public IReadOnlySet<ushort> Party => _party;
+    /// <summary>The Job's party: the set the Duffels of this Heist belong to and its crews attack.</summary>
+    public JobParty Party => Job.Party;
     /// <summary>Duffels the party has filled so far (a kind's filling counts them up to the maximum).</summary>
     public int Filled { get; set; }
     /// <summary>The Duffels loaded in the van now (the bay's count).</summary>
@@ -171,19 +176,9 @@ internal sealed class HeistRun : IJobObjective
     public NVec3 VanFeet => CarPose.Present(_van).Feet;
     public HeistAssaults Assaults { get; }
 
-    /// <summary>The party follows the owner's members (a squad mate came or went): the Duffels' set and the van's riders.</summary>
-    public void SyncParty()
-    {
-        var members = _s.Parties.MembersOf(Job.Owner);
-        if (_party.SetEquals(members)) return;
-        _party.Clear();
-        _party.UnionWith(members);
-        JobVehicles.SetRiders(_van, members);
-    }
-
     public JobStep Step(Job job, float dt)
     {
-        SyncParty();
+        if (_riders.Update(Party.Version)) JobVehicles.SetRiders(_van, Party); // a squad mate came or went: the van takes whom the party has now
         foreach (var spent in Assaults.TakeSpent()) _s.Raids.Remove(spent); // its crew is gone: the van frees its slot
         var feet = VanFeet;
         var atDrop = CarPose.Flat(feet, _drop) <= Data.DropRadiusM && MathF.Abs(_van.State.Speed) < Data.DropStopMps;
@@ -205,7 +200,7 @@ internal sealed class HeistRun : IJobObjective
     /// <summary>A chat line to every human of the party.</summary>
     public void Tell(string text)
     {
-        foreach (var id in _party)
+        foreach (var id in Party)
             if (_s.Ctx.Players.TryGetValue(id, out var c) && !c.IsBot) _s.Ctx.ChatTo(c, ChatLineKind.Info, text);
     }
 
@@ -216,6 +211,9 @@ internal sealed class HeistRun : IJobObjective
         Tell($"The Cartel van was destroyed{by}: the heist is lost.");
         GD.Print($"server: {Job}: the Cartel van {car.Id} was destroyed{(attacker != 0 ? $"{by} #{attacker}" : "")}");
     }
+
+    /// <summary>An admin's <c>/cartel assault</c>: an Assault now, by the clock's own path and cap (the clock goes on as it was). Null when it was sent; else why not.</summary>
+    public string? SendAssault() => _s.LaunchAssault(this);
 
     public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Loaded, Heist.Min) : 0;
 
@@ -233,7 +231,7 @@ internal sealed class HeistRun : IJobObjective
     {
         _van.Exploded -= OnExploded;
         _s.Duffels.Book.RemoveVolume(_bay);
-        var duffels = _s.Duffels.RemoveParty(_party);
+        var duffels = _s.Duffels.Book.RemoveParty(Party);
         foreach (var raid in Assaults.TakeAll()) _s.Raids.Remove(raid);
         _s.Vehicles.Remove(_van);
         Goal.End();

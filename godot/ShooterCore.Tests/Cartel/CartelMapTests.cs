@@ -35,8 +35,8 @@ public class CartelMapTests
         Assert.False(CartelMap.From(ZonePoints.Parse(Points), null).HasCartel);
         var bare = CartelMap.From(ZonePoints.Empty, new ContactPose(Vector3.Zero, new Vector2(0, 1)));
         Assert.True(bare.HasCartel);
-        Assert.Null(bare.PickDrop(new Random(1)));
-        Assert.Null(bare.PickHit(new Random(1)));
+        Assert.Empty(bare.DropPoints);
+        Assert.Empty(bare.HitSpots);
         Assert.False(CartelMap.Empty.HasCartel);
     }
 
@@ -46,9 +46,9 @@ public class CartelMapTests
         var m = CartelMap.From(ZonePoints.Parse(Points), null);
         var taken = new[] { new Vector3(11, 100, -20) }; // a running job's drop point
         for (var seed = 0; seed < 20; seed++)
-            Assert.Equal(new Vector3(200, 101, 0), m.PickDrop(new Random(seed), CartelMap.Apart(taken, 30f)));
-        Assert.Null(m.PickDrop(new Random(1), _ => false));
-        var seen = Enumerable.Range(0, 200).Select(s => m.PickDrop(new Random(s))!.Value).Distinct().Count();
+            Assert.Equal(new Vector3(200, 101, 0), CartelMap.Pick(m.DropPoints, new Random(seed), CartelMap.Apart(taken, 30f)));
+        Assert.Null(CartelMap.Pick(m.DropPoints, new Random(1), _ => false));
+        var seen = Enumerable.Range(0, 200).Select(s => CartelMap.Pick(m.DropPoints, new Random(s))!.Value).Distinct().Count();
         Assert.Equal(3, seen); // with no filter every point comes up
     }
 

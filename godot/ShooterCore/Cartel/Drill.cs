@@ -54,7 +54,7 @@ public sealed class Drill
     /// <summary>The building id of its Trap house.</summary>
     public string House { get; }
     public int Tier { get; }
-    /// <summary>The player ids that may set and fix it (the Job's party, read live).</summary>
+    /// <summary>The player ids that may set and fix it (the Job's party set, refreshed each tick).</summary>
     public IReadOnlySet<ushort> Party { get; }
     public float RunSeconds { get; }
     public DrillState State => _fsm.Current;
@@ -105,12 +105,10 @@ public sealed class Drill
 /// <summary>The rules of the Drill that need no world, from trap_house.json <c>drill</c>: the run time, the jams, the holds, who may hold and from where, the cash it pays out.</summary>
 public static class DrillRules
 {
-    /// <summary>Tier 1 is the first entry; a tier past the list takes the last.</summary>
-    static T ByTier<T>(IReadOnlyList<T> list, int tier) => list[Math.Clamp(tier - 1, 0, list.Count - 1)];
+    /// <summary>The run by tier (a tier past the list takes the last: <see cref="CartelTiers.Of"/>).</summary>
+    public static float RunSeconds(TrapDrillData d, int tier) => CartelTiers.Of(d.RunSeconds, tier);
 
-    public static float RunSeconds(TrapDrillData d, int tier) => ByTier(d.RunSeconds, tier);
-
-    public static int CashDuffels(TrapDrillData d, int tier) => ByTier(d.CashDuffels, tier);
+    public static int CashDuffels(TrapDrillData d, int tier) => CartelTiers.Of(d.CashDuffels, tier);
 
     public static float HoldSeconds(TrapDrillData d, DrillHold hold) => hold == DrillHold.Fix ? d.FixHoldSeconds : d.SetHoldSeconds;
 

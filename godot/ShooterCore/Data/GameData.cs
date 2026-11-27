@@ -60,8 +60,8 @@ public class GameData
     public ScudFile Scud { get; init; } = ScudFile.Default;
     /// <summary>plantation.json (the marijuana plantation: hold and high times, the nausea and the looks of a high player). The shipped defaults when the file is absent.</summary>
     public PlantationFile Plantation { get; init; } = PlantationFile.Default;
-    /// <summary>duffels.json (the Duffels of the cartel's Jobs: kinds, weights, the throw, the props). Read by the host after <see cref="Parse"/>; the shipped defaults when the file is absent.</summary>
-    public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels { get; set; } = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
+    /// <summary>duffels.json (the Duffels of the cartel's Jobs: kinds, weights, the throw, the props). The shipped defaults when the file is absent.</summary>
+    public DuffelsFile Duffels { get; init; } = DuffelsFile.Default;
     /// <summary>companions.json (the Companions a player can own). Empty when the file is absent.</summary>
     public CompanionsFile Companions { get; init; } = new();
     /// <summary>cartel.json (the Cartel: ranks, tiers, each kind of Job's numbers; docs/cartel.md). The shipped defaults when the file is absent.</summary>
@@ -84,7 +84,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "", string rivalCrewJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "", string rivalCrewJson = "", string duffelsJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -115,6 +115,7 @@ public class GameData
             Companions = companionsJson == "" ? new() : CompanionsFile.Parse(companionsJson).CheckAgainst(animals),
             HouseDestruction = houseDestructionJson == "" ? DestructionConfig.Default : DestructionConfig.Parse(houseDestructionJson),
             Cartel = cartelJson == "" ? CartelFile.Default : CartelFile.Parse(cartelJson),
+            Duffels = duffelsJson == "" ? DuffelsFile.Default : DuffelsFile.Parse(duffelsJson),
         };
     }
 
@@ -151,6 +152,7 @@ public class GameData
             Companions = File.Exists(Path.Combine(dir, "companions.json")) ? CompanionsFile.Load(Path.Combine(dir, "companions.json")).CheckAgainst(animals) : new(),
             HouseDestruction = File.Exists(Path.Combine(dir, "house_destruction.json")) ? DestructionConfig.Load(Path.Combine(dir, "house_destruction.json")) : DestructionConfig.Default,
             Cartel = File.Exists(Path.Combine(dir, "cartel.json")) ? CartelFile.Load(Path.Combine(dir, "cartel.json")) : CartelFile.Default,
+            Duffels = File.Exists(Path.Combine(dir, "duffels.json")) ? DuffelsFile.Load(Path.Combine(dir, "duffels.json")) : DuffelsFile.Default,
         };
     }
 }

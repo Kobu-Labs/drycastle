@@ -15,8 +15,8 @@ public interface IJobParties
     /// <summary>The owner's members now, the leader among them (empty when the owner is gone).</summary>
     IReadOnlyList<ushort> MembersOf(JobOwner owner);
     /// <summary>
-    /// The player is one of the owner's members now. Asked per lying Duffel per player per tick, by crew spotting and by the plantation's hold: an implementation answers it
-    /// without allocating (this default scans <see cref="MembersOf"/>, for hand-built parties in tests).
+    /// The player is one of the owner's members now. Asked per running Job per player per tick (whose Job a player is in, what the feed tells them): an implementation answers it
+    /// without allocating (this default scans <see cref="MembersOf"/>, for hand-built parties in tests). What a Job puts in the world reads its <see cref="Job.Party"/> instead.
     /// </summary>
     bool Has(JobOwner owner, ushort player)
     {

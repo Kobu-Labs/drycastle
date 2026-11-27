@@ -30,8 +30,9 @@ public sealed class TrapHouseHeistData : HeistData
     {
         Validate(what, tiers);
         DataFileException Bad(string text) => new($"{what}: {text}");
-        if (DefenderGunmen.Length != tiers || DefenderEnforcers.Length != tiers) throw Bad($"defender_gunmen and defender_enforcers need one number per tier ({tiers})");
-        if (DefenderGunmen.Any(n => n < 0) || DefenderEnforcers.Any(n => n < 0) || DefenderGunmenPerExtraMember < 0) throw Bad("the defender counts must be 0 or more");
+        CartelTiers.Check(DefenderGunmen, tiers, $"{what}: defender_gunmen", CartelTiers.Count, "0 or more");
+        CartelTiers.Check(DefenderEnforcers, tiers, $"{what}: defender_enforcers", CartelTiers.Count, "0 or more");
+        if (DefenderGunmenPerExtraMember < 0) throw Bad("defender_gunmen_per_extra_member must be 0 or more");
         if (MaxDefenders < 0) throw Bad("max_defenders must be 0 or more");
         if (!float.IsFinite(AreaM) || !(AreaM > 0)) throw Bad("area_m must be more than 0");
     }
@@ -43,16 +44,9 @@ public static class TrapHouseHeistRules
     /// <summary>The book's name of a house a Trap house Job holds (two Jobs never share one).</summary>
     public static string Key(string house) => "trap_house:" + house;
 
-    static T PerTier<T>(T[] a, int tier) => a[Math.Clamp(tier, 1, a.Length) - 1];
-
     /// <summary>The posted defenders for a party of <paramref name="size"/>: the tier's Gunmen plus one per extra member and its Enforcers, Gunmen first within max_defenders and the <paramref name="posts"/>.</summary>
-    public static (int Gunmen, int Enforcers) Defenders(TrapHouseHeistData d, int tier, int size, int posts)
-    {
-        var cap = Math.Max(0, Math.Min(d.MaxDefenders, posts));
-        var gunmen = Math.Min(cap, PerTier(d.DefenderGunmen, tier) + d.DefenderGunmenPerExtraMember * Math.Max(0, size - 1));
-        var enforcers = Math.Min(cap - gunmen, PerTier(d.DefenderEnforcers, tier));
-        return (gunmen, enforcers);
-    }
+    public static (int Gunmen, int Enforcers) Defenders(TrapHouseHeistData d, int tier, int size, int posts) =>
+        CrewRules.Split(CartelTiers.Of(d.DefenderGunmen, tier), d.DefenderGunmenPerExtraMember, CartelTiers.Of(d.DefenderEnforcers, tier), 0, size, Math.Min(d.MaxDefenders, posts));
 
     /// <summary>
     /// How many Duffels lie on the tables: what makes the heist's maximum together with the safe's <paramref name="safeCash"/>, never fewer than the minimum (the safe is a bonus), never more

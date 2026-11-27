@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Jobs;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
@@ -25,6 +26,7 @@ internal sealed class CartelServer
     readonly IJobParties _parties;
     readonly IContactSite _contact;
     readonly Func<ServerClient, bool> _isAdmin;
+    readonly Func<WorldQuery> _query;
     readonly CartelMembers _members;
     readonly JobBook _book = new();
     readonly List<JobEnded> _ended = new();
@@ -37,9 +39,10 @@ internal sealed class CartelServer
     /// <param name="parties">Who runs a Job (<see cref="MatchJobParties"/>).</param>
     /// <param name="contact">Where the Contact stands; <see cref="MapContactSite"/>, the map's placed Contact.</param>
     /// <param name="isAdmin">The chat's admin check: only an admin may start the test kind (it pays for nothing done).</param>
-    public CartelServer(ServerContext ctx, CartelFile data, IProgressionStore? store, IJobParties parties, IContactSite contact, Func<ServerClient, bool> isAdmin)
+    /// <param name="query">The world query: the ground under a Job's marker, where the admin's <c>/cartel goto</c> lands.</param>
+    public CartelServer(ServerContext ctx, CartelFile data, IProgressionStore? store, IJobParties parties, IContactSite contact, Func<ServerClient, bool> isAdmin, Func<WorldQuery> query)
     {
-        _ctx = ctx; _data = data; _parties = parties; _contact = contact; _isAdmin = isAdmin;
+        _ctx = ctx; _data = data; _parties = parties; _contact = contact; _isAdmin = isAdmin; _query = query;
         _members = new CartelMembers(ctx, data, store);
         _feed = new JobFeed(data.MarkerResendM);
         _flagsOf = FlagsOf;
@@ -158,7 +161,7 @@ internal sealed class CartelServer
             _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin);
         var why = CartelRules.CanStart(_data, facts);
         if (why != JobStartRefusal.None) { Refuse(c, CartelAction.StartJob, (byte)why, CartelRules.Words(why, _data, tier), admin); return; }
-        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, out var refusal) is not { } job)
+        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, _parties, out var refusal) is not { } job)
         {
             Refuse(c, CartelAction.StartJob, (byte)JobStartRefusal.CannotBegin, refusal ?? CartelWords.Start.Text(JobStartRefusal.CannotBegin), admin);
             return;
@@ -228,7 +231,9 @@ internal sealed class CartelServer
 
     /// <summary>
     /// "/cartel join | quit | respect &lt;n&gt; | job &lt;kind&gt; [tier] | status" (admin, for testing, on themselves): join or quit anywhere, add Respect (a rank-up is announced as
-    /// after a Job), start a Job of any tier anywhere (the other checks stand), or say the standing and the Jobs that run.
+    /// after a Job), start a Job of any tier anywhere (the other checks stand), or say the standing and the Jobs that run. On the admin's own running Job (the one involving them), to reach
+    /// its late stages: "end win | fail" ends it now (a win pays as a success, a fail reads "Ended by an admin"), "time &lt;seconds&gt;" sets its timer, "assault" sends an Assault on a heist
+    /// (the clock's path and cap), "goto" puts the admin on the ground under its marker.
     /// </summary>
     public void Chat(ServerClient c, IReadOnlyList<string> args)
     {
@@ -255,6 +260,64 @@ internal sealed class CartelServer
                 _ctx.ChatTo(c, ChatLineKind.Info, $"Cartel: {s.Membership}, {s.Respect} Respect, {_members.RankName(s)}, tiers up to {_data.HighestTier(s.Rank(_data))}. {_book.Running.Count} job(s) running.");
                 if (_book.Involving(c.Id, _parties) is { } job) _ctx.ChatTo(c, ChatLineKind.Info, $"Your job: {job.Kind.Name} tier {job.Tier}, led by {_ctx.NameOf(job.Leader)}, {Math.Max(0, job.SecondsLeft):F0} s left.");
                 break;
+            case "end": AdminEnd(c, rest); break;
+            case "time": AdminTime(c, rest); break;
+            case "assault": AdminAssault(c); break;
+            case "goto": AdminGoto(c); break;
         }
     }
+
+    /// <summary>The admin's own running Job, or null (they are told to start one).</summary>
+    Job? AdminJob(ServerClient c)
+    {
+        if (_book.Involving(c.Id, _parties) is { } job) return job;
+        _ctx.ChatTo(c, ChatLineKind.Error, "You run no job: start one with /cartel job <kind> [tier].");
+        return null;
+    }
+
+    void AdminEnd(ServerClient c, string[] rest)
+    {
+        if (rest.Length != 1 || CartelAdmin.ParseEnd(rest[0]) is not { } won) { _ctx.ChatTo(c, ChatLineKind.Error, "Say how it ends: /cartel end win|fail."); return; }
+        if (AdminJob(c) is not { } job) return;
+        GD.Print($"server: {c.Name} #{c.Id} ended {job} as a {(won ? "win" : "fail")} (admin)");
+        _book.EndByAdmin(job, won, _parties, _ended);
+        Settle(); // the party hears the end and, on a win, is paid
+    }
+
+    void AdminTime(ServerClient c, string[] rest)
+    {
+        if (rest.Length != 1 || CartelAdmin.ParseSeconds(rest[0]) is not { } seconds) { _ctx.ChatTo(c, ChatLineKind.Error, $"Say the seconds left: /cartel time <1 to {CartelAdmin.MaxTimerSeconds}>."); return; }
+        if (AdminJob(c) is not { } job) return;
+        job.SetSecondsLeft(seconds);
+        foreach (var m in job.Party) // the tracker counts down from the last Job message: send it again
+            if (_ctx.Players.TryGetValue(m, out var mc) && !mc.IsBot) _ctx.SendEvent(mc, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(job, (CartelJobFlags)FlagsOf(job, m), 0)));
+        _ctx.ChatTo(c, ChatLineKind.Info, $"Your job has {seconds} s left.");
+    }
+
+    void AdminAssault(ServerClient c)
+    {
+        if (AdminJob(c) is not { } job) return;
+        if (job.Objective is not HeistRun run) { _ctx.ChatTo(c, ChatLineKind.Error, $"Your job ({job.Kind.Name}) is no heist: only a heist has Assaults."); return; }
+        if (run.SendAssault() is { } why) _ctx.ChatTo(c, ChatLineKind.Error, why);
+    }
+
+    void AdminGoto(ServerClient c)
+    {
+        if (AdminJob(c) is not { } job) return;
+        if (job.Objective.Marker(job) is not { } marker) { _ctx.ChatTo(c, ChatLineKind.Error, "Your job has no marker now."); return; }
+        if (!_ctx.IsAlive(c.Id)) { _ctx.ChatTo(c, ChatLineKind.Error, "Only a living player can go there."); return; }
+        if (c.Car != null) { _ctx.ChatTo(c, ChatLineKind.Error, "Get out of the vehicle first."); return; }
+        var at = new Vector3(marker.X, marker.Y, marker.Z);
+        // the first surface under the marker (a floor indoors, the ground outdoors), looked for from a little above it so a marker at floor height still finds that floor
+        var feet = _query().Ground(MoverKind.Player, at, GotoUpM, GotoDownM) is { } ground ? ground.Position : at;
+        c.Body.Teleport(new Vector3(feet.X, feet.Y + 0.1f, feet.Z));
+        c.Inputs.Clear();
+        var s = new System.Numerics.Vector3(feet.X, feet.Y, feet.Z);
+        _ctx.Match.SetPosition(c.Id, s);
+        _ctx.Broadcast(EventKind.Spawn, MatchCodec.Encode(new SpawnMsg(c.Id, s, 0))); // as the sandbox's teleport: the client takes the new place at once
+        _ctx.ChatTo(c, ChatLineKind.Info, $"At your job's marker ({feet.X:F0}, {feet.Z:F0}).");
+    }
+
+    /// <summary>/cartel goto looks for the surface under the marker from this far above it down to this far below.</summary>
+    const float GotoUpM = 1.5f, GotoDownM = 200f;
 }

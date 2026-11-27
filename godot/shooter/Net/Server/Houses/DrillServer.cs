@@ -50,7 +50,7 @@ internal sealed class DrillServer
     TrapHouseFile? Data => _houses.Data;
 
     /// <summary>
-    /// Arms the safe of dressed house <paramref name="house"/> for <paramref name="party"/> (read live: the Job's set) at <paramref name="tier"/>: a new Drill waits there to be set (a Drill
+    /// Arms the safe of dressed house <paramref name="house"/> for <paramref name="party"/> (the Job's set, refreshed each tick) at <paramref name="tier"/>: a new Drill waits there to be set (a Drill
     /// already on it is replaced). Null when the house is not dressed or has no safe.
     /// </summary>
     public Drill? Arm(string house, IReadOnlySet<ushort> party, int tier)

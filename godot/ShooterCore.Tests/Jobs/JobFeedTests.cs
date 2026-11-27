@@ -49,7 +49,7 @@ public class JobFeedTests
         readonly List<JobEnded> _ended = new();
 
         public Job Start(IJobKind kind, ushort leader) =>
-            Book.Start(CartelRules.Giver, kind, 1, Parties.OwnerOf(leader), leader, out var why) ?? throw new Xunit.Sdk.XunitException(why);
+            Book.Start(CartelRules.Giver, kind, 1, Parties.OwnerOf(leader), leader, Parties, out var why) ?? throw new Xunit.Sdk.XunitException(why);
 
         /// <summary>One tick of the book, then the feed; what it asked for.</summary>
         public List<JobFeedMessage> Tick()

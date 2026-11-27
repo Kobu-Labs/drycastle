@@ -189,4 +189,22 @@ public class CartelTests
         Assert.Equal(NoRespectReason.Guest, CartelRules.NoRespect(false, stored: false, sandbox: true, null));
         Assert.Equal(NoRespectReason.Sandbox, CartelRules.NoRespect(false, true, sandbox: true, new CartelStanding()));
     }
+
+    [Fact]
+    public void The_admins_job_commands_take_win_or_fail_and_whole_seconds()
+    {
+        Assert.True(CartelAdmin.ParseEnd("win"));
+        Assert.False(CartelAdmin.ParseEnd(" FAIL "));
+        Assert.Null(CartelAdmin.ParseEnd("lose"));
+        Assert.Equal(90, CartelAdmin.ParseSeconds("90"));
+        Assert.Equal(CartelAdmin.MaxTimerSeconds, CartelAdmin.ParseSeconds(CartelAdmin.MaxTimerSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        Assert.Null(CartelAdmin.ParseSeconds("0"));
+        Assert.Null(CartelAdmin.ParseSeconds("-5"));
+        Assert.Null(CartelAdmin.ParseSeconds("1.5"));
+        Assert.Null(CartelAdmin.ParseSeconds((CartelAdmin.MaxTimerSeconds + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        var admin = new ShooterCore.Chat.ChatContext(true, Array.Empty<string>());
+        foreach (var line in new[] { "/cartel end win", "/cartel time 60", "/cartel assault", "/cartel goto" }) Assert.True(ShooterCore.Chat.ChatCommands.Parse(line, admin).Ok, line);
+        Assert.Equal(new[] { "end", "fail" }, ShooterCore.Chat.ChatCommands.Parse("/cartel END fail", admin).Args);
+        Assert.False(ShooterCore.Chat.ChatCommands.Parse("/cartel finish", admin).Ok);
+    }
 }

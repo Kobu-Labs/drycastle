@@ -26,6 +26,8 @@ public enum JobFailReason : byte
     Abandoned = 5,
     /// <summary>The kind's own failure (a Heist's Cartel van destroyed).</summary>
     Objective = 6,
+    /// <summary>An admin ended it as failed (<c>/cartel end fail</c>, a test).</summary>
+    Admin = 7,
 }
 
 /// <summary>Who runs a Job: one player alone, or a Squad. The wire carries the byte.</summary>
@@ -46,10 +48,10 @@ public readonly record struct JobOwner(JobOwnerKind Kind, ushort Id)
 public sealed class Job
 {
     public static readonly StateMachineSpec<JobState> RunSpec = StateMachineSpec<JobState>
-        .Define("Job.Run", "One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure).", JobState.Active)
+        .Define("Job.Run", "One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure, an admin).", JobState.Active)
         .Allow(JobState.Active, JobState.Succeeded, JobState.Failed)
         .Note(JobState.Active, "the objective runs and the timer counts down")
-        .Note(JobState.Succeeded, "the objective was met: every earning member of the party at that moment is paid")
+        .Note(JobState.Succeeded, "the objective was met (or an admin ended it so): every earning member of the party at that moment is paid")
         .Note(JobState.Failed, "pays nothing; the reason says why")
         .Build();
 
@@ -58,6 +60,7 @@ public sealed class Job
     internal Job(int id, string giver, IJobKind kind, int tier, JobOwner owner, ushort leader, float seconds)
     {
         Id = id; Giver = giver; Kind = kind; Tier = tier; Owner = owner; Leader = leader; Seconds = seconds;
+        Party = new JobParty(owner);
         _run.Restart(seconds);
     }
 
@@ -68,6 +71,8 @@ public sealed class Job
     public IJobKind Kind { get; }
     public int Tier { get; }
     public JobOwner Owner { get; }
+    /// <summary>The owner's members as of the last tick (the book refreshes it): the one set the Job's Duffels, crews and Drill read.</summary>
+    public JobParty Party { get; }
     /// <summary>The leader as of the last tick: the solo player, or the Squad's leader (who may change while it runs).</summary>
     public ushort Leader { get; internal set; }
     /// <summary>The timer it started with.</summary>
@@ -80,6 +85,9 @@ public sealed class Job
     public float SecondsLeft => _run.Left;
     /// <summary>Seconds since it started (while active).</summary>
     public float Elapsed => _run.Elapsed;
+
+    /// <summary>An admin's test (<c>/cartel time</c>): the timer has this many seconds left now; <see cref="Seconds"/> and <see cref="Elapsed"/> stay.</summary>
+    public void SetSecondsLeft(float seconds) => _run.SetLeft(seconds);
 
     /// <summary>Advances the timer; true when it ran out.</summary>
     internal bool Tick(float dt) => _run.Tick(dt);

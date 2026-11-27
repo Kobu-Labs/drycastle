@@ -9,7 +9,8 @@ public sealed record JobEnded(Job Job, IReadOnlyList<ushort> Members)
 /// <summary>
 /// Every running Job (ADR 0045, docs/cartel.md "Who runs a job", "Failure"): one per owner (a solo player or a Squad), as many owners as like at once, beside any Event. It steps
 /// each Job's objective and timer, ends Jobs on a death, a quit, a round reset or when nobody is left, and holds the named things of the world Jobs have claimed (a drop point
-/// id, a house), so two Jobs never share one. Who is in a party is <see cref="IJobParties"/>'s; what a Job pays is its giver's. Pure; the server owns one.
+/// id, a house), so two Jobs never share one. Who is in a party is <see cref="IJobParties"/>'s, read into each Job's <see cref="Job.Party"/> at its start and each tick; what a Job pays is
+/// its giver's. Pure; the server owns one.
 /// </summary>
 public sealed class JobBook
 {
@@ -57,14 +58,15 @@ public sealed class JobBook
     public IReadOnlyList<string> ReservedBy(Job job) => _reserved.Where(kv => kv.Value == job.Id).Select(kv => kv.Key).ToList();
 
     /// <summary>
-    /// Starts a Job for <paramref name="owner"/>, led by <paramref name="leader"/>. The giver checked who may start what; this refuses only an owner with a running Job and a
-    /// kind that cannot begin (its reason). Null with <paramref name="refusal"/> when nothing started.
+    /// Starts a Job for <paramref name="owner"/>, led by <paramref name="leader"/>, its party filled from <paramref name="parties"/> before the kind begins. The giver checked who may start
+    /// what; this refuses only an owner with a running Job and a kind that cannot begin (its reason). Null with <paramref name="refusal"/> when nothing started.
     /// </summary>
-    public Job? Start(string giver, IJobKind kind, int tier, JobOwner owner, ushort leader, out string? refusal)
+    public Job? Start(string giver, IJobKind kind, int tier, JobOwner owner, ushort leader, IJobParties parties, out string? refusal)
     {
         refusal = null;
         if (OfOwner(owner) != null) { refusal = "A job is running already."; return null; }
         var job = new Job(NextId(), giver, kind, tier, owner, leader, kind.Seconds(tier));
+        job.Party.Refresh(parties);
         var objective = kind.Begin(job, this, out refusal);
         if (objective == null)
         {
@@ -78,8 +80,8 @@ public sealed class JobBook
     }
 
     /// <summary>
-    /// One tick: each Job's leader is looked up (none left: it fails, <see cref="JobFailReason.Abandoned"/>), then its objective steps (met: success; lost: it fails), then its
-    /// timer (run out: it fails). What ended is added to <paramref name="ended"/>.
+    /// One tick: each Job's leader is looked up (none left: it fails, <see cref="JobFailReason.Abandoned"/>) and its party refreshed (<see cref="Job.Party"/>), then its objective steps
+    /// (met: success; lost: it fails), then its timer (run out: it fails). What ended is added to <paramref name="ended"/>.
     /// </summary>
     public void Tick(float dt, IJobParties parties, List<JobEnded> ended)
     {
@@ -89,6 +91,7 @@ public sealed class JobBook
             var leader = parties.LeaderOf(job.Owner);
             if (leader == 0) { End(job, JobState.Failed, JobFailReason.Abandoned, parties, ended); continue; }
             job.Leader = leader;
+            job.Party.Refresh(parties);
             var step = job.Objective.Step(job, dt);
             if (step == JobStep.Succeeded) End(job, JobState.Succeeded, JobFailReason.None, parties, ended);
             else if (step == JobStep.Failed) End(job, JobState.Failed, JobFailReason.Objective, parties, ended);
@@ -101,6 +104,17 @@ public sealed class JobBook
 
     /// <summary>A player quit the giver: the Job they lead fails.</summary>
     public void LeaderQuit(ushort player, IJobParties parties, List<JobEnded> ended) => FailLedBy(player, JobFailReason.LeaderQuit, parties, ended);
+
+    /// <summary>
+    /// An admin ends a running Job now (<c>/cartel end</c>, a test): won, it succeeds and pays as if its objective was met; else it fails as <see cref="JobFailReason.Admin"/>. False when
+    /// the Job is not running.
+    /// </summary>
+    public bool EndByAdmin(Job job, bool won, IJobParties parties, List<JobEnded> ended)
+    {
+        if (!_running.Contains(job)) return false;
+        End(job, won ? JobState.Succeeded : JobState.Failed, won ? JobFailReason.None : JobFailReason.Admin, parties, ended);
+        return true;
+    }
 
     /// <summary>Every Job fails (a round reset).</summary>
     public void FailAll(JobFailReason reason, IJobParties parties, List<JobEnded> ended)
