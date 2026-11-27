@@ -169,6 +169,9 @@ public partial class NetClient : Node
     public HighClient High { get; private set; } = null!;
     /// <summary>plantation.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public PlantationFile Plantation = PlantationFile.Default;
+    /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
+    public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
+    DuffelsClient _duffels = null!;
     SessionLog _session = null!;
     PerfLog _perf = null!;
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
@@ -323,7 +326,8 @@ public partial class NetClient : Node
         _harvester = new HarvesterClient(Ctx, _corpses, _bales, new DroppedBales(Ctx, _bales, at => _harvester.NearestHarvester(at)), _crush);
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
-        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction);
+        _duffels = new DuffelsClient(Ctx, Duffels, _interact);
+        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction);
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
@@ -411,7 +415,7 @@ public partial class NetClient : Node
     /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
     string? PromptLine(string? ride) =>
         _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
-        ?? _crates.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt();
+        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _duffels.CarryHint();
 
     void HudWelcome()
     {
@@ -499,6 +503,7 @@ public partial class NetClient : Node
         _poseDemo?.Tick();
         _corpses.Render(delta);
         _groundItems.Render();
+        _duffels.Render(); // the Duffels: on backs, on the ground, in flight; the own one burdens the body
         _crates.Render();
         _minerals.Render();
         _turrets.Render();
@@ -653,6 +658,7 @@ public partial class NetClient : Node
         _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
+        _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
         _match.OnEvent(kind, payload); // the match: phase, scoreboard, kills, the own spawn and death
         Loadouts.OnEvent(kind, payload);
@@ -721,7 +727,7 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
-        if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
+        if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); _duffels.TickKey(dt); }
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)

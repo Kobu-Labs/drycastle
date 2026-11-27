@@ -16,12 +16,14 @@ internal sealed class InteractTargets
     public bool GroundItemNearest;
     /// <summary>The corpse within reach (null when none, or when the player cannot take one).</summary>
     public ushort? Corpse;
+    /// <summary>The lying Duffel the server says this player's key would pick up (null when none).</summary>
+    public ushort? Duffel;
     /// <summary>True while the corpse chooser is up.</summary>
     public Func<bool> ChooserOpen = () => false;
 
     /// <summary>Who has the interact key on foot: the crate, the ground item, the corpse.</summary>
-    public InteractOwner Owner => InteractArbiter.Owner(Crate != null, GroundItem != null, GroundItemNearest, Corpse != null, ChooserOpen());
+    public InteractOwner Owner => InteractArbiter.Owner(Crate != null, GroundItem != null, GroundItemNearest, Corpse != null, ChooserOpen(), duffelInReach: Duffel != null);
 
     /// <summary>The corpse's prompt is shown (not while another has the key or the chooser is up).</summary>
-    public bool CorpseShowsPrompt => InteractArbiter.CorpseShowsPrompt(Crate != null, GroundItem != null, GroundItemNearest, true, ChooserOpen());
+    public bool CorpseShowsPrompt => InteractArbiter.CorpseShowsPrompt(Crate != null, GroundItem != null, GroundItemNearest, true, ChooserOpen(), Duffel != null);
 }

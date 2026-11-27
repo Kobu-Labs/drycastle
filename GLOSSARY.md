@@ -846,7 +846,7 @@ A Job in Payday's style: fill Duffels at the objective, throw them into the Cart
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
-A bag of goods (weed, cash, product) a Job's player carries, one at a time and slowed by its weight, throws to a mate or into the Cartel van, and drops at death. Not an Item and not in the Bag. Planned (#437).
+A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. Holding the throw key (X) charges a throw of about 6 to 12 m by weight; a tap puts it down at the feet; the carrier's death drops it where they fell. One that is thrown or put down into a cargo volume (the Cartel van's back) is loaded and counted there. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
 _Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
 
 **Cartel van**:

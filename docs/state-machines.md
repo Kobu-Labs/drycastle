@@ -584,6 +584,41 @@ stateDiagram-v2
 - **Asleep**: Resting phases show as Waiting; the health is back to full and the pounce, flame and leap clocks are cleared.
 - **Awake**: Fighting: the hits needed grow with the players inside and never shrink; the fight clock, the roar clock and the leap clock run.
 
+## Duffel.Place
+
+A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a cargo volume (the Cartel van's back).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Lying
+    Lying --> Carried
+    Carried --> Flying
+    Carried --> Lying
+    Carried --> Loaded
+    Flying --> Lying
+    Flying --> Loaded
+    Loaded --> [*]
+```
+
+- **Lying**: On the ground (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
+- **Carried**: On a party player's back: no sprint, slower by its weight. The throw key's tap puts it down (Lying, or Loaded in a cargo volume), a charged release throws it (Flying); the carrier's death drops it where they fell.
+- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.
+- **Loaded**: In a cargo volume, counted by its owner; it stays there until the Job removes it.
+
+## Duffel.ThrowKey
+
+The Duffel throw key: up, or held from a fresh press while carrying (charging); the release puts the Duffel down (a tap) or throws it (a hold).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Charging
+    Charging --> Idle
+```
+
+- **Idle**: Key up, or held since before the player could throw (a held key must be let go first).
+- **Charging**: Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.
+
 ## Editor.Shape
 
 The shape tools of the map editor (ground patches, zones): draw a polygon, ask for the water level, select a shape, drag one of its corners.
