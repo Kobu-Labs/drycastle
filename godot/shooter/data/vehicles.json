@@ -32,6 +32,13 @@
         "camera": { "distance": 6.5, "height": 1.5, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 7, "turn_follow": 0, "turn_response": 5 }
       },
       "top_speed": 44.4, "acceleration": 5.5, "brake": 9.5, "turn_radius": 3.6, "high_speed_radius_factor": 10, "max_lateral_accel": 10, "mass": 1200, "hp": 300, "hood": [0, 0.95, -1.3], "spawn_count": 12, "half_width": 1.03, "half_length": 1.93, "height": 1.62,
+      "cargo_volume": {
+        "comment": "The boot (Delivery rework, docs/cartel.md Cargo vehicles; measured: docs/research/vehicle-models-facts.md SM_Veh_Car_Small_01 boot): the cavity behind the rear bench, floor 0.661 to the window sill 1.104, x +-0.6, z 1.473 (the bench's rearmost point) to 1.883 (the tailgate's bottom edge); the lid the standardizer cuts out of the body (node cargo_door, scripts/vehicles/specs/car_small.json cuts) opens about X, hinge on the rear window's lower edge, 110 degrees. A bag lies across it (0.56 x 0.28). slots: [x, y, z, yaw_deg] of a loaded Duffel's base centre; access: where a player stands on the ground (box end 1.93 + 0.55); capacity 1 is the owner's.",
+        "centre": [0, 0.883, 1.678], "size": [1.2, 0.443, 0.41], "capacity": 1,
+        "slots": [[0, 0.661, 1.678, 0]],
+        "access": [0, 0, 2.48], "access_radius_m": 1.5,
+        "doors": [{ "node": "cargo_door", "axis": [-1, 0, 0], "open_deg": 110 }]
+      },
       "glass": [
         { "id": "windscreen", "centre": [0, 1.282, -0.52], "normal": [0, 0.759, -0.651], "size": [1.475, 0.664], "outline": [[-0.737, -0.332], [0.737, -0.332], [0.676, -0.01], [0.595, 0.332], [-0.595, 0.332], [-0.676, -0.01]] },
         { "id": "rear", "centre": [0, 1.29, 1.636], "normal": [0, 0.468, 0.884], "size": [1.308, 0.56], "outline": [[-0.654, -0.245], [-0.572, -0.265], [0, -0.28], [0.572, -0.265], [0.654, -0.245], [0.53, 0.256], [0.44, 0.271], [0, 0.28], [-0.44, 0.271], [-0.53, 0.256]] },
@@ -97,6 +104,15 @@
       "top_speed": 30, "acceleration": 4.8, "brake": 8, "turn_radius": 3.6, "max_lateral_accel": 9, "reverse_beep": true, "mass": 6500, "run_over_mass": 1500, "hp": 380, "hood": [0, 1.9, -3.3], "spawn_count": 3, "half_width": 1.53, "half_length": 3.54, "height": 3.17,
       "model": "pack:synty-vehicles/truck_woodland", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "chase_distance": 9, "chase_height": 2.8,
+      "cargo_volume": {
+        "comment": "The open bed (Delivery rework, docs/cartel.md Cargo vehicles; measured from SM_Veh_Truck_01's bed: docs/research/vehicle-models-facts.md): inside the boards x +-1.17, z -0.78 (the front board) to 3.30 (the tail board), floor 1.50 to the board tops 2.07. from_top: a bag loads only coming down through the top face (y 2.07); the boards stop the rest and it falls beside. No doors: always open. Two rows of 4 bags lying along z (yaw 90), x +-0.5; capacity 8 is the owner's; access: ground behind the box end 3.54 + 0.55.",
+        "centre": [0, 1.785, 1.26], "size": [2.34, 0.57, 4.08], "capacity": 8, "from_top": true,
+        "slots": [
+          [-0.5, 1.5, 0.285, 90], [-0.5, 1.5, 0.935, 90], [-0.5, 1.5, 1.585, 90], [-0.5, 1.5, 2.235, 90],
+          [0.5, 1.5, 0.285, 90], [0.5, 1.5, 0.935, 90], [0.5, 1.5, 1.585, 90], [0.5, 1.5, 2.235, 90]
+        ],
+        "access": [0, 0, 4.09], "access_radius_m": 1.5
+      },
       "tow": { "hitch": [0, 0.62, 3.66] },
       "seats": [
         { "role": "driver", "offset": [-0.736, 1.647, -2.24], "cover": "glass", "eye_height": 1 },
@@ -343,6 +359,13 @@
       "top_speed": 55.6, "acceleration": 6, "brake": 10.5, "turn_radius": 3.4, "high_speed_radius_factor": 14, "max_lateral_accel": 12, "mass": 950, "hp": 250, "hood": [0, 1.1875, -1.625], "spawn_count": 0,
       "fixed_spots": [{ "x": 32.876, "z": 13.668, "yaw_deg": -103.7 }],
       "half_width": 1.125, "half_length": 2.68, "height": 1.79,
+      "cargo_volume": {
+        "comment": "The boot behind the rear bench (Delivery rework, docs/cartel.md Cargo vehicles; numbers of scripts/models/make_golf_mk2_model.py times its SCALE 1.25): floor top 0.372 (Boot_floor), x +-0.916 (Boot_side_closure inner faces), z 2.091 (the rear cabin bulkhead) to 2.488 (the hatch's rear panel), up to 1.16 (the side closures' top); the hatch (node cargo_door, origin on the roof's rear edge) opens about X by 80 degrees. Two bags side by side (0.56 x 0.28 each); capacity 2 is the owner's; access: ground behind the box end 2.68 + 0.55.",
+        "centre": [0, 0.766, 2.289], "size": [1.83, 0.788, 0.398], "capacity": 2,
+        "slots": [[-0.31, 0.372, 2.289, 0], [0.31, 0.372, 2.289, 0]],
+        "access": [0, 0, 3.23], "access_radius_m": 1.5,
+        "doors": [{ "node": "cargo_door", "axis": [-1, 0, 0], "open_deg": 80 }]
+      },
       "model": "drycastle-generated-models/golf_mk2.glb", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "paint_material": "Black paint", "paints": ["Black paint"],
       "seats": [
@@ -464,7 +487,17 @@
       "top_speed": 33, "acceleration": 4.6, "brake": 8.5, "turn_radius": 4, "high_speed_radius_factor": 8, "max_lateral_accel": 9, "reverse_beep": true, "mass": 2400, "run_over_mass": 1800, "hp": 1000, "returns": false,
       "hood": [0, 1.25, -2.2], "spawn_count": 0, "half_width": 1.32, "half_length": 2.53, "height": 2.43,
       "chase_distance": 7.5, "chase_height": 2.4,
-      "cargo_volume": { "centre": [0, 1.3, 0.99], "size": [1.54, 1.14, 2.32], "capacity": 12 },
+      "cargo_volume": {
+        "comment": "The Delivery rework added to the bay: slots (6 rows of 2 bags, 0.56 x 0.28 lying across, on the floor y 0.73 from the bulkhead to the doors), the access point behind the rear doors (box end 2.53 + 0.55) and the doors (nodes cargo_door_l / _r, origins on the outer vertical hinge lines x +-0.806, z 2.369; left (-x) turns about -Y, right about +Y, 90 degrees, so a positive angle opens outward).",
+        "centre": [0, 1.3, 0.99], "size": [1.54, 1.14, 2.32], "capacity": 12,
+        "slots": [
+          [-0.3, 0.73, 0.05, 0], [0.3, 0.73, 0.05, 0], [-0.3, 0.73, 0.41, 0], [0.3, 0.73, 0.41, 0],
+          [-0.3, 0.73, 0.77, 0], [0.3, 0.73, 0.77, 0], [-0.3, 0.73, 1.13, 0], [0.3, 0.73, 1.13, 0],
+          [-0.3, 0.73, 1.49, 0], [0.3, 0.73, 1.49, 0], [-0.3, 0.73, 1.85, 0], [0.3, 0.73, 1.85, 0]
+        ],
+        "access": [0, 0, 3.08], "access_radius_m": 1.5,
+        "doors": [{ "node": "cargo_door_l", "axis": [0, -1, 0], "open_deg": 90 }, { "node": "cargo_door_r", "axis": [0, 1, 0], "open_deg": 90 }]
+      },
       "model": "pack:synty-vehicles/cartel_van_white", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
       "seats": [
         { "role": "driver", "offset": [-0.431, 0.71, -0.586], "cover": "glass", "eye_height": 1 },

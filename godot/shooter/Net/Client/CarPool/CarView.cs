@@ -26,6 +26,8 @@ internal sealed class CarView
     public DriveNodes? Drive;
     /// <summary>The generic wheel animation of a ground vehicle that is neither predicted nor has its own (null otherwise, or a model without wheels).</summary>
     public VehicleWheels? Roller;
+    /// <summary>The boot lid, hatch or rear doors of a cargo type (vehicles.json cargo_volume "doors"; null for every other type, a model without them, and a headless client): <c>CargoDoors?.SetOpen(open)</c> swings them, <c>VehiclesClient.RenderCar</c> steps it.</summary>
+    public CargoDoorsView? CargoDoors;
     public readonly Interpolator Buf = new();
     /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
     public Node3D? Visual;

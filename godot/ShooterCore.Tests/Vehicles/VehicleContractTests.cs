@@ -28,6 +28,44 @@ public class VehicleContractTests
         return dir == null ? null : Path.Combine(dir, "assets");
     }
 
+    // the Duffel prop a loaded slot draws: duffels.json view.box (length, height, depth) times view.scale (read raw: the file has comments)
+    static readonly (float Length, float Height, float Depth) Bag = ReadBag();
+    static (float, float, float) ReadBag()
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(Path.Combine(DataDir, "duffels.json")), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
+        var view = doc.RootElement.GetProperty("view");
+        var box = view.GetProperty("box").EnumerateArray().Select(e => e.GetSingle()).ToArray();
+        var scale = view.GetProperty("scale").GetSingle();
+        return (box[0] * scale, box[1] * scale, box[2] * scale);
+    }
+
+    /// <summary>The corners (x, z) of a slot's Duffel lying on the floor: its long side is the prop's x, turned by the yaw about Y (Godot: +x goes towards -z for a positive angle).</summary>
+    static (float X, float Z)[] Footprint(float[] slot)
+    {
+        var yaw = slot[3] * MathF.PI / 180;
+        var (c, s) = (MathF.Cos(yaw), MathF.Sin(yaw));
+        var (ax, az) = (c, -s); // the long axis
+        var (bx, bz) = (s, c);  // the short axis
+        var (hl, hd) = (Bag.Length / 2, Bag.Depth / 2);
+        return new[] { (-1f, -1f), (1f, -1f), (1f, 1f), (-1f, 1f) }.Select(k => (slot[0] + k.Item1 * hl * ax + k.Item2 * hd * bx, slot[2] + k.Item1 * hl * az + k.Item2 * hd * bz)).ToArray();
+    }
+
+    /// <summary>Whether two convex quads overlap by more than the gap (separating axis test on the four edge normals).</summary>
+    static bool Overlap((float X, float Z)[] a, (float X, float Z)[] b, float gap)
+    {
+        foreach (var poly in new[] { a, b })
+            for (var i = 0; i < 4; i++)
+            {
+                var (nx, nz) = (-(poly[(i + 1) % 4].Z - poly[i].Z), poly[(i + 1) % 4].X - poly[i].X);
+                var len = MathF.Sqrt(nx * nx + nz * nz);
+                (nx, nz) = (nx / len, nz / len);
+                float Min((float X, float Z)[] p) => p.Min(q => q.X * nx + q.Z * nz);
+                float Max((float X, float Z)[] p) => p.Max(q => q.X * nx + q.Z * nz);
+                if (Max(a) + gap <= Min(b) || Max(b) + gap <= Min(a)) return false;
+            }
+        return true;
+    }
+
     static bool In(VehicleDef v, float x, float y, float z) => MathF.Abs(x) <= v.HalfWidth + 1e-3f && MathF.Abs(z) <= v.HalfLength + 1e-3f && y >= -1e-3f && y <= v.Height + 1e-3f;
 
     /// <summary>A rule: null when the vehicle meets it, else what is wrong.</summary>
@@ -61,6 +99,43 @@ public class VehicleContractTests
         ["every_seat_has_a_cover"] = v => Enumerable.Range(0, v.Seats.Count).Where(i => v.DeclaredCover(i) == null).Select(i => $"seat {i} ({v.Seats[i].Role}) declares no cover").FirstOrDefault(),
         // A / ADR 0035: every pane has a kind the glass table knows (a pane that says none is normal; an unknown name does not load) with positive hit points
         ["every_pane_has_a_known_kind"] = v => v.Glass.Where(g => !Enum.IsDefined(g.Kind) || (g.Hp ?? GlassData.PaneHp(g.Kind)) <= 0).Select(g => $"pane {g.Id} kind {g.Kind}").FirstOrDefault(),
+        // Delivery rework (docs/cartel.md Cargo vehicles): a cargo volume says where each load is drawn (one slot per load), where a player stands, and what swings open; an open bed (from_top) has no doors, a closed one has some
+        ["cargo_volume_is_complete"] = v => v.CargoVolume is not { } c ? null
+            : c.Slots.Count != c.Capacity ? $"{c.Slots.Count} slots for a capacity of {c.Capacity}"
+            : c.Access == null ? "no access point"
+            : c.FromTop != (c.Doors.Count == 0) ? (c.FromTop ? "an open bed has no doors" : "a closed cargo area needs its doors")
+            : null,
+        // the slots: a Duffel (duffels.json view.box times view.scale) lying on the floor inside the volume, clear of the others, its top under the volume's top
+        ["cargo_slots_fit_a_duffel"] = v =>
+        {
+            if (v.CargoVolume is not { } c) return null;
+            var (lx, hx, lz, hz) = (c.Centre[0] - c.Size[0] / 2, c.Centre[0] + c.Size[0] / 2, c.Centre[2] - c.Size[2] / 2, c.Centre[2] + c.Size[2] / 2);
+            var feet = c.Slots.Select(Footprint).ToList();
+            for (var i = 0; i < c.Slots.Count; i++)
+            {
+                var s = c.Slots[i];
+                if (feet[i].Any(p => p.X < lx || p.X > hx || p.Z < lz || p.Z > hz)) return $"slot {i} [{string.Join(", ", s)}]: the Duffel leaves the volume";
+                if (s[1] < c.Centre[1] - c.Size[1] / 2 - 1e-3f || s[1] + Bag.Height > c.Centre[1] + c.Size[1] / 2 + 1e-3f) return $"slot {i}: floor {s[1]} and the Duffel's {Bag.Height:F2} m do not fit the volume's height";
+                for (var j = 0; j < i; j++) if (Overlap(feet[i], feet[j], 0.02f)) return $"slots {j} and {i} overlap";
+            }
+            return null;
+        },
+        // the access point: on the ground, outside the hit box (a player cannot stand in the solid) and no more than a metre behind it, within reach (access_radius_m) of the cargo end
+        ["cargo_access_is_behind_the_cargo_end"] = v =>
+        {
+            if (v.CargoVolume is not { Access: { } a } c) return null;
+            if (MathF.Abs(a[1]) > 1e-3f) return $"access y {a[1]}: on the ground";
+            if (MathF.Abs(a[0]) > v.HalfWidth || a[2] < v.HalfLength || a[2] > v.HalfLength + 1f) return $"access [{a[0]}, {a[2]}] is not just behind the hit box";
+            var (dx, dz) = (MathF.Max(0, MathF.Abs(a[0] - c.Centre[0]) - c.Size[0] / 2), a[2] - (c.Centre[2] + c.Size[2] / 2));
+            return MathF.Sqrt(dx * dx + dz * dz) <= c.AccessRadiusM ? null : $"the cargo end is {MathF.Sqrt(dx * dx + dz * dz):F2} m from the access point (access_radius_m {c.AccessRadiusM})";
+        },
+        // a door names a node of the model; a public model (the Golf's) is checked against its .glb, a pack model is the standardizer's (docs/standards/car-design.md node table)
+        ["cargo_doors_are_nodes_of_a_public_model"] = v =>
+        {
+            if (v.CargoVolume is not { } c || c.Doors.Count == 0 || v.Model.StartsWith("pack:") || AssetsDir() is null) return null;
+            var nodes = AmphibiousModelTests.Nodes(v.Model);
+            return c.Doors.Where(d => !nodes.ContainsKey(d.Node)).Select(d => $"the model has no node {d.Node}").FirstOrDefault();
+        },
         // A: a Synty model is recoloured by an atlas swap, never a tint or paint_material (a tint multiplies the whole atlas)
         ["synty_not_tinted"] = v => !v.Model.StartsWith("pack:") || v.Tint == null && v.PaintMaterial == "" && v.Paints.Count == 0 ? null : "tint/paint_material on a pack model",
     };

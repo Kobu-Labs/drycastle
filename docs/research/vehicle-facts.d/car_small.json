@@ -458,6 +458,7 @@
  ],
  "nodes": [
   "car_small",
+  "cargo_door",
   "glass_0",
   "glass_1",
   "glass_2",
@@ -481,5 +482,56 @@
   "wheel_fr_steer",
   "wheel_rl",
   "wheel_rr"
- ]
+ ],
+ "hinges": {
+  "cargo_door": [
+   0.0,
+   1.049,
+   1.764
+  ]
+ },
+ "cuts": {
+  "cargo_door": {
+   "box": {
+    "min": [
+     -0.6,
+     0.64,
+     -2.0
+    ],
+    "max": [
+     0.6,
+     1.055,
+     -1.66
+    ]
+   },
+   "triangles": 120,
+   "hinge": [
+    0.0,
+    1.049,
+    1.764
+   ],
+   "lining": {
+    "min": [
+     -0.6,
+     0.657,
+     -1.88
+    ],
+    "max": [
+     0.6,
+     1.1,
+     -1.47
+    ],
+    "faces": [
+     "floor",
+     "side_lo",
+     "side_hi",
+     "front"
+    ],
+    "uv": [
+     0.081,
+     0.925
+    ]
+   }
+  }
+ }
 }

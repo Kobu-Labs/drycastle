@@ -24,6 +24,9 @@ Node tree (the names the client looks for, DriveNodes.cs and GlassClient.cs):
         seat_driver, seat_passenger_1 .. _3   empties: the four seats of vehicles.json (feet)
         light_head_l/r, light_tail_l/r        empties: the lamp positions of vehicles.json
         steering_wheel_rim, steering_wheel_spokes   (meshes, in hull) the wheel: the cockpit view hides them and draws its own wheel that turns (CockpitRig)
+        cargo_door                 the hatch (rear window with its pane glass_1, the lower deck, the rear panel, handle, badge, wiper), its OWN node: origin on the hinge line
+                                   (the roof's rear edge, x 0, y 1.40, z 1.03 at 1:1), so a turn about its local -X lifts the lower edge back and up (vehicles.json cargo_volume.doors,
+                                   CargoDoorsView). Closed it sits exactly where it sat when it was part of the body; the boot behind it (Boot_floor, Boot_side_closure, the bulkhead) is real.
       wheel_fl_steer, _fr_steer    front steering pivots (turn about Y), origin at the wheel centre; SIBLINGS of the hull: the wheels follow the ground, the body leans over them
         wheel_fl, wheel_fr         front wheels (l = -x), origin at the wheel centre, roll about X
       wheel_rl, wheel_rr           rear wheels, siblings of the hull
@@ -288,6 +291,15 @@ for a in [.65,2.49,3.79,5.63]:
 box('Steering_hub',(-.39,.94,-.17),(.115,.09,.04),dash,gname='steering_wheel_spokes')
 box('Instrument_binnacle',(-.39,.995,-.40),(.39,.11,.08),dash)
 for x in [-.49,-.29]:ring('Vintage_analog_dial',(x,1.00,-.352),.055,.045,.005,gauge,16,'z')
+# The hatch: every part of the tailgate leaves the body for the node cargo_door (the rear half of the names below: the front has a badge too). The glass contract (docs/glass.md): the pane
+# glass_1 is a child of the door like any door leaf's pane, it keeps its closed-pose outline in vehicles.json (the server tests panes closed) and the client hides the node when it shatters;
+# the crack overlay and the shards stay where the pane is closed while the hatch is open (the known door-leaf gap).
+HINGE=np.array([0.0,1.40,1.03])   # 1:1 metres: the roof's rear edge (Roof ends z 1.02, y 1.405; the window frame starts at 1.04)
+HATCH_PARTS={'Hatch_lower_deck','End_panel','Hatch_handle','Rear_wiper','Rear_window_rubber','Rear_window_lower_surround','Rear_roof_window_join','Badge_backing','Badge_ring','VW_monogram'}
+for p in PARTS:
+    if p['gnode']==1 or (p['name'] in HATCH_PARTS and p['v'][:,2].mean()>1.0):
+        p['parent']='cargo_door';p['v']=p['v']-HINGE
+DOORS={'cargo_door':HINGE}
 # Seats (feet, vehicles.json "seats": x right, y up, z back) and lamps ([x, y, z] of vehicles.json "lights"); empties in the glb.
 SEATS={'seat_driver':(-.39,.36,.17),'seat_passenger_1':(.39,.36,.17),'seat_passenger_2':(-.36,.36,1.0),'seat_passenger_3':(.36,.36,1.0)}
 LAMPS={'light_head_l':(-.46,.75,-2.07),'light_head_r':(.46,.75,-2.07),'light_tail_l':(-.56,.76,2.03),'light_tail_r':(.56,.76,2.03)}
@@ -311,6 +323,7 @@ def export(path):
             steer=node(name+'_steer',root,pos);pids[name]=node(name,steer)
         else:pids[name]=node(name,root,pos)   # the wheels are siblings of the hull: they follow the ground, the body leans over them
     for name,pos in {**SEATS,**LAMPS}.items():node(name,hull,pos)
+    for name,pos in DOORS.items():pids[name]=node(name,hull,pos)
     tris=0
     grouped={}
     for p in PARTS:
@@ -339,7 +352,7 @@ def export(path):
 def main():
     out=sys.argv[1] if len(sys.argv)>1 else str(OUT)
     export(out)
-    pts=[p['v']+np.array(PIVOTS.get(p['parent'],[0,0,0])) for p in PARTS]
+    pts=[p['v']+np.array({**PIVOTS,**DOORS}.get(p['parent'],[0,0,0])) for p in PARTS]
     lo=SCALE*np.min([v.min(axis=0) for v in pts],axis=0);hi=SCALE*np.max([v.max(axis=0) for v in pts],axis=0)
     print('bounds: x %.3f..%.3f  y %.3f..%.3f  z %.3f..%.3f'%(lo[0],hi[0],lo[1],hi[1],lo[2],hi[2]))
     GLASS.report()
