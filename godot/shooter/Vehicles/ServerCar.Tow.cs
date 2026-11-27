@@ -183,7 +183,6 @@ public partial class ServerCar
         if (Retired) return;
         DropLinks();
         Life.Destroy(double.PositiveInfinity);
-        Hold?.Clear();
         Retired = true;
         CollisionLayer = 0;
         Velocity = Vector3.Zero;

@@ -13,7 +13,7 @@ public class VehicleCargoVolumeDef
     public float[] Centre { get; set; } = { 0, 0, 0 };
     /// <summary>The box's size [width (x), height (y), length (z)], metres.</summary>
     public float[] Size { get; set; } = { 1, 1, 1 };
-    /// <summary>How many loads it holds at once (<see cref="CargoLoad"/>).</summary>
+    /// <summary>How many loads it holds at once (the loader counts them: a Heist's van bay).</summary>
     public int Capacity { get; set; } = 1;
 
     /// <summary>Null when the volume is well formed and inside the type's hit box (<paramref name="v"/>), else what is wrong.</summary>
@@ -47,39 +47,4 @@ public static class CargoVolume
     /// <summary>The volume's centre in the world, for a vehicle placed as in <see cref="Contains"/> (where a load is drawn going in, where a marker points).</summary>
     public static Vector3 Centre(VehicleCargoVolumeDef v, Vector3 feet, float yaw, float pitch, float roll) =>
         feet + FlightMath.Rotate(new Vector3(v.Centre[0], v.Centre[1], v.Centre[2]), yaw, pitch, roll);
-}
-
-/// <summary>
-/// The loads a vehicle's cargo volume holds now (a counter up to the type's capacity): server-owned, never sent (a Job reports its own count). Emptied when the vehicle returns or
-/// is taken out (<see cref="Clear"/>). What a load is (a weed, cash or product Duffel) is the loader's.
-/// </summary>
-public sealed class CargoLoad
-{
-    public CargoLoad(int capacity)
-    {
-        if (capacity < 1) throw new ArgumentOutOfRangeException(nameof(capacity));
-        Capacity = capacity;
-    }
-
-    public int Capacity { get; }
-    public int Count { get; private set; }
-    public bool Full => Count >= Capacity;
-
-    /// <summary>One more load goes in. False (nothing changes) when it is full.</summary>
-    public bool TryAdd()
-    {
-        if (Full) return false;
-        Count++;
-        return true;
-    }
-
-    /// <summary>One load comes out. False when it is empty.</summary>
-    public bool TryRemove()
-    {
-        if (Count == 0) return false;
-        Count--;
-        return true;
-    }
-
-    public void Clear() => Count = 0;
 }

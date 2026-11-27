@@ -93,9 +93,6 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>The velocity (Godot frame) it had going into the step of <see cref="LastImpact"/>: what a ram into a house reads (HouseRam).</summary>
     public System.Numerics.Vector3 LastImpactVelocity;
 
-    /// <summary>The loads in the type's cargo volume (vehicles.json cargo_volume, the Cartel van's Duffels; CarCargo); null for a type without one. Emptied by every <see cref="Reset"/> and by the destruction.</summary>
-    public CargoLoad? Hold { get; private set; }
-
     /// <summary>
     /// The hook of this vehicle's destruction: raised once when it blows up (CarBlast.Detonate: bullets, a blast, a crash, a chain), after it is destroyed, with the attacker it is
     /// credited to (0: nobody). Not raised when it is taken out on purpose (<see cref="Retire"/>) or hidden (a harvester parked away). A Job listens to fail its Heist (#495).
@@ -145,7 +142,6 @@ public partial class ServerCar : CharacterBody3D
         if (IsTrailer) ReadyTrailer(); // before the life: a loaded trailer's hit points are its load's
         Life = new VehicleLifecycle(Cargo?.MaxHp(Def) ?? Def.Hp);
         Seat = new VehicleSeat(Def.Seats.Count); // a trailer has none
-        Hold = Def.CargoVolume is { } cargo ? new CargoLoad(cargo.Capacity) : null;
         // the hit volume (VehicleBox): ground to the top of the body; a type with a hull list has a shape for each of its boxes (the body itself stays upright, it turns with the yaw only)
         if (Def.Tilts && Flies) // (a trailer's body keeps the wide footprint for the vehicle contact pass; its narrow hull is the analytic one, #482)
             foreach (var b in Def.HullBoxes) AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(b.HalfWidth * 2, b.Y1 - b.Y0, b.HalfLength * 2) }, Position = new Vector3(b.Cx, (b.Y0 + b.Y1) / 2, b.Cz) });
@@ -200,7 +196,6 @@ public partial class ServerCar : CharacterBody3D
     {
         DropLinks(); // a destroyed tractor lets its trailer go, a destroyed trailer its tractor
         Life.Destroy(returnAt); Asleep = false; RestCount = 0;
-        Hold?.Clear(); // what was loaded is lost with it
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
@@ -232,7 +227,6 @@ public partial class ServerCar : CharacterBody3D
         TickEndPos = GlobalPosition;
         HitCooldown.Clear();
         Lights = false;
-        Hold?.Clear(); // back at its origin: the bay is empty
     }
 
     /// <summary>A flying type back on its skids at the origin, rotor stopped. The origin is put on the ground under it when that is within a few metres (a sandbox spawn on a slope).</summary>

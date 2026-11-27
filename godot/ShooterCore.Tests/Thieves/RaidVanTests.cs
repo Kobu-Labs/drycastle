@@ -1,4 +1,5 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Match;
@@ -527,6 +528,57 @@ public class RaidVanTests
         Assert.Empty(rig.Raids.Raids);
         Assert.Equal(0, assault.Gang.Count);
         rig.Raids.Remove(assault); // twice does nothing
+    }
+
+    static Raid SendAssault(Rig rig, RoadPath path, Vector3 post)
+    {
+        var stays = rig.Cfg.Van.Copy();
+        stays.StaySeconds = float.PositiveInfinity; // as RaidLauncher.LaunchAssault: it never drives off
+        return rig.Raids.Launch(Rig.PlanTo(path.End, path), new RoadPath(new[] { path.End, path.End + new Vector2(300, 0) }), new Vector3(path.Start.X, 0, path.Start.Y),
+            new[] { GangMemberKind.Enforcer, GangMemberKind.Enforcer }, rig.Gangs.NewGang(post, rig.Cfg.Gang, GangCrew.RivalCrew), stays, null, p => new Vector3(1000, 0, 0), null, post)!;
+    }
+
+    [Fact]
+    public void AnAssaultWhoseCrewIsDeadDoesNotCountBesideItsStandingVanAndIsTakenOutOnceTheBodiesAreGone()
+    {
+        var rig = new Rig();
+        var assaults = new HeistAssaults(1);
+        var a = SendAssault(rig, new RoadPath(new[] { new Vector2(-20, 0), new Vector2(60, 0) }), new Vector3(60, 0, 40));
+        assaults.Add(a);
+        Assert.True(HeistAssaults.InFight(a)); // the crew is still in the van
+        Assert.False(assaults.MaySend);
+        rig.RunUntil(() => a.StillToSpawn == 0);
+        Assert.False(assaults.MaySend);
+        foreach (var m in a.Gang.Members) m.Kill(1);
+        rig.Step();
+        Assert.False(a.Over); // the van stands on: it never drives off
+        Assert.False(HeistAssaults.InFight(a));
+        Assert.True(assaults.MaySend); // a dead crew beside a standing van holds no place under the cap
+        Assert.Empty(assaults.TakeSpent()); // the bodies lie their time first
+        rig.RunUntil(() => a.Gang.Count == 0);
+        var spent = assaults.TakeSpent();
+        Assert.Equal(new[] { a }, spent);
+        Assert.Empty(assaults.Raids);
+        Assert.Equal(new[] { a.Plan.StopAt }, assaults.Stops); // the next still parks away from where it stood
+        foreach (var r in spent) rig.Raids.Remove(r);
+        Assert.Empty(rig.Raids.Raids); // its van slot is free for the Thieves and the next Assault
+        Assert.Equal(1, assaults.Sent);
+    }
+
+    [Fact]
+    public void AHitOnAnAssaultVanEarnsNoPartInTheThievesEvent()
+    {
+        var rig = new Rig();
+        var thieves = rig.Launch();
+        var assault = SendAssault(rig, new RoadPath(new[] { new Vector2(-20, 50), new Vector2(60, 50) }), new Vector3(60, 0, 90));
+        var credit = new ThievesCredit();
+        var vans = new CreditedVanHits(rig.Raids, credit, id => rig.Raids.RaidOf(id)?.Gang.Crew != GangCrew.RivalCrew); // as ThievesPayout
+        Assert.Equal(DamageResult.Damaged, vans.Hit(RaidVanRules.HitIdOf(assault.Van.Slot, 0), 4, Bullet, 14, KillCause.Standard));
+        Assert.Empty(credit.Credited); // the hit lands, it is not the Thieves'
+        Assert.Equal(DamageResult.Damaged, vans.Hit(RaidVanRules.HitIdOf(thieves.Van.Slot, 1), 5, Bullet, 14, KillCause.Standard));
+        Assert.Equal(new ushort[] { 5 }, credit.Credited);
+        Assert.Same(assault, rig.Raids.RaidOf(RaidVanRules.HitIdOf(assault.Van.Slot, 1)));
+        Assert.Null(rig.Raids.RaidOf(GangRules.FirstHitId));
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Vehicles;
+using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server.CarPool;
@@ -45,6 +46,18 @@ internal sealed class JobVehicles
         _active.Add(car);
         GD.Print($"server: Job vehicle {def.Id} {car.Id} at ({position.X:F1},{y:F1},{position.Z:F1}){(riders != null ? ", reserved" : "")}");
         return car;
+    }
+
+    /// <summary>No vehicle of the world stands within <paramref name="apartM"/> of the ground point <paramref name="at"/> (x, z): a Job vehicle put down there lands in no other. Destroyed and retired ones are not in the world.</summary>
+    public bool Clear(NVec2 at, float apartM)
+    {
+        foreach (var car in _fleet.Cars)
+        {
+            if (car.Retired || car.Destroyed) continue;
+            var p = car.GlobalPosition;
+            if (new NVec2(p.X - at.X, p.Z - at.Y).LengthSquared() < apartM * apartM) return false;
+        }
+        return true;
     }
 
     /// <summary>Who may board <paramref name="car"/> from now on (a squad member joined or left); null lets anybody in. Riders already seated keep their seats.</summary>

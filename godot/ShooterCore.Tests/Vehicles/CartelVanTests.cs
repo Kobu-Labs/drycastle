@@ -6,7 +6,7 @@ using Xunit;
 namespace Drycastle.ShooterCore.Tests.Vehicles;
 
 /// <summary>
-/// The `cartel_van` type (the Gang Warfare SM_Veh_Van_01, #495) and the generic pieces it brought: the cargo volume (a bay in the vehicle frame and its load count) and the reserved
+/// The `cartel_van` type (the Gang Warfare SM_Veh_Van_01, #495) and the generic pieces it brought: the cargo volume (a bay in the vehicle frame and how many it takes) and the reserved
 /// riders of a vehicle. The generic model checks are StandardizedVehicleTests and VehicleContractTests.
 /// </summary>
 public class CartelVanTests
@@ -78,22 +78,6 @@ public class CartelVanTests
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(Json("{ \"centre\": [0, 1.2, 1.8], \"size\": [1.6, 1.0, 2.0], \"capacity\": 3 }"), "vehicles.json")));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(Json("{ \"centre\": [0, 1.9, 1], \"size\": [1.6, 1.0, 2.0], \"capacity\": 3 }"), "vehicles.json")));
         Assert.Throws<DataFileException>(() => VehiclesFile.Validate(DataFile.Parse<VehiclesFile>(Json("{ \"centre\": [0, 1.2, 1], \"size\": [1.6, 1.0, 2.0], \"capacity\": 0 }"), "vehicles.json")));
-    }
-
-    [Fact]
-    public void The_load_counts_up_to_the_capacity_and_empties()
-    {
-        var hold = new CargoLoad(2);
-        Assert.False(hold.TryRemove());
-        Assert.True(hold.TryAdd());
-        Assert.True(hold.TryAdd());
-        Assert.True(hold.Full);
-        Assert.False(hold.TryAdd());
-        Assert.Equal(2, hold.Count);
-        Assert.True(hold.TryRemove());
-        Assert.Equal(1, hold.Count);
-        hold.Clear();
-        Assert.Equal(0, hold.Count);
     }
 
     [Fact]

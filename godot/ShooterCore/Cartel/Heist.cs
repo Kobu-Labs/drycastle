@@ -200,7 +200,7 @@ public class HeistData
     public int[] AssaultEnforcers { get; set; } = { 2, 2, 3, 3, 4 };
     public int GunmenPerExtraMember { get; set; } = 1;
     public int MaxCrew { get; set; } = 8;
-    /// <summary>No new Assault while this many of the Heist's are still in the fight (a van standing, or a crew member alive); the clock goes on.</summary>
+    /// <summary>No new Assault while this many of the Heist's are still in the fight (a crew member alive or still in its van: <see cref="HeistAssaults.InFight"/>); the clock goes on.</summary>
     public int MaxAssaultsAlive { get; set; } = 3;
     /// <summary>The vehicle type the Heist puts down (vehicles.json), on the road spot nearest the Contact at least van_spawn_min_m from him.</summary>
     public string VanType { get; set; } = "cartel_van";
@@ -214,7 +214,7 @@ public class HeistData
     public float DropStopMps { get; set; } = 1;
 
     /// <summary>Checks the numbers; <paramref name="what"/> names the section (<c>cartel.json: jobs.harvest</c>).</summary>
-    public void Validate(string what, int tiers)
+    public virtual void Validate(string what, int tiers)
     {
         DataFileException Bad(string text) => new($"{what}: {text}");
         void PerTier<T>(T[] a, string name, Func<T, bool> ok, string rule)
@@ -250,6 +250,14 @@ public sealed class HarvestData : HeistData
     public float FillHoldSeconds { get; set; } = 3;
     /// <summary>The objective's area: the plantation's outline grown by this.</summary>
     public float AreaMarginM { get; set; } = 25;
+
+    /// <summary>The template's checks and the plantation's own.</summary>
+    public override void Validate(string what, int tiers)
+    {
+        base.Validate(what, tiers);
+        if (!float.IsFinite(FillHoldSeconds) || FillHoldSeconds <= 0) throw new DataFileException($"{what}: fill_hold_seconds must be more than 0");
+        if (!float.IsFinite(AreaMarginM) || AreaMarginM < 0) throw new DataFileException($"{what}: area_margin_m must be 0 or more");
+    }
 }
 
 /// <summary>The Heist template's rules (docs/cartel.md "Difficulty and reward", "Assaults"): counts by tier and squad size, the bonus Respect, an Assault's crew.</summary>
