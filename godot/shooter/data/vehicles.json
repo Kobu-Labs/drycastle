@@ -444,6 +444,41 @@
         { "id": "corner_r", "centre": [1.336, 2.204, -5.693], "normal": [1.0, 0, 0], "size": [0.291, 0.422], "outline": [[-0.144, 0.211], [-0.146, -0.211], [0.146, -0.211], [0.146, 0.211]] }
       ],
       "lights": { "head": [[-0.92, 1.344, -5.91], [0.92, 1.344, -5.91]], "tail": [[-0.92, 1.344, 5.354], [0.92, 1.344, 5.354]], "beam_range": 45, "beam_angle": 26 }
+    },
+    {
+      "id": "cartel_van",
+      "comment": "The Cartel van (GLOSSARY Cartel van, docs/cartel.md, #495): the Gang Warfare panel van SM_Veh_Van_01 at real size (scripts/vehicles/specs/cartel_van.json, private pack, a box without it), a driver and a passenger on the cab bench behind glass, the cargo bay behind the bulkhead. Never dealt (spawn_count 0) and never returns once destroyed (returns false): a Heist puts one down (JobVehicles) and takes it away; /spawn cartel_van puts one down by hand. cargo_volume is the bay in the vehicle frame (centre, size [width, height, length]): the inside of the bay, bulkhead to rear doors, floor to roof lining (measured: docs/research/vehicle-models-facts.md); capacity is how many loads (Duffels) it takes. The gameplay numbers (hp, speed, mass, capacity) are provisional until the owner sets them.",
+      "drive": {
+        "throttle_rise": 200, "throttle_fall": 200, "steer_rise": 200, "steer_fall": 200, "steer_calm": 1, "wheelbase": 3.33, "track": 1.837,
+        "land": {
+          "launch_boost": 2.5, "launch_speed": 12, "power_curve": 16, "coast_decel": 1.5, "coast_drag": 0, "brake_bite": 1, "reverse_top_fraction": 0.2,
+          "grip": 1000, "yaw_response": 20, "handbrake_decel": 12, "handbrake_grip": 0.3, "handbrake_steer": 1.5,
+          "step_height": 0.45, "max_climb_deg": 45, "snap_down": 0.3, "pivot_behind": 1.564
+        },
+        "body": {
+          "squat_deg": 0.35, "dive_deg": 0.45, "lean_deg": 0.4, "max_pitch_deg": 3, "max_roll_deg": 4.5, "response": 7, "damping": 0.45, "terrain_response": 12,
+          "wheel_lock_deg": 30
+        },
+        "camera": { "distance": 7.5, "height": 2.4, "follow": 10, "max_lag": 1.6, "tilt": 0.35, "fov_boost_deg": 6, "turn_follow": 0, "turn_response": 5 }
+      },
+      "top_speed": 33, "acceleration": 4.6, "brake": 8.5, "turn_radius": 4, "high_speed_radius_factor": 8, "max_lateral_accel": 9, "reverse_beep": true, "mass": 2400, "run_over_mass": 1800, "hp": 1000, "returns": false,
+      "hood": [0, 1.25, -2.2], "spawn_count": 0, "half_width": 1.32, "half_length": 2.53, "height": 2.43,
+      "chase_distance": 7.5, "chase_height": 2.4,
+      "cargo_volume": { "centre": [0, 1.3, 0.99], "size": [1.54, 1.14, 2.32], "capacity": 12 },
+      "model": "pack:synty-vehicles/cartel_van_white", "model_scale": 1, "model_yaw_deg": 0, "model_offset": [0, 0, 0],
+      "seats": [
+        { "role": "driver", "offset": [-0.431, 0.71, -0.586], "cover": "glass", "eye_height": 1 },
+        { "role": "passenger", "offset": [0.431, 0.71, -0.586], "cover": "glass", "eye_height": 1 }
+      ],
+      "skins": ["pack:synty-vehicles/cartel_van_white"],
+      "lights": { "head": [[-0.843, 0.869, -2.457], [0.843, 0.869, -2.457]], "tail": [[-0.925, 0.873, 2.379], [0.925, 0.873, 2.379]], "beam_range": 40, "beam_angle": 26 },
+      "glass": [
+        { "id": "windscreen", "centre": [0, 1.566, -1.303], "normal": [0, 0.668, -0.745], "size": [1.734, 0.789], "outline": [[-0.867, -0.313], [-0.507, -0.381], [0, -0.395], [0.507, -0.381], [0.867, -0.313], [0.81, 0.039], [0.709, 0.359], [0.553, 0.384], [0, 0.395], [-0.553, 0.384], [-0.709, 0.359], [-0.81, 0.039]] },
+        { "id": "rear_1", "centre": [-0.386, 1.594, 2.278], "normal": [-0.011, 0.25, 0.968], "size": [0.662, 0.536], "outline": [[-0.331, -0.017], [-0.331, -0.268], [0.32, -0.266], [0.331, -0.016], [0.309, 0.268], [-0.174, 0.251], [-0.27, 0.205]] },
+        { "id": "rear_2", "centre": [0.386, 1.594, 2.278], "normal": [0.011, 0.25, 0.968], "size": [0.662, 0.536], "outline": [[-0.331, -0.016], [-0.32, -0.266], [0.331, -0.268], [0.331, -0.017], [0.27, 0.205], [0.174, 0.251], [-0.309, 0.268]] },
+        { "id": "side_left", "centre": [-0.89, 1.566, -0.821], "normal": [-0.972, 0.236, 0.007], "size": [0.912, 0.486], "outline": [[-0.456, -0.241], [0.455, -0.243], [0.456, 0.242], [-0.143, 0.243], [-0.344, 0.017]] },
+        { "id": "side_right", "centre": [0.89, 1.566, -0.821], "normal": [0.972, 0.236, 0.007], "size": [0.912, 0.486], "outline": [[-0.456, 0.242], [-0.455, -0.243], [0.456, -0.241], [0.344, 0.017], [0.143, 0.243]] }
+      ]
     }
   ]
 }

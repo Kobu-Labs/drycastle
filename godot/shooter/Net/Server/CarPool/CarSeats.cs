@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.Shooting;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
@@ -47,11 +48,20 @@ internal sealed class CarSeats
         return best;
     }
 
-    /// <summary>The player gets into the nearest vehicle in reach, in the free seat nearest to them. False when there is none.</summary>
+    /// <summary>
+    /// The player gets into the nearest vehicle in reach, in the free seat nearest to them. False when there is none. A vehicle reserved for other players (<see cref="VehicleSeat.Reserve"/>,
+    /// a Heist's Cartel van) refuses them with a notice: the key was used, nobody gets in.
+    /// </summary>
     public bool TryEnter(ServerClient c)
     {
         var p = c.Body.GlobalPosition;
         if (EnterableCar(p) is not { } best) return false;
+        if (!best.Seat.Admits(c.Id))
+        {
+            _ctx.ChatTo(c, ChatLineKind.Error, VehicleSeat.RefusedText);
+            GD.Print($"server: {c.Name} refused a seat in {best.Def.Id} {best.Id} (reserved for its crew)");
+            return true;
+        }
         // the free seat nearest to the player (a roof gunner seat is a little further out than the car's centre)
         var seat = best.Seat.NearestFreeSeat(best.Def, best.GlobalPosition.ToNumerics(), best.State.Yaw, p.ToNumerics(), float.MaxValue, kickCorpses: true); // any free seat of a vehicle in reach: the nearest one
         var wasEmpty = !best.Seat.Occupied;

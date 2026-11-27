@@ -850,7 +850,7 @@ A bag of goods (weed, cash, product) a Job's player carries, one at a time and s
 _Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
 
 **Cartel van**:
-The drivable van of a Heist: only the Job's players get in or load Duffels; it is put down for the Job and goes with it, and its destruction fails the Heist. Planned (#437).
+The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. The vehicle is built (#495); the Heist that uses it is planned (#437).
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:

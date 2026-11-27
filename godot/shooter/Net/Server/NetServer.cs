@@ -99,6 +99,7 @@ public partial class NetServer : Node
     CorpseBook _corpses = null!; RidingCorpses _riding = null!; CarSeats _seats = null!; CarDamage _carDamage = null!; CarBlast _carBlast = null!; CorpseServer _remains = null!;
     RunOverServer _runOver = null!; TowServer _tow = null!; RocketCarts _rocketCarts = null!; VehicleLoop _loop = null!; VehicleGuns _guns = null!; CarDealer _dealer = null!;
     // players, chat and what they carry
+    JobVehicles _jobVehicles = null!;
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     // the village and its animals
@@ -286,6 +287,7 @@ public partial class NetServer : Node
             _wildlife.Populate, // the match cleared the pets' entities too; a new round moves new ones into the property groups
             _rozhlas.RoundReset, // the Urad workers of a detour still open sit down again
             _loop.RoundReset, _scenery.RoundStart, // the vehicles are back where they started, the lamps and plates whole
+            _jobVehicles.RoundReset, // a Job's vehicles (the Cartel van) go with the round
             _harvester.RoundReset, // the car reset brought the harvester back to its old field: hidden again
             _scudEvent.RoundReset, // the Scud event is over with the round (no reward); the loop below retires its truck and carts
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
@@ -316,6 +318,7 @@ public partial class NetServer : Node
         _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Config.Vehicles, Config.Water, Config.KillY, Config.BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver, _houseDestruction.Ram);
         _guns = new VehicleGuns(_ctx, _rewind, _shot, _glass, _scenery, _flak, _targets, _impacts, _damage.Deal, _carDamage, Config.Vehicles, _rng);
         _dealer = new CarDealer(_fleet, Config.Vehicles, Config.World, Config.Map, Config.Water, Config.Spawns, _rng, _garage, Config.BlastSmoke, Config.CarSmoke, Config.SmokeKind);
+        _jobVehicles = new JobVehicles(_fleet, () => Config.Vehicles, Config.World, _seats.Leave); // a Job's own vehicles (the Cartel van, #495)
     }
 
     /// <summary>What the server needs once everything exists: the warmed indexes, the default vehicle table, the checks that fail at start and the two lines the smoke scripts wait for.</summary>
