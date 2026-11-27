@@ -80,6 +80,20 @@ public class WorldEntityTests
     static WorldState StateOf(WorldEntityManager m, ushort id) => m.StateOf(id)!.Value;
 
     [Fact]
+    public void IdsWrapBelowBit15WhereTheReceiverOwnerFieldNeedsItClear()
+    {
+        var m = new WorldEntityManager(Types());
+        var keep = m.Spawn(new Dummy { TypeId = Plain })!.Value; // lives through the wrap: its id is never handed out again
+        for (var n = 0; n < 0x8000 + 100; n++)
+        {
+            var id = m.Spawn(new Dummy { TypeId = Plain })!.Value;
+            Assert.True(id is > 0 and < 0x8000, $"id {id}");
+            Assert.NotEqual(keep, id);
+            m.Despawn(id, WorldDespawnReason.Expired);
+        }
+    }
+
+    [Fact]
     public void SpawnAndDespawnPayloadsRoundTrip()
     {
         var s = WorldState.Make(new Vector3(12.5f, -3.25f, 400f), 1.2f, -0.3f, 9, 2, 88f);

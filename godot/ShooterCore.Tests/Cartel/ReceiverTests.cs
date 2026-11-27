@@ -225,6 +225,26 @@ public class ReceiverTests
     }
 
     [Fact]
+    public void TheBagsOnALeavingReceiverSurviveTheJobsEndAndAreRemovedWhenItIsGone()
+    {
+        var (r, book, entities) = Setup(ReceiverKind.StashHouse, min: 2);
+        var a = Throw(book, entities, Party);
+        var b = Throw(book, entities, Party);
+        var lying = book.Place(DuffelKind.Cash, Party, new Vector3(5, 0, 5))!;
+        Assert.True(r.Send());
+        Assert.Equal(1, book.RemoveParty(Party, keep: r)); // the Job ended: only the lying one went, the count says so
+        Assert.Null(book.Find(lying.Id));
+        Assert.Same(a, book.Find(a.Id));
+        Assert.Same(b, book.Find(b.Id));
+        Assert.Equal(DuffelState.Loaded, a.State);
+        entities.Tick(Dt); // the buyer takes the bags, the Receiver is Gone
+        Assert.Equal(ReceiverPhase.Gone, r.Phase);
+        Assert.Equal(2, book.RemoveLoadedIn(r)); // the server removes them once it is gone
+        Assert.Null(book.Find(a.Id));
+        Assert.Null(book.Find(b.Id));
+    }
+
+    [Fact]
     public void TheAsksOfTheKeyAtTheCartelMan()
     {
         Assert.Equal(ReceiverAsk.Leave, ReceiverRules.Ask(true, 3, 3));

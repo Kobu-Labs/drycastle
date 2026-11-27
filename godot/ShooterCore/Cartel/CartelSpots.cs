@@ -63,7 +63,8 @@ public static class CartelSpots
         return at;
     }
 
-    static int IndexOf(IReadOnlyList<Vector3> pool, Vector3 p)
+    /// <summary>The index of the point in the pool, or -1.</summary>
+    public static int IndexOf(IReadOnlyList<Vector3> pool, Vector3 p)
     {
         for (var i = 0; i < pool.Count; i++) if (pool[i] == p) return i;
         return -1;

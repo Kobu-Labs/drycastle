@@ -63,12 +63,12 @@ internal sealed class CargoServer
     }
 
     /// <summary>A cargo vehicle's doors are in reach of the player's interact key (its access point): they own the key before the vehicle's seat.</summary>
-    public bool DoorsInReach(ServerClient c) => _bays.Count > 0 && DoorsAt(c.Body.GlobalPosition.ToNumerics()) != null;
+    public bool DoorsInReach(ServerClient c) => DoorsAt(c.Body.GlobalPosition.ToNumerics()) != null;
 
     /// <summary>The interact key's press on foot: opens or shuts the doors of the vehicle at whose access point the player stands. True when it did (the key is used up).</summary>
     public bool Use(ServerClient c)
     {
-        if (_bays.Count == 0 || DoorsAt(c.Body.GlobalPosition.ToNumerics()) is not { } bay) return false;
+        if (DoorsAt(c.Body.GlobalPosition.ToNumerics()) is not { } bay) return false;
         var open = bay.Doors.Toggle();
         _ctx.Broadcast(EventKind.CargoDoors, CargoDoorsCodec.Encode(bay.Vehicle, open));
         GD.Print($"server: {c.Name} #{c.Id} {(open ? "opened" : "shut")} the cargo doors of vehicle {bay.Vehicle}");

@@ -90,7 +90,7 @@ public readonly record struct WorldDespawned(ushort Id, WorldDespawnReason Reaso
 /// Server-side entity manager, owned by the match (<see cref="MatchSim.Entities"/>). Spawn, despawn and damage raise
 /// <see cref="Spawned"/> and <see cref="Despawned"/> synchronously in call order; the server turns them into reliable
 /// events, so the reliable channel delivers spawn and despawn in the order the match made them.
-/// Ids start at 1 and are never handed out again while the entity is live. Capped at <see cref="MaxEntities"/>.
+/// Ids run 1 to 0x7FFF (then wrap) and are never handed out again while the entity is live. Capped at <see cref="MaxEntities"/>.
 /// </summary>
 public sealed class WorldEntityManager
 {
@@ -121,9 +121,10 @@ public sealed class WorldEntityManager
         return id;
     }
 
+    /// <summary>The next free id, 1 to 0x7FFF, wrapping: bit 15 stays clear because a Loaded Duffel's owner field carries a Receiver's entity id in its low 15 bits (<see cref="Cartel.ReceiverRules.WireBit"/>).</summary>
     ushort NextId()
     {
-        do { _lastId = unchecked((ushort)(_lastId + 1)); } while (_lastId == 0 || _live.ContainsKey(_lastId));
+        do { _lastId = (ushort)((_lastId + 1) & 0x7FFF); } while (_lastId == 0 || _live.ContainsKey(_lastId));
         return _lastId;
     }
 

@@ -101,7 +101,7 @@ internal sealed class HeistServer
         var capacity = CarCargo.Capacity(van);
         var heist = new Heist(HeistRules.MinDuffels(data, job.Tier, members.Count, capacity), HeistRules.MaxDuffels(data, job.Tier, members.Count, capacity),
             HeistRules.GraceSeconds(data, job.Tier), HeistRules.IntervalSeconds(data, job.Tier), data.DropGraceSeconds) { Drop = ReceiverRules.Text(plan.Kind) };
-        if (Receivers.Put(plan, members, heist.Min, Math.Min(heist.Max, VehicleCargoVolumeDef.MaxCapacity)) is not { } receiver) { Vehicles.Remove(van); refusal = "The drop cannot be put down."; return null; }
+        if (Receivers.Put(plan, members, heist.Min, heist.Max) is not { } receiver) { Vehicles.Remove(van); refusal = "The drop cannot be put down."; return null; }
         GD.Print($"server: {job}: Cartel van {van.Id} at ({at.X:F0},{at.Z:F0}), drop: {ReceiverRules.NameOf(plan.Kind)} at ({plan.At.X:F0},{plan.At.Z:F0}), {heist.Min} to {heist.Max} duffels");
         return new HeistRun(this, job, data, goal, van, receiver, heist);
     }
@@ -250,21 +250,35 @@ internal sealed class HeistRun : IJobObjective
             if (_s.Ctx.Players.TryGetValue(id, out var c) && !c.IsBot) _s.Ctx.ChatTo(c, ChatLineKind.Info, text);
     }
 
-    /// <summary>A Duffel took a slot in the van's bay: the party hears the milestones (the minimum, the maximum); the tracker line carries the count.</summary>
+    /// <summary>The count milestones the party was told already: each is told once, however often a bag is taken out and thrown back.</summary>
+    [Flags]
+    enum Told { None = 0, VanMin = 1, VanMax = 2, DropMin = 4, DropMax = 8 }
+
+    Told _told;
+
+    /// <summary>True the first time for each milestone.</summary>
+    bool FirstTime(Told milestone)
+    {
+        if ((_told & milestone) != 0) return false;
+        _told |= milestone;
+        return true;
+    }
+
+    /// <summary>A Duffel took a slot in the van's bay: the party hears the milestones (the minimum, the maximum) once each; the tracker line carries the count.</summary>
     void OnLoaded(Duffel duffel)
     {
         var loaded = _bay.Loaded; // counted by the bay itself (the one count): a Duffel taken out lowers it, a reset of the van empties it
-        if (loaded == Heist.Max) Tell($"All {loaded} duffels are loaded: drive the van to {Heist.Drop.Place}.");
-        else if (loaded == Heist.Min) Tell($"{loaded} loaded, enough for the drop: drive the van to {Heist.Drop.Place}, or load up to {Heist.Max} for more Respect.");
+        if (loaded == Heist.Max) { if (FirstTime(Told.VanMax)) Tell($"All {loaded} duffels are loaded: drive the van to {Heist.Drop.Place}."); }
+        else if (loaded == Heist.Min) { if (FirstTime(Told.VanMin)) Tell($"{loaded} loaded, enough for the drop: drive the van to {Heist.Drop.Place}, or load up to {Heist.Max} for more Respect."); }
     }
 
-    /// <summary>A Duffel took a slot on the Receiver: the party hears the minimum and the maximum.</summary>
+    /// <summary>A Duffel took a slot on the Receiver: the party hears the minimum and the maximum, once each.</summary>
     void OnReceived(Duffel duffel)
     {
         var on = Receiver.Loaded;
         var man = ReceiverRules.Man(Receiver.Kind);
-        if (on == Receiver.Capacity) Tell($"{on} duffels are on board: that is all it takes. The leader presses the interact key at the {man} to finish.");
-        else if (on == Heist.Min) Tell($"{on} on board, enough: the leader presses the interact key at the {man} to finish, or unload up to {Heist.Max} for more Respect.");
+        if (on == Receiver.Capacity) { if (FirstTime(Told.DropMax)) Tell($"{on} duffels are on board: that is all it takes. The leader presses the interact key at the {man} to finish."); }
+        else if (on == Heist.Min) { if (FirstTime(Told.DropMin)) Tell($"{on} on board, enough: the leader presses the interact key at the {man} to finish, or unload up to {Heist.Max} for more Respect."); }
     }
 
     /// <summary>The van blew up: the party hears why before the Job fails on its next step (the failure line alone says only that the objective was lost).</summary>

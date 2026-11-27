@@ -88,7 +88,7 @@ internal sealed class DuffelServer
     /// <summary>The throw key's press with empty hands: the last loaded Duffel of the party in the vehicle at whose open cargo area the player stands goes into their hands. True when one did.</summary>
     public bool TakeOut(ServerClient c)
     {
-        if (TakeableBy(c) == null || Book.TakeOut(c.Id, Feet(c)) is not { } d) return false;
+        if (Book.Count == 0 || c.IsBot || !OnFoot(c) || Book.TakeOut(c.Id, Feet(c)) is not { } d) return false;
         GD.Print($"server: {c.Name} #{c.Id} took a {DuffelRules.NameOf(d.Kind)} duffel (id {d.Id}) out of vehicle {d.Owner}");
         return true;
     }
@@ -102,12 +102,12 @@ internal sealed class DuffelServer
     }
 
     /// <summary>
-    /// Every input of a living player on foot, carrier or not (the key's up/down is followed for all, as the client follows it): the throw key. A fresh press while carrying throws the Duffel at once from
+    /// The throw key's press of an input of a living player on foot, carrier or not (<paramref name="pressed"/> is the key's edge, which the caller feeds on every input, held or not, as the client does). A fresh press while carrying throws the Duffel at once from
     /// the eye along the look. A press with empty hands, at the open cargo area of a vehicle that holds one of the player's party's, takes the last loaded one out into their hands (<see cref="TakeOut"/>).
     /// </summary>
-    public void OnInput(ServerClient c, NetInput i)
+    public void OnInput(ServerClient c, NetInput i, bool pressed)
     {
-        if (!c.DuffelKey.Pressed((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0) || !OnFoot(c)) return;
+        if (!pressed || !OnFoot(c)) return;
         if (Book.CarriedBy(c.Id) == null) { TakeOut(c); return; }
         Book.Throw(c.Id, Feet(c) + new NVec3(0, MovementStep.EyeHeight(c.Body.State.Stance), 0), Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
     }
