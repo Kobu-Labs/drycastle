@@ -1,5 +1,6 @@
 using System.Numerics;
 using Drycastle.ShooterCore.Cartel;
+using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Plantation;
 using Xunit;
@@ -107,6 +108,8 @@ public class DrillTests
         Assert.Equal(DrillHold.None, DrillRules.HoldOf(d, 3, false, true, KeyCompetitor.None));
         Assert.Equal(DrillHold.None, DrillRules.HoldOf(d, 3, true, false, KeyCompetitor.None));
         Assert.Equal(DrillHold.None, DrillRules.HoldOf(d, 3, true, true, KeyCompetitor.Duffel)); // a Duffel wins the key
+        Assert.Equal(DrillHold.Set, DrillRules.HoldOf(d, 3, true, true, KeyCompetitor.Corpse | KeyCompetitor.GroundItem)); // a mate's body on the stand spot gives it up
+        Assert.Equal(DrillHold.None, DrillRules.HoldOf(d, 3, true, true, KeyCompetitor.Corpse | KeyCompetitor.Crate));
         d.Work();
         Assert.Equal(DrillHold.None, DrillRules.HoldOf(d, 3, true, true, KeyCompetitor.None)); // running: nothing to hold for
         RunUntil(d, 20);
@@ -116,6 +119,15 @@ public class DrillTests
         Assert.True(DrillRules.InReach(Data, stand, stand + new Vector3(Data.ReachM * 0.9f, 0.2f, 0)));
         Assert.False(DrillRules.InReach(Data, stand, stand + new Vector3(Data.ReachM * 1.1f, 0, 0)));
         Assert.False(DrillRules.InReach(Data, stand, stand + new Vector3(0, Data.ReachUpM + 0.5f, 0))); // the floor above
+    }
+
+    [Fact]
+    public void On_the_client_the_drill_has_the_key_before_a_corpse_and_a_ground_item()
+    {
+        Assert.Equal(InteractOwner.Drill, InteractArbiter.Owner(false, true, true, true, false, drillInReach: true));
+        Assert.False(InteractArbiter.CorpseShowsPrompt(false, false, false, true, false, drillInReach: true));
+        Assert.Equal(InteractOwner.Crate, InteractArbiter.Owner(true, false, false, false, false, drillInReach: true));
+        Assert.Equal(InteractOwner.Duffel, InteractArbiter.Owner(false, false, false, false, false, duffelInReach: true, drillInReach: true));
     }
 
     [Fact]

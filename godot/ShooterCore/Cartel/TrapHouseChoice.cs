@@ -31,11 +31,4 @@ public static class TrapHouseChoice
         }
         return list;
     }
-
-    /// <summary>One of <see cref="Candidates"/> at random, or null when none qualifies.</summary>
-    public static TrapHouseCandidate? Pick(IEnumerable<HouseFloorPlan> houses, RoadGraph roads, float roadMaxM, ICollection<string> inUse, IReadOnlyCollection<Vector3> playerFeet, Random rng)
-    {
-        var all = Candidates(houses, roads, roadMaxM, inUse, playerFeet);
-        return all.Count == 0 ? null : all[rng.Next(all.Count)];
-    }
 }

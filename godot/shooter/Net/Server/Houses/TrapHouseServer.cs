@@ -14,8 +14,9 @@ namespace Drycastle.Shooter.Net.Server.Houses;
 /// The one keeper of the Trap houses (#496, ADR 0046, docs/cartel.md "Trap house") on the server: which hollow houses stand dressed, with what. <see cref="Dress"/> plans a house's props
 /// (<see cref="TrapHousePlanner"/>, trap_house.json), puts them in the world (<see cref="TrapHousesNode"/>: the solid ones are boxes on the World layer) and tells everyone
 /// (<see cref="EventKind.TrapHouseDressed"/>); <see cref="Strip"/> takes them away (<see cref="EventKind.TrapHouseStripped"/>). A joiner is told every dressed house. A new round
-/// strips them all (the Jobs that held them failed with it). The Trap house Job asks <see cref="PickAndDress"/> for its house and strips it when it ends; the spots of the dressing
-/// (defenders' posts, the safe, the Duffel spots) are its own to use. A map without hollow houses, or the arena: nothing here does anything.
+/// strips them all (the Jobs that held them failed with it). The Trap house Job asks <see cref="Pick"/> for its house, dresses it (<see cref="Apply"/>) once its run began and strips it
+/// when it ends; the spots of the dressing (defenders' posts, the safe, the Duffel spots) are its own to use. The admin's /traphouse leaves a house a running Job holds alone
+/// (<see cref="Held"/>). A map without hollow houses, or the arena: nothing here does anything.
 /// </summary>
 internal sealed class TrapHouseServer
 {
@@ -36,11 +37,14 @@ internal sealed class TrapHouseServer
     /// <summary>trap_house.json, when this map has houses to dress (the Drill reads its section).</summary>
     public TrapHouseFile? Data => Node?.Data;
 
-    /// <summary>Whether this map has a house that could be dressed.</summary>
-    public bool On => Node != null;
-
     /// <summary>The dressed houses by building id, with their dressing (props and the spots).</summary>
     public IReadOnlyDictionary<string, TrapHouseDressing> Dressed => _dressed;
+
+    /// <summary>Whether a running Job holds house <paramref name="house"/> (the Job book's <see cref="TrapHouseHeistRules.Key"/>; set once the Cartel is there): /traphouse and /drill leave it alone.</summary>
+    public Func<string, bool> Held { get; set; } = _ => false;
+
+    /// <summary>A house's props were taken away, or it is dressed anew: what stood on its old dressing (the safe's Drill) goes.</summary>
+    public event Action<string>? Stripped;
 
     /// <summary>The roads a Cartel van drives (trap_house.json choice.min_road_width_m), parsed at the first ask.</summary>
     RoadGraph Roads(TrapHouseFile data) => _roads ??= _map != null && _map.RoadsJson.Length > 0 ? RoadGraph.Parse(_map.RoadsJson, data.Choice.MinRoadWidthM) : RoadGraph.Empty;
@@ -48,28 +52,24 @@ internal sealed class TrapHouseServer
     /// <summary>Where the living players' feet are (no house with one inside is taken).</summary>
     List<NVec3> Feet() => _ctx.Players.Values.Where(c => c.Joined && _ctx.IsAlive(c.Id)).Select(c => c.Body.GlobalPosition.ToNumerics()).ToList();
 
-    /// <summary>The houses a Trap house Job may take now: road access for the van, not dressed, not in <paramref name="inUse"/> (another Job's), nobody inside.</summary>
-    public List<TrapHouseCandidate> Candidates(ICollection<string> inUse)
+    /// <summary>The houses a Trap house Job may take now: road access for the van, not dressed (a Job's house is dressed while it runs), nobody inside.</summary>
+    public List<TrapHouseCandidate> Candidates()
     {
         if (Node is not { } node) return new List<TrapHouseCandidate>();
-        var taken = new HashSet<string>(inUse);
-        taken.UnionWith(_dressed.Keys);
-        return TrapHouseChoice.Candidates(node.Houses, Roads(node.Data), node.Data.Choice.RoadMaxM, taken, Feet());
+        return TrapHouseChoice.Candidates(node.Houses, Roads(node.Data), node.Data.Choice.RoadMaxM, _dressed.Keys, Feet());
     }
 
     /// <summary>
-    /// The Job's house: a random one of <see cref="Candidates"/> whose dressing has at least <paramref name="minDuffelSpots"/> Duffel spots, dressed now with a random seed. Null when
-    /// none qualifies (the Job cannot start).
+    /// The Job's house: a random one of <see cref="Candidates"/> whose dressing (planned with a random seed) has at least <paramref name="minDuffelSpots"/> Duffel spots. Only planned:
+    /// nobody sees it until <see cref="Apply"/>, so a Job refused after the pick pops nothing in and out. Null when none qualifies (the Job cannot start).
     /// </summary>
-    public (TrapHouseCandidate House, TrapHouseDressing Dressing)? PickAndDress(ICollection<string> inUse, int minDuffelSpots = 1)
+    public (TrapHouseCandidate House, TrapHouseDressing Dressing)? Pick(int minDuffelSpots = 1)
     {
         if (Node is not { } node) return null;
-        foreach (var c in Candidates(inUse).OrderBy(_ => _rng.Next()))
+        foreach (var c in Candidates().OrderBy(_ => _rng.Next()))
         {
             var d = TrapHousePlanner.Plan(c.House, node.Data, _rng.Next());
-            if (d.Duffels.Count < minDuffelSpots) continue;
-            Apply(node, d);
-            return (c, d);
+            if (d.Duffels.Count >= minDuffelSpots) return (c, d);
         }
         return null;
     }
@@ -79,13 +79,15 @@ internal sealed class TrapHouseServer
     {
         if (Node is not { } node || !node.Plans.TryGetValue(house, out var plan)) return null;
         var d = TrapHousePlanner.Plan(plan, node.Data, seed);
-        Apply(node, d);
+        Apply(d);
         return d;
     }
 
-    /// <summary>A dressing goes into the world and to everyone. Planning a house takes a few milliseconds (the largest about 20): once at a Job's start, not every tick.</summary>
-    void Apply(TrapHousesNode node, TrapHouseDressing d)
+    /// <summary>A dressing goes into the world and to everyone (one already there is replaced). Planning a house takes a few milliseconds (the largest about 20): once at a Job's start, not every tick.</summary>
+    public void Apply(TrapHouseDressing d)
     {
+        if (Node is not { } node) return;
+        if (_dressed.ContainsKey(d.House)) Stripped?.Invoke(d.House);
         node.Show(d.House, d.Props);
         _dressed[d.House] = d;
         _ctx.Broadcast(EventKind.TrapHouseDressed, TrapHouseCodec.EncodeDressed(d.House, d.Props));
@@ -98,19 +100,20 @@ internal sealed class TrapHouseServer
         if (!_dressed.Remove(house)) return false;
         Node?.Hide(house);
         _ctx.Broadcast(EventKind.TrapHouseStripped, TrapHouseCodec.EncodeStripped(house));
+        Stripped?.Invoke(house);
         return true;
     }
 
-    /// <summary>Every dressed house stripped; the count.</summary>
-    public int StripAll()
+    /// <summary>Every dressed house stripped, but those <paramref name="skip"/> says to keep; the count.</summary>
+    int StripAll(Func<string, bool> skip)
     {
         var n = 0;
-        foreach (var house in _dressed.Keys.ToList()) if (Strip(house)) n++;
+        foreach (var house in _dressed.Keys.ToList()) if (!skip(house) && Strip(house)) n++;
         return n;
     }
 
     /// <summary>A new round: no Job outlives it, so no Trap house does.</summary>
-    public void RoundStart() => StripAll();
+    public void RoundStart() => StripAll(_ => false);
 
     /// <summary>The joiner's catch-up: every dressed house with its props.</summary>
     public void SendOnJoin(ServerClient c)
@@ -118,15 +121,20 @@ internal sealed class TrapHouseServer
         foreach (var (house, d) in _dressed) _ctx.SendEvent(c, EventKind.TrapHouseDressed, TrapHouseCodec.EncodeDressed(house, d.Props));
     }
 
-    /// <summary>"/traphouse [nearest|&lt;house id&gt;|off]": dress the hollow house nearest the admin (or that one) as a Trap house now, for everyone, or strip every one.</summary>
+    /// <summary>
+    /// "/traphouse [nearest|&lt;house id&gt;|off]": dress the hollow house nearest the admin (or that one) as a Trap house now, for everyone, or strip every one. A house a running Job holds
+    /// is left alone (its Job would run on with defenders and Duffels in a bare house).
+    /// </summary>
     public void ChatTrapHouse(ServerClient c, IReadOnlyList<string> args)
     {
         if (Node is not { } node) { _ctx.ChatTo(c, ChatLineKind.Error, "This map has no hollow house with a floor plan to dress."); return; }
         var what = args.Count > 0 ? args[0] : "nearest";
         if (what.Equals("off", StringComparison.OrdinalIgnoreCase))
         {
-            var n = StripAll();
-            _ctx.ChatTo(c, ChatLineKind.Info, n == 0 ? "No house is dressed." : $"Stripped {n} trap house{(n == 1 ? "" : "s")}.");
+            var held = _dressed.Keys.Count(Held);
+            var n = StripAll(Held);
+            var left = held == 0 ? "" : $" {held} house{(held == 1 ? " is" : "s are")} a running job's: left dressed.";
+            _ctx.ChatTo(c, ChatLineKind.Info, (n == 0 ? "No house stripped." : $"Stripped {n} trap house{(n == 1 ? "" : "s")}.") + left);
             return;
         }
         HouseFloorPlan? plan;
@@ -141,10 +149,11 @@ internal sealed class TrapHouseServer
             _ctx.ChatTo(c, ChatLineKind.Error, $"No hollow house '{what}' with a floor plan on this map.");
             return;
         }
+        if (plan != null && Held(plan.Id)) { _ctx.ChatTo(c, ChatLineKind.Error, $"Trap house {plan.Id} is a running job's: left as it is."); return; }
         if (plan == null || Dress(plan.Id, _rng.Next()) is not { } d) { _ctx.ChatTo(c, ChatLineKind.Error, "No house to dress."); return; }
         var solid = d.Props.Count(x => node.Data.Props[x.Kind].Solid);
         var safe = d.Safe is { } s ? $"the safe in {s.Room} ({plan.Room(s.Room)?.Type})" : "no safe";
         _ctx.ChatTo(c, ChatLineKind.Info, $"Trap house {plan.Id} ({plan.Parcel}) dressed: {d.Props.Count} props ({solid} solid), {d.Posts.Count} posts, {d.Duffels.Count} Duffel spots, {safe}. "
-            + $"{Candidates(Array.Empty<string>()).Count} houses qualify for a Job now. /traphouse off strips it.");
+            + $"{Candidates().Count} houses qualify for a Job now. /traphouse off strips it.");
     }
 }

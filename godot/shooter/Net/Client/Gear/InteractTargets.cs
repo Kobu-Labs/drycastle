@@ -3,8 +3,9 @@ using Drycastle.ShooterCore.Hud;
 namespace Drycastle.Shooter.Net.Client.Gear;
 
 /// <summary>
-/// What the interact key could act on, on foot, from the last render: the landed crate, the ground item and the corpse in reach, and whether the corpse chooser is up. Each feature
-/// sets its own; who has the key is <see cref="InteractArbiter"/>'s rule over them: a care package in reach owns it before both, a ground item nearer than a corpse before the corpse.
+/// What the interact key could act on, on foot, from the last render: the landed crate, the Duffel, the safe's Drill, the ground item and the corpse in reach, and whether the corpse
+/// chooser is up. Each feature sets its own; who has the key is <see cref="InteractArbiter"/>'s rule over them: a care package in reach owns it first, a ground item nearer than a
+/// corpse before the corpse.
 /// </summary>
 internal sealed class InteractTargets
 {
@@ -18,12 +19,14 @@ internal sealed class InteractTargets
     public ushort? Corpse;
     /// <summary>The lying Duffel the server says this player's key would pick up (null when none).</summary>
     public ushort? Duffel;
+    /// <summary>True while the server says this player's hold would set or fix a safe's Drill (and until a completed hold's key is let go).</summary>
+    public Func<bool> DrillInReach = () => false;
     /// <summary>True while the corpse chooser is up.</summary>
     public Func<bool> ChooserOpen = () => false;
 
-    /// <summary>Who has the interact key on foot: the crate, the ground item, the corpse.</summary>
-    public InteractOwner Owner => InteractArbiter.Owner(Crate != null, GroundItem != null, GroundItemNearest, Corpse != null, ChooserOpen(), duffelInReach: Duffel != null);
+    /// <summary>Who has the interact key on foot: the crate, the Duffel, the Drill, the ground item, the corpse.</summary>
+    public InteractOwner Owner => InteractArbiter.Owner(Crate != null, GroundItem != null, GroundItemNearest, Corpse != null, ChooserOpen(), duffelInReach: Duffel != null, drillInReach: DrillInReach());
 
     /// <summary>The corpse's prompt is shown (not while another has the key or the chooser is up).</summary>
-    public bool CorpseShowsPrompt => InteractArbiter.CorpseShowsPrompt(Crate != null, GroundItem != null, GroundItemNearest, true, ChooserOpen(), Duffel != null);
+    public bool CorpseShowsPrompt => InteractArbiter.CorpseShowsPrompt(Crate != null, GroundItem != null, GroundItemNearest, true, ChooserOpen(), Duffel != null, DrillInReach());
 }

@@ -302,6 +302,7 @@ public partial class NetServer : Node
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
+        _trapHouses.Held = h => _cartel.Jobs.IsReserved(TrapHouseHeistRules.Key(h)); // the admin's /traphouse and /drill leave a running Job's house alone
         BuildVehicles();
         BuildShooting();
         var rounds = new RoundHooks(_streaks, _gunships, _flak, _progress, _bigfoot, _thieves);

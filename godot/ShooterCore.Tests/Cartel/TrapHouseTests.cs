@@ -71,6 +71,13 @@ public class TrapHouseTests
             Assert.True(PlanGeometry.Inside(house.Room(post.Room)!.Polygon, p));
         }
         Assert.Equal(d.Props.Count(p => Data.Props[p.Kind].Duffel != "") * 2, d.Duffels.Count);
+        if (d.Safe is { } safe) // the open safe's cash, at every tier: on its room's floor, never in a wall or a solid prop
+            foreach (var n in Data.Drill.CashDuffels.Distinct())
+                Assert.All(DrillRules.CashSpots(Data.Drill, safe, Data.Props[Data.KindOf("safe")].Depth, n), s =>
+                {
+                    Assert.True(PlanGeometry.Inside(house.Room(safe.Room)!.Polygon, Local(s)), $"a cash duffel of {house.Id} lies outside the safe's room");
+                    Assert.All(floor.Where(p => Data.Props[p.Kind].Solid), p => Assert.False(PlanGeometry.Inside(Foot(p), Local(s)), $"a cash duffel of {house.Id} lies in a {Data.Props[p.Kind].Id}"));
+                });
     }
 
     [Fact]
@@ -149,6 +156,29 @@ public class TrapHouseTests
     }
 
     [Fact]
+    public void Defender_posts_keep_off_the_props_and_the_doorways()
+    {
+        var q = Data.Posts;
+        var none = DefenderPosts.Plan(House, Array.Empty<PropFootprint>(), Data, new Random(1));
+        Assert.Equal(none.Select(p => p.Room).Distinct().Count(), none.Select(p => p.Room).Take(none.Select(p => p.Room).Distinct().Count()).Distinct().Count()); // round-robin
+        var first = none.First(p => p.Room == "r1");
+        var block = PlanGeometry.Rect(Local(first.Pos), new Vector2(0, 1), 1, 1); // a prop where the living room's first post stood
+        var posts = DefenderPosts.Plan(House, new[] { new PropFootprint(Local(first.Pos), 0.71f, block) }, Data, new Random(1));
+        Assert.Contains(posts, p => p.Room == "r1");
+        Assert.All(posts, p =>
+        {
+            var at = Local(p.Pos);
+            Assert.False(PlanGeometry.Inside(block, at));
+            Assert.True(PlanGeometry.ToOutline(block, at) >= q.PropGapM - 1e-3f);
+            Assert.All(House.Doors, d => Assert.True(PlanGeometry.PointSegment(at, d.A, d.B) >= Data.Clearance.DoorClearM - 1e-3f));
+        });
+        var (depth, entrance) = DefenderPosts.Ways(House);
+        Assert.Equal(0, depth["r0"]); // the front door's room
+        Assert.Equal(1, depth["r2"]);
+        Assert.True(Vector2.Distance(entrance["r2"], new Vector2(7, 4)) < 1e-4f); // reached by its link
+    }
+
+    [Fact]
     public void The_dressing_goes_over_the_wire()
     {
         var d = TrapHousePlanner.Plan(House, Data, 1);
@@ -165,6 +195,9 @@ public class TrapHouseTests
         Assert.Equal("w1", TrapHouseCodec.DecodeStripped(TrapHouseCodec.EncodeStripped("w1")));
         Assert.Null(TrapHouseCodec.DecodeDressed(new byte[] { 2, 0x77 }));
         Assert.Null(TrapHouseCodec.DecodeStripped(new byte[] { 5, 0x77 }));
+        Assert.Equal(new byte[] { 2, 0x77, 0x31 }, TrapHouseCodec.EncodeStripped("w1")); // one house id format: u8 length, UTF-8
+        Assert.Equal(TrapHouseCodec.EncodeStripped("w1"), DrillCodec.EncodeCleared("w1"));
+        Assert.Equal(new byte[] { 2, 0x77, 0x31, 0, 0 }, TrapHouseCodec.EncodeDressed("w1", Array.Empty<TrapProp>()));
         Assert.Equal(66, (int)EventKind.TrapHouseDressed);
         Assert.Equal(67, (int)EventKind.TrapHouseStripped);
     }
@@ -184,7 +217,7 @@ public class TrapHouseTests
         Assert.Empty(TrapHouseChoice.Candidates(houses, far, Data.Choice.RoadMaxM, none, nobody));
         Assert.Empty(TrapHouseChoice.Candidates(houses, near, Data.Choice.RoadMaxM, new HashSet<string> { "w1" }, nobody));
         Assert.Empty(TrapHouseChoice.Candidates(houses, near, Data.Choice.RoadMaxM, none, new[] { new Vector3(3, 100, -3) }));
-        Assert.NotNull(TrapHouseChoice.Pick(houses, near, Data.Choice.RoadMaxM, none, new[] { new Vector3(3, 100, 30) }, new Random(1)));
+        Assert.Single(TrapHouseChoice.Candidates(houses, near, Data.Choice.RoadMaxM, none, new[] { new Vector3(3, 100, 30) })); // someone outside: still free
     }
 
     /// <summary>Every hollow house of a real map (TRAP_HOUSE_MAP=out/village/map, the full village) keeps the rules; without the variable nothing is checked.</summary>

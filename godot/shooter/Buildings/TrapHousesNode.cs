@@ -60,10 +60,6 @@ public partial class TrapHousesNode : Node3D
         if (Current == this) Current = null;
     }
 
-    public bool IsDressed(string house) => _dressed.ContainsKey(house);
-
-    public IEnumerable<string> Dressed => _dressed.Keys;
-
     /// <summary>House <paramref name="house"/>'s safe prop (a pivot at its foot, +Z its front; its model under it), or null. A new dressing makes a new one.</summary>
     public Node3D? SafeOf(string house) => _safes.TryGetValue(house, out var s) && IsInstanceValid(s) ? s : null;
 
