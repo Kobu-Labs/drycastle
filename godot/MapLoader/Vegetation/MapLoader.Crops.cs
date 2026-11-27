@@ -75,7 +75,7 @@ public sealed partial class MapLoader
         var done = 0;
         foreach (var g in doc.Groups)
         {
-            if (++done % 8 == 0) yield return (float)done / doc.Groups.Count;
+            yield return (float)done++ / doc.Groups.Count; // one cell a step (below): the caller draws a frame when its time slice is used up
             var spec = doc.Kinds[g.Kind];
             if (!meshes.TryGetValue(g.Kind, out var variants)) meshes[g.Kind] = variants = CropMeshesOf(g.Kind, spec);
             var parent = _chunkRoots.TryGetValue($"chunk_{g.ChunkX}_{g.ChunkY}", out var cr) ? cr : Root;
@@ -85,7 +85,10 @@ public sealed partial class MapLoader
                 var mine = variants.Count == 1 ? g.Instances : g.Instances.Where(i => CropSettings.Variant(i, variants.Count) == v).ToList();
                 var cells = ClutterSettings.Cells(mine).ToList();
                 foreach (var cell in cells)
+                {
                     _cropNodes.Add(AddCropCell(parent, g.Kind, variants.Count > 1 ? v : -1, variants[v], cell, range, spec.IsPlant));
+                    yield return (float)done / doc.Groups.Count;
+                }
             }
             if (spec.IsPlant) sheets.Add((parent, g));
         }

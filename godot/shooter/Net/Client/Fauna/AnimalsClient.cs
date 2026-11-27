@@ -53,7 +53,7 @@ internal sealed class AnimalsClient : IStandingBodies
     public IReadOnlyDictionary<ushort, AnimalView> ById => _animals;
 
     /// <summary>Leaving: the animals go with the owned node.</summary>
-    public void Clear() => _animals.Clear();
+    public void Clear() { _animals.Clear(); _pending.Clear(); }
 
     internal sealed class AnimalView
     {
@@ -138,10 +138,15 @@ internal sealed class AnimalsClient : IStandingBodies
         }
     }
 
-    /// <summary>An animal outside the interest range (ADR 0025) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).</summary>
+    /// <summary>
+    /// An animal outside the interest range (ADR 0025) is hidden and its animation stops; one that comes back starts its clip afresh (its pose is from a keyframe, not from the last time we saw it).
+    /// One that was never in range has no view yet: it is made now.
+    /// </summary>
     void OnDormancy(WorldReplica.Entity e)
     {
-        if (e.Type == AnimalRules.TypeId && _animals.TryGetValue(e.Id, out var v)) SetAnimalDormant(v, e);
+        if (e.Type != AnimalRules.TypeId) return;
+        if (_animals.TryGetValue(e.Id, out var v)) SetAnimalDormant(v, e);
+        else if (!e.Dormant && !_pending.Contains(e.Id)) _pending.Add(e.Id);
     }
 
     static void SetAnimalDormant(AnimalView v, WorldReplica.Entity e)
@@ -153,9 +158,44 @@ internal sealed class AnimalsClient : IStandingBodies
         v.SeenFly = false;
     }
 
+    /// <summary>
+    /// A spawned animal gets its view (model, clips, limbs) once it is in the interest range (<see cref="OnDormancy"/>), and then in <see cref="MakePendingViews"/>, a few a frame:
+    /// a joiner is sent every animal of the map, and the first keyframe brings about 200 in range, which took the main thread 0.8 s in one frame.
+    /// </summary>
     void OnSpawned(WorldReplica.Entity e)
     {
-        if (e.Type != AnimalRules.TypeId) return;
+        if (e.Type == AnimalRules.TypeId && !e.Dormant) _pending.Add(e.Id);
+    }
+
+    /// <summary>Animals in range that have no view yet, by entity id.</summary>
+    readonly List<ushort> _pending = new();
+    /// <summary>The main thread's time a frame for making animal views (one is made in any case): about 4 ms each.</summary>
+    const double ViewBudgetMs = 4;
+
+    /// <summary>Makes the views of <see cref="_pending"/> nearest the camera first, until the frame's budget is spent.</summary>
+    void MakePendingViews()
+    {
+        if (_pending.Count == 0) return;
+        var cam = _ctx.Root.GetViewport().GetCamera3D()?.GlobalPosition ?? Vector3.Zero;
+        var at = new NVec3(cam.X, cam.Y, cam.Z);
+        var until = System.Diagnostics.Stopwatch.GetTimestamp() + (long)(ViewBudgetMs * System.Diagnostics.Stopwatch.Frequency / 1000);
+        do
+        {
+            var best = 0;
+            var bestD = float.MaxValue;
+            for (var i = 0; i < _pending.Count; i++)
+            {
+                var d = _ctx.WorldEntities.Entities.TryGetValue(_pending[i], out var p) ? NVec3.DistanceSquared(p.State.Position, at) : 0f; // a gone one is dropped first
+                if (d < bestD) { bestD = d; best = i; }
+            }
+            var id = _pending[best];
+            _pending.RemoveAt(best);
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && !e.Dormant && !_animals.ContainsKey(id)) MakeView(e);
+        } while (_pending.Count > 0 && System.Diagnostics.Stopwatch.GetTimestamp() < until);
+    }
+
+    void MakeView(WorldReplica.Entity e)
+    {
         var species = AnimalRules.SpeciesOf(e.State.Owner);
         if (species >= _data.Animals.Count)
         {
@@ -178,7 +218,6 @@ internal sealed class AnimalsClient : IStandingBodies
         if (def.Fx == UnicornFx.Id) view.Fx = UnicornFx.Attach(node, modelRoot, def.VanishSeconds);
         if (def.Fx == PhoenixFx.Id) view.Phoenix = PhoenixFx.Attach(node, modelRoot, _wildlife.Phoenix?.BurnSeconds ?? 6f);
         _animals[e.Id] = view;
-        if (e.Dormant) SetAnimalDormant(view, e); // spawned outside the interest range: hidden until a keyframe shows it
     }
 
     /// <summary>
@@ -217,6 +256,7 @@ internal sealed class AnimalsClient : IStandingBodies
 
     void OnDespawned(ushort id)
     {
+        _pending.Remove(id);
         if (!_animals.Remove(id, out var v)) return;
         v.Node.QueueFree();
     }
@@ -224,6 +264,7 @@ internal sealed class AnimalsClient : IStandingBodies
     /// <summary>Places the animals (interpolated, a little in the past like every remote body) and plays the clip of their state.</summary>
     public void Render()
     {
+        MakePendingViews();
         if (_animals.Count == 0 || _ctx.LastTick == 0) return;
         TickMarks();
         var rt = _ctx.RenderTick;

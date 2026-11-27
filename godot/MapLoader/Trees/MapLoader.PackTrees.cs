@@ -444,20 +444,24 @@ public sealed partial class MapLoader
         return id;
     }
 
-    /// <summary>The files of the pack tree models the configuration names (for the model prefetch); none without pack trees.</summary>
+    /// <summary>The files of the pack models the configuration names (for the model prefetch): the trees, the ground objects' and the undergrowth's; none without pack trees.</summary>
     IEnumerable<string> PackModelPaths()
     {
         if (_packCfg is not { } cfg) return Array.Empty<string>();
         var paths = new List<string>();
-        PackModelSets.Build(cfg, e =>
+        void Add(PackTreeEntry e)
         {
-            if (_packDirs.TryGetValue(e.Pack, out var dir))
-            {
-                var file = _packFiles.TryGetValue(e.Pack, out var files) && files.TryGetValue(e.Name, out var f) ? f : null;
-                paths.Add(file != null && File.Exists(Path.Combine(dir, file)) ? Path.Combine(dir, file) : Path.Combine(dir, e.Name + ".glb"));
-            }
-            return null;
-        });
+            if (!_packDirs.TryGetValue(e.Pack, out var dir)) return;
+            var file = _packFiles.TryGetValue(e.Pack, out var files) && files.TryGetValue(e.Name, out var f) ? f : null;
+            paths.Add(file != null && File.Exists(Path.Combine(dir, file)) ? Path.Combine(dir, file) : Path.Combine(dir, e.Name + ".glb"));
+        }
+        PackModelSets.Build(cfg, e => { Add(e); return null; });
+        if (_packGround != null) // InitGroundObjects: the swamp's dead trees, reeds and moss were parsed, their textures decoded, on the main thread
+            foreach (var kind in _packGround.Objects.Select(o => o.Kind).Distinct())
+                if (cfg.GroundObjects.Kinds.TryGetValue(kind, out var kc))
+                    foreach (var e in kc.Models) if (e.Weight > 0) Add(e);
+        if (cfg.Undergrowth.Enabled) // InitUndergrowth
+            foreach (var e in cfg.Undergrowth.Mixes.SelectMany(m => m.Kinds).SelectMany(k => k.Models)) if (e.Weight > 0) Add(e);
         return paths;
     }
 

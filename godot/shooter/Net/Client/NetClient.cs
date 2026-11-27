@@ -109,6 +109,16 @@ public partial class NetClient : Node
     readonly StateMachine<LinkPhase> _link = new(ConnectionPhases.Link);
     /// <summary>A welcome was received at some point (it stays true after a failure or a leave: the perf and telemetry output still flush, and Fail tells the menu whether the match was joined).</summary>
     bool _welcomed;
+    /// <summary>The join's backlog is applied (EventKind.JoinSynced): the loading screen ended. Until then a failure is a failed join.</summary>
+    bool _synced;
+    /// <summary>
+    /// Between the welcome and JoinSynced: the packets of the join (a WorldSpawn per world entity, the houses, about 3 s of work on the main thread)
+    /// are applied in slices of <see cref="CatchUpSliceMs"/>, a frame drawn between them under the loading screen; the rest wait in <see cref="_inbox"/>, in order.
+    /// </summary>
+    bool _catchingUp;
+    const int CatchUpSliceMs = 50; // the loading screen's map slices (Shooter.LoadingSliceMs)
+    readonly Queue<byte[]> _inbox = new();
+    long _sliceEnd;
     bool OwnSpawned => _link.Is(LinkPhase.Spawned);
     bool LinkEnded => _link.Current.IsEnded();
     ushort _seq;
@@ -377,9 +387,9 @@ public partial class NetClient : Node
         FreeOwned(); // also when the client leaves without Teardown
     }
 
-    /// <summary>Menu mode: raised instead of quitting when the connection fails or drops (the reason is short, for the error message).</summary>
+    /// <summary>Menu mode: raised instead of quitting when the connection fails or drops (the reason is short, for the error message); the flag: the join had completed (<see cref="OnWelcomed"/>).</summary>
     public Action<string, bool>? OnFailed;
-    /// <summary>Menu mode: raised once the server's welcome arrived (the match is joined).</summary>
+    /// <summary>Menu mode: raised once the join is applied: the server's welcome and everything it sent with it (EventKind.JoinSynced).</summary>
     public Action? OnWelcomed;
 
     /// <summary>Leaves the server and removes everything this client put into the world (back to the main menu).</summary>
@@ -451,7 +461,7 @@ public partial class NetClient : Node
     void Fail(string why)
     {
         GD.PrintErr($"client: {why}");
-        var joined = _welcomed;
+        var joined = _synced;
         _link.Enter(LinkPhase.Failed);
         if (OnFailed != null) { OnFailed(why, joined); return; }
         if (Bot) GD.Print("SHOOTER_NET_CLIENT_FAIL");
@@ -479,7 +489,12 @@ public partial class NetClient : Node
         _screens.UpdateMapCursor();
         if (_volumes.On) _volumes.Update();
         var t = ClientProf.Begin();
-        _server.Poll(() => new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, Sandbox.Requested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0), OnServerGone, OnPacket);
+        var tp = System.Diagnostics.Stopwatch.GetTimestamp(); // LoadFrameProbe: the parts of the first frames in the match
+        _sliceEnd = tp + CatchUpSliceMs * System.Diagnostics.Stopwatch.Frequency / 1000;
+        DrainInbox(all: false);
+        _server.Poll(() => new HelloMsg(Wire.ProtocolVersion, PlayerName, Token, Sandbox.Requested ? HelloFlags.Sandbox : (byte)0, Map?.BuildHash ?? 0),
+            () => { DrainInbox(all: true); OnServerGone(); }, Receive); // a refusal's reason is in the inbox before the disconnect
+        tp = Dev.LoadFrameProbe.Part("client: packets", tp);
         t = ClientProf.Lap(ClientProf.S.Net, t);
         if (_link.Is(LinkPhase.Connecting))
         {
@@ -489,21 +504,28 @@ public partial class NetClient : Node
         }
         Loadouts.PumpAutosave(); // loadout saves whose debounce ran out go out here, whichever screen is open (#145)
         RenderPlayersAndProps(delta);
+        tp = Dev.LoadFrameProbe.Part("client: players, props", tp);
         t = ClientProf.Lap(ClientProf.S.Players, t);
         RenderCreatures(delta);
+        tp = Dev.LoadFrameProbe.Part("client: creatures", tp);
         t = ClientProf.Lap(ClientProf.S.Creatures, t);
         _death.Update(delta);
         _pounce.Update(delta);
+        tp = Dev.LoadFrameProbe.Part("client: death, pounce", tp);
         t = ClientProf.Lap(ClientProf.S.View, t);
         RenderVehicles(delta);
+        tp = Dev.LoadFrameProbe.Part("client: vehicles", tp);
         t = ClientProf.Lap(ClientProf.S.Vehicles, t);
         RenderProjectiles(delta);
+        tp = Dev.LoadFrameProbe.Part("client: projectiles", tp);
         t = ClientProf.Lap(ClientProf.S.Projectiles, t);
         UpdateView(delta);
+        tp = Dev.LoadFrameProbe.Part("client: view", tp);
         t = ClientProf.Lap(ClientProf.S.View, t);
         _hud.Update();
         _rozhlas.MicFrame(); // the set holder's mic and the ON AIR cue
         _rozhlasTest?.MicTick(_rozhlas.HoldsSet);
+        Dev.LoadFrameProbe.Part("client: hud", tp);
         ClientProf.End(ClientProf.S.Hud, t);
     }
 
@@ -579,18 +601,37 @@ public partial class NetClient : Node
         if (!LinkEnded) Fail(_rejectReason ?? "server disconnected");
     }
 
+    bool OverSlice => _catchingUp && System.Diagnostics.Stopwatch.GetTimestamp() > _sliceEnd;
+
+    /// <summary>A packet from the server: applied now, or queued behind the ones waiting while the join catches up.</summary>
+    void Receive(byte[] d)
+    {
+        if (_inbox.Count > 0 || OverSlice) _inbox.Enqueue(d);
+        else OnPacket(d);
+    }
+
+    void DrainInbox(bool all)
+    {
+        while (_inbox.Count > 0 && (all || !OverSlice)) OnPacket(_inbox.Dequeue());
+    }
+
     void OnPacket(byte[] d)
     {
         if (d.Length == 0) return;
         var t = ClientProf.Begin();
+        var tp = System.Diagnostics.Stopwatch.GetTimestamp(); // LoadFrameProbe: what the first packets in the match cost
         if (d[0] < Wire.TInput)
         {
             var m = Wire.DecodeReliable(d);
             OnReliable(m);
             Report.Event(m is EventMsg e ? e.Kind : (byte)0, ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetEvents, t));
+            if (Dev.LoadFrameProbe.On)
+                Dev.LoadFrameProbe.Part(m is not EventMsg pe ? $"packet {m?.GetType().Name}"
+                    : pe.Kind == (byte)EventKind.WorldSpawn && pe.Payload.Length > 2 ? $"packet event WorldSpawn {WorldEntityRegistry.Shared.Find(pe.Payload[2])?.Name ?? pe.Payload[2].ToString()}"
+                    : $"packet event {(EventKind)pe.Kind}", tp);
         }
-        else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); }
-        else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); }
+        else if (d[0] == Wire.TSnapshot) { OnSnapshot(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetSnapshot, t); Dev.LoadFrameProbe.Part("packet snapshot", tp); }
+        else if (d[0] == Wire.TWorldSnapshot) { WorldEntities.Apply(d); ClientProf.Move(ClientProf.S.Net, ClientProf.S.NetWorld, t); Dev.LoadFrameProbe.Part("packet world snapshot", tp); }
         else if (d[0] == Wire.TRozhlasFeed && RozhlasFeedWire.TryDecode(d, out var feedSeq, out var feedOpus)) { RozhlasFeedPlayer.Current?.Push(feedSeq, feedOpus); _rozhlasTest?.OnFeedFrame(feedOpus); } // the live rozhlas feed (silent when headless)
     }
 
@@ -614,6 +655,9 @@ public partial class NetClient : Node
             case LeaveMsg l:
                 OnLeave(l);
                 break;
+            case EventMsg { Kind: (byte)EventKind.JoinSynced }:
+                OnJoinSynced();
+                break;
             case EventMsg e:
                 DispatchEvent((EventKind)e.Kind, e.Payload);
                 break;
@@ -623,19 +667,35 @@ public partial class NetClient : Node
     /// <summary>The server's welcome: the player's id, the day clock, the predicted body with its camera and viewmodel, the HUD.</summary>
     void OnWelcome(WelcomeMsg w)
     {
-        Ctx.MyId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
+        var tw0 = System.Diagnostics.Stopwatch.GetTimestamp();
+        Ctx.MyId = w.PlayerId; _welcomed = true; _catchingUp = true; _link.Enter(LinkPhase.Welcomed);
+        Dev.LoadFrameProbe.Mark("catch-up");
         _rozhlas.Reset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
         DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
         CasingFx.Water = Water;
         Ctx.Me = new Player { Name = "Me", UseCamera = !Bot, AutoSim = false, Authoritative = false, CaptureMouse = !Bot && !Report.PerfPlay, SelfManageMouse = UiShell.Instance == null, KillY = KillY, Water = Water, Ladders = ObjectLadders.WithObjects(Shelters.FromJsonOrEmpty(Map?.BunkersJson, m => GD.PrintErr($"client: {m}; no ladders")).Ladders, Map), Bodies = _animals };
         World.AddChild(Ctx.Me);
+        var tw = Dev.LoadFrameProbe.Part("welcome: player", tw0);
         Ctx.Viewmodel.Create();
+        tw = Dev.LoadFrameProbe.Part("welcome: viewmodel", tw);
         if (!Bot && ShotFx.Enabled) GlassFx.WarmUp(Ctx.Me.Camera); // the glass shaders compile now, not at the first crack
+        tw = Dev.LoadFrameProbe.Part("welcome: glass warm-up", tw);
         if (WeaponsBot != "" || CarBot != "" || _fxDemo.Mode.StartsWith("vehicle:")) SmokeArena.AddColliders(World);
         if (Bot) Ctx.Me.InputOverride = new MoveInput { SpeedScale = 1 };
         HudWelcome();
-        OnWelcomed?.Invoke();
+        Dev.LoadFrameProbe.Part("welcome: hud", tw);
         GD.Print($"client: welcome, id {Ctx.MyId}, server tick {w.ServerTick}");
+    }
+
+    /// <summary>The server sent everything of the join, and it is applied: the match starts on screen (<see cref="OnWelcomed"/>).</summary>
+    void OnJoinSynced()
+    {
+        if (_synced) return;
+        _synced = true; _catchingUp = false;
+        var t = System.Diagnostics.Stopwatch.GetTimestamp();
+        OnWelcomed?.Invoke();
+        Dev.LoadFrameProbe.Part("synced: the shell (BeginGame)", t);
+        GD.Print("client: join synced");
     }
 
     /// <summary>A player left: everything the client keeps per player goes.</summary>

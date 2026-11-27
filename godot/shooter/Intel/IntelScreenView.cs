@@ -282,16 +282,18 @@ sealed partial class IntelEmblem : Control
 /// A square map of the surroundings of an event: the shared map base around its place (terrain texture and roads), a ring and a
 /// cross on the place, and a north mark. Without a place it is a hatched panel that says so. Redrawn only when it is set.
 /// </summary>
-sealed partial class IntelMapTile : Control
+public sealed partial class IntelMapTile : Control
 {
     /// <summary>Metres across the window the tile shows, and the side of the terrain texture it takes from the shared base.</summary>
     const float WindowM = 600f;
-    const int TextureSide = 1024;
+    /// <summary>The map texture's side (texels); <see cref="Shooter"/> has it made while the map loads.</summary>
+    public const int TextureSide = 1024;
 
     MapBase? _map;
     NVec2? _at;
     float? _radius;
     ImageTexture? _tex;
+    int _texSide;
 
     public IntelMapTile(int side)
     {
@@ -324,9 +326,12 @@ sealed partial class IntelMapTile : Control
         var window = Math.Min(_radius is { } rad ? Math.Max(WindowM, rad * 2.6f) : WindowM, b.SideMetres); // an area shows whole when it fits
         var x0 = Math.Clamp(g.X - window / 2, b.Origin.X, b.Origin.X + b.SideMetres - window); // the window stays on the map
         var z0 = Math.Clamp(g.Y - window / 2, b.Origin.Y, b.Origin.Y + b.SideMetres - window);
-        _tex ??= b.Texture(TextureSide);
-        var texels = TextureSide / b.SideMetres;
-        DrawTextureRectRegion(_tex, r, new Rect2((x0 - b.Origin.X) * texels, (z0 - b.Origin.Y) * texels, window * texels, window * texels));
+        if (_tex == null && b.TryTexture(TextureSide, out var built) is { } made) { _tex = made; _texSide = built; } // made on a worker: the next refresh (each second) shows it
+        if (_tex != null)
+        {
+            var texels = _texSide / b.SideMetres;
+            DrawTextureRectRegion(_tex, r, new Rect2((x0 - b.Origin.X) * texels, (z0 - b.Origin.Y) * texels, window * texels, window * texels));
+        }
         var px = r.Size.X / window;
         var origin = new Vector2(x0, z0);
         var win = new Rect2(x0, z0, window, window);

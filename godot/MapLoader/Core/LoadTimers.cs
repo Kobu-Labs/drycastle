@@ -18,6 +18,9 @@ public static class LoadTimers
 
     public static long Start() => Stopwatch.GetTimestamp();
 
+    /// <summary>Stopwatch ticks in milliseconds.</summary>
+    public static double Ms(long ticks) => ticks * 1000.0 / Stopwatch.Frequency;
+
     /// <summary>Adds the time since <paramref name="since"/> to <paramref name="key"/>; returns now, for the next lap.</summary>
     public static long Lap(string key, long since)
     {

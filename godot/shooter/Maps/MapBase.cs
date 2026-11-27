@@ -201,29 +201,38 @@ public sealed class MapBase
     }
 
     /// <summary>
-    /// A texture near <paramref name="wanted"/> texels (within <see cref="MinimapView.NeedsRebuild"/>'s tolerance), built at <paramref name="built"/> texels, or null while it is being made. The world sheet with a top-down picture
-    /// is rasterised on a worker thread (decoding and resizing the picture would stall a frame for a second), so the caller asks again next frame; every other base makes it at once. Starts a build when none is near.
+    /// A texture near <paramref name="wanted"/> texels (within <see cref="MinimapView.NeedsRebuild"/>'s tolerance), built at <paramref name="built"/> texels, or null while it is being made: it is
+    /// rasterised on a worker thread (the village sheet took the main thread 1.1 s, the world sheet's picture a second), so the caller asks again next frame. Starts a build when none is near; the
+    /// terrain meshes are read here, on the main thread, and the worker paints from the copy.
     /// </summary>
     public ImageTexture? TryTexture(int wanted, out int built)
     {
         foreach (var (k, t) in _textures)
             if (!MinimapView.NeedsRebuild(k, wanted)) { built = k; return t; }
         built = wanted;
-        if (!_world || !HasTopDownFiles) return Texture(wanted);
         foreach (var (k, task) in _building.ToList())
         {
             if (MinimapView.NeedsRebuild(k, wanted)) continue;
             if (!task.IsCompleted) { built = k; return null; } // on its way
             _building.Remove(k);
+            if (_building.Count == 0) _terrainCopy = null;
             built = k;
             var img = task.IsCompletedSuccessfully ? task.Result : null;
             if (img == null) return Texture(k); // the picture was unreadable: the terrain colours, made here
             if (_textures.Count >= MaxTextures) _textures.Clear();
-            return _textures[k] = ImageTexture.CreateFromImage(img);
+            using (img) return _textures[k] = ImageTexture.CreateFromImage(img);
         }
-        _building[wanted] = Task.Run(() => RasteriseWorld(wanted));
+        if (_world && HasTopDownFiles) _building[wanted] = Task.Run(() => RasteriseWorld(wanted));
+        else
+        {
+            var terrain = _terrainCopy ??= TerrainTriangles();
+            _building[wanted] = Task.Run<Image?>(() => RasteriseImage(wanted, terrain));
+        }
         return null;
     }
+
+    /// <summary>The terrain meshes' triangles while a build runs (they are read once for the builds in flight, then dropped: a few tens of MB).</summary>
+    List<(Vector3[] V, Color[] C, int[] I)>? _terrainCopy;
 
     /// <summary>Starts building the world sheet's texture near <paramref name="wanted"/> texels without waiting for it (the map is not open yet).</summary>
     public void Prewarm(int wanted) => TryTexture(wanted, out _);
@@ -252,12 +261,19 @@ public sealed class MapBase
     /// <summary>Rasterises the parcel fills into a square of <paramref name="side"/> texels, with mipmaps. Each row takes its edge crossings once (scanline fill), and the image is built from one byte buffer.</summary>
     ImageTexture Rasterise(int side)
     {
+        using var img = RasteriseImage(side, TerrainTriangles());
+        return ImageTexture.CreateFromImage(img);
+    }
+
+    /// <summary>The picture <see cref="Rasterise"/> uploads, painted from <paramref name="triangles"/> (<see cref="TerrainTriangles"/>); touches no scene object, so it runs on any thread.</summary>
+    Image RasteriseImage(int side, List<(Vector3[] V, Color[] C, int[] I)> triangles)
+    {
         var metresPerTexel = SideMetres / side;
         var px = new byte[side * side * 4];
         var terrain = Rgba(Terrain);
         for (var i = 0; i < px.Length; i += 4) Buffer.BlockCopy(terrain, 0, px, i, 4);
         // the real ground colour from the terrain mesh wherever the map has terrain; the default shows where it is cut off. A map with no terrain mesh falls back to flat parcel colours.
-        if (!PaintTerrain(px, side, metresPerTexel))
+        if (!PaintTerrain(px, side, metresPerTexel, triangles))
         {
             foreach (var parcel in _map.Parcels.Values)
                 Fill(px, side, metresPerTexel, Rgba(ParcelColour(parcel.Kind)), parcel.Rings.Select(r => r.Select(v => new NVector2(v.X, v.Y)).ToArray()).ToList(), parcel.Bounds);
@@ -272,9 +288,9 @@ public sealed class MapBase
         for (var i = 0; i < px.Length; i += 4)
             if (!_world && inside[i + 3] == 0) Buffer.BlockCopy(terrain, 0, px, i, 4); // the world sheet keeps the terrain's own colours past the parcels
         PaintTopDown(px, null, side, metresPerTexel); // the picture over every texel it has, as on the tactical map
-        using var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
+        var img = Image.CreateFromData(side, side, false, Image.Format.Rgba8, px);
         img.GenerateMipmaps();
-        return ImageTexture.CreateFromImage(img);
+        return img;
     }
 
     /// <summary>RGBA mask of <paramref name="side"/> texels: alpha 255 inside a parcel. The ground outside every parcel is not part of the game: it takes the plain terrain colour, so the terrain mesh and the patch paints that reach past the village polygon do not show.</summary>
@@ -354,10 +370,10 @@ public sealed class MapBase
         return _topDown != null && _topDownExtent is { } t ? (_topDown, t) : null;
     }
 
-    /// <summary>Rasterises the terrain meshes' triangles with their interpolated vertex colours (top-down, so each texel is the ground colour at that point). False when there is no coloured terrain.</summary>
-    bool PaintTerrain(byte[] px, int side, float metresPerTexel)
+    /// <summary>The terrain meshes' vertices, vertex colours and indices, surface by surface (the coloured ones). Main thread: a mesh is a scene resource.</summary>
+    List<(Vector3[] V, Color[] C, int[] I)> TerrainTriangles()
     {
-        var any = false;
+        var surfaces = new List<(Vector3[] V, Color[] C, int[] I)>();
         foreach (var mi in _map.TerrainVisuals)
         {
             if (!GodotObject.IsInstanceValid(mi) || mi.Mesh is not { } mesh) continue;
@@ -366,20 +382,27 @@ public sealed class MapBase
                 var arrays = mesh.SurfaceGetArrays(s);
                 var v = arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array();
                 var col = arrays[(int)Mesh.ArrayType.Color].AsColorArray();
-                var idx = arrays[(int)Mesh.ArrayType.Index].AsInt32Array();
-                if (col.Length != v.Length) continue;
-                var n = idx.Length > 0 ? idx.Length : v.Length;
-                for (var t = 0; t + 2 < n; t += 3)
-                {
-                    var a = idx.Length > 0 ? idx[t] : t;
-                    var b = idx.Length > 0 ? idx[t + 1] : t + 1;
-                    var c = idx.Length > 0 ? idx[t + 2] : t + 2;
-                    Triangle(px, side, metresPerTexel, v[a], v[b], v[c], col[a], col[b], col[c]);
-                }
-                any = true;
+                if (col.Length == v.Length) surfaces.Add((v, col, arrays[(int)Mesh.ArrayType.Index].AsInt32Array()));
             }
         }
-        return any;
+        return surfaces;
+    }
+
+    /// <summary>Rasterises the terrain meshes' triangles with their interpolated vertex colours (top-down, so each texel is the ground colour at that point). False when there is no coloured terrain.</summary>
+    bool PaintTerrain(byte[] px, int side, float metresPerTexel, List<(Vector3[] V, Color[] C, int[] I)> terrain)
+    {
+        foreach (var (v, col, idx) in terrain)
+        {
+            var n = idx.Length > 0 ? idx.Length : v.Length;
+            for (var t = 0; t + 2 < n; t += 3)
+            {
+                var a = idx.Length > 0 ? idx[t] : t;
+                var b = idx.Length > 0 ? idx[t + 1] : t + 1;
+                var c = idx.Length > 0 ? idx[t + 2] : t + 2;
+                Triangle(px, side, metresPerTexel, v[a], v[b], v[c], col[a], col[b], col[c]);
+            }
+        }
+        return terrain.Count > 0;
     }
 
     /// <summary>One triangle (ground x, z from the vertices' X and Z) into the texel grid: every texel centre inside it takes the barycentric blend of the three colours.</summary>

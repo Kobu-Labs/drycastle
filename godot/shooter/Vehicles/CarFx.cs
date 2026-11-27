@@ -17,14 +17,6 @@ public static class CarFx
         if (ShotFx.Enabled) Load(model);
     }
 
-    /// <summary>Warms the model and every skin of a vehicle type.</summary>
-    public static void Warm(VehicleDef def)
-    {
-        if (def.Model == "") return;
-        Warm(def.Model);
-        foreach (var skin in def.Skins) Warm(skin);
-    }
-
     /// <summary>Loads a model of the private asset library by its id ("pack:synty-farm/..."), a scene not in the tree; set by the shell once the map (which owns that library) is up. Null: not available, the vehicle is a box.</summary>
     public static Func<string, Node3D?>? PackLoader;
     static readonly HashSet<string> PackWarned = new();
