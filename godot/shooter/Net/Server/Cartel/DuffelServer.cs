@@ -12,10 +12,11 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// <summary>
 /// The Duffels on the server (GLOSSARY "Duffel"; docs/cartel.md "Duffels"; duffels.json). The pure part is <see cref="DuffelBook"/> (world entity 62); this class feeds it the players: the interact key's
 /// press picks one up (<see cref="TryPickUp"/>), the throw key (<see cref="MoveButtons.DuffelThrow"/>, counted from the inputs by <see cref="DuffelThrowKey"/>) throws or drops it, a carrier's death,
-/// leaving or a seat drops it where they were, a carrier is refused a vehicle seat with a notice (<see cref="RefuseSeat"/>), and the body's <see cref="Characters.Player.Burden"/> follows what it carries.
+/// leaving the server or the party or a seat drops it where they were, a carrier is refused a vehicle seat with a notice (<see cref="RefuseSeat"/>), and the body's <see cref="Characters.Player.Burden"/>
+/// follows what it carries: set in one place, from the book's <see cref="DuffelBook.CarrierChanged"/>, whoever changed the carrier.
 /// <para>
-/// Seams for the other packages: a Job gives or places Duffels for its party with <see cref="Give"/> and <see cref="Book"/> (<see cref="DuffelBook.Place"/>, <see cref="DuffelBook.RemoveParty"/>), the
-/// Cartel van registers its cargo box with <see cref="DuffelBook.AddVolume"/>. The admin's <c>/duffel kind</c> gives one to the admin (a party of one).
+/// Seams for the other packages: a Job gives or places Duffels for its party with <see cref="Give"/> and <see cref="Book"/> (<see cref="DuffelBook.Place"/>) and takes them away with
+/// <see cref="RemoveParty"/>, the Cartel van registers its cargo box with <see cref="DuffelBook.AddVolume"/>. The admin's <c>/duffel kind</c> gives one to the admin (a party of one).
 /// </para>
 /// </summary>
 internal sealed class DuffelServer
@@ -24,11 +25,12 @@ internal sealed class DuffelServer
     readonly DuffelsFile _data;
     readonly Func<Vector3, ServerCar?> _enterableCar;
     readonly Func<NVec3, bool> _crateInReach;
-    readonly Dictionary<ushort, DuffelThrowKey> _keys = new();
-    /// <summary>The Duffel id each human was last told is in reach (absent: 0).</summary>
-    readonly Dictionary<ushort, ushort> _reachSent = new();
     /// <summary>Where each carrier last stood on foot (the drop point when they leave or are put in a seat).</summary>
     readonly Dictionary<ushort, NVec3> _lastFeet = new();
+    /// <summary>The carried Duffels of this tick (kept: the tick allocates nothing).</summary>
+    readonly List<Duffel> _carried = new();
+    /// <summary>How many humans were told a Duffel is in reach at the last tick (0 with no Duffel: the tick skips the roster).</summary>
+    int _told;
 
     /// <param name="enterableCar">The vehicle the interact key would get a player at the point into (the seats').</param>
     /// <param name="crateInReach">A landed care package is in reach of the point: its hold owns the key before a Duffel (<see cref="ShooterCore.Hud.InteractArbiter"/>).</param>
@@ -36,7 +38,7 @@ internal sealed class DuffelServer
     {
         _ctx = ctx; _data = data; _enterableCar = enterableCar; _crateInReach = crateInReach;
         Book = new DuffelBook(data, ctx.Match.Entities, new DuffelWorld(query));
-        Book.Loaded += (d, _) => GD.Print($"server: a {DuffelRules.NameOf(d.Kind)} duffel (id {d.Id}) is loaded");
+        Book.CarrierChanged += OnCarrierChanged;
     }
 
     /// <summary>Every Duffel (the Job core and the Cartel van plug in here).</summary>
@@ -49,30 +51,23 @@ internal sealed class DuffelServer
     {
         if (!_ctx.IsAlive(carrier.Id)) return null;
         if (Book.CarriedBy(carrier.Id) != null) { _ctx.SendEvent(carrier, EventKind.DuffelNotice, DuffelCodec.EncodeNotice(DuffelNotice.CarryingOne)); return null; }
-        var d = Book.Give(kind, party, carrier.Id, Feet(carrier));
-        if (d != null) Carry(carrier, d);
-        return d;
+        return Book.Give(kind, party, carrier.Id, Feet(carrier));
     }
 
-    /// <summary>Takes every Duffel of the party out of the world (its Job ended) and unburdens whoever carried one. The count removed.</summary>
-    public int RemoveParty(IReadOnlySet<ushort> party)
-    {
-        foreach (var d in Book.Carried()) if (ReferenceEquals(d.Party, party)) Unburden(d.Carrier);
-        return Book.RemoveParty(party);
-    }
+    /// <summary>Takes every Duffel of the party out of the world (its Job ended); whoever carried one is unburdened (<see cref="DuffelBook.CarrierChanged"/>). The count removed. The Jobs' entry point.</summary>
+    public int RemoveParty(IReadOnlySet<ushort> party) => Book.RemoveParty(party);
 
-    void Carry(ServerClient c, Duffel d)
+    /// <summary>
+    /// The one place a body's burden follows what it carries: a new carrier is slowed and stands where they took it, one who carries none any more walks free. The throw key starts a fresh
+    /// hold either way, but keeps its last up/down: X held through the pick-up must be let go first, as the client counts it.
+    /// </summary>
+    void OnCarrierChanged(ushort id, Duffel? d)
     {
-        c.Body.Burden = _data.BurdenOf(d.Kind);
-        _lastFeet[c.Id] = Feet(c);
-        _keys[c.Id] = default;
-    }
-
-    void Unburden(ushort id)
-    {
-        if (_ctx.Players.TryGetValue(id, out var c)) c.Body.Burden = MoveBurden.None;
-        _lastFeet.Remove(id);
-        _keys.Remove(id);
+        if (d == null) _lastFeet.Remove(id);
+        if (!_ctx.Players.TryGetValue(id, out var c)) return;
+        c.Body.Burden = d != null ? _data.BurdenOf(d.Kind) : MoveBurden.None;
+        if (d != null) _lastFeet[id] = Feet(c);
+        c.DuffelKey.Reset();
     }
 
     bool OnFoot(ServerClient c) => c.Car == null && _ctx.IsAlive(c.Id) && _ctx.Tick > c.HeldUntilTick;
@@ -86,7 +81,6 @@ internal sealed class DuffelServer
     {
         if (InReach(c) == null || !Book.PickUp(c.Id, Feet(c))) return false;
         var d = Book.CarriedBy(c.Id)!;
-        Carry(c, d);
         GD.Print($"server: {c.Name} #{c.Id} picked up a {DuffelRules.NameOf(d.Kind)} duffel (id {d.Id})");
         return true;
     }
@@ -99,59 +93,71 @@ internal sealed class DuffelServer
         return true;
     }
 
-    /// <summary>Every input of a living player on foot: the throw key. A tap puts the Duffel down at the feet, a charged release throws it from the eye along the look.</summary>
+    /// <summary>
+    /// Every input of a living player on foot, carrier or not (the key's up/down is followed for all, as the client follows it): the throw key. A tap puts the Duffel down at the feet, a charged
+    /// release throws it from the eye along the look.
+    /// </summary>
     public void OnInput(ServerClient c, NetInput i)
     {
         var carrying = Book.CarriedBy(c.Id) != null;
-        if (!carrying && !_keys.ContainsKey(c.Id)) return;
-        var key = _keys.GetValueOrDefault(c.Id);
-        var release = key.Tick((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0, carrying && OnFoot(c), 1f / Wire.TickRate, _data, out var charge);
-        _keys[c.Id] = key;
+        var release = c.DuffelKey.Tick((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0, carrying && OnFoot(c), 1f / Wire.TickRate, _data, out var charge);
         if (release == DuffelRelease.None) return;
         var feet = Feet(c);
-        var done = release == DuffelRelease.Drop
-            ? Book.Drop(c.Id, feet)
-            : Book.Throw(c.Id, feet + new NVec3(0, MovementStep.EyeHeight(c.Body.State.Stance), 0), Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch), charge);
-        if (done) Unburden(c.Id);
+        if (release == DuffelRelease.Drop) Book.Drop(c.Id, feet);
+        else Book.Throw(c.Id, feet + new NVec3(0, MovementStep.EyeHeight(c.Body.State.Stance), 0), Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch), charge);
     }
 
     /// <summary>
-    /// Every tick, after the shots and blasts: carried Duffels stay with their carriers; a carrier who died drops it where they fell, one who left or was put in a seat where they last stood on foot.
-    /// Then each human is told the Duffel in reach when that changed.
+    /// Every tick, after the shots and blasts: carried Duffels stay with their carriers; a carrier who died drops it where they fell, one who left or was put in a seat where they last stood on foot,
+    /// one who left the party (a squad mate who quit the squad: the Job's party is read live) at their feet, so a party player can take it on. Then each human is told the Duffel in reach when
+    /// that changed.
     /// </summary>
     public void Tick()
     {
-        foreach (var d in Book.Carried())
-        {
-            var id = d.Carrier;
-            if (!_ctx.Players.TryGetValue(id, out var c)) { Book.Drop(id, _lastFeet.GetValueOrDefault(id, d.Position)); Unburden(id); continue; }
-            if (!_ctx.IsAlive(id)) { Book.Drop(id, Feet(c)); Unburden(id); GD.Print($"server: {c.Name} #{id} died and dropped a duffel"); continue; }
-            if (c.Car != null) { Book.Drop(id, _lastFeet.GetValueOrDefault(id, d.Position)); Unburden(id); continue; }
-            var feet = Feet(c);
-            Book.Follow(id, feet);
-            _lastFeet[id] = feet;
-        }
-        if (Book.Count == 0 && _reachSent.Count == 0) return;
+        if (Book.CarriedCount > 0) FollowCarriers();
+        if (Book.Count == 0 && _told == 0) return;
+        var told = 0;
         foreach (var c in _ctx.Roster)
         {
             if (c.IsBot || !c.Joined) continue;
             var now = InReach(c)?.Id ?? 0;
-            if (now == _reachSent.GetValueOrDefault(c.Id)) continue;
-            if (now == 0) _reachSent.Remove(c.Id); else _reachSent[c.Id] = now;
+            if (now != 0) told++;
+            if (now == c.DuffelReach) continue;
+            c.DuffelReach = now;
             _ctx.SendEvent(c, EventKind.DuffelReach, DuffelCodec.EncodeReach(now));
         }
-        foreach (var gone in _reachSent.Keys.Where(id => !_ctx.Players.ContainsKey(id)).ToList()) _reachSent.Remove(gone);
+        _told = told;
     }
 
-    /// <summary>A new round: the match cleared the entities; every body is unburdened and nothing is in reach.</summary>
+    void FollowCarriers()
+    {
+        Book.Carried(_carried);
+        foreach (var d in _carried)
+        {
+            var id = d.Carrier;
+            if (!_ctx.Players.TryGetValue(id, out var c)) { Book.Drop(id, _lastFeet.GetValueOrDefault(id, d.Position)); continue; }
+            if (!_ctx.IsAlive(id)) { Book.Drop(id, Feet(c)); GD.Print($"server: {c.Name} #{id} died and dropped a duffel"); continue; }
+            if (c.Car != null) { Book.Drop(id, _lastFeet.GetValueOrDefault(id, d.Position)); continue; }
+            var feet = Feet(c);
+            if (!d.MayTouch(id)) { Book.Drop(id, feet); GD.Print($"server: {c.Name} #{id} left the duffel's party and dropped it"); continue; }
+            Book.Follow(id, feet);
+            _lastFeet[id] = feet;
+        }
+        _carried.Clear();
+    }
+
+    /// <summary>A new round: the match cleared the entities (every carrier was unburdened as its Duffel went); nothing is in reach.</summary>
     public void RoundStart()
     {
-        foreach (var d in Book.Carried()) Unburden(d.Carrier);
         Book.Reset();
-        _keys.Clear(); _lastFeet.Clear();
-        foreach (var c in _ctx.Roster) c.Body.Burden = MoveBurden.None;
-        foreach (var (id, _) in _reachSent) if (_ctx.Players.TryGetValue(id, out var c)) _ctx.SendEvent(c, EventKind.DuffelReach, DuffelCodec.EncodeReach(0));
-        _reachSent.Clear();
+        _lastFeet.Clear();
+        foreach (var c in _ctx.Roster)
+        {
+            if (c.DuffelReach == 0) continue;
+            c.DuffelReach = 0;
+            _ctx.SendEvent(c, EventKind.DuffelReach, DuffelCodec.EncodeReach(0));
+        }
+        _told = 0;
     }
 
     /// <summary>"/duffel kind" (TEST): a Duffel of that kind in the admin's hands, the admin a party of one.</summary>
