@@ -109,11 +109,18 @@ internal sealed class HeistServer
         return (new NVec3(p.X, Ground(p.X, p.Y), p.Y), contact.YawDeg * MathF.PI / 180f);
     }
 
-    /// <summary>An Assault is due for <paramref name="run"/>: a Rival crew van to the objective, hostile to the party, unless max_assaults_alive of the Heist's are still in the fight (<see cref="HeistAssaults.MaySend"/>).</summary>
-    public void LaunchAssault(HeistRun run)
+    /// <summary>
+    /// An Assault is due for <paramref name="run"/> (its clock, or an admin's <c>/cartel assault</c>): a Rival crew van to the objective, hostile to the party, unless max_assaults_alive of the
+    /// Heist's are still in the fight (<see cref="HeistAssaults.MaySend"/>). Null when it was sent; else why not.
+    /// </summary>
+    public string? LaunchAssault(HeistRun run)
     {
         var assaults = run.Assaults;
-        if (!assaults.MaySend) { GD.Print($"server: {run.Job}: an Assault is due, {assaults.InFightCount} still fight: none sent"); return; }
+        if (!assaults.MaySend)
+        {
+            GD.Print($"server: {run.Job}: an Assault is due, {assaults.InFightCount} still fight: none sent");
+            return $"No Assault sent: {assaults.InFightCount} of this heist's are still in the fight (max_assaults_alive {run.Data.MaxAssaultsAlive}).";
+        }
         var (gunmen, enforcers) = HeistRules.AssaultCrew(run.Data, run.Job.Tier, run.Party.Count);
         var party = run.Party;
         var centre = run.Goal.Centre;
@@ -122,10 +129,11 @@ internal sealed class HeistServer
         if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, CrewRules.Order(gunmen, enforcers), crew, centre) is not { } raid)
         {
             _rivals.Remove(crew);
-            return;
+            return "No Assault sent: no Rival crew van could be put on the road now.";
         }
         assaults.Add(raid);
         run.Tell($"A Rival crew van is coming to {run.Goal.Place}!");
+        return null;
     }
 }
 
@@ -203,6 +211,9 @@ internal sealed class HeistRun : IJobObjective
         Tell($"The Cartel van was destroyed{by}: the heist is lost.");
         GD.Print($"server: {Job}: the Cartel van {car.Id} was destroyed{(attacker != 0 ? $"{by} #{attacker}" : "")}");
     }
+
+    /// <summary>An admin's <c>/cartel assault</c>: an Assault now, by the clock's own path and cap (the clock goes on as it was). Null when it was sent; else why not.</summary>
+    public string? SendAssault() => _s.LaunchAssault(this);
 
     public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Loaded, Heist.Min) : 0;
 

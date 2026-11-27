@@ -1253,7 +1253,7 @@ stateDiagram-v2
 
 ## Job.Run
 
-One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure).
+One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure, an admin).
 
 ```mermaid
 stateDiagram-v2
@@ -1265,7 +1265,7 @@ stateDiagram-v2
 ```
 
 - **Active**: the objective runs and the timer counts down
-- **Succeeded**: the objective was met: every earning member of the party at that moment is paid
+- **Succeeded**: the objective was met (or an admin ended it so): every earning member of the party at that moment is paid
 - **Failed**: pays nothing; the reason says why
 
 ## Killstreak.Hold

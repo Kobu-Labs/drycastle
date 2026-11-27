@@ -140,6 +140,30 @@ public class JobBookTests
     }
 
     [Fact]
+    public void AnAdminEndsARunningJobAsAWinOrAFailAndSetsItsTimer()
+    {
+        var kind = new SpotKind("a");
+        var (book, parties, ended) = Setup(kind);
+        var job = Start(book, parties, kind, 1, tier: 2);
+        job.SetSecondsLeft(5);
+        Assert.Equal(5f, job.SecondsLeft);
+        Assert.Equal(60f, job.Seconds); // the start's timer stays
+        for (var i = 0; i < 30 * 4; i++) book.Tick(1 / 30f, parties, ended);
+        Assert.Empty(ended);
+        Assert.True(book.EndByAdmin(job, won: true, parties, ended));
+        Assert.True(Assert.Single(ended).Succeeded); // pays as a success
+        Assert.False(book.IsReserved("a"));
+        Assert.Equal(1, kind.Ended);
+        Assert.False(book.EndByAdmin(job, won: false, parties, ended)); // over already
+
+        ended.Clear();
+        var lost = Start(book, parties, kind, 1);
+        Assert.True(book.EndByAdmin(lost, won: false, parties, ended));
+        Assert.Equal(JobFailReason.Admin, lost.Reason);
+        Assert.Equal("Ended by an admin", CartelWords.Fail.Text(JobFailReason.Admin));
+    }
+
+    [Fact]
     public void TheTimerFailsItAndTheObjectiveCanEndIt()
     {
         var kind = new SpotKind("a", seconds: 1);

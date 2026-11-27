@@ -50,6 +50,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - Death fails it: solo, the player's death; in a squad, the **leader's** death (other members respawn and carry on; a carried duffel drops where they fell).
 - Heists also fail when the Cartel van is destroyed.
 - No Respect penalty, no cooldown. A job's NPCs, duffels and van are removed when it ends.
+- An admin's `/cartel end fail` fails it too ("Ended by an admin", `JobFailReason.Admin`): a test, see "Testing".
 
 ## Contact
 
@@ -115,6 +116,14 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - **Safe and drill**: hold E to place a drill; it runs a tier time (about 90 s) and jams at random one to three times; a job player holds E to fix it. Open, the safe gives bonus cash duffels.
 - Built (#496): `Drill` (machine `Drill.Run`: armed, running, jammed, done) and `DrillRules` (ShooterCore/Cartel; run seconds and cash Duffels by tier, the jams' moments, the holds, who may hold and from where), numbers in `trap_house.json` `drill`; `DrillServer` (`Arm(house, party, tier)`, `Disarm`, `Of`, `Done` event with the paid-out Duffels; the hold of E via `KeyCompetition`, a corpse or ground item on the stand spot giving it up (`DrillKey`); a stripped house or a round reset disarms; events 62 DrillState and 63 DrillCleared to the players within `near_m`, 64 DrillReach to one player); `DrillsClient` (the drill on the safe prop, Apocalypse `SM_Prop_Drill_01` or a box, the running loop, the jam's sparks and clunk, the safe's door swings open, the hold ring and prompt) and the HUD's Drill panel for party players near it; admin `/drill [tier|off]` arms the nearest dressed safe for the admin.
 - Built (#496, the heist): `TrapHouseJobKind` (server, kind `trap_house` on the Heist template) with `TrapHouseHeistData` / `TrapHouseHeistRules` (ShooterCore/Cartel/TrapHouseHeist.cs), numbers in `cartel.json` `jobs.trap_house`. Begin: `Pick` (a house with at least the minimum's Duffel spots; planned only, dressed once the template gave a run, so a refused start shows nothing), book key `trap_house:<id>`, then the template (van at the Contact, drop from the house); the tables hold the maximum less the safe's cash (never under the minimum); posted Gunmen and Enforcers on the dressing's posts (tier, squad size, `max_defenders`, the posts); the safe armed for the party. The area: `area_m` round the house's centre or the road spot where the van parks. Line adds the Drill's state while loading; the marker points at the safe while the Drill waits to be set, runs or is jammed. End strips the house, disarms the safe, removes the defenders (the template the van, Duffels, Assaults). `IHeistGoal` gained `Line` / `Marker` overrides. `/cartel job trap_house [tier]` to test.
+
+## Testing
+
+Admin chat commands (`/cartel`, `CartelServer.Chat`; the words in `ShooterCore/Cartel/CartelAdmin.cs`), on the admin's own standing and Job, so a Job's late stages need no play-through:
+
+- `/cartel join | quit | respect <n> | status`; `/cartel job <kind> [tier]` starts any kind at any tier anywhere (the test kind `test` only for admins).
+- On the running Job the admin is in: `/cartel end win` (succeeds and pays as a met objective) or `end fail` (fails, "Ended by an admin"); `/cartel time <seconds>` sets the seconds left (1 to 3600; the party's tracker is sent the Job again); `/cartel assault` sends an Assault on a heist now, through the clock's own launch and `max_assaults_alive` (the clock goes on as it was); `/cartel goto` puts the admin (alive, on foot) on the first surface under the Job's marker (the van's bay marker lands under the van).
+- `/duffel <kind>`, `/drill [tier|off]`, `/traphouse`, `/gunman` for the parts on their own.
 
 ## Docs, ADRs, state machines
 

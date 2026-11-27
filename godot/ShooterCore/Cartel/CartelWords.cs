@@ -39,7 +39,8 @@ public static class CartelWords
         (JobFailReason.LeaderQuit, "cartel.fail.quit", "The leader quit the Cartel"),
         (JobFailReason.Death, "cartel.fail.death", "The leader died"),
         (JobFailReason.Abandoned, "cartel.fail.abandoned", "Nobody is left to run it"),
-        (JobFailReason.Objective, "cartel.fail.objective", "The objective was lost"));
+        (JobFailReason.Objective, "cartel.fail.objective", "The objective was lost"),
+        (JobFailReason.Admin, "cartel.fail.admin", "Ended by an admin"));
 
     /// <summary>Holes: <see cref="JobStartRefusal.UnknownTier"/> {0} the tier count; <see cref="JobStartRefusal.TierLocked"/> {0} the tier, {1} the rank it needs.</summary>
     public static readonly WordTable<JobStartRefusal> Start = new(("cartel.refuse.other", "The job cannot start now."),

@@ -105,6 +105,17 @@ public sealed class JobBook
     /// <summary>A player quit the giver: the Job they lead fails.</summary>
     public void LeaderQuit(ushort player, IJobParties parties, List<JobEnded> ended) => FailLedBy(player, JobFailReason.LeaderQuit, parties, ended);
 
+    /// <summary>
+    /// An admin ends a running Job now (<c>/cartel end</c>, a test): won, it succeeds and pays as if its objective was met; else it fails as <see cref="JobFailReason.Admin"/>. False when
+    /// the Job is not running.
+    /// </summary>
+    public bool EndByAdmin(Job job, bool won, IJobParties parties, List<JobEnded> ended)
+    {
+        if (!_running.Contains(job)) return false;
+        End(job, won ? JobState.Succeeded : JobState.Failed, won ? JobFailReason.None : JobFailReason.Admin, parties, ended);
+        return true;
+    }
+
     /// <summary>Every Job fails (a round reset).</summary>
     public void FailAll(JobFailReason reason, IJobParties parties, List<JobEnded> ended)
     {
