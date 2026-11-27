@@ -11,7 +11,7 @@ public partial class EditorMode
     public ConfirmDialog Confirm { get; } = new();
     public CommandPalette Commands { get; }
 
-    public bool Modal => Confirm.Visible || Commands.Visible;
+    public bool Modal => Confirm.Visible || Commands.Visible || Photo.ViewerOpen;
 
     /// <summary>Ctrl+P and the keys of an open confirm dialog or palette. True when used.</summary>
     bool HandleModalKey(InputEventKey k)
@@ -23,6 +23,7 @@ public partial class EditorMode
             return k.Keycode == Key.Escape; // Enter and Tab go to the focused button
         }
         if (Commands.Visible) { if (k.Keycode == Key.Escape) Commands.Close(); return k.Keycode == Key.Escape; }
+        if (Photo.ViewerOpen) { Photo.ViewerKey(k); return true; }
         return false;
     }
 
@@ -41,6 +42,7 @@ public partial class EditorMode
         yield return (Zones.SelectedKind != null ? $"Zones: mark all {Zones.KindLabel(Zones.SelectedKind)} zones for deletion" : "Zones: mark all zones for deletion", () => { SelectTool(EditorTool.Zones); Zones.Marks.MarkListed(); });
         yield return (Zones.Overlay.On ? "Zones: hide the zone overlay  (M)" : "Zones: show the zone overlay  (M)", () => { SelectTool(EditorTool.Zones); Zones.Overlay.Toggle(); });
         yield return (FloorPlan.FloorPlanParcel != null ? $"View: floor plan off, show the building of {FloorPlan.FloorPlanParcel}  (B)" : "View: floor plan of the selected parcel  (B)", FloorPlan.ToggleFloorPlan);
+        yield return ("Photo to building: open the tool for the selected parcel  (0)", () => SelectTool(EditorTool.Photo));
         yield return ("Sketch: mark points  (P)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Point); });
         yield return ("Sketch: draw a line  (L)", () => { SelectTool(EditorTool.Sketch); Sketches.SetMode(SketchKind.Line); });
         if (Sketches.Doc.Count > 0) yield return ("Sketch: clear the active sketch", () => { SelectTool(EditorTool.Sketch); Sketches.RequestClear(); });

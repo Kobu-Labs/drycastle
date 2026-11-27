@@ -55,13 +55,29 @@ def check(answer: dict, ask: str) -> None:
         raise ValueError('a "?" was left unanswered')
 
 
-def save(out: Path, answer: dict, again: bool = False) -> Path:
+def save(out: Path, answer: dict, again: bool = False, stage: str | None = None) -> Path:
+    """Check the answer against its ask file and write it. ``stage`` ("ends" or "walls") names the question; else the open one."""
+    ask_name, answer_name = _named(out, stage) if stage else _open(out, again)
+    check(answer, (out / ask_name).read_text())
+    (out / answer_name).write_text(json.dumps(answer, indent=1) + "\n")
+    return out / answer_name
+
+
+def _open(out: Path, again: bool) -> tuple[str, str]:
     stage = pending(out, again)
     if stage is None:
         raise ValueError(f"{out}: no question open")
-    check(answer, (out / stage[0]).read_text())
-    (out / stage[1]).write_text(json.dumps(answer, indent=1) + "\n")
-    return out / stage[1]
+    return stage
+
+
+def _named(out: Path, stage: str) -> tuple[str, str]:
+    """(ask file, answer file) of the named stage; its ask file must exist."""
+    if stage not in ("ends", "walls"):
+        raise ValueError(f"stage must be ends or walls, not {stage!r}")
+    ask, answer = STAGES[0 if stage == "ends" else 1]
+    if not (out / ask).exists():
+        raise ValueError(f"{out}: no {ask} to answer")
+    return ask, answer
 
 
 def stage_answers(reply: Path, again: bool, run_dir) -> None:
@@ -76,20 +92,17 @@ def stage_answers(reply: Path, again: bool, run_dir) -> None:
             print(f"PROBLEM: {out}: {e}: not written")
 
 
-def read_one(client, out: Path, again: bool) -> dict | None:
-    """One API call for the folder's open question. Returns the token usage, or None if nothing was open."""
-    import anthropic
+def image_block(path: Path) -> dict:
+    return {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(path.read_bytes()).decode()}}
 
-    stage = pending(out, again)
-    if stage is None:
-        print(f"{out}: no question open")
-        return None
-    ask = (out / stage[0]).read_text()
-    content: list[dict] = []
-    for p in pictures(out, ask):
-        content.append({"type": "text", "text": f"Picture `{p.name if p.parent == out else p}`:"})
-        content.append({"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": base64.standard_b64encode(p.read_bytes()).decode()}})
-    content.append({"type": "text", "text": ask + "\nReply with the JSON object only, nothing before or after it."})
+
+def json_object(text: str) -> dict:
+    """The JSON object in a model's reply (anything before its first ``{`` and after its last ``}`` is dropped)."""
+    return json.loads(text[text.index("{") : text.rindex("}") + 1])
+
+
+def ask_model(client, content: list[dict], label: str) -> tuple[str, dict, str]:
+    """One API call: (the reply's text, token usage, stop reason). An API error ends the run (SystemExit with its message)."""
     try:
         r = client.beta.messages.create(
             model=MODEL,
@@ -99,21 +112,53 @@ def read_one(client, out: Path, again: bool) -> dict | None:
             fallbacks="default",
             messages=[{"role": "user", "content": content}],
         )
-    except anthropic.RateLimitError as e:
-        raise SystemExit(f"{out}: rate limited after the SDK's retries: {e}") from e
-    except anthropic.APIStatusError as e:
-        raise SystemExit(f"{out}: the API answered {e.status_code}: {e.message}") from e
-    except anthropic.APIConnectionError as e:
-        raise SystemExit(f"{out}: no connection to the API: {e}") from e
+    except Exception as e:  # the SDK is an optional extra: its error classes are looked at only if it is loaded
+        import sys
+
+        anthropic = sys.modules.get("anthropic")
+        if anthropic is not None and isinstance(e, anthropic.RateLimitError):
+            raise SystemExit(f"{label}: rate limited after the SDK's retries: {e}") from e
+        if anthropic is not None and isinstance(e, anthropic.APIStatusError):
+            raise SystemExit(f"{label}: the API answered {e.status_code}: {e.message}") from e
+        if anthropic is not None and isinstance(e, anthropic.APIConnectionError):
+            raise SystemExit(f"{label}: no connection to the API: {e}") from e
+        raise
     usage = {"in": r.usage.input_tokens, "out": r.usage.output_tokens}
-    if r.stop_reason != "end_turn":
-        print(f"PROBLEM: {out}: the model stopped with {r.stop_reason}: not written")
-        return usage
-    text = "".join(b.text for b in r.content if b.type == "text")
+    return "".join(b.text for b in r.content if b.type == "text"), usage, r.stop_reason
+
+
+def read_one(client, out: Path, again: bool, stage: str | None = None) -> dict | None:
+    """One API call for the folder's open question. Returns the token usage (plus ``problem``, why nothing was written, when
+    the reply was no good), or None if nothing was open. ``stage`` ("ends" | "walls") asks that question though it is
+    answered (its answer file is then overwritten)."""
+    if stage:
+        try:
+            ask_name, _ = _named(out, stage)
+        except ValueError as e:
+            print(f"{out}: no question open ({e})")
+            return None
+    else:
+        found = pending(out, again)
+        if found is None:
+            print(f"{out}: no question open")
+            return None
+        ask_name = found[0]
+    ask = (out / ask_name).read_text()
+    content: list[dict] = []
+    for p in pictures(out, ask):
+        content.append({"type": "text", "text": f"Picture `{p.name if p.parent == out else p}`:"})
+        content.append(image_block(p))
+    content.append({"type": "text", "text": ask + "\nReply with the JSON object only, nothing before or after it."})
+    text, usage, stop_reason = ask_model(client, content, str(out))
+    if stop_reason != "end_turn":
+        problem = f"the model stopped with {stop_reason}"
+        print(f"PROBLEM: {out}: {problem}: not written")
+        return {**usage, "problem": problem}
     try:
-        print(f"written: {save(out, json.loads(text[text.index('{') : text.rindex('}') + 1]), again)}  ({usage['in']} in, {usage['out']} out)")
+        print(f"written: {save(out, json_object(text), again, stage)}  ({usage['in']} in, {usage['out']} out)")
     except (ValueError, KeyError, TypeError) as e:
         print(f"PROBLEM: {out}: {e}: not written")
+        return {**usage, "problem": str(e)}
     return usage
 
 

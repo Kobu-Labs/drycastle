@@ -35,6 +35,8 @@ RUN_ALL = "run-all"
 PREVIEW = "preview"  # not a map stage: renders PNGs from the work files
 PARCEL_RUN = "parcel-run"  # not a map stage: fences and trees of some parcels, as JSON
 PATCH_RUN = "patch-run"  # not a map stage: the meshes of some ground patches, as a GLB
+BUILDING_RUN = "building-run"  # not a map stage: the buildings of some parcels, as a GLB
+BUILDING_SERVE = "building-serve"  # the same as a long-lived worker (JSON lines on stdin and stdout)
 DEFAULT_EXAGGERATION = 3.0  # same as preview.DEFAULT_EXAGGERATION
 
 
@@ -51,7 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="drycastle_pipeline",
         description="Generate the Drycastle base map from source data.",
     )
-    choices = [*STAGES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN]
+    choices = [*STAGES, RUN_ALL, PREVIEW, PARCEL_RUN, PATCH_RUN, BUILDING_RUN, BUILDING_SERVE]
     parser.add_argument(
         "stage",
         choices=choices,
@@ -85,7 +87,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         metavar="ID",
-        help="parcel-run: parcel to regenerate, e.g. P-0412 (repeatable)",
+        help="parcel-run, building-run: parcel to regenerate, e.g. P-0412 (repeatable)",
     )
     parser.add_argument(
         "--group",
@@ -93,6 +95,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="ID",
         help="parcel-run: property group to regenerate, e.g. G-0001 (repeatable)",
+    )
+    parser.add_argument(
+        "--building",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="building-run: building to regenerate, e.g. w378920327 (repeatable; its whole parcel is rebuilt)",
     )
     parser.add_argument(
         "--patch",
@@ -105,20 +114,20 @@ def build_parser() -> argparse.ArgumentParser:
         "--out",
         metavar="PATH",
         default=None,
-        help="parcel-run: write the JSON fragment here instead of stdout; "
+        help="parcel-run, building-run: write the JSON fragment here instead of stdout; "
         "export: write the map folder here instead of out/village/map",
     )
     parser.add_argument(
         "--work",
         metavar="DIR",
         default=None,
-        help="detail, export, parcel-run: read this work directory instead of data/village/work (experiments; detail also writes its files there)",
+        help="detail, export, parcel-run, building-run, building-serve: read this work directory instead of data/village/work (experiments; detail also writes its files there)",
     )
     parser.add_argument(
         "--glb",
         metavar="PATH",
         default=None,
-        help="parcel-run, patch-run: also write a GLB with the props nodes / patch_<ID> nodes "
+        help="parcel-run, patch-run, building-run: also write a GLB with the props nodes / patch_<ID> nodes / building nodes "
         "(chunk-file frame)",
     )
     return parser
@@ -147,6 +156,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             glb=args.glb,
             work=args.work,
         )
+    if args.stage == BUILDING_RUN:
+        from drycastle_pipeline.edits import building_run
+
+        return building_run.run(parcels=args.parcel, buildings=args.building, out=args.out, glb=args.glb, work=args.work)
+    if args.stage == BUILDING_SERVE:
+        from drycastle_pipeline.edits import building_run
+
+        return building_run.serve(work=args.work)
     if args.stage == RUN_ALL:
         timings: list[tuple[str, float]] = []
         for name, run in STAGES.items():

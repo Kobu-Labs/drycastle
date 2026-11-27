@@ -400,7 +400,9 @@ def _upsert_locked(path: Path, bid: str, comment: str, fields: dict, replace: bo
         lines[start:end] = block
     else:
         lines += ["", *block]
-    path.write_text("\n".join(lines) + "\n")
+    from drycastle_pipeline.edits.building_edit import atomic_write
+
+    atomic_write(path, "\n".join(lines) + "\n")
 
 
 @dataclass
@@ -671,7 +673,9 @@ def _write_building_files(bid: str, b: dict, sheet: dict, detail: dict, ov: dict
             f"# Eave {eave:.2f} m, top {b['height_m']:.2f} m. Sides with no photo have no openings." + (f" Not modelled: {lost}." if lost else "")]  # fmt: skip
     body = yaml.safe_dump({k: v for k, v in detail.items() if k != "openings"}, sort_keys=False, default_flow_style=False)
     rows = "".join("  - {" + ", ".join(f"{k}: " + (f'"{v}"' if isinstance(v, str) and v.startswith("#") else str(v)) for k, v in o.items()) + "}\n" for o in openings)
-    (DETAILS_DIR / f"{bid}.yaml").write_text("\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))
+    from drycastle_pipeline.edits.building_edit import atomic_write
+
+    atomic_write(DETAILS_DIR / f"{bid}.yaml", "\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))
     _upsert_override(PIPELINE_DIR / "config" / "overrides.yaml", bid, f"{b['parcel']}: {sheet.get('what', 'house')}, from {sheet.get('source', 'a photo')}; openings in config/buildings/.", ov, replace)
 
 

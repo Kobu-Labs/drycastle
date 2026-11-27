@@ -123,18 +123,21 @@ def load_building_rules(path: Path = DEFAULT_RULES) -> BuildingRules:
     )
 
 
-def load_traced(path: Path = DEFAULT_OVERRIDES) -> set[str]:
+def load_traced(path: Path = DEFAULT_OVERRIDES, data: dict | None = None) -> set[str]:
     """Buildings (or whole parcels) whose footprint stays as traced, whatever the cadastre says: those modelled by hand
-    on that outline. The list keep_traced_footprint of overrides.yaml."""
-    data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
+    on that outline. The list keep_traced_footprint of overrides.yaml (``data``: the file as already parsed)."""
+    if data is None:
+        data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
     got = data.get("keep_traced_footprint") or []
     if not isinstance(got, list) or not all(isinstance(k, str) for k in got):
         raise RulesError("overrides: keep_traced_footprint must be a list of building or parcel ids")
     return set(got)
 
 
-def load_overrides(path: Path = DEFAULT_OVERRIDES) -> dict[str, dict]:
-    data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
+def load_overrides(path: Path = DEFAULT_OVERRIDES, data: dict | None = None) -> dict[str, dict]:
+    """The ``buildings`` of overrides.yaml, checked (``data``: the file as already parsed)."""
+    if data is None:
+        data = (yaml.safe_load(path.read_text()) or {}) if path.is_file() else {}
     out = data.get("buildings") or {}
     for key, fields in out.items():
         if not isinstance(fields, dict):
@@ -326,6 +329,45 @@ def height_class(h: float) -> str:
     return ">=8 m"
 
 
+def derive_parcel(
+    parcel: dict,
+    features: dict[str, dict],
+    overrides: dict[str, dict],
+    rules: BuildingRules,
+    plots,
+    kept: set[str],
+    used: set[str] | None = None,
+    fixed: Counter | None = None,
+) -> list[dict]:
+    """The buildings.json entries of one parcel (the rules stage's loop body; ``building-run`` calls it for single parcels).
+
+    ``features`` are the OSM buildings by id, ``plots`` the cadastre (``cadastre_check.Plots``, needs the parcel's own plot and the
+    plots under its buildings), ``kept`` the footprints that stay as traced. ``used`` collects the override keys that matched,
+    ``fixed`` counts the footprints the cadastre set right.
+    """
+    from drycastle_pipeline.buildings.cadastre_check import judge
+
+    out = []
+    for bid in sorted(parcel["buildings"]):
+        f = features[bid]
+        merged: dict = {}
+        for key in (parcel["id"], bid):
+            if key in overrides:
+                merged.update(overrides[key])
+                if used is not None:
+                    used.add(key)
+        if merged.pop("remove", False):
+            continue  # replaced by a placed object (a hangar from a pack): no mesh, no collider, no interior
+        geom = shape(f["geometry"])
+        if bid not in kept and parcel["id"] not in kept and geom.geom_type == "Polygon":
+            # the outline as traced in OpenStreetMap, set right by the cadastre where the cadastre knows better
+            finding, geom = judge(geom.buffer(0), parcel["id"], plots)
+            if fixed is not None and finding["finding"] in ("replace", "shift", "clip"):
+                fixed[finding["finding"]] += 1
+        out.append(derive_building(bid, parcel["id"], geom, f["properties"]["tags"], rules, merged))
+    return out
+
+
 @dataclass
 class BuildingsResult:
     buildings: list[dict]
@@ -363,27 +405,12 @@ def build_buildings(
     feats = json.loads((work_dir / "normalised" / "buildings.geojson").read_text())["features"]
     by_id = {f["properties"]["osm_id"]: f for f in feats}
 
-    from drycastle_pipeline.buildings.cadastre_check import Plots, judge
+    from drycastle_pipeline.buildings.cadastre_check import Plots
 
     plots, kept, fixed = Plots(parcels["parcels"]), load_traced(), Counter()
     out, used = [], set()
     for parcel in sorted(parcels["parcels"], key=lambda p: p["id"]):
-        for bid in sorted(parcel["buildings"]):
-            f = by_id[bid]
-            merged: dict = {}
-            for key in (parcel["id"], bid):
-                if key in overrides:
-                    merged.update(overrides[key])
-                    used.add(key)
-            if merged.pop("remove", False):
-                continue  # replaced by a placed object (a hangar from a pack): no mesh, no collider, no interior
-            geom = shape(f["geometry"])
-            if bid not in kept and parcel["id"] not in kept and geom.geom_type == "Polygon":
-                # the outline as traced in OpenStreetMap, set right by the cadastre where the cadastre knows better
-                finding, geom = judge(geom.buffer(0), parcel["id"], plots)
-                if finding["finding"] in ("replace", "shift", "clip"):
-                    fixed[finding["finding"]] += 1
-            out.append(derive_building(bid, parcel["id"], geom, f["properties"]["tags"], rules, merged))
+        out += derive_parcel(parcel, by_id, overrides, rules, plots, kept, used, fixed)
     return BuildingsResult(
         out, sorted(parcels.get("unassigned_buildings", [])), sorted(set(overrides) - used), dict(fixed)
     )

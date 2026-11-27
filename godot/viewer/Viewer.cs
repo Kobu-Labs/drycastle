@@ -18,7 +18,7 @@ namespace Drycastle.Viewer;
 /// --state PATH, --edit-smoke --edit-smoke-plan FILE, --patches-smoke --patches-smoke-plan FILE,
 /// --editor (editor mode, implies --watch; F2 toggles walk/editor), --editor-smoke --editor-smoke-plan FILE,
 /// --panel-smoke --panel-smoke-plan FILE (Fence panel), --objects-smoke --objects-smoke-plan FILE (objects, gizmo, undo), --shape-editor-smoke --shape-editor-smoke-plan FILE (Ground patches and Zones tools),
-/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-tool Select|Group|Fence|Ground|Objects|Zones|View] [--shot-patch GP-0001 | --shot-zone Z-0001 | --shot-draft "x,y;..." [--shot-zones --shot-kind K | --shot-type T]]
+/// --editor-shot PNG [--select P-0001,P-0002] [--shot-at P-0001] [--shot-edits FILE] [--shot-collapse Group,Fence] [--shot-gate N] [--shot-tool Select|Group|Fence|Ground|Objects|Zones|View|Sketch|Photo] [--shot-opening w3] [--shot-size 1280x720] [--shot-patch GP-0001 | --shot-zone Z-0001 | --shot-draft "x,y;..." [--shot-zones --shot-kind K | --shot-type T]]
 /// [--shot-object ID] [--shot-arm ASSET --shot-ghost x,y --shot-ghost-rot DEG] [--shot-filter TEXT] [--shot-open car,pot]
 /// (editor screenshot of the main window).
 /// Env: DRYCASTLE_MAP, DRYCASTLE_ASSETS, DRYCASTLE_UV (the uv executable).

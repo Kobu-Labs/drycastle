@@ -12,6 +12,10 @@ Commands run from `pipeline/`. Scratch files go in your scratchpad directory (`O
 
 ## Rules
 
+- The viewer's Photo to building tool (editor key 0) and `facade_pipeline auto <id>` do steps 1 to 3 in one command with the model called by API (`docs/photo-to-building.md`);
+  use them when `ANTHROPIC_API_KEY` is there and the user does not need you to read the pictures. The steps below are the same flow done by hand or by you.
+- While the viewer runs with `--watch` or `--editor` the two files are followed live (a second after `apply` writes them): do not run `make rules` or `make export` to see a building,
+  and do not edit `overrides.yaml` or `config/buildings/<id>.yaml` by hand-rewriting them wholesale (the viewer's form edits them line by line; make small changes).
 - Never edit the footprint, `edits.json`, or anything but the two files `apply` writes. No game, no screenshots, no
   commit, no `make`, no tests: the map is exported once after a batch, not per building.
 - Never estimate a size or a position yourself, and never change a number in `state.json`. If the candidates do not

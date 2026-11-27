@@ -118,6 +118,13 @@ public sealed class EditStore
             _host.Say($"{word}: {rec.Description}");
             return true;
         }
+        if (rec.Replay != null)
+        {
+            if (!rec.Replay(undo)) return false;
+            History.Moved(undo);
+            _host.Say($"{word}: {rec.Description}");
+            return true;
+        }
         var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {

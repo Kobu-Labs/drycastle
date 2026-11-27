@@ -319,8 +319,30 @@ def _landmark_mesh(scene: MapScene, p: dict, bid: str, b: dict, dz: float, visua
     return m
 
 
-def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, dz: float, visual: bool) -> Mesh:
-    """The visual (or collision) mesh of one building, on the ground: a detailed one, a landmark or the plain massing."""
+def _house_documents(scene: MapScene, p: dict, bid: str, b: dict, d, ins, dz: float, m: Mesh) -> None:
+    """The records the game reads of a hollow house: its interiors.json entry and its hidden voxel grid."""
+    scene.interiors.append({
+        "id": bid, "parcel": p["id"],
+        "room": {"polygon": interior.room_ring(b), "z0": round(dz + ins.floor - 0.2, 3), "z1": round(dz + ins.ceiling + 0.1, 3)},
+        "floor_z": round(dz + ins.floor, 3), "ceiling_z": round(dz + ins.ceiling, 3), "wall_m": interior.WALL_M,
+        **(floorplan.plan_doc(plan) if (plan := interior.plan_of(b, d, ins)) else {}),
+        "doorways": [{**w, "at": [w["at"][0], w["at"][1], round(w["at"][2] + dz, 3)]} for w in interior.doorways(b, d, ins)],
+        "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, d, ins)],
+    })  # fmt: skip
+    scene.house_voxels.append(voxels.voxelise(bid, b, d, ins, m, dz))
+
+
+def _warn_zfight(scene: MapScene, bid: str, m: Mesh) -> None:
+    fought = zfight.fights(m.tris, m.colours)  # its inside is seen up close, and through every hole
+    if sum(f[2] for f in fought) > zfight.WARN_M2:
+        scene.warnings.append(f"house {bid}: {len(fought)} pairs of faces in one plane fight (flicker), {sum(f[2] for f in fought):.2f} m2 (core/zfight.py)")
+
+
+def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, dz: float, visual: bool, documents: bool = True) -> Mesh:
+    """The visual (or collision) mesh of one building, on the ground: a detailed one, a landmark or the plain massing.
+
+    ``documents`` False leaves out what the game reads from files and a viewer does not (the house's interiors.json record and
+    its voxel grid, ``building-run``): the meshes and window panes are the same."""
     fn = building_mesh if visual else collision_mesh
     if bid in details and not b.get("model"):
         ins = interior.inside_of(b, details[bid])
@@ -330,18 +352,9 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
             m, tags = build_detail(b, details[bid])
             _add_window_tags(scene, p, tags, dz)
             if ins:
-                scene.interiors.append({
-                    "id": bid, "parcel": p["id"],
-                    "room": {"polygon": interior.room_ring(b), "z0": round(dz + ins.floor - 0.2, 3), "z1": round(dz + ins.ceiling + 0.1, 3)},
-                    "floor_z": round(dz + ins.floor, 3), "ceiling_z": round(dz + ins.ceiling, 3), "wall_m": interior.WALL_M,
-                    **(floorplan.plan_doc(plan) if (plan := interior.plan_of(b, details[bid], ins)) else {}),
-                    "doorways": [{**w, "at": [w["at"][0], w["at"][1], round(w["at"][2] + dz, 3)]} for w in interior.doorways(b, details[bid], ins)],
-                    "doors": [{**w, "pos": [w["pos"][0], w["pos"][1], round(w["pos"][2] + dz, 3)]} for w in interior.leaves(b, details[bid], ins)],
-                })  # fmt: skip
-                scene.house_voxels.append(voxels.voxelise(bid, b, details[bid], ins, m, dz))
-                fought = zfight.fights(m.tris, m.colours)  # its inside is seen up close, and through every hole
-                if sum(f[2] for f in fought) > zfight.WARN_M2:
-                    scene.warnings.append(f"house {bid}: {len(fought)} pairs of faces in one plane fight (flicker), {sum(f[2] for f in fought):.2f} m2 (core/zfight.py)")
+                if documents:
+                    _house_documents(scene, p, bid, b, details[bid], ins, dz, m)
+                _warn_zfight(scene, bid, m)
     elif b.get("model"):
         m = _landmark_mesh(scene, p, bid, b, dz, visual)
     else:
@@ -349,7 +362,7 @@ def _building_mesh(scene: MapScene, p: dict, bid: str, b: dict, details: dict, d
     return Mesh(m.tris + [0, 0, dz], m.colours)
 
 
-def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: dict) -> None:
+def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: dict, documents: bool = True) -> None:
     """``scene.parcels``: the buildings of each parcel as one visual and one collision mesh, standing on the terrain. A hollow house
     is not merged: it is a ``house_<bid>_visual`` and a ``house_<bid>_collision`` node of the chunk of its centroid
     (docs/house-destruction.md, Contract 2)."""
@@ -364,7 +377,7 @@ def _add_parcels(scene: MapScene, parcels_doc: dict, buildings: dict, details: d
         for bid in ids:
             dz = scene.building_elevation.get(bid, 0.0)
             b = buildings[bid]
-            pair = [_building_mesh(scene, p, bid, b, details, dz, visual) for visual in (True, False)]
+            pair = [_building_mesh(scene, p, bid, b, details, dz, visual, documents) for visual in (True, False)]
             if bid in details and not b.get("model") and interior.inside_of(b, details[bid]) is not None:
                 c = footprint_polygon(b["footprint"]).centroid
                 nodes = scene.nodes.setdefault(_chunk((c.x, c.y), chunk_m), {})

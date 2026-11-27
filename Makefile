@@ -5,7 +5,8 @@ MAP ?= out/village/map
 .PHONY: viewer-pack-trees rozhlas thief-voices private-pack release-check editor setup test fetch normalise parcels rules terrain roads props detail detail-rust-build export parcel-run patch-run preview ortho ortho-trees poles-preview poles-manifest floodwall-preview floodwall-manifest map map-update viewer viewer-smoke viewer-edit-smoke viewer-patches-smoke viewer-editor-smoke viewer-panel-smoke viewer-shape-editor-smoke viewer-objects-smoke mcp viewer-shot assets-check netspike netspike-quick lint shooter-server shooter-client shooter-client-sandbox shooter-test shooter-net-smoke shooter-match-smoke shooter-weapons-smoke shooter-rpg-smoke shooter-hud-shots shooter-menu-shots shooter-intel-shots shooter-companion-shots shooter-car-smoke shooter-bike-smoke shooter-blast-smoke shooter-loss-test shooter-icons
 
 setup:
-	cd pipeline && uv sync
+	cd pipeline && uv sync --extra reader
+	$(MAKE) detail-rust-build
 
 test:
 	cd pipeline && uv run pytest
@@ -38,7 +39,7 @@ detail: detail-rust-build
 	cd pipeline && uv run python -m drycastle_pipeline detail
 
 # Builds the Rust engine of the detail stage (pipeline/rust/detail, PyO3, linked to the system GEOS: needs cargo and
-# geos-devel, e.g. `sudo dnf install geos-devel`) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it again: build it again after.
+# geos-devel, e.g. `sudo dnf install geos-devel`) and installs it into the pipeline's venv with maturin. `make setup` (uv sync) removes it, then builds it again.
 detail-rust-build:
 	cd pipeline && uv pip install --quiet maturin && uv run maturin develop --release --manifest-path rust/detail/Cargo.toml
 
