@@ -31,7 +31,7 @@ internal sealed class CartelServer
     readonly Dictionary<int, (ushort Leader, ushort[] Members)> _told = new();
 
     /// <param name="parties">Who runs a Job (<see cref="MatchJobParties"/>).</param>
-    /// <param name="contact">Where the Contact stands; <see cref="AnywhereContact"/> until the map places him.</param>
+    /// <param name="contact">Where the Contact stands; <see cref="MapContactSite"/>, the map's placed Contact.</param>
     public CartelServer(ServerContext ctx, CartelFile data, IProgressionStore? store, IJobParties parties, IContactSite contact)
     {
         _ctx = ctx; _data = data; _store = store; _parties = parties; _contact = contact;

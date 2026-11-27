@@ -14,7 +14,14 @@ public interface IContactSite
     bool InReach(Vector3 at);
 }
 
-/// <summary>Today's stand-in until the map places the Contact: he is everywhere.</summary>
+/// <summary>The map's placed Contact (<see cref="CartelMap.Contact"/>): in reach within <paramref name="reachM"/> ground metres; a map without one has no Cartel.</summary>
+public sealed class MapContactSite(Func<CartelMap> map, float reachM) : IContactSite
+{
+    public bool Present => map().HasCartel;
+    public bool InReach(Vector3 at) => map().Contact is { } c && c.GroundDistance(at) <= reachM;
+}
+
+/// <summary>A stand-in for tests: he is everywhere.</summary>
 public sealed class AnywhereContact : IContactSite
 {
     public static readonly AnywhereContact Instance = new();

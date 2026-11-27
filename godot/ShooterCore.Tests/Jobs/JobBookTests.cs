@@ -208,7 +208,7 @@ public class JobBookTests
         Assert.Equal(JobOwner.Squad(squad), q.OwnerOf(1));
         Assert.Equal(JobOwner.Solo(2), q.OwnerOf(2)); // in no squad: alone
         Assert.Equal(new ushort[] { 1, 3 }, q.MembersOf(JobOwner.Squad(squad)));
-        Assert.Equal(1, q.LeaderOf(JobOwner.Squad(squad))); // SEAM: the first member until MatchSim keeps the leader
+        Assert.Equal(1, q.LeaderOf(JobOwner.Squad(squad))); // the creator leads
         tdm.LeaveSquad(1); tdm.LeaveSquad(3);
         Assert.Equal(0, q.LeaderOf(JobOwner.Squad(squad)));
         Assert.Empty(q.MembersOf(JobOwner.Squad(squad)));

@@ -280,8 +280,8 @@ public partial class NetServer : Node
         var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
-        // the Cartel's Jobs (#494): parties from the match (SEAM: the Squad leader), the Contact everywhere until the map places him
-        _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, new MatchJobParties(_match), AnywhereContact.Instance);
+        // the Cartel's Jobs (#494): parties from the match (Squads and their leaders), the map's placed Contact
+        _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, new MatchJobParties(_match), new MapContactSite(() => _areas.Cartel, Config.Cartel.ContactReachM));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
         BuildVehicles();
         BuildShooting();
