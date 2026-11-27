@@ -834,7 +834,7 @@ What a finished cartel Job pays, and all it pays: the Cartel rank's own experien
 _Avoid_: XP, rep, reputation, money
 
 **Contact**:
-The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. Planned (#437).
+The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. He stands on his marker, a Placed object (`prim:cartel_contact`, the first one by id) set by hand in the map editor, facing its arrow; the game hides the marker (it stops nothing) and draws a Gang Warfare character there (`contact.json`). A map without one has no cartel, with no error. Planned (#437).
 _Avoid_: NPC (alone), quest giver, dealer
 
 **Job**:
@@ -854,8 +854,12 @@ The drivable van of a Heist: only the Job's players get in or load Duffels; it i
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:
-A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success. Planned (#437).
+A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). Planned (#437).
 _Avoid_: secure zone, delivery spot
+
+**Hit spot**:
+Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of the `cartel_hit` zones (a Runtime zone), drawn on open ground. Planned (#437).
+_Avoid_: target spot, hit zone
 
 **Assault**:
 A van of the Rival crew that comes in to attack a Heist's objective, one after another until the Cartel van leaves. Planned (#437).

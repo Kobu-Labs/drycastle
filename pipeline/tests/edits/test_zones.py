@@ -19,6 +19,7 @@ from drycastle_pipeline.edits.zones import (
     KIND_NAMES,
     KINDS,
     PLAYER_SPAWN,
+    RULE_KEYS,
     WILDLIFE,
     ZonesError,
     build_zone_points,
@@ -69,8 +70,8 @@ def inside(points: list, geom) -> bool:
 
 
 def test_the_catalog_is_the_event_kinds_the_player_kinds_and_every_species() -> None:
-    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", "plantation", *WILDLIFE, *FLOCKS)
-    assert {k.group for k in KINDS} == {"event", "player", "wildlife"}
+    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", "plantation", "cartel_drop", "cartel_hit", *WILDLIFE, *FLOCKS)
+    assert {k.group for k in KINDS} == {"event", "player", "cartel", "wildlife"}
     assert all(k.label and k.tint.startswith("#") for k in KINDS)
 
 
@@ -96,6 +97,9 @@ def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
     assert "where_ground" not in section["bigfoot"]  # drawn only
     assert "where_ground" not in section["scud"]  # drawn only; the server falls back to open ground when none is drawn
     assert section["scud"]["building_clearance_m"] >= 12  # a 12 m truck needs room
+    for cartel in ("cartel_drop", "cartel_hit"):  # drawn only, exported as points (the Job picks one)
+        assert "where_ground" not in section[cartel] and set(section[cartel]) == set(RULE_KEYS)
+    assert section["cartel_drop"]["building_clearance_m"] >= 2.4 / 2  # the Cartel van stops at a drop point
     assert set(section["player_spawn"]["where_ground"]) == {"allotments", "orchard", "meadow", "village", "field"}
     assert section["stag"]["where_ground"] == ["forest"]
     assert set(section["deer"]["where_ground"]) == {"forest", "meadow", "field"}
@@ -112,6 +116,7 @@ def test_kind_rows_are_the_catalog_in_order_with_the_rule_zone() -> None:
     assert by["stag"]["where_ground"] == ["forest"] and by["stag"]["group"] == "wildlife"
     assert set(by["player_spawn"]) == {"name", "label", "group", "tint", "where_ground"}
     assert by["plantation"]["group"] == "player" and by["plantation"]["where_ground"] is None
+    assert by["cartel_drop"]["group"] == by["cartel_hit"]["group"] == "cartel" and by["cartel_drop"]["where_ground"] is None
 
 
 @pytest.mark.parametrize(
@@ -374,6 +379,18 @@ def test_player_spawn_has_no_points_and_a_kind_without_a_rule_is_warned_about() 
     got, warnings = build_zone_points({}, d, [], make_terrain(), {"bodies": []}, rules({"player_spawn": {}, "bigfoot": RULE}))
     assert got is None  # no bigfoot zone, spawn is not points, deer has no rule here
     assert any("Z-0002" in w and "deer" in w for w in warnings)
+
+
+def test_the_cartel_kinds_bake_points_with_the_shipped_rules() -> None:
+    """A drawn Drop point and Hit spot zone each give candidate points of their own kind (the Job picks one, CartelMap.cs)."""
+    yard, field = box(30, 30, 60, 50), box(100, 30, 160, 90)
+    d = drawn(zone("Z-0001", "cartel_drop", yard), zone("Z-0002", "cartel_hit", field))
+    out, warnings = build_zone_points({}, d, [], make_terrain(), {"bodies": []}, rules(load_section("zones")))
+    assert warnings == []
+    by = {e["kind"]: e for e in out["zones"]}
+    assert set(by) == {"cartel_drop", "cartel_hit"} and by["cartel_drop"]["areas"] == ["Z-0001"]
+    assert len(by["cartel_drop"]["points"]) == 4  # 600 m2 at 150 m2 a point
+    assert inside(by["cartel_drop"]["points"], yard) and inside(by["cartel_hit"]["points"], field)
 
 
 # --- the export stage ---------------------------------------------------------------------------

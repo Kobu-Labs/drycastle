@@ -114,7 +114,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - Glossary: the terms above are in; still to change when built: Squad gains a leader (still tdm-only); Plantation's hold during a Harvest; Gang member gains Gunman and Rival dealer and ranged fighting; Event's _Avoid_ names Job and Heist.
 - State machines (`StateMachineSpec<T>`, `docs/state-machines.md`): Job.Run, Cartel.Membership, Heist.Phase, Duffel (carried, flying, lying, loaded), Drill (placed, running, jammed, done), the Gunman and posted defender states, the Assault clock. No bool flags.
 - Data: `cartel.json` (ranks and curve, tiers, timers, counts, Respect, weights and throw ranges, Assault sizes and timing, drill times and jams).
-- Map: zone kinds `cartel_drop` and `cartel_hit`; the Contact as a placed object.
+- Map: zone kinds `cartel_drop` and `cartel_hit`; the Contact as a placed object. Built: the kinds (`rules.yaml` `zones`, exported to `zone_points.json`, drawn in the Zones tool, group cartel); the Contact is the first placed object of the marker `prim:cartel_contact` (Objects tool, category other; its arrow is his facing, `contact.json` `facing`), hidden in the game, pass-through, with a Gang Warfare look (`contact.json` `view`, `Cartel/ContactView.cs`). The server reads all of it as `ShooterCore.Cartel.CartelMap` (`MapAreas.Cartel`): `Contact` (null: no cartel), `DropPoints`, `HitSpots`, `PickDrop`/`PickHit(rng, filter)`, `CartelMap.Apart(points, m)` to keep jobs apart.
 
 ## Tickets (v1, sub-issues of #437)
 

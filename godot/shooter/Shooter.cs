@@ -450,6 +450,7 @@ public partial class Shooter : Node3D
         if (!_map.CollisionOnly && _map.ObjectsOf(_data.Plantation.Reflectors.Asset) is { Count: > 0 } stands) // the plantation's reflector stands: real beams at night
             AddChild(new PlantationReflectors { Stands = stands.Select(o => o.Transform).ToList(), Data = _data.Plantation.Reflectors });
         if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
+        if (!_map.CollisionOnly) Drycastle.Shooter.Cartel.ContactView.AddTo(this, _map); // the cartel's Contact on his marker (none on a map without one)
         if (!_map.CollisionOnly) AddChild(new RozhlasFeedPlayer { Speakers = _map.MegaphoneSpeakers() }); // the live feed (a hijacker's voice) from the same poles
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }

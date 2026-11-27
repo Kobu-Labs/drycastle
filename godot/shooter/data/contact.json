@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  // The cartel's Contact (docs/cartel.md "Contact"; ShooterCore/Cartel/CartelMap.cs). He stands where the first placed object of the marker
+  // prim:cartel_contact stands (set by hand in the map editor, Objects tool, category other); a map without one has no cartel. The marker
+  // stops nothing and the game hides it.
+  // facing: the way he looks, a unit vector [x, z] in the marker's own frame (Godot axes, before its turn); [0, 1] is the marker's arrow.
+  "facing": [0, 1],
+  // Client only (Cartel/ContactView.cs). With the private Gang Warfare pack: model under assets-private/synty/glb (no .glb), atlas under synty/,
+  // idle a looping clip of anim/baked ("" holds the rest pose), scale the size (1 = the model's own, about a player). Without the pack: a capsule
+  // of capsule_colour, capsule_height_m tall, a darker nose on the side he faces. Nothing here was seen in the game: nudge freely.
+  "view": {
+    "model": "gang_boss_01",
+    "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png",
+    "idle": "idle_standing_masc_g",
+    "scale": 1.0,
+    "capsule_colour": "#e8e2d0",
+    "capsule_height_m": 1.8
+  }
+}

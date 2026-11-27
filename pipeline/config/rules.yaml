@@ -1033,6 +1033,25 @@ zones:
   # The marijuana plantation: a player on foot inside one who holds the interact key for 1.5 s gets high (godot/shooter/data/plantation.json).
   # Drawn only; no rule zone, no numbers here (the game reads the polygons, not points).
   plantation: {}
+  # The cartel (docs/cartel.md; ShooterCore/Cartel/CartelMap.cs). Drawn only, no rule zone; a map with none has no Delivery, Heist
+  # drop or Hit (the Job refuses to start). Points of one kind may lie in the same zone, so the Job keeps running jobs apart by
+  # distance, not by point.
+  # Drop points: a Delivery's duffel or a loaded Cartel van is handed over at one. Draw small zones (a yard, a lay-by) where a van
+  # can stop: clear of buildings by 3 m (the van is 2.4 m wide) and of water by 5 m; one point per 150 m2, so a 600 m2 yard gives 4.
+  cartel_drop:
+    m2_per_point: 150
+    min_points: 4
+    max_points: 200
+    building_clearance_m: 3
+    water_clearance_m: 5
+  # Hit spots: a Hit's Rival dealer stands outdoors at one, his guards round him. Open ground with room for the group: 6 m from
+  # buildings (the guards spread round him), 5 m from water.
+  cartel_hit:
+    m2_per_point: 400
+    min_points: 10
+    max_points: 300
+    building_clearance_m: 6
+    water_clearance_m: 5
   # Wildlife: one point pool per species (the server picks a spawn point for that species from it). The numbers are shared
   # by every species (YAML anchor); the ground types are where the species lives. Species ids: godot/shooter/data/animals.json.
   deer: &wildlife_rule
