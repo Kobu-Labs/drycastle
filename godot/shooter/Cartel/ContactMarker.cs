@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Data;
+using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Scenery;
 using NVec3 = System.Numerics.Vector3;
 
@@ -33,14 +34,14 @@ public static class ContactMarker
     public static PalletPose? PalletIn(Drycastle.MapLoader.MapLoader? map)
         => map?.FirstObjectOfAsset(CartelZones.PalletAsset) is { } o ? new PalletPose(new NVec3(o.Position.X, o.Position.Y, o.Position.Z), o.YawDeg) : null;
 
-    /// <summary>The cartel's map data: the Contact, the pallet and the points of the cartel zones of <paramref name="points"/> (the map's zone_points.json).</summary>
-    public static CartelMap Of(Drycastle.MapLoader.MapLoader? map, ZonePoints points)
+    /// <summary>The cartel's map data: the Contact, the pallet, the points of the cartel zones of <paramref name="points"/> (the map's zone_points.json) and the outlines of the landing pads and moorings (<paramref name="polygons"/>, zone_polygons.json).</summary>
+    public static CartelMap Of(Drycastle.MapLoader.MapLoader? map, ZonePoints points, ZonePolygons? polygons = null)
     {
         var contact = PoseIn(map, LoadConfig());
         var markers = map?.ObjectsOf(CartelZones.ContactAsset).Count ?? 0;
         if (markers > 1) GD.PrintErr($"cartel: the map has {markers} Contact markers; the first (lowest object id) is the Contact, the rest do nothing");
         var pallets = map?.ObjectsOf(CartelZones.PalletAsset).Count ?? 0;
         if (pallets > 1) GD.PrintErr($"cartel: the map has {pallets} pallet markers; the first (lowest object id) is the pallet, the rest do nothing");
-        return CartelMap.From(points, contact, PalletIn(map));
+        return CartelMap.From(points, contact, PalletIn(map), polygons);
     }
 }

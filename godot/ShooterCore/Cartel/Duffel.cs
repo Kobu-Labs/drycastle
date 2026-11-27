@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <summary>What a Duffel holds (GLOSSARY "Duffel"): weed is light, cash medium, product heavy (duffels.json). The wire carries the number.</summary>
 public enum DuffelKind : byte { Weed = 0, Cash = 1, Product = 2 }
 
-/// <summary>Where a Duffel is: lying on the ground (or on the Cartel pallet), carried by a player, flying from a throw, or loaded in a cargo volume (a vehicle's boot, bed or bay).</summary>
+/// <summary>Where a Duffel is: lying on the ground (or on the Cartel pallet), carried by a player, flying from a throw, or loaded in a cargo volume (a vehicle's boot, bed or bay, or a Heist's Receiver).</summary>
 public enum DuffelState : byte { Lying = 0, Carried = 1, Flying = 2, Loaded = 3 }
 
 /// <summary>
@@ -22,7 +22,7 @@ public readonly record struct CargoMeet(Vector3 At, Vector3 Normal, bool FromTop
 /// </summary>
 public interface ICargoVolume
 {
-    /// <summary>The world id of the vehicle the volume belongs to (the wire's: a loaded Duffel's owner field).</summary>
+    /// <summary>The world id of the vehicle the volume belongs to (the wire's: a loaded Duffel's owner field); a Receiver's is its entity id with <see cref="ReceiverRules.WireBit"/> set.</summary>
     ushort Vehicle { get; }
     /// <summary>Whether the flight segment from a to b meets the volume (grown by its margin), and where and how.</summary>
     bool Meets(Vector3 from, Vector3 to, out CargoMeet meet);

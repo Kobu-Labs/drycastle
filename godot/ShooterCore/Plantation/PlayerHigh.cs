@@ -84,6 +84,8 @@ public enum KeyCompetitor
     Contact = 2048,
     /// <summary>A cargo vehicle's doors (boot, hatch, rear doors) at its access point (a press opens or shuts them): after a lying Duffel's pick-up, before the vehicle's seat.</summary>
     CargoDoors = 4096,
+    /// <summary>A Heist's Receiver's Cartel man (the pilot, the boatman, the buyer) in reach of a party player (a press from the leader sends it off): the key is his before the plantation's hold.</summary>
+    Receiver = 8192,
 }
 
 /// <summary>The rules of the plantation hold, in one place so the server and the tests agree.</summary>

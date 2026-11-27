@@ -11,7 +11,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <item>A Job (or <c>/duffel</c>) makes one for a party with <see cref="Give"/> (in a player's hands) or <see cref="Place"/> (on the ground), and takes its own away with <see cref="Remove"/> or <see cref="RemoveParty"/>.</item>
 /// <item>One per player: a party player who carries none picks up the nearest lying one in reach (<see cref="PickUp"/>).</item>
 /// <item>The carrier throws it (<see cref="Throw"/>: one press, a fixed range, an arc); it is put down where they stand only when they cannot carry it on (<see cref="Drop"/>: death, a seat, leaving the party or the server).</item>
-/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot (<see cref="LoadedIn"/>); one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
+/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's, and every Heist's <see cref="Receiver"/>) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot (<see cref="LoadedIn"/>); one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
 /// </list>
 /// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a throw, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
 /// </summary>
@@ -252,10 +252,16 @@ public sealed class DuffelBook
         Forget(d.Id);
     }
 
-    /// <summary>Takes every Duffel of this party out of the world (the Job ended); the count removed.</summary>
-    public int RemoveParty(IReadOnlySet<ushort> party)
+    /// <summary>How many Duffels of this party exist now, wherever they are (lying, carried, flying, loaded).</summary>
+    public int PartyCount(IReadOnlySet<ushort> party) => _byId.Values.Count(d => ReferenceEquals(d.Party, party));
+
+    /// <summary>
+    /// Takes every Duffel of this party out of the world (the Job ended); the count removed. Those loaded in <paramref name="keep"/> stay (a Receiver that is leaving carries its bags off; the server removes them when
+    /// it is gone).
+    /// </summary>
+    public int RemoveParty(IReadOnlySet<ushort> party, ICargoVolume? keep = null)
     {
-        var gone = _byId.Values.Where(d => ReferenceEquals(d.Party, party)).ToList();
+        var gone = _byId.Values.Where(d => ReferenceEquals(d.Party, party) && !(keep != null && d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, keep))).ToList();
         foreach (var d in gone) Remove(d);
         return gone.Count;
     }

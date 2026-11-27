@@ -17,6 +17,8 @@ public static class CartelSpots
     {
         CartelZones.DropKind => map.DropPoints,
         CartelZones.HitKind => map.HitSpots,
+        CartelZones.HeliKind => map.HeliPoints,
+        CartelZones.BoatKind => map.BoatPoints,
         _ => Array.Empty<Vector3>(),
     };
 
@@ -45,7 +47,7 @@ public static class CartelSpots
     {
         refusal = null;
         var pool = Pool(map, zoneKind);
-        var what = zoneKind == CartelZones.HitKind ? "hit spot" : "drop point";
+        var what = zoneKind switch { CartelZones.HitKind => "hit spot", CartelZones.HeliKind => "landing spot", CartelZones.BoatKind => "mooring", _ => "drop point" };
         if (pool.Count == 0) { refusal = $"This map has no {what}."; return null; }
         var apart = CartelMap.Apart(Held(book, map), apartM);
         var min2 = minFromM * minFromM;

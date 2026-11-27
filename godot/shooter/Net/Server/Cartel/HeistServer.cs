@@ -8,6 +8,7 @@ using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Jobs;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
 
@@ -37,8 +38,8 @@ internal interface IHeistGoal
 
 /// <summary>
 /// The Heist template on the server (GLOSSARY "Heist", "Cartel van", "Assault"; docs/cartel.md "Heists", "Cartel van", "Assaults"): a kind's <see cref="IJobKind.Begin"/> calls <see cref="Begin"/> with its
-/// numbers (<see cref="HeistData"/>) and its <see cref="IHeistGoal"/>, and gets the objective (<see cref="HeistRun"/>): the Cartel van on the road beside the Contact reserved for the party, a Drop point
-/// far from the objective, the van's bay as the party's cargo volume (<see cref="VehicleCargo"/>, restricted to the party), the Assaults (<see cref="HeistAssaults"/>) of the Rival crew on the Raid vans' roads, and all of it removed at the end. The Harvest (<see cref="HarvestJobKind"/>)
+/// numbers (<see cref="HeistData"/>) and its <see cref="IHeistGoal"/>, and gets the objective (<see cref="HeistRun"/>): the Cartel van on the road beside the Contact reserved for the party, a drop
+/// far from the objective that is a Receiver (<see cref="ReceiverServer"/>: a stash house, a helicopter or a boat), the van's bay as the party's cargo volume (<see cref="VehicleCargo"/>, restricted to the party), the Assaults (<see cref="HeistAssaults"/>) of the Rival crew on the Raid vans' roads, at the objective and at the drop, and all of it removed at the end. The Harvest (<see cref="HarvestJobKind"/>)
 /// is registered here; the Trap house heist registers its own kind on the same services.
 /// </summary>
 internal sealed class HeistServer
@@ -50,10 +51,11 @@ internal sealed class HeistServer
 
     /// <param name="vehicles">The Job vehicles (built after the Cartel; asked at a Job's start).</param>
     /// <param name="ground">The terrain height under (x, z) (the map's, or its mean height off it).</param>
-    public HeistServer(ServerContext ctx, CartelFile data, CartelServer cartel, IJobParties parties, DuffelServer duffels, CargoServer cargo, Func<JobVehicles> vehicles, RaidServer raids, RivalCrewServer rivals,
+    public HeistServer(ServerContext ctx, CartelFile data, CartelServer cartel, IJobParties parties, DuffelServer duffels, CargoServer cargo, ReceiverServer receivers, Func<JobVehicles> vehicles, RaidServer raids, RivalCrewServer rivals,
         Func<CartelMap> map, Func<ZonePolygons> polygons, Func<float, float, float> ground, Random rng)
     {
-        Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; Cargo = cargo; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
+        Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; Cargo = cargo; Receivers = receivers; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
+        receivers.RunOf = RunOf;
         Harvest = new HarvestJobKind(this, data);
         cartel.Register(Harvest);
     }
@@ -64,6 +66,8 @@ internal sealed class HeistServer
     public DuffelServer Duffels { get; }
     /// <summary>The cargo vehicles: the Cartel van's bay is one of them.</summary>
     public CargoServer Cargo { get; }
+    /// <summary>The Receivers: where a Heist's drop is.</summary>
+    public ReceiverServer Receivers { get; }
     public RaidServer Raids { get; }
     public JobVehicles Vehicles => _vehicles();
     public Func<CartelMap> Map { get; }
@@ -77,22 +81,23 @@ internal sealed class HeistServer
     public HeistRun? RunOf(ushort player) => Cartel.Jobs.Involving(player, Parties)?.Objective as HeistRun;
 
     /// <summary>
-    /// Begins a Heist for <paramref name="job"/>: a Drop point at least drop_min_m from the objective (reserved in the book), then the Cartel van on the road spot nearest the Contact, reserved for the
-    /// party, and the counts for the party's size. Null with why not (no drop point left, no van type).
+    /// Begins a Heist for <paramref name="job"/>: a drop (a Receiver's place: a hollow house, a landing spot or a mooring) at least drop_min_m from the objective (reserved in the book), then the Cartel van on the road
+    /// spot nearest the Contact, reserved for the party, the counts for the party's size and the Receiver put down for it. Null with why not (no drop left, no van type).
     /// </summary>
     public HeistRun? Begin(Job job, JobBook book, HeistData data, IHeistGoal goal, ContactPose contact, out string? refusal)
     {
         refusal = null;
         var members = job.Party;
-        if (CartelSpots.Claim(job, book, Map(), CartelZones.DropKind, _rng, goal.Centre, goal.Place, data.DropMinM, data.DropApartM, out refusal) is not { } drop) return null;
+        if (Receivers.Plan(job, book, goal.Centre, goal.Place, data, out refusal) is not { } plan) return null;
         var (at, yaw) = VanSpot(contact, data.VanSpawnMinM);
         if (Vehicles.Spawn(data.VanType, at, yaw, members) is not { } van) { refusal = "The Cartel van cannot be put down."; return null; }
         if (Cargo.BayOf(van) == null) { Vehicles.Remove(van); refusal = "The Cartel van has no cargo volume."; return null; }
         var capacity = CarCargo.Capacity(van);
         var heist = new Heist(HeistRules.MinDuffels(data, job.Tier, members.Count, capacity), HeistRules.MaxDuffels(data, job.Tier, members.Count, capacity),
-            HeistRules.GraceSeconds(data, job.Tier), HeistRules.IntervalSeconds(data, job.Tier));
-        GD.Print($"server: {job}: Cartel van {van.Id} at ({at.X:F0},{at.Z:F0}), drop at ({drop.X:F0},{drop.Z:F0}), {heist.Min} to {heist.Max} duffels");
-        return new HeistRun(this, job, data, goal, van, drop, heist);
+            HeistRules.GraceSeconds(data, job.Tier), HeistRules.IntervalSeconds(data, job.Tier), data.DropGraceSeconds) { Drop = ReceiverRules.Text(plan.Kind) };
+        if (Receivers.Put(plan, members, heist.Min, Math.Min(heist.Max, VehicleCargoVolumeDef.MaxCapacity)) is not { } receiver) { Vehicles.Remove(van); refusal = "The drop cannot be put down."; return null; }
+        GD.Print($"server: {job}: Cartel van {van.Id} at ({at.X:F0},{at.Z:F0}), drop: {ReceiverRules.NameOf(plan.Kind)} at ({plan.At.X:F0},{plan.At.Z:F0}), {heist.Min} to {heist.Max} duffels");
+        return new HeistRun(this, job, data, goal, van, receiver, heist);
     }
 
     /// <summary>The Cartel van is not put down this close to another vehicle (a second squad's van standing on the road spot nearest the Contact).</summary>
@@ -126,7 +131,7 @@ internal sealed class HeistServer
         }
         var (gunmen, enforcers) = HeistRules.AssaultCrew(run.Data, run.Job.Tier, run.Party.Count);
         var party = run.Party;
-        var centre = run.Goal.Centre;
+        var centre = run.AssaultTarget;
         var crew = _rivals.NewCrew(centre, party.Contains);
         var used = assaults.Stops.Append(new NVec2(run.VanFeet.X, run.VanFeet.Z)).ToList(); // not on top of the Cartel van (a Raid van shoves cars aside)
         if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, CrewRules.Order(gunmen, enforcers), crew, centre) is not { } raid)
@@ -135,36 +140,40 @@ internal sealed class HeistServer
             return "No Assault sent: no Rival crew van could be put on the road now.";
         }
         assaults.Add(raid);
-        run.Tell($"A Rival crew van is coming to {run.Goal.Place}!");
+        run.Tell($"A Rival crew van is coming to {run.AssaultPlace}!");
         return null;
     }
 }
 
 /// <summary>
 /// One running Heist's objective on the server (the template, <see cref="Heist"/> for its phase and Assault clock): the van's riders follow the Job's party (<see cref="Job.Party"/>), it feeds the
-/// facts of the Cartel van each tick, launches the Assaults when due and takes out the spent ones (<see cref="HeistAssaults"/>), and counts the van's bay (<see cref="VehicleCargo"/>). It succeeds when the
-/// van stops at the Drop point with the minimum loaded, fails when the van is destroyed, and its end removes the van, the party's Duffels and the Assaults.
+/// facts of the Cartel van and the drop's <see cref="Receiver"/> each tick, launches the Assaults when due (at the objective, and at the drop once the van is there) and takes out the spent ones
+/// (<see cref="HeistAssaults"/>), and counts the van's bay (<see cref="VehicleCargo"/>). It succeeds the moment the Receiver is sent off with the minimum on it, fails when the van is destroyed, and its end removes
+/// the van, the party's Duffels (but those on a Receiver that is still leaving) and the Assaults.
+/// <para>
+/// The seam for the Rival chase cars (a later wave): <see cref="LeftObjective"/> is raised when the van left the objective's area with the minimum loaded (the drive to the drop begins), <see cref="ReachedDrop"/>
+/// when the van came within the drop's area (the drive is over); <see cref="VanFeet"/>, <see cref="Heist"/> and <see cref="Receiver"/> say where everything is.
+/// </para>
 /// </summary>
 internal sealed class HeistRun : IJobObjective
 {
     readonly HeistServer _s;
     readonly ServerCar _van;
-    readonly NVec3 _drop;
     readonly VehicleCargo _bay;
-    Change<HeistPhase> _told;
     /// <summary>The party's version the van's riders were last set from (the van was put down with the party at the start).</summary>
     Change<int> _riders;
 
-    public HeistRun(HeistServer s, Job job, HeistData data, IHeistGoal goal, ServerCar van, NVec3 drop, Heist heist)
+    public HeistRun(HeistServer s, Job job, HeistData data, IHeistGoal goal, ServerCar van, Receiver receiver, Heist heist)
     {
-        _s = s; Job = job; Data = data; Goal = goal; _van = van; _drop = drop; Heist = heist;
-        _told.Update(heist.Phase);
+        _s = s; Job = job; Data = data; Goal = goal; _van = van; Receiver = receiver; Heist = heist;
         _riders.Update(job.Party.Version);
         Assaults = new HeistAssaults(data.MaxAssaultsAlive);
         _bay = s.Cargo.BayOf(van)!; // the van's bay is a cargo volume like every vehicle's; this Job's van takes only its party's Duffels, and counts them
         _bay.Restrict(job.Party);
         _bay.MarginM = data.VanLoadMarginM;
         _bay.DuffelLoaded += OnLoaded;
+        receiver.DuffelLoaded += OnReceived;
+        heist.PhaseChanged += OnPhase;
         van.Exploded += OnExploded;
     }
 
@@ -172,6 +181,8 @@ internal sealed class HeistRun : IJobObjective
     public HeistData Data { get; }
     public IHeistGoal Goal { get; }
     public Heist Heist { get; }
+    /// <summary>The drop: a stash house's pallet, a helicopter or a boat. The party unloads the van into it.</summary>
+    public Receiver Receiver { get; }
     /// <summary>The Job's party: the set the Duffels of this Heist belong to and its crews attack.</summary>
     public JobParty Party => Job.Party;
     /// <summary>Duffels the party has filled so far (a kind's filling counts them up to the maximum).</summary>
@@ -181,24 +192,42 @@ internal sealed class HeistRun : IJobObjective
     public NVec3 VanFeet => CarPose.Present(_van).Feet;
     public HeistAssaults Assaults { get; }
 
+    /// <summary>The van left the objective's area with at least the minimum loaded: the drive to the drop begins (the Assaults stop). A later wave's chase cars start here.</summary>
+    public event Action<HeistRun>? LeftObjective;
+    /// <summary>The van came within the drop's area: the drive is over, the party unloads (the Assaults come to the drop). A later wave's chase cars stop coming here.</summary>
+    public event Action<HeistRun>? ReachedDrop;
+
+    /// <summary>Where an Assault goes now: the van at the drop once it is there, else the objective's centre.</summary>
+    public NVec3 AssaultTarget => Heist.Phase == HeistPhase.AtDrop ? VanFeet : Goal.Centre;
+    /// <summary>What the chat calls where the Assault goes.</summary>
+    public string AssaultPlace => Heist.Phase == HeistPhase.AtDrop ? Heist.Drop.Place : Goal.Place;
+
     public JobStep Step(Job job, float dt)
     {
         if (_riders.Update(Party.Version)) JobVehicles.SetRiders(_van, Party); // a squad mate came or went: the van takes whom the party has now
         foreach (var spent in Assaults.TakeSpent()) _s.Raids.Remove(spent); // its crew is gone: the van frees its slot
         var feet = VanFeet;
-        var atDrop = CarPose.Flat(feet, _drop) <= Data.DropRadiusM && MathF.Abs(_van.State.Speed) < Data.DropStopMps;
-        var t = Heist.Step(new HeistFacts(_van.Destroyed, Goal.InArea(feet), atDrop, Loaded), dt);
+        var r = Receiver;
+        // every Duffel of the Job on board a helicopter or a boat sends it off by itself; a stash house waits for its buyer's E
+        if (r.Kind != ReceiverKind.StashHouse && r.CanSend && Heist.Phase is HeistPhase.ToDrop or HeistPhase.AtDrop && _s.Duffels.Book.PartyCount(Party) == r.Loaded && r.Send())
+        {
+            Tell($"All {r.SentWith} duffels are aboard: the {ReceiverRules.Man(r.Kind)} takes off.");
+            GD.Print($"server: {Job}: every duffel is on the {ReceiverRules.NameOf(r.Kind)}, it leaves with {r.SentWith}");
+        }
+        var inDrop = CarPose.Flat(feet, r.Position) <= r.Data.AreaM;
+        var t = Heist.Step(new HeistFacts(_van.Destroyed, Goal.InArea(feet), inDrop, Loaded, r.Sent ? r.SentWith : r.Loaded, r.Sent), dt);
         if (t.AssaultDue) _s.LaunchAssault(this);
-        if (_told.Update(Heist.Phase)) TellPhase();
         return t.Step;
     }
 
-    void TellPhase()
+    /// <summary>The phase changed: the party is told, and the seam's events go out.</summary>
+    void OnPhase(HeistPhase from, HeistPhase to)
     {
-        switch (Heist.Phase)
+        switch (to)
         {
-            case HeistPhase.AtObjective: Tell(Heist.Assaults.Due == 0 && Heist.Assaults.State == AssaultClockState.Grace ? $"The van is at {Goal.Place}. Load at least {Heist.Min} duffels; the Rival crew is coming." : $"Back at {Goal.Place}: the Rival crew comes again."); break;
-            case HeistPhase.ToDrop: Tell($"The van is away with {Heist.Loaded} duffels: drive to the drop point and stop there."); break;
+            case HeistPhase.AtObjective: Tell(from == HeistPhase.ToObjective ? $"The van is at {Goal.Place}. Load at least {Heist.Min} duffels; the Rival crew is coming." : $"Back at {Goal.Place}: the Rival crew comes again."); break;
+            case HeistPhase.ToDrop when from == HeistPhase.AtObjective: Tell($"The van is away with {Loaded} duffels: drive to {Heist.Drop.Place}."); LeftObjective?.Invoke(this); break;
+            case HeistPhase.AtDrop: Tell($"The van is at {Heist.Drop.Place}: carry or throw the duffels into it, at least {Heist.Min}. The Rival crew will come here too."); ReachedDrop?.Invoke(this); break;
         }
     }
 
@@ -213,8 +242,17 @@ internal sealed class HeistRun : IJobObjective
     void OnLoaded(Duffel duffel)
     {
         var loaded = _bay.Loaded; // counted by the bay itself (the one count): a Duffel taken out lowers it, a reset of the van empties it
-        if (loaded == Heist.Max) Tell($"All {loaded} duffels are loaded: drive the van to the drop point and stop there.");
-        else if (loaded == Heist.Min) Tell($"{loaded} loaded, enough for the drop: drive the van there, or load up to {Heist.Max} for more Respect.");
+        if (loaded == Heist.Max) Tell($"All {loaded} duffels are loaded: drive the van to {Heist.Drop.Place}.");
+        else if (loaded == Heist.Min) Tell($"{loaded} loaded, enough for the drop: drive the van to {Heist.Drop.Place}, or load up to {Heist.Max} for more Respect.");
+    }
+
+    /// <summary>A Duffel took a slot on the Receiver: the party hears the minimum and the maximum.</summary>
+    void OnReceived(Duffel duffel)
+    {
+        var on = Receiver.Loaded;
+        var man = ReceiverRules.Man(Receiver.Kind);
+        if (on == Receiver.Capacity) Tell($"{on} duffels are on board: that is all it takes. The leader presses the interact key at the {man} to finish.");
+        else if (on == Heist.Min) Tell($"{on} on board, enough: the leader presses the interact key at the {man} to finish, or unload up to {Heist.Max} for more Respect.");
     }
 
     /// <summary>The van blew up: the party hears why before the Job fails on its next step (the failure line alone says only that the objective was lost).</summary>
@@ -228,7 +266,7 @@ internal sealed class HeistRun : IJobObjective
     /// <summary>An admin's <c>/cartel assault</c>: an Assault now, by the clock's own path and cap (the clock goes on as it was). Null when it was sent; else why not.</summary>
     public string? SendAssault() => _s.LaunchAssault(this);
 
-    public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Loaded, Heist.Min) : 0;
+    public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Received, Heist.Min) : 0;
 
     public string Objective(Job job) => Goal.Line(Heist, Heist.Line(Goal.Place, Goal.FillLine));
 
@@ -236,7 +274,7 @@ internal sealed class HeistRun : IJobObjective
     {
         HeistMarker.Objective => Goal.Centre,
         HeistMarker.Van => CarCargo.Centre(_van) ?? VanFeet,
-        HeistMarker.Drop => _drop,
+        HeistMarker.Drop => Receiver.Position,
         _ => (NVec3?)null,
     });
 
@@ -245,10 +283,13 @@ internal sealed class HeistRun : IJobObjective
         _van.Exploded -= OnExploded;
         _bay.DuffelLoaded -= OnLoaded;
         _bay.Restrict(null);
-        var duffels = _s.Duffels.Book.RemoveParty(Party);
+        Receiver.DuffelLoaded -= OnReceived;
+        Heist.PhaseChanged -= OnPhase;
+        _s.Receivers.Release(Receiver); // a helicopter or boat that is leaving finishes its way, with the Duffels on it
+        var duffels = _s.Duffels.Book.RemoveParty(Party, Receiver.Leaving ? Receiver : null);
         foreach (var raid in Assaults.TakeAll()) _s.Raids.Remove(raid);
         _s.Vehicles.Remove(_van);
         Goal.End();
-        GD.Print($"server: {job} over: {Heist.Phase}, {Heist.Loaded} loaded, {Assaults.Sent} Assault(s); van, {duffels} duffel(s) and crews removed");
+        GD.Print($"server: {job} over: {Heist.Phase}, {Heist.Received} received, {Assaults.Sent} Assault(s); van, {duffels} duffel(s) and crews removed");
     }
 }

@@ -38,6 +38,92 @@
     "size_m": [1.441, 0.235, 1.418],
     "colour": "#8a6a45"
   },
+
+  // receivers (ReceiversData, ShooterCore/Cartel/Receiver.cs; docs/cartel.md "Receivers"; GLOSSARY "Receiver"): the drop of a Heist (Harvest and Trap house; a Delivery keeps its cartel_drop points). A Heist's drop is one of three
+  // kinds, drawn at random among the kinds the map has (weights below: a kind with weight 0 is never drawn; a kind with no free place now, or none far enough, falls through to the next): a stash house (a hollow house with
+  // road access that no player is in and no Job holds, at least the heist's drop_min_m from its objective: a Cartel pallet and a buyer at it), a helicopter (the utility helicopter on a landing spot, zone kind cartel_heli, rotors
+  // turning, a pilot in it) or a boat (the Battle Royale SM_Veh_Boat_01 at a mooring, zone kind cartel_boat, with a boatman). A Receiver is not a vehicle of vehicles.json: nothing can enter it, hurt it or push it, its Cartel man
+  // cannot be hurt either; the party's Duffels go into its cargo volume (carried and thrown, as into a van) and are never taken out again. Everything below is in the Receiver's own frame: forward -Z, x right, y up, origin on the
+  // ground under it (the pallet's base centre, the helicopter's rotor mast, the boat's waterline), metres.
+  "receivers": {
+    // weights: how likely each kind is among the kinds the map has.
+    "weights": { "stash_house": 1, "helicopter": 1, "boat": 1 },
+    // reach_m, reach_up_m: a party player is "at the Cartel man" (the interact key is the leader's send-off, the prompt shows) within reach_m on the ground of him and reach_up_m up or down.
+    "reach_m": 3.5,
+    "reach_up_m": 3,
+    // leave: how a helicopter or boat leaves once sent off, scripted with no physics (the server moves its entity, every client interpolates it). A helicopter climbs climb_m at climb_mps over its landing spot (turning to
+    // face the way it flies, turn_deg_per_s), then flies off over the nearest map edge at fly_mps, nose down pitch_deg, and is removed exit_margin_m past the edge. A boat sails the placed route of its mooring at sail_mps and
+    // is removed at the route's last point. The first ramp_seconds ease in (the speed rises from nothing).
+    "leave": { "climb_m": 60, "climb_mps": 9, "fly_mps": 35, "exit_margin_m": 150, "pitch_deg": 10, "turn_deg_per_s": 45, "sail_mps": 12, "ramp_seconds": 4 },
+    // Per kind. model + atlas: the model under assets-private/synty/glb (no .glb) wearing the atlas under synty/ (private pack: a box of size_m, in colour, without it); no atlas: an asset the map library knows (the
+    // helicopter's generated glb). model_yaw_deg: the turn of the model in the frame (the Synty pack faces +Z, the frame's forward is -Z: 180). area_m: the van is "at the drop" within this many ground metres of the
+    // Receiver (the unloading begins and the Assaults come to the drop). figure: where the Cartel man stands (feet, in the frame) and how he looks (a Gang Warfare character as the Contact is, contact.json view; yaw_deg 90
+    // faces -X). cargo_volume: the box the bags go into and 15 slots they lie on (vehicles.json cargo_volume's schema: [x, y, z, yaw_deg] of a bag's base centre; no doors, no access point: nothing is taken out); a run uses
+    // the first as many slots as the heist's maximum. A bag is 0.56 x 0.24 x 0.28 m (duffels.json view box [0.7, 0.3, 0.35] times scale 0.8), lying with its long side along x; the first layer fills first, the next lies on it.
+    "stash_house": {
+      // The Cartel pallet's own model and size (pallet.size_m, read from SM_Prop_Pallet_01.glb): deck at 0.235, 1.441 wide, 1.418 deep. Slots: 2 bags across (x +-0.3) and 4 rows (z every 0.33), then the second layer on them
+      // (y 0.475): 8 + 7. The buyer stands 1.25 m to the pallet's +x side, facing it. The server turns the pallet so that side is away from the house's door (StashPlacement).
+      "model": "gang-warfare/SM_Prop_Pallet_01",
+      "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "size_m": [1.441, 0.235, 1.418],
+      "colour": "#8a6a45",
+      "area_m": 25,
+      "figure": { "pos": [1.25, 0, 0], "yaw_deg": 90, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "idle_standing_masc_g" } },
+      "cargo_volume": {
+        "centre": [0, 0.735, 0], "size": [1.44, 1, 1.42], "capacity": 15,
+        "slots": [
+          [-0.3, 0.235, -0.495, 0], [0.3, 0.235, -0.495, 0], [-0.3, 0.235, -0.165, 0], [0.3, 0.235, -0.165, 0],
+          [-0.3, 0.235, 0.165, 0], [0.3, 0.235, 0.165, 0], [-0.3, 0.235, 0.495, 0], [0.3, 0.235, 0.495, 0],
+          [-0.3, 0.475, -0.495, 0], [0.3, 0.475, -0.495, 0], [-0.3, 0.475, -0.165, 0], [0.3, 0.475, -0.165, 0],
+          [-0.3, 0.475, 0.165, 0], [0.3, 0.475, 0.165, 0], [-0.3, 0.475, 0.495, 0]
+        ]
+      }
+    },
+    "helicopter": {
+      // drycastle-generated-models/utility_helicopter.glb (scripts/models/make_utility_helicopter_model.py): the game's vehicle frame already (forward -Z, origin on the ground under the rotor mast). Measured from the model's
+      // script and glb: cabin floor top 0.732 (FLOOR 0.72 plus the anti-slip plate), x +-1.2 between the walls, z -1.2 (the cockpit's B post) to 1.3 (the rear wall), roof 2.12; the troop bench lies along the rear wall
+      // (x -1.08..0.3, z 0.86..1.3) and the door gunner's seat at x 0.22..0.56, z -0.07..0.37, so the bags pile on the free floor of the cabin's left half (x -1.1..0.04, z -1.19..0.49): 2 across, 6 rows, then the second layer
+      // on them: 12 + 3. cargo_volume is the whole open cabin (x +-1.15, z -1.25..1.2, 1 m above the floor): a bag thrown in through either open side loads. The pilot sits in the right seat (seat_pilot, 0.55, 0.72, -1.9):
+      // there is no sitting clip in the pack, so the crouch idle is lowered into the seat (a human look is due). area_m 45: the van stops on the field's edge, not under the rotor (13.4 m across).
+      "model": "drycastle-generated-models/utility_helicopter.glb",
+      "size_m": [2.4, 3.7, 12.6],
+      "colour": "#5c6638",
+      "area_m": 45,
+      "figure": { "pos": [0.55, 0.55, -1.9], "yaw_deg": 0, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "crouch_idle_masc" } },
+      "cargo_volume": {
+        "centre": [0, 1.232, -0.025], "size": [2.3, 1, 2.45], "capacity": 15,
+        "slots": [
+          [-0.82, 0.732, -1.05, 0], [-0.24, 0.732, -1.05, 0], [-0.82, 0.732, -0.77, 0], [-0.24, 0.732, -0.77, 0],
+          [-0.82, 0.732, -0.49, 0], [-0.24, 0.732, -0.49, 0], [-0.82, 0.732, -0.21, 0], [-0.24, 0.732, -0.21, 0],
+          [-0.82, 0.732, 0.07, 0], [-0.24, 0.732, 0.07, 0], [-0.82, 0.732, 0.35, 0], [-0.24, 0.732, 0.35, 0],
+          [-0.82, 0.972, -1.05, 0], [-0.24, 0.972, -1.05, 0], [-0.82, 0.972, -0.77, 0]
+        ]
+      }
+    },
+    "boat": {
+      // assets-private/synty/glb/battle-royale/SM_Veh_Boat_01.glb (private pack; a box without it), origin on the waterline (hull bottom -0.565, engine -0.77, hull 3.45 wide, 8.35 long: z -3.9 stern to 4.43 bow in the pack's
+      // frame, bow at +Z), turned 180 degrees into the frame (forward -Z), so every z below is the pack's negated. Measured from the glb (upward faces and obstacles on a 0.1 m grid): the cockpit floor lies at 0.2 to 0.22
+      // between the hull walls at x +-0.9, the bench across the stern (frame z 2.3, 0.27..0.75 high) and the helm console (frame z 0.75..1.45, x +-0.5, 1.6 high). The bags lie on the free floor ahead of the console
+      // (frame z -0.05..0.7), 3 across and 2 rows, in a pile three layers high: 6 + 6 + 3. cargo_volume is the cockpit aft of the bow deck (x +-0.86, z -0.05..2.2, 1 m above the floor). The boatman stands at the helm
+      // behind the console, at the wheel, facing the bow.
+      "model": "battle-royale/SM_Veh_Boat_01",
+      "atlas": "battle-royale/polygon-battle-royale-01/Assets/PolygonBattleRoyale/Textures/PolygonBattleRoyale_Vehicles_01.png",
+      "model_yaw_deg": 180,
+      "size_m": [3.45, 3, 8.35],
+      "colour": "#d8d4c8",
+      "area_m": 45,
+      "figure": { "pos": [0, 0.21, 1.85], "yaw_deg": 0, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "idle_standing_masc_g" } },
+      "cargo_volume": {
+        "centre": [0, 0.7, 1.075], "size": [1.72, 1, 2.25], "capacity": 15,
+        "slots": [
+          [-0.58, 0.21, 0.14, 0], [0, 0.21, 0.14, 0], [0.58, 0.21, 0.14, 0], [-0.58, 0.21, 0.42, 0],
+          [0, 0.21, 0.42, 0], [0.58, 0.21, 0.42, 0], [-0.58, 0.45, 0.14, 0], [0, 0.45, 0.14, 0],
+          [0.58, 0.45, 0.14, 0], [-0.58, 0.45, 0.42, 0], [0, 0.45, 0.42, 0], [0.58, 0.45, 0.42, 0],
+          [-0.58, 0.69, 0.14, 0], [0, 0.69, 0.14, 0], [0.58, 0.69, 0.14, 0]
+        ]
+      }
+    }
+  },
   // One section per kind of Job, read only by that kind.
   "jobs": {
     // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when
@@ -107,12 +193,13 @@
       "van_type": "cartel_van",
       "van_spawn_min_m": 8,
       "van_load_margin_m": 0.35,
-      // The Drop point (cartel_drop zones): at least drop_min_m from the plantation's centre and drop_apart_m from another job's; the van must stop (slower than drop_stop_mps) within
-      // drop_radius_m of it, with at least the minimum loaded.
+      // The drop (a Receiver, see "receivers": a stash house, a helicopter or a boat; the heists no longer use cartel_drop points): at least drop_min_m from the plantation's centre and drop_apart_m from another job's.
+      // The van is "at the drop" within the Receiver's area_m: the party unloads it there, and Assaults come to the drop too: the first drop_grace_seconds after the van arrived, then every assault_interval_seconds
+      // until the heist ends. The heist succeeds the moment the Receiver is sent off with at least the minimum on it (the helicopter or boat leaves by itself once every duffel of the job is on board, or the leader presses
+      // the interact key at the pilot, boatman or buyer; the stash house's buyer takes the bags when the leader presses it); the Respect counts the duffels on the Receiver then.
       "drop_min_m": 300,
       "drop_apart_m": 40,
-      "drop_radius_m": 10,
-      "drop_stop_mps": 1,
+      "drop_grace_seconds": 20,
       // fill_hold_seconds: during the heist a party member's hold of the interact key in the plantation fills a weed duffel in their hands (instead of High) until the maximum is filled.
       // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
       "fill_hold_seconds": 3,
@@ -140,7 +227,7 @@
       "max_defenders": 10,
       // area_m: the objective's area, where the van loads and the Assaults go on: within this of the house's centre or of the road spot where the van parks (its door's nearest road).
       "area_m": 20,
-      // Assaults, the Cartel van and the Drop point (from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded.
+      // Assaults, the Cartel van and the drop (a Receiver, from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded; they come again at the drop (harvest's drop_grace_seconds).
       "grace_seconds": [60, 55, 50, 45, 40],
       "assault_interval_seconds": [100, 90, 80, 70, 60],
       "assault_gunmen": [1, 2, 2, 3, 3],
@@ -153,8 +240,7 @@
       "van_load_margin_m": 0.35,
       "drop_min_m": 300,
       "drop_apart_m": 40,
-      "drop_radius_m": 10,
-      "drop_stop_mps": 1
+      "drop_grace_seconds": 20
     }
   }
 }

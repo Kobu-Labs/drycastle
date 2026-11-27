@@ -15,7 +15,7 @@ namespace Drycastle.Shooter.Net.Client.Incidents;
 
 /// <summary>
 /// The Duffels on the client (GLOSSARY "Duffel"; world entity <see cref="DuffelRules.TypeId"/>; duffels.json <c>view</c>). Everyone sees a carried Duffel on its carrier's back and a lying or flying one
-/// where it is (interpolated); a loaded one is drawn on its slot of its vehicle (the owner field says which, the state byte's high bits the slot), fixed to it. The own carried Duffel is not drawn (the eye is inside the body), but it burdens the predicted body
+/// where it is (interpolated); a loaded one is drawn on its slot of its vehicle or of a Heist's Receiver (the owner field says which, the state byte's high bits the slot), fixed to it. The own carried Duffel is not drawn (the eye is inside the body), but it burdens the predicted body
 /// (<see cref="Characters.Player.Burden"/>, the server's numbers) from the very input that takes it or lets it go, as the server does: the client predicts its own pick-up (the interact key's press
 /// on the Duffel in reach) and throw (the throw key's fresh press), and each predicted input keeps the burden it ran with for the replay (<see cref="OwnPlayer.OwnPrediction"/>), so carrying
 /// corrects nothing. Only the server knows a Duffel's party, so the key's owner and the prompt follow its <see cref="EventKind.DuffelReach"/>. A refusal (<see cref="EventKind.DuffelNotice"/>) is a toast.
@@ -56,6 +56,10 @@ public sealed class DuffelsClient
 
     /// <summary>Longer than a round trip takes: a prediction the replica has not confirmed by then was wrong.</summary>
     const float ConfirmSeconds = 1.5f;
+
+    /// <summary>The Receivers' view: where a Duffel loaded on one is drawn (set by the host, which builds both).</summary>
+    internal ReceiversClient? Receivers { set => _receivers = value; }
+    ReceiversClient? _receivers;
 
     internal DuffelsClient(ClientContext ctx, DuffelsFile data, InteractTargets targets)
     {
@@ -145,6 +149,12 @@ public sealed class DuffelsClient
     /// </summary>
     void PlaceLoaded(View v, ushort vehicle, int slot)
     {
+        if (ReceiverRules.IsReceiver(vehicle, out var receiver)) // the owner field of a Duffel on a Heist's Receiver: its entity id with the Receiver bit
+        {
+            if (_receivers?.SlotTransform(receiver, slot) is { } onReceiver) { v.Node.GlobalTransform = onReceiver; v.Node.Visible = true; }
+            else v.Node.Visible = false;
+            return;
+        }
         if (!_ctx.Cars.TryGet(vehicle, out var car) || car.Destroyed || _ctx.Vehicles == null || car.Kind >= _ctx.Vehicles.Vehicles.Count
             || _ctx.Vehicles.Vehicles[car.Kind].CargoVolume?.Slot(slot) is not { } place || !GodotObject.IsInstanceValid(car.SeatAnchor)) { v.Node.Visible = false; return; }
         var body = car.SeatAnchor.GlobalTransform;

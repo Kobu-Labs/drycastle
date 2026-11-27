@@ -183,6 +183,7 @@ public partial class NetClient : Node
     /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     DuffelsClient _duffels = null!;
+    ReceiversClient _receivers = null!;
     DrillsClient _drills = null!;
     /// <summary>cartel.json (the host sets it from the data directory; the shipped defaults otherwise): the Contact's reach, the ranks, tiers and kinds the panel lists.</summary>
     public Drycastle.ShooterCore.Cartel.CartelFile Cartel = Drycastle.ShooterCore.Cartel.CartelFile.Default;
@@ -349,6 +350,8 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
         _duffels = new DuffelsClient(Ctx, Duffels, _interact);
+        _receivers = new ReceiversClient(Ctx, Cartel.Receivers); // the Heists' drops (docs/cartel.md "Receivers"): world entity 59
+        _duffels.Receivers = _receivers; // a Duffel loaded on one is drawn on it
         _drills = new DrillsClient(Ctx, _interact); // the Drills on the Trap houses' safes (#496)
         _cartel = new CartelClient(Ctx, Cartel, () => Chat.Context.IsAdmin, () => _screens.OpenContactPanel());
         _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _drills.HoldFraction, () => _cartel.HoldFraction);
@@ -453,7 +456,7 @@ public partial class NetClient : Node
     string? PromptLine(string? ride)
     {
         ride = _duffels.InsteadOfRide(ride);
-        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _duffels.CargoPrompt() ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
+        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _receivers.Prompt() ?? _duffels.CargoPrompt() ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
             ?? _minerals.Prompt() ?? _crates.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
     }
 
@@ -557,6 +560,7 @@ public partial class NetClient : Node
         _poseDemo?.Tick();
         _corpses.Render(delta);
         _groundItems.Render();
+        _receivers.Render((float)delta); // the Heists' Receivers (their pose, a helicopter's rotors), before the Duffels that ride on them
         _duffels.Render(); // the Duffels: on backs, on the ground, in flight; the own one burdens the body
         _drills.Render(delta); // the drills on the safes, their sound and sparks, the opened doors, the Drill panel
         _cartel.Render(delta); // the Job tracker's clock, the Contact's key and his panel's reach
@@ -757,6 +761,7 @@ public partial class NetClient : Node
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
+        _receivers.OnEvent(kind, payload); // what the interact key does at a Receiver's Cartel man
         _drills.OnEvent(kind, payload); // the Drills on the safes near the player, and what the key's hold would do (#496)
         _cartel.OnEvent(kind, payload); // the Cartel: the own standing, Job and objective, everyone's rank-ups (#494)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
