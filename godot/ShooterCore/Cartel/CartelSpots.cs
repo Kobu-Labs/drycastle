@@ -65,19 +65,4 @@ public static class CartelSpots
         for (var i = 0; i < pool.Count; i++) if (pool[i] == p) return i;
         return -1;
     }
-
-    /// <summary>Checks a kind's per-tier array: one positive number per tier of cartel.json.</summary>
-    internal static void CheckPerTier(float[] values, CartelFile file, string what)
-    {
-        if (values.Length != file.Tiers.Count) throw new Data.DataFileException($"cartel.json: {what} needs one number per tier ({file.Tiers.Count})");
-        if (values.Any(s => !float.IsFinite(s) || s <= 0)) throw new Data.DataFileException($"cartel.json: {what} must all be more than 0");
-    }
-
-    internal static void CheckPerTier(int[] values, CartelFile file, string what)
-    {
-        if (values.Length != file.Tiers.Count) throw new Data.DataFileException($"cartel.json: {what} needs one number per tier ({file.Tiers.Count})");
-        if (values.Any(s => s < 0)) throw new Data.DataFileException($"cartel.json: {what} must not be negative");
-    }
-
-    internal static T OfTier<T>(T[] values, int tier) => values[Math.Clamp(tier, 1, values.Length) - 1];
 }

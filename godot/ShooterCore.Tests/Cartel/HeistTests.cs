@@ -81,8 +81,45 @@ public class HeistTests
         Assert.Equal((1, 2), HeistRules.AssaultCrew(d, 1, 1));
         Assert.Equal((5, 3), HeistRules.AssaultCrew(d, 4, 3));
         Assert.Equal((6, 2), HeistRules.AssaultCrew(d, 5, 4)); // 6 Gunmen, room for 2 of the 4 Enforcers
-        var order = HeistRules.CrewOrder(2, 3);
+        var order = CrewRules.Order(2, 3);
         Assert.Equal(new[] { GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Enforcer }, order);
+    }
+
+    [Fact]
+    public void OneCrewFormulaAndOneOrderServeEveryKind()
+    {
+        // the per-member terms both count: a Hit scales its Enforcers per mate too, an Assault and a house do not (0)
+        Assert.Equal((4, 5), CrewRules.Split(1, 1, 2, 1, 4, 10));
+        Assert.Equal((4, 2), CrewRules.Split(1, 1, 2, 0, 4, 10));
+        Assert.Equal((3, 0), CrewRules.Split(5, 0, 2, 0, 1, 3)); // Gunmen first within the cap
+        Assert.Equal((0, 0), CrewRules.Split(2, 1, 2, 1, 3, -1)); // no room at all
+        // the ring of a Rival dealer's guards used its own interleave: the one order gives the same for every split
+        for (var g = 0; g <= 6; g++)
+            for (var e = 0; e <= 6; e++)
+            {
+                var ring = new List<GangMemberKind>();
+                int gs = 0, es = 0;
+                for (var i = 0; i < g + e; i++)
+                {
+                    var k = gs < g && (es >= e || gs <= es) ? GangMemberKind.Gunman : GangMemberKind.Enforcer;
+                    if (k == GangMemberKind.Gunman) gs++; else es++;
+                    ring.Add(k);
+                }
+                Assert.Equal(ring, CrewRules.Order(g, e));
+            }
+    }
+
+    [Fact]
+    public void ATiersNumberIsItsEntryAndTheListsAreChecked()
+    {
+        var a = new[] { 10, 20, 30 };
+        Assert.Equal(10, CartelTiers.Of(a, 1));
+        Assert.Equal(30, CartelTiers.Of(a, 3));
+        Assert.Equal(30, CartelTiers.Of(a, 9)); // past the list: the last
+        Assert.Equal(10, CartelTiers.Of(a, 0));
+        CartelTiers.Check(a, 3, "x", CartelTiers.Count, "0 or more");
+        Assert.Contains("one number per tier (5)", Assert.Throws<DataFileException>(() => CartelTiers.Check(a, 5, "x", CartelTiers.Count, "0 or more")).Message);
+        Assert.Contains("every number must be more than 0", Assert.Throws<DataFileException>(() => CartelTiers.Check(new[] { 1f, 0f }, 2, "x", CartelTiers.Positive, "more than 0")).Message);
     }
 
     [Fact]

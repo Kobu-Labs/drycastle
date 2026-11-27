@@ -86,9 +86,10 @@ public sealed class HitJobKind : IJobKind
     public HitJobKind(CartelFile file, IJobParties parties, Func<CartelMap> map, Random rng, IHitWorld world)
     {
         _data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.hit");
-        CartelSpots.CheckPerTier(_data.Seconds, file, "jobs.hit.seconds");
-        CartelSpots.CheckPerTier(_data.Gunmen, file, "jobs.hit.gunmen");
-        CartelSpots.CheckPerTier(_data.Enforcers, file, "jobs.hit.enforcers");
+        var tiers = file.Tiers.Count;
+        CartelTiers.Check(_data.Seconds, tiers, "cartel.json: jobs.hit.seconds", CartelTiers.Positive, "more than 0");
+        CartelTiers.Check(_data.Gunmen, tiers, "cartel.json: jobs.hit.gunmen", CartelTiers.Count, "0 or more");
+        CartelTiers.Check(_data.Enforcers, tiers, "cartel.json: jobs.hit.enforcers", CartelTiers.Count, "0 or more");
         static DataFileException Bad(string what) => new($"cartel.json: jobs.hit.{what}");
         if (_data.GunmenPerMate < 0 || _data.EnforcersPerMate < 0) throw Bad("gunmen_per_mate and enforcers_per_mate must not be negative");
         if (_data.MaxGuards < 0) throw Bad("max_guards must not be negative");
@@ -99,16 +100,11 @@ public sealed class HitJobKind : IJobKind
 
     public string Id => KindId;
     public string Name => _data.Name;
-    public float Seconds(int tier) => CartelSpots.OfTier(_data.Seconds, tier);
+    public float Seconds(int tier) => CartelTiers.Of(_data.Seconds, tier);
 
     /// <summary>The guards of a Hit of that tier for a party of <paramref name="partySize"/>: the tier's counts plus the per-mate ones for each member past the first, at most max_guards (Gunmen kept first).</summary>
-    public (int Gunmen, int Enforcers) Guards(int tier, int partySize)
-    {
-        var mates = Math.Max(0, partySize - 1);
-        var gunmen = Math.Min(CartelSpots.OfTier(_data.Gunmen, tier) + mates * _data.GunmenPerMate, _data.MaxGuards);
-        var enforcers = Math.Min(CartelSpots.OfTier(_data.Enforcers, tier) + mates * _data.EnforcersPerMate, _data.MaxGuards - gunmen);
-        return (gunmen, enforcers);
-    }
+    public (int Gunmen, int Enforcers) Guards(int tier, int partySize) =>
+        CrewRules.Split(CartelTiers.Of(_data.Gunmen, tier), _data.GunmenPerMate, CartelTiers.Of(_data.Enforcers, tier), _data.EnforcersPerMate, partySize, _data.MaxGuards);
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {

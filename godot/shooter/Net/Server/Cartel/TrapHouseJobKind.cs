@@ -88,7 +88,7 @@ internal sealed class TrapHouseJobKind : IJobKind
             var (gunmen, enforcers) = TrapHouseHeistRules.Defenders(kind._data, tier, party.Count, dressing.Posts.Count);
             _crew = kind._rivals.NewCrew(centre, p => party.Contains(p));
             var posted = 0;
-            var order = HeistRules.CrewOrder(gunmen, enforcers);
+            var order = CrewRules.Order(gunmen, enforcers);
             for (var i = 0; i < order.Count; i++)
                 if (_crew.AddPosted(order[i], dressing.Posts[i].Pos, dressing.Posts[i].Yaw) != null) posted++;
             _drill = kind._drills.Arm(dressing.House, party, tier);

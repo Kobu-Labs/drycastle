@@ -44,14 +44,12 @@ internal sealed class CartelJobWorld : IDeliveryWorld, IHitWorld
         var crew = _rivals.NewCrew(centre, hostileTo);
         var dealer = crew.Add(GangMemberKind.GangBoss, centre, (float)_rng.NextDouble() * MathF.Tau - MathF.PI);
         if (dealer == null) { _rivals.Remove(crew); return null; }
-        var guards = order.Gunmen + order.Enforcers;
+        var kinds = CrewRules.Order(order.Gunmen, order.Enforcers); // Gunmen and Enforcers in turn round the ring, so each side has both
+        var guards = kinds.Count;
         var turn = (float)_rng.NextDouble() * MathF.Tau;
-        int gunmen = 0, enforcers = 0;
         for (var i = 0; i < guards; i++)
         {
-            // Gunmen and Enforcers in turn round the ring, so each side has both
-            var kind = (gunmen < order.Gunmen && (enforcers >= order.Enforcers || gunmen <= enforcers)) ? GangMemberKind.Gunman : GangMemberKind.Enforcer;
-            if (kind == GangMemberKind.Gunman) gunmen++; else enforcers++;
+            var kind = kinds[i];
             var a = turn + MathF.Tau * i / guards;
             var raw = centre + new NVec3(MathF.Cos(a), 0, MathF.Sin(a)) * order.RingM;
             var snapped = _rivals.Snap(raw);

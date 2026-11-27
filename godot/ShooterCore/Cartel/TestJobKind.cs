@@ -25,13 +25,13 @@ public sealed class TestJobKind : IJobKind
     public TestJobKind(CartelFile file)
     {
         _data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.test");
-        CartelSpots.CheckPerTier(_data.Seconds, file, "jobs.test.seconds");
+        CartelTiers.Check(_data.Seconds, file.Tiers.Count, "cartel.json: jobs.test.seconds", CartelTiers.Positive, "more than 0");
         if (!float.IsFinite(_data.SucceedSeconds) || _data.SucceedSeconds <= 0) throw new DataFileException("cartel.json: jobs.test.succeed_seconds must be more than 0");
     }
 
     public string Id => KindId;
     public string Name => _data.Name;
-    public float Seconds(int tier) => CartelSpots.OfTier(_data.Seconds, tier);
+    public float Seconds(int tier) => CartelTiers.Of(_data.Seconds, tier);
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {

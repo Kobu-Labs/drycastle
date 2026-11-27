@@ -123,7 +123,7 @@ internal sealed class HeistServer
         var centre = run.Goal.Centre;
         var crew = _rivals.NewCrew(centre, p => party.Contains(p));
         var used = assaults.Stops.Append(new NVec2(run.VanFeet.X, run.VanFeet.Z)).ToList(); // not on top of the Cartel van (a Raid van shoves cars aside)
-        if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, HeistRules.CrewOrder(gunmen, enforcers), crew, centre) is not { } raid)
+        if (Raids.LaunchAssault(new NVec2(centre.X, centre.Z), used, CrewRules.Order(gunmen, enforcers), crew, centre) is not { } raid)
         {
             _rivals.Remove(crew);
             return;

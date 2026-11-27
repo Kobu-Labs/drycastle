@@ -61,7 +61,7 @@ public sealed class DeliveryJobKind : IJobKind
     public static Data Read(CartelFile file)
     {
         var data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.delivery");
-        CartelSpots.CheckPerTier(data.Seconds, file, "jobs.delivery.seconds");
+        CartelTiers.Check(data.Seconds, file.Tiers.Count, "cartel.json: jobs.delivery.seconds", CartelTiers.Positive, "more than 0");
         if (DuffelRules.Parse(data.Duffel) == null) throw new DataFileException($"cartel.json: jobs.delivery.duffel '{data.Duffel}' is not weed, cash or product");
         void Positive(float v, string what) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"cartel.json: jobs.delivery.{what} must be more than 0"); }
         Positive(data.RadiusM, "radius_m"); Positive(data.HoldSeconds, "hold_seconds");
@@ -72,7 +72,7 @@ public sealed class DeliveryJobKind : IJobKind
     public string Id => KindId;
     public string Name => _data.Name;
     public Data Numbers => _data;
-    public float Seconds(int tier) => CartelSpots.OfTier(_data.Seconds, tier);
+    public float Seconds(int tier) => CartelTiers.Of(_data.Seconds, tier);
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {

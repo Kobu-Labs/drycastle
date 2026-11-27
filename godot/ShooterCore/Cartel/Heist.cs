@@ -217,19 +217,15 @@ public class HeistData
     public virtual void Validate(string what, int tiers)
     {
         DataFileException Bad(string text) => new($"{what}: {text}");
-        void PerTier<T>(T[] a, string name, Func<T, bool> ok, string rule)
-        {
-            if (a.Length != tiers) throw Bad($"{name} needs one number per tier ({tiers})");
-            if (!a.All(ok)) throw Bad($"{name}: every number must be {rule}");
-        }
-        PerTier(Seconds, "seconds", s => float.IsFinite(s) && s > 0, "more than 0");
+        void PerTier<T>(T[] a, string name, Func<T, bool> ok, string rule) => CartelTiers.Check(a, tiers, $"{what}: {name}", ok, rule);
+        PerTier(Seconds, "seconds", CartelTiers.Positive, "more than 0");
         PerTier(MinDuffels, "min_duffels", n => n >= 1, "at least 1");
         PerTier(MaxDuffels, "max_duffels", n => n >= 1, "at least 1");
         for (var t = 0; t < tiers; t++) if (MaxDuffels[t] < MinDuffels[t]) throw Bad($"tier {t + 1}: max_duffels is below min_duffels");
         PerTier(GraceSeconds, "grace_seconds", s => float.IsFinite(s) && s >= 0, "0 or more");
-        PerTier(AssaultIntervalSeconds, "assault_interval_seconds", s => float.IsFinite(s) && s > 0, "more than 0");
-        PerTier(AssaultGunmen, "assault_gunmen", n => n >= 0, "0 or more");
-        PerTier(AssaultEnforcers, "assault_enforcers", n => n >= 0, "0 or more");
+        PerTier(AssaultIntervalSeconds, "assault_interval_seconds", CartelTiers.Positive, "more than 0");
+        PerTier(AssaultGunmen, "assault_gunmen", CartelTiers.Count, "0 or more");
+        PerTier(AssaultEnforcers, "assault_enforcers", CartelTiers.Count, "0 or more");
         for (var t = 0; t < tiers; t++) if (AssaultGunmen[t] + AssaultEnforcers[t] < 1) throw Bad($"tier {t + 1}: an Assault needs at least one member");
         if (MinPerExtraMember < 0 || MaxPerExtraMember < 0 || GunmenPerExtraMember < 0) throw Bad("the per_extra_member numbers must be 0 or more");
         if (BonusRespectPerDuffel < 0) throw Bad("bonus_respect_per_duffel must be 0 or more");
@@ -263,49 +259,31 @@ public sealed class HarvestData : HeistData
 /// <summary>The Heist template's rules (docs/cartel.md "Difficulty and reward", "Assaults"): counts by tier and squad size, the bonus Respect, an Assault's crew.</summary>
 public static class HeistRules
 {
-    static T PerTier<T>(T[] a, int tier) => a[Math.Clamp(tier, 1, a.Length) - 1];
-
     /// <summary>The fewest Duffels loaded that the drop takes for a party of <paramref name="size"/>, never more than the van takes (<paramref name="capacity"/>, 0: no limit).</summary>
     public static int MinDuffels(HeistData d, int tier, int size, int capacity = 0)
     {
-        var n = PerTier(d.MinDuffels, tier) + d.MinPerExtraMember * Math.Max(0, size - 1);
+        var n = CartelTiers.Of(d.MinDuffels, tier) + d.MinPerExtraMember * Math.Max(0, size - 1);
         return capacity > 0 ? Math.Min(n, capacity) : n;
     }
 
     /// <summary>The most Duffels the party can fill: at least the minimum, never more than the van takes (<paramref name="capacity"/>, 0: no limit).</summary>
     public static int MaxDuffels(HeistData d, int tier, int size, int capacity = 0)
     {
-        var n = Math.Max(MinDuffels(d, tier, size), PerTier(d.MaxDuffels, tier) + d.MaxPerExtraMember * Math.Max(0, size - 1));
+        var n = Math.Max(MinDuffels(d, tier, size), CartelTiers.Of(d.MaxDuffels, tier) + d.MaxPerExtraMember * Math.Max(0, size - 1));
         return capacity > 0 ? Math.Min(n, capacity) : n;
     }
 
     /// <summary>Respect on top of the tier's: each Duffel loaded above the minimum pays bonus_respect_per_duffel times the tier.</summary>
     public static int Bonus(HeistData d, int tier, int loaded, int min) => d.BonusRespectPerDuffel * Math.Max(0, loaded - min) * Math.Max(1, tier);
 
-    /// <summary>One Assault's crew for a party of <paramref name="size"/>: the tier's Gunmen plus one per extra member, and its Enforcers, Gunmen first within max_crew.</summary>
-    public static (int Gunmen, int Enforcers) AssaultCrew(HeistData d, int tier, int size)
-    {
-        var gunmen = Math.Min(d.MaxCrew, PerTier(d.AssaultGunmen, tier) + d.GunmenPerExtraMember * Math.Max(0, size - 1));
-        var enforcers = Math.Min(d.MaxCrew - gunmen, PerTier(d.AssaultEnforcers, tier));
-        return (gunmen, enforcers);
-    }
-
-    /// <summary>The order a crew gets out of its van: Gunmen and Enforcers in turn, a Gunman first.</summary>
-    public static List<Thieves.GangMemberKind> CrewOrder(int gunmen, int enforcers)
-    {
-        var list = new List<Thieves.GangMemberKind>(gunmen + enforcers);
-        while (gunmen > 0 || enforcers > 0)
-        {
-            if (gunmen-- > 0) list.Add(Thieves.GangMemberKind.Gunman);
-            if (enforcers-- > 0) list.Add(Thieves.GangMemberKind.Enforcer);
-        }
-        return list;
-    }
+    /// <summary>One Assault's crew for a party of <paramref name="size"/>: the tier's Gunmen plus gunmen_per_extra_member for each extra member, and its Enforcers, Gunmen first within max_crew.</summary>
+    public static (int Gunmen, int Enforcers) AssaultCrew(HeistData d, int tier, int size) =>
+        CrewRules.Split(CartelTiers.Of(d.AssaultGunmen, tier), d.GunmenPerExtraMember, CartelTiers.Of(d.AssaultEnforcers, tier), 0, size, d.MaxCrew);
 
     /// <summary>The Job timer of a tier.</summary>
-    public static float Seconds(HeistData d, int tier) => PerTier(d.Seconds, tier);
-    public static float GraceSeconds(HeistData d, int tier) => PerTier(d.GraceSeconds, tier);
-    public static float IntervalSeconds(HeistData d, int tier) => PerTier(d.AssaultIntervalSeconds, tier);
+    public static float Seconds(HeistData d, int tier) => CartelTiers.Of(d.Seconds, tier);
+    public static float GraceSeconds(HeistData d, int tier) => CartelTiers.Of(d.GraceSeconds, tier);
+    public static float IntervalSeconds(HeistData d, int tier) => CartelTiers.Of(d.AssaultIntervalSeconds, tier);
 }
 
 /// <summary>
