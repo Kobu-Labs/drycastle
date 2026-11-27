@@ -37,7 +37,7 @@ public static class SpecialWeapons
     public const byte Helper = 245;
     /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the vehicle machine gun.</summary>
     public const byte Flak = 243;
-    /// <summary>What a Gang member does to a player (a fist or a pipe, Thieves event): the kill feed names it.</summary>
+    /// <summary>What a Gang member does to a player (a fist or a pipe, Thieves event; a Gunman's round, the Rival crew): the kill feed names it.</summary>
     public const byte Gang = 240;
     /// <summary>What the Bigfoot does to a player (its logs, shockwave and launch, issue #264): the kill feed names it.</summary>
     public const byte Bigfoot = 241;

@@ -73,6 +73,44 @@ public sealed partial class GangMemberView
         }
     }
 
+    /// <summary>
+    /// A Gunman's gun (its weapon by look number, <see cref="GangLook.Gun"/>): the Gang Warfare prop gripped in the right hand (rival_crew.json <c>view.grip</c>), else a dark box (also on the capsule, at its right
+    /// hip). The muzzle flash and tracer are the shared Shot events', from where the server's muzzle is.
+    /// </summary>
+    void AddGun()
+    {
+        if (_cfg.Of(GangMemberKind.Gunman).Gun is not { Weapons.Count: > 0 } gun) return;
+        var weapon = GangLook.Gun(gun, _look);
+        var grip = _data.RivalCrew.View.Grip;
+        var hand = _skeleton != null && _skeleton.FindBone(grip.Bone) >= 0;
+        Node3D body;
+        if (hand && weapon.Model != "" && SyntyLib.Instance(weapon.Model, weapon.Atlas) is { } model)
+        {
+            model.Transform = new Transform3D(Rot(grip.ModelRotationDeg), V3(grip.ModelOffset));
+            body = model;
+        }
+        else body = GunBox();
+        if (hand)
+        {
+            var att = new BoneAttachment3D { Name = "GunHand", BoneName = grip.Bone };
+            _skeleton!.AddChild(att);
+            var at = new Node3D { Name = "Grip", Transform = new Transform3D(new Basis(new Quaternion(grip.Rotation[0], grip.Rotation[1], grip.Rotation[2], grip.Rotation[3]).Normalized()), V3(grip.Position)) };
+            att.AddChild(at);
+            at.AddChild(body);
+        }
+        else
+        {
+            _pivot.AddChild(body);
+            body.Position = new Vector3(0.38f, 1.0f, -0.25f);
+        }
+    }
+
+    static MeshInstance3D GunBox() => new()
+    {
+        Name = "Gun", Mesh = new BoxMesh { Size = new Vector3(0.06f, 0.14f, 0.32f) },
+        MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("#1e1e22"), Roughness = 0.6f, Metallic = 0.5f },
+    };
+
     static MeshInstance3D Stick() => new()
     {
         Name = "Pipe", Mesh = new CylinderMesh { TopRadius = 0.035f, BottomRadius = 0.035f, Height = 0.95f },

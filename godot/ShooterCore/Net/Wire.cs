@@ -427,6 +427,7 @@ public static class Wire
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
+    //   vNEXT (Gunman + posted defenders): Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind)
     public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

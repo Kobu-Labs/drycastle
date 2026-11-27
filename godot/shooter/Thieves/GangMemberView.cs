@@ -10,7 +10,7 @@ namespace Drycastle.Shooter.Thieves;
 /// A Gang member's body on the client (GLOSSARY "Gang member"). With the private Gang Warfare pack it is the kind's model (Gang boss, Enforcer, a Thief of two looks) in one of the pack's twelve atlases,
 /// both picked by the look number (<see cref="GangLook"/>: every client agrees), with the pack's gang-rig clips (names in thieves.json <c>gang.view</c>); the peasants' clips do not fit this rig. It wears
 /// what <see cref="GangMemberView.Dress"/> says (the Enforcer's pipe, a cigarette, the Gang boss's chain, a speaker) and holds the Loot it carries (<see cref="GangMemberView.SetCarried"/>). Without the pack (or when the
-/// model fails to load) a coloured capsule per kind is drawn, so a member is never invisible: a Thief is a plain capsule, an Enforcer carries a stick, the Gang boss is bigger and gold. A kind's size is
+/// model fails to load) a coloured capsule per kind is drawn (the Rival crew's Gunman: rival_crew.json <c>view</c>, its gun in the right hand and the arm raised while it aims and fires, <see cref="GangMemberView.AddGun"/>), so a member is never invisible: a Thief is a plain capsule, an Enforcer carries a stick, the Gang boss is bigger and gold. A kind's size is
 /// <see cref="GangKindConfig.HitScale"/>, the same number the server's hit volume uses.
 /// <para>
 /// The state byte says what it does; whether it is walking is read from how far it moved (the caller passes <c>moving</c>): standing, guarding and walking share the idle and walk clips. Which clip each state plays
@@ -62,6 +62,7 @@ public sealed partial class GangMemberView : Node3D
         if (_model != null) BuildModel();
         else BuildCapsule();
         if (_kind == GangMemberKind.Enforcer) AddPipe();
+        else if (_kind == GangMemberKind.Gunman) AddGun();
         SetProcess(_anim != null);
     }
 
@@ -100,7 +101,7 @@ public sealed partial class GangMemberView : Node3D
     {
         var v = _view;
         var h = v.CapsuleHeightM;
-        var colour = Color.FromHtml(_kind switch { GangMemberKind.Enforcer => v.EnforcerColor, GangMemberKind.GangBoss => v.GangBossColor, _ => v.ThiefColor });
+        var colour = Color.FromHtml(_kind switch { GangMemberKind.Enforcer => v.EnforcerColor, GangMemberKind.GangBoss => v.GangBossColor, GangMemberKind.Gunman => _data.RivalCrew.View.GunmanColor, _ => v.ThiefColor });
         var mat = new StandardMaterial3D { AlbedoColor = colour, Roughness = 0.9f };
         _capsule = new MeshInstance3D { Name = "Capsule", Mesh = new CapsuleMesh { Radius = 0.3f, Height = h }, MaterialOverride = mat, Position = new Vector3(0, h / 2, 0) };
         _pivot.AddChild(_capsule);

@@ -38,7 +38,7 @@ internal sealed class ThievesPayout
         Func<ushort, bool> scores, Action<IEnumerable<XpGrant>> awardXp, GangRoster gangs, RaidRoster raids)
     {
         _ctx = ctx; _cfg = data.Reward; _items = items; _weapons = weapons; _corpses = corpses; _broadcastCorpseItems = broadcastCorpseItems; _winXp = eventWinXp; _rng = rng; _scores = scores; _awardXp = awardXp;
-        ctx.Match.Gang = new CreditedGangHits(gangs, _credit);
+        ctx.Match.Gang = new CreditedGangHits(gangs, _credit, id => gangs.GangOf(id)?.Crew != GangCrew.RivalCrew); // a Job's Rival crew earns no part in the Thieves' reward
         ctx.Match.Vans = new CreditedVanHits(raids, _credit);
         gangs.Killed += OnBossKilled;
     }

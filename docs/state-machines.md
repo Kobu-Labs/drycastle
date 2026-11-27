@@ -784,6 +784,29 @@ stateDiagram-v2
     Load --> Flee
     Load --> Board
     Board --> Flee
+    Guard --> Aim
+    Guard --> Posted
+    Idle --> Aim
+    Idle --> Posted
+    Chase --> Aim
+    Aim --> Fire
+    Aim --> Chase
+    Aim --> Posted
+    Aim --> Guard
+    Aim --> Flee
+    Aim --> Board
+    Fire --> Aim
+    Fire --> Chase
+    Fire --> Posted
+    Fire --> Guard
+    Fire --> Flee
+    Fire --> Board
+    Posted --> Aim
+    Posted --> Windup
+    Posted --> Flee
+    Posted --> Board
+    Windup --> Posted
+    Swing --> Posted
     Flee --> [*]
     Dead --> [*]
 ```
@@ -813,6 +836,9 @@ From any state: Dead
 - **Falling**: Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.
 - **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
+- **Aim**: A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.
+- **Fire**: The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.
+- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.
 
 ## Garage.Door
 

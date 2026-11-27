@@ -50,12 +50,16 @@ public sealed class CreditedGangHits : IGangHits
     readonly IGangHits _inner;
     readonly ThievesCredit _credit;
 
-    public CreditedGangHits(IGangHits inner, ThievesCredit credit) { _inner = inner; _credit = credit; }
+    readonly Func<ushort, bool>? _credits;
+
+    /// <param name="credits">Which hit ids count for the event (a Raid's member, not a Job's Rival crew's); null: all.</param>
+    public CreditedGangHits(IGangHits inner, ThievesCredit credit, Func<ushort, bool>? credits = null) { _inner = inner; _credit = credit; _credits = credits; }
 
     public DamageResult Hit(ushort hitId, ushort attacker, byte weapon, float amount, KillCause cause)
     {
+        var counts = _credits?.Invoke(hitId) ?? true; // asked before the hit: the member is still the gang's
         var result = _inner.Hit(hitId, attacker, weapon, amount, cause);
-        if (result != DamageResult.Ignored) _credit.NoteGangHit(attacker);
+        if (result != DamageResult.Ignored && counts) _credit.NoteGangHit(attacker);
         return result;
     }
 }

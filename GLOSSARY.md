@@ -707,7 +707,7 @@ The vehicle of a Raid: a scripted world entity that follows the road graph (in a
 _Avoid_: truck, transport, car
 
 **Gang member**:
-A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only while that player keeps attacking them: a hit on a member of their Raid makes the whole Raid fight that player (Enforcers, the Gang boss and a Thief with free hands) until 8 s after their last hit, they die or are 30 m from every living member; then the Thieves go back to stealing and the Enforcers and the Gang boss to guarding. Members do not stack on one spot: chasers take different places round the player. Killed by hits (a Hit count of 5 / 8.75 / 20: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57.
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only while that player keeps attacking them: a hit on a member of their Raid makes the whole Raid fight that player (Enforcers, the Gang boss and a Thief with free hands) until 8 s after their last hit, they die or are 30 m from every living member; then the Thieves go back to stealing and the Enforcers and the Gang boss to guarding. Members do not stack on one spot: chasers take different places round the player. Killed by hits (a Hit count of 5 / 8.75 / 20: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57. The Rival crew's people are Gang members too: its Enforcer (the same kind, its own Hit count) and the **Gunman**, who fights at range; a Rival crew also attacks on sight the players its Job names (within the sight radius, in a member's line of sight), and killing one pays nothing. Any member can be **posted**: it holds a given spot and facing, turns and fights from there and never walks (a Trap house defender).
 _Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
 
 **Loot**:
@@ -862,11 +862,11 @@ A van of the Rival crew that comes in to attack a Heist's objective, one after a
 _Avoid_: wave, attack, Raid
 
 **Rival crew**:
-The gang that works against the Cartel: it holds Trap houses, guards a Rival dealer and sends the Assaults. Its people are Gang members. Planned (#437).
+The gang that works against the Cartel: it holds Trap houses, guards a Rival dealer and sends the Assaults. Its people are Gang members (Enforcers and Gunmen, numbers in `rival_crew.json`). A crew attacks the players of its Job on sight and anyone who attacks it, and ignores everyone else. Its crews and Gunmen are built (#495); the Jobs that send them are planned (#437).
 _Avoid_: enemy, rival gang, cops
 
 **Gunman**:
-A Gang member of the Rival crew who fights at range with a gun, where the Thieves' kinds fight hand to hand. Planned (#437).
+A Gang member of the Rival crew who fights at range with a gun (a pistol, an SMG or a shotgun, by its look), where the Thieves' kinds fight hand to hand. It shoots only a target in its line of sight and range: it stops, aims (a telegraph), then fires a burst of real rounds with an aim error, resolved on server time; out of sight it closes in, or, posted, turns and waits.
 _Avoid_: shooter, bot
 
 **Trap house**:

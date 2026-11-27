@@ -119,8 +119,8 @@ internal sealed class ThievesServer
         _ctx.ChatToAll(ChatLineKind.System, "", "The Thieves event is over.");
     }
 
-    /// <summary>Every Raid goes, vans and members, the dead too.</summary>
-    void ClearCrews() { _raids.Clear(); _gangs.Roster.Clear(); }
+    /// <summary>Every Raid goes, vans and members, the dead too (a Job's Rival crew stays: its Job clears it).</summary>
+    void ClearCrews() { _raids.Clear(); _gangs.Roster.Clear(GangCrew.Raid); }
 
     // ---- what the rest of the server asks ----
 
