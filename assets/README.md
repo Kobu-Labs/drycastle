@@ -142,7 +142,7 @@ the manifest's top-level `sounds` array (id `sfx:<pack>/<file>`, pack, source, l
 | Pack | Source | Used for |
 |---|---|---|
 | `kenney-interface-sounds` | opengameart.org/content/interface-sounds (Kenney) | UI sounds, hit tick, kill confirm, dry-fire click |
-| `kenney-music-jingles` | opengameart.org/node/22000 (Kenney) | round start and end stingers |
+| `kenney-music-jingles` | opengameart.org/node/22000 (Kenney) | round start and end stingers; the Cartel's "Job done" sting (`jingles_SAX07`, added 2026-11-27) |
 | `free-firearm-sound-library` | opengameart.org/content/the-free-firearm-sound-library | pistol and AK shots (single shots cut from long takes); shooter v2 shots: ar15, ppsh, model12, nova, mossberg, walther_ppq, tikka, savage10, sks (see "Shooter v2 weapons") |
 | `oga-combat-sound-effects-150` | opengameart.org/node/195932 (compilation, per-file sources in its `LICENSE.txt`) | knife, impacts, death, weapon switch, rpg explosion (layered) |
 | `fantozzi-footsteps` | opengameart.org/content/fantozzis-footsteps-grasssand-stone | footsteps (one surface) |

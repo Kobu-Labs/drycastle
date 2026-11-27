@@ -4717,6 +4717,18 @@
       "note": "OGG copied unchanged"
     },
     {
+      "id": "sfx:kenney-music-jingles/jingles_SAX07",
+      "name": "Jingle SAX 07",
+      "file": "kenney-music-jingles/jingles_SAX07.ogg",
+      "used_for": "job.done",
+      "licence": "CC0",
+      "source": "https://opengameart.org/node/22000",
+      "pack": "kenney-music-jingles",
+      "downloaded": "2026-11-27",
+      "generated": false,
+      "note": "OGG copied unchanged (the longest of the pack's sax jingles, 1.7 s: a short phrase that resolves)"
+    },
+    {
       "id": "sfx:kenney-music-jingles/jingles_STEEL03",
       "name": "Jingle STEEL 03",
       "file": "kenney-music-jingles/jingles_STEEL03.ogg",

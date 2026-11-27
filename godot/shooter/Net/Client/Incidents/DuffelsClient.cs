@@ -50,6 +50,8 @@ public sealed class DuffelsClient
     DuffelKind _takeKind;
     /// <summary>The door prompt as last built: rebuilt only when the vehicle's label, the doors' state or the key changes.</summary>
     string? _doorsText;
+    /// <summary>The take-out and doors prompts as one line: rebuilt only when either of them is a different string.</summary>
+    string? _bothText, _bothFirst, _bothSecond;
     string _doorsLabel = "";
     bool _doorsOpen;
     Binding _doorsKey;
@@ -205,14 +207,18 @@ public sealed class DuffelsClient
         _targets.Duffel is { } id && _views.TryGetValue(id, out var v) ? _take.Get(v.Kind, "interact", "hud.duffel.take") : null;
 
     /// <summary>
-    /// At a cargo vehicle: "take a duffel out" while the server says the throw key would (empty hands, the party's Duffel loaded in the open cargo area within reach), else the doors' prompt ("open / close the boot")
-    /// while the interact key would work them. Null elsewhere. The doors' key is not predicted: the state comes back as the event.
+    /// At a cargo vehicle: "take a duffel out" while the server says the throw key would (empty hands, the party's Duffel loaded in the open cargo area within reach), and the doors' prompt ("open / close the boot")
+    /// while the interact key would work them: both keys do something at an open boot with a bag in it, so both show, in one line ("X  Take a duffel out  ·  E  Close the boot"). Null elsewhere. The doors' key is not predicted: the state comes back as the event.
     /// </summary>
     public string? CargoPrompt()
     {
         if (_ctx.Dead || _ctx.Driving) return null;
-        if (_takeVehicle != 0 && _carried == null) return _takeOut.Get(_takeKind, "duffel_throw", "hud.duffel.takeout");
-        return DoorsPrompt();
+        var doors = DoorsPrompt();
+        if (_takeVehicle == 0 || _carried != null) return doors;
+        var take = _takeOut.Get(_takeKind, "duffel_throw", "hud.duffel.takeout");
+        if (doors == null) return take;
+        if (_bothText == null || !ReferenceEquals(_bothFirst, take) || !ReferenceEquals(_bothSecond, doors)) { _bothFirst = take; _bothSecond = doors; _bothText = Strings.F("hud.prompt.join", take, doors); }
+        return _bothText;
     }
 
     /// <summary>The prompt of the nearest cargo vehicle with doors whose access point the own body stands at (the server's rule, from the drawn pose, its slope too), or null.</summary>

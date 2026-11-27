@@ -5,8 +5,8 @@ using Drycastle.ShooterCore.Jobs;
 
 namespace Drycastle.ShooterCore.Cartel;
 
-/// <summary>Where a Heist is (machine <c>Heist.Phase</c>, docs/cartel.md "Heists").</summary>
-public enum HeistPhase : byte { ToObjective, AtObjective, ToDrop, AtDrop, Delivered, Lost }
+/// <summary>Where a Heist is (machine <c>Heist.Phase</c>, docs/cartel.md "Heists"). <see cref="ToVan"/> is the start (last in the enum: the numbers of the others stand).</summary>
+public enum HeistPhase : byte { ToObjective, AtObjective, ToDrop, AtDrop, Delivered, Lost, ToVan }
 
 /// <summary>The Assault clock of a Heist (machine <c>Heist.Assaults</c>): when the next Rival crew van is due.</summary>
 public enum AssaultClockState : byte { Idle, Grace, Waiting, Paused, DropGrace, DropWaiting, Over }
@@ -21,7 +21,8 @@ public enum AssaultSite : byte { Away, Objective, Drop }
 /// <param name="Loaded">Duffels loaded in the van now.</param>
 /// <param name="Received">Duffels on the Receiver now (its own count; frozen at the moment it was sent off).</param>
 /// <param name="Sent">The Receiver was sent off (it leaves, or the buyer took the bags): the Job succeeds with <paramref name="Received"/>.</param>
-public readonly record struct HeistFacts(bool VanDestroyed, bool VanInArea, bool VanInDropArea, int Loaded, int Received = 0, bool Sent = false);
+/// <param name="PartyAtVan">A human of the party is at the Cartel van or sits in it (the server's reach): the party has found its van.</param>
+public readonly record struct HeistFacts(bool VanDestroyed, bool VanInArea, bool VanInDropArea, int Loaded, int Received = 0, bool Sent = false, bool PartyAtVan = false);
 
 /// <summary>How a Heist's drop is worded in the tracker line: where ("the helicopter") and how it is finished ("tell the pilot to leave"). The server fills it from the Receiver (<see cref="ReceiverRules"/>).</summary>
 public readonly record struct DropText(string Place, string Leave)
@@ -127,18 +128,20 @@ public sealed class AssaultClock
 /// objective (ToObjective), the party fills Duffels and loads them (AtObjective, Assaults come), the van leaves the objective's area with at least the minimum loaded (ToDrop, no new Assault)
 /// and reaches the drop's area (AtDrop: the party unloads the van into the drop's Receiver and Assaults come to the drop). The Heist succeeds the moment the Receiver is sent off with at least
 /// the minimum on it (Delivered), wherever the van is by then. The van destroyed loses it (Lost: the Job fails). What the objective is (the plantation, a trap house) is the kind's; the template
-/// knows only its area. The server part of a kind feeds the facts and launches the Assaults.
+/// knows only its area. The server part of a kind feeds the facts and launches the Assaults. The party starts at the van (ToVan: the marker is on it) and drives it to the objective (ToObjective) once a party player is at it or in it.
 /// </summary>
 public sealed class Heist
 {
     public static readonly StateMachineSpec<HeistPhase> PhaseSpec = StateMachineSpec<HeistPhase>
-        .Define("Heist.Phase", "One Heist from the Contact to the drop: the Cartel van to the objective, filling and loading under Assaults, the van to the drop, unloading into its Receiver under Assaults; the van's destruction loses it.", HeistPhase.ToObjective)
+        .Define("Heist.Phase", "One Heist from the Contact to the drop: the party to the Cartel van, the van to the objective, filling and loading under Assaults, the van to the drop, unloading into its Receiver under Assaults; the van's destruction loses it.", HeistPhase.ToVan)
+        .Allow(HeistPhase.ToVan, HeistPhase.ToObjective, HeistPhase.AtObjective, HeistPhase.Delivered)
         .Allow(HeistPhase.ToObjective, HeistPhase.AtObjective, HeistPhase.Delivered)
         .Allow(HeistPhase.AtObjective, HeistPhase.ToDrop, HeistPhase.Delivered)
         .Allow(HeistPhase.ToDrop, HeistPhase.AtObjective, HeistPhase.AtDrop, HeistPhase.Delivered)
         .Allow(HeistPhase.AtDrop, HeistPhase.ToDrop, HeistPhase.AtObjective, HeistPhase.Delivered)
         .FromAnywhere(HeistPhase.Lost)
-        .Note(HeistPhase.ToObjective, "The Cartel van, put down beside the Contact, has not reached the objective's area yet; no Assault. Ends when it stands in the area.")
+        .Note(HeistPhase.ToVan, "The Cartel van is put down beside the Contact and the party has not reached it yet (the marker is on the van). Ends when a party player is at the van or sits in it.")
+        .Note(HeistPhase.ToObjective, "The party has the Cartel van and it has not reached the objective's area yet; no Assault. Ends when it stands in the area.")
         .Note(HeistPhase.AtObjective, "The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.")
         .Note(HeistPhase.ToDrop, "The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; within the drop's area it is AtDrop.")
         .Note(HeistPhase.AtDrop, "The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault about 20 s after the arrival). Leaving the area is ToDrop again.")
@@ -200,6 +203,7 @@ public sealed class Heist
         var enough = f.Loaded >= Min;
         switch (_phase.Current)
         {
+            case HeistPhase.ToVan: if (f.VanInArea) _phase.Enter(HeistPhase.AtObjective); else if (f.PartyAtVan) _phase.Enter(HeistPhase.ToObjective); break;
             case HeistPhase.ToObjective: if (f.VanInArea) _phase.Enter(HeistPhase.AtObjective); break;
             case HeistPhase.AtObjective: if (!f.VanInArea && enough) _phase.Enter(HeistPhase.ToDrop); break;
             case HeistPhase.ToDrop:
@@ -214,22 +218,27 @@ public sealed class Heist
         return new(JobStep.Running, Assaults.Tick(dt, site));
     }
 
-    /// <summary>What the party's marker points at now: the objective on the way there (and while the van is away short of the minimum), the van's bay while loading, the drop after.</summary>
+    /// <summary>
+    /// What the party's marker points at now: the van until the party has reached it, then the objective on the way there (and while the van is away short of the minimum), the van's bay while loading,
+    /// nothing once the van holds the minimum in the area (the line says to leave; the drop's marker waits until the van is out), the drop after.
+    /// </summary>
     public HeistMarker Marker => _phase.Current switch
     {
+        HeistPhase.ToVan => HeistMarker.Van,
         HeistPhase.ToObjective => HeistMarker.Objective,
-        HeistPhase.AtObjective => VanInArea ? HeistMarker.Van : HeistMarker.Objective,
+        HeistPhase.AtObjective => !VanInArea ? HeistMarker.Objective : Loaded >= Min ? HeistMarker.None : HeistMarker.Van,
         HeistPhase.ToDrop or HeistPhase.AtDrop => HeistMarker.Drop,
         _ => HeistMarker.None,
     };
 
-    /// <summary>The tracker's objective line now. <paramref name="place"/> names the objective ("the plantation"); <paramref name="fill"/> says how the party fills a Duffel there.</summary>
+    /// <summary>The tracker's objective line now. <paramref name="place"/> names the objective ("the plantation"); <paramref name="fill"/> says how the party fills a Duffel there. With the minimum loaded and the van still in the area the line is "Leave the area": the drop's own line comes once the van is out.</summary>
     public string Line(string place, string fill) => _phase.Current switch
     {
+        HeistPhase.ToVan => $"Go to the Cartel van, then drive it to {place}",
         HeistPhase.ToObjective => $"Drive the Cartel van to {place}",
         HeistPhase.AtObjective when !VanInArea => $"Bring the van back to {place}: {Loaded}/{Min} loaded",
         HeistPhase.AtObjective when Loaded < Min => $"{fill}: {Loaded}/{Min} loaded",
-        HeistPhase.AtObjective => $"{Loaded} loaded (up to {Max}): load more or drive the van to {Drop.Place}",
+        HeistPhase.AtObjective => $"Leave the area: {Loaded} loaded (up to {Max})",
         HeistPhase.ToDrop => Loaded < Min ? $"Load at least {Min} duffels: {Loaded} loaded" : $"Drive the van to {Drop.Place}: {Loaded} loaded",
         HeistPhase.AtDrop when Received < Min => $"Unload the duffels into {Drop.Place}: {Received}/{Min}",
         HeistPhase.AtDrop => $"{Received} on board (up to {Max}): unload the rest, then {Drop.Leave}",

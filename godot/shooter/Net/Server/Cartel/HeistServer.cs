@@ -226,10 +226,26 @@ internal sealed class HeistRun : IJobObjective
             GD.Print($"server: {Job}: every duffel is on the {ReceiverRules.NameOf(r.Kind)}, it leaves with {r.SentWith}");
         }
         var inDrop = CarPose.Flat(feet, r.Position) <= r.Data.AreaM;
-        var t = Heist.Step(new HeistFacts(_van.Destroyed, Goal.InArea(feet), inDrop, Loaded, r.Sent ? r.SentWith : r.Loaded, r.Sent), dt);
+        var t = Heist.Step(new HeistFacts(_van.Destroyed, Goal.InArea(feet), inDrop, Loaded, r.Sent ? r.SentWith : r.Loaded, r.Sent, Heist.Phase == HeistPhase.ToVan && PartyAtVan(feet)), dt);
         if (t.AssaultDue) _s.LaunchAssault(this);
         if (t.Step == JobStep.Running) Chases.Tick(dt);
         return t.Step;
+    }
+
+    /// <summary>A party player at the Cartel van counts as having found it within this many metres (ground distance), or sitting in it.</summary>
+    const float VanReachM = 8f;
+
+    /// <summary>A living human of the party sits in the van or stands within <see cref="VanReachM"/> of it (the marker leaves the van for the objective).</summary>
+    bool PartyAtVan(NVec3 feet)
+    {
+        foreach (var id in Party)
+        {
+            if (!_s.Ctx.Players.TryGetValue(id, out var c) || c.IsBot || !_s.Ctx.IsAlive(id)) continue;
+            if (_van.Seat.SeatOf(id) >= 0) return true;
+            var p = c.Body.GlobalPosition;
+            if (CarPose.Flat(feet, new NVec3(p.X, p.Y, p.Z)) <= VanReachM) return true;
+        }
+        return false;
     }
 
     /// <summary>The phase changed: the party is told, and the seam's events go out.</summary>
@@ -237,7 +253,7 @@ internal sealed class HeistRun : IJobObjective
     {
         switch (to)
         {
-            case HeistPhase.AtObjective: Tell(from == HeistPhase.ToObjective ? $"The van is at {Goal.Place}. Load at least {Heist.Min} duffels; the Rival crew is coming." : $"Back at {Goal.Place}: the Rival crew comes again."); break;
+            case HeistPhase.AtObjective: Tell(from is HeistPhase.ToObjective or HeistPhase.ToVan ? $"The van is at {Goal.Place}. Load at least {Heist.Min} duffels; the Rival crew is coming." : $"Back at {Goal.Place}: the Rival crew comes again."); break;
             case HeistPhase.ToDrop when from == HeistPhase.AtObjective: Tell($"The van is away with {Loaded} duffels: drive to {Heist.Drop.Place}."); LeftObjective?.Invoke(this); break;
             case HeistPhase.AtDrop: Tell($"The van is at {Heist.Drop.Place}: carry or throw the duffels into it, at least {Heist.Min}. The Rival crew will come here too."); ReachedDrop?.Invoke(this); break;
         }

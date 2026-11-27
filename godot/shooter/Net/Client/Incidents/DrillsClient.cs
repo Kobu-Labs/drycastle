@@ -187,6 +187,9 @@ public sealed class DrillsClient
         if (Data is { } data) _hold.Tick(use, InReach, dt, DrillRules.HoldSeconds(data, _reach.Hold));
     }
 
+    /// <summary>The string key of the hold ring's label: setting the drill, or fixing the jammed one.</summary>
+    public string RingKey => _reach.Hold == DrillHold.Fix ? "hud.ring.drill.fix" : "hud.ring.drill.set";
+
     /// <summary>How full the hold ring is for the Drill (0 when not holding at a safe).</summary>
     public float HoldFraction => InReach && _hold.Held > 0 && Data is { } data ? (float)Math.Min(1.0, _hold.Held / DrillRules.HoldSeconds(data, _reach.Hold)) : 0f;
 }

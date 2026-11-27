@@ -16,10 +16,14 @@ namespace Drycastle.Shooter.Net.Client.HudFeeds;
 /// wants it: the prompt shows and a press opens his panel (the server, for its part, keeps the plantation's hold off the key there: <see cref="KeyCompetitor.Contact"/>). Walking out of
 /// reach closes the panel. The panel's requests go out as <see cref="EventKind.CartelRequest"/>; the server checks each again and answers a refusal (<see cref="EventKind.CartelRefused"/>),
 /// which the panel shows. During a Delivery, carrying a Duffel within <c>jobs.delivery.radius_m</c> of the drop point, the prompt says to hold the key and the hold ring fills over
-/// <c>hold_seconds</c> while it is held (the server counts the same hold and ends the Job).
+/// <c>hold_seconds</c> while it is held (the server counts the same hold and ends the Job). A Job of the party that succeeds raises the "Job done" banner (<see cref="Done"/>) and its jingle; the camera pull-back that goes with
+/// it is <see cref="JobDoneCamera"/>'s.
 /// </summary>
 public sealed class CartelClient
 {
+    /// <summary>The jingle of a succeeded Job (sounds.json: a short sax sting of Kenney's Music Jingles, on the Music bus).</summary>
+    public const string JobDoneSound = "job.done";
+
     readonly ClientContext _ctx;
     readonly CartelFile _data;
     readonly Func<bool> _admin;
@@ -47,6 +51,8 @@ public sealed class CartelClient
     public CartelStatusMsg? Status { get; private set; }
     /// <summary>The player's Job as the HUD tracker shows it.</summary>
     public CartelTracker Tracker { get; } = new(ShooterTheme.JobCardSeconds);
+    /// <summary>The "Job done" banner of a succeeded Job: its text, its seconds and the camera's pull-back.</summary>
+    public JobDone Done { get; } = new();
     /// <summary>The standing or the Job changed, or a request was refused (the panel redraws).</summary>
     public event Action? Changed;
     /// <summary>The server's last refusal of a request; null until one came.</summary>
@@ -79,6 +85,7 @@ public sealed class CartelClient
                 break;
             case EventKind.CartelJob when CartelCodec.TryDecodeJob(payload, out var j):
                 Tracker.OnJob(j);
+                if (Done.OnJob(j)) Sfx.Play2D(JobDoneSound);
                 Changed?.Invoke();
                 break;
             case EventKind.CartelRefused when CartelCodec.TryDecodeRefusal(payload, out var no):
@@ -104,6 +111,7 @@ public sealed class CartelClient
     public void Render(double delta)
     {
         Tracker.Tick((float)delta);
+        Done.Tick((float)delta);
         if (!ReferenceEquals(_mapSeen, _ctx.Map)) { _mapSeen = _ctx.Map; _contact = ContactMarker.PoseIn(_ctx.Map, ContactMarker.LoadConfig()); }
         var (pressed, _) = _use.Step(_ctx.InteractHeld);
         var reach = InReach();
@@ -150,5 +158,6 @@ public sealed class CartelClient
         Refusal = null;
         _handOver = 0;
         Tracker.Clear();
+        Done.Clear();
     }
 }

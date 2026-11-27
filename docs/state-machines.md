@@ -299,6 +299,21 @@ stateDiagram-v2
 - **Closed**: The start state, and what a spawn, a reset or a respawn of the vehicle leaves. A throw into the cargo area is refused (it falls beside the vehicle).
 - **Open**: A player on foot at the access point pressed the interact key. Stays open while the vehicle drives; a throw loads, the key at the access point shuts it.
 
+## Cartel.JobDone
+
+The "Job done" banner of a succeeded Cartel Job (with its jingle and the camera's pull-back) for the party's players: up for about 4 s, then gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Showing
+    Showing --> Idle
+    Showing --> Showing
+```
+
+- **Idle**: No banner; the camera is the player's own.
+- **Showing**: The banner shows the Respect (or why none); the clock runs the banner's seconds and sets how far the camera is pulled back (out, hold, back). A Job that succeeds while it shows replaces it.
+
 ## Cartel.Membership
 
 Whether a player works for the Cartel: an outsider until they join at the Contact, a member who runs Jobs and earns Respect, or quit with rank and Respect frozen until they rejoin.
@@ -1093,11 +1108,14 @@ From any state: Over
 
 ## Heist.Phase
 
-One Heist from the Contact to the drop: the Cartel van to the objective, filling and loading under Assaults, the van to the drop, unloading into its Receiver under Assaults; the van's destruction loses it.
+One Heist from the Contact to the drop: the party to the Cartel van, the van to the objective, filling and loading under Assaults, the van to the drop, unloading into its Receiver under Assaults; the van's destruction loses it.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ToObjective
+    [*] --> ToVan
+    ToVan --> ToObjective
+    ToVan --> AtObjective
+    ToVan --> Delivered
     ToObjective --> AtObjective
     ToObjective --> Delivered
     AtObjective --> ToDrop
@@ -1114,12 +1132,13 @@ stateDiagram-v2
 
 From any state: Lost
 
-- **ToObjective**: The Cartel van, put down beside the Contact, has not reached the objective's area yet; no Assault. Ends when it stands in the area.
+- **ToObjective**: The party has the Cartel van and it has not reached the objective's area yet; no Assault. Ends when it stands in the area.
 - **AtObjective**: The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.
 - **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; within the drop's area it is AtDrop.
 - **AtDrop**: The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault about 20 s after the arrival). Leaving the area is ToDrop again.
 - **Delivered**: The Receiver was sent off with at least the minimum on it (it left by itself with every Duffel aboard, the leader told it to, or the buyer took the bags): the Job succeeds; Respect counts what was on the Receiver then. Never left.
 - **Lost**: The Cartel van was destroyed: the Job fails. Never left.
+- **ToVan**: The Cartel van is put down beside the Contact and the party has not reached it yet (the marker is on the van). Ends when a party player is at the van or sits in it.
 
 ## HelicopterGunner.Phase
 

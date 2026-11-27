@@ -147,11 +147,18 @@ public class HeistTests
     static HeistTick Step(Heist h, bool inArea, bool inDrop, int loaded, bool destroyed = false, int received = 0, bool sent = false)
         => h.Step(new HeistFacts(destroyed, inArea, inDrop, loaded, received, sent), Dt);
 
+    static HeistTick StepWithParty(Heist h, bool partyAtVan, bool inArea = false, int loaded = 0)
+        => h.Step(new HeistFacts(false, inArea, false, loaded, PartyAtVan: partyAtVan), Dt);
+
     [Fact]
     public void AHeistGoesToTheObjectiveLoadsLeavesWithTheMinimumUnloadsAtTheDropAndIsDeliveredWhenTheReceiverIsSentOff()
     {
         var h = new Heist(min: 3, max: 6, graceSeconds: 1, intervalSeconds: 2, dropGraceSeconds: 1.5f) { Drop = ReceiverRules.Text(ReceiverKind.Helicopter) };
         Assert.Equal(JobStep.Running, Step(h, false, false, 0).Step);
+        Assert.Equal(HeistPhase.ToVan, h.Phase); // nobody reached the van yet: the marker is on it
+        Assert.Equal(HeistMarker.Van, h.Marker);
+        Assert.Equal("Go to the Cartel van, then drive it to the plantation", h.Line("the plantation", "Fill"));
+        StepWithParty(h, partyAtVan: true);
         Assert.Equal(HeistPhase.ToObjective, h.Phase);
         Assert.Equal(HeistMarker.Objective, h.Marker);
         Assert.Equal("Drive the Cartel van to the plantation", h.Line("the plantation", "Fill"));
@@ -202,6 +209,46 @@ public class HeistTests
     }
 
     [Fact]
+    public void TheMarkerIsOnTheVanUntilThePartyReachesItAndStaysOffItAfterwardsEvenIfTheyLeaveIt()
+    {
+        var h = new Heist(2, 4, 1, 2);
+        StepWithParty(h, partyAtVan: false);
+        StepWithParty(h, partyAtVan: false);
+        Assert.Equal((HeistPhase.ToVan, HeistMarker.Van), (h.Phase, h.Marker));
+        StepWithParty(h, partyAtVan: true);
+        Assert.Equal((HeistPhase.ToObjective, HeistMarker.Objective), (h.Phase, h.Marker));
+        StepWithParty(h, partyAtVan: false); // got out to look around: the objective stays
+        Assert.Equal((HeistPhase.ToObjective, HeistMarker.Objective), (h.Phase, h.Marker));
+    }
+
+    [Fact]
+    public void AVanAlreadyInTheAreaSkipsTheWalkToIt()
+    {
+        var h = new Heist(2, 4, 1, 2);
+        StepWithParty(h, partyAtVan: false, inArea: true);
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+    }
+
+    [Fact]
+    public void WithTheMinimumLoadedInTheAreaTheLineSaysLeaveAndNothingIsMarkedUntilTheVanIsOutThenTheDropIs()
+    {
+        var h = new Heist(min: 2, max: 5, graceSeconds: 1, intervalSeconds: 2) { Drop = ReceiverRules.Text(ReceiverKind.Boat) };
+        Step(h, true, false, 1);
+        Assert.Equal(HeistMarker.Van, h.Marker); // loading: the van's bay
+        Assert.Equal("Fill: 1/2 loaded", h.Line("the plantation", "Fill"));
+        Step(h, true, false, 2);
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+        Assert.Equal(HeistMarker.None, h.Marker); // no drop waypoint yet
+        Assert.Equal("Leave the area: 2 loaded (up to 5)", h.Line("the plantation", "Fill"));
+        Step(h, true, false, 3);
+        Assert.Equal("Leave the area: 3 loaded (up to 5)", h.Line("the plantation", "Fill"));
+        Step(h, false, false, 3); // out of the area
+        Assert.Equal(HeistPhase.ToDrop, h.Phase);
+        Assert.Equal(HeistMarker.Drop, h.Marker);
+        Assert.Equal("Drive the van to the boat: 3 loaded", h.Line("the plantation", "Fill"));
+    }
+
+    [Fact]
     public void ASendOffWithFewerThanTheMinimumDoesNotDeliverAndOneAwayFromTheDropStillDoes()
     {
         var h = new Heist(3, 6, 1, 2);
@@ -249,7 +296,7 @@ public class HeistTests
         Step(h, false, true, 2, received: 2, sent: true);
         Assert.Equal(new[]
         {
-            (HeistPhase.ToObjective, HeistPhase.AtObjective), (HeistPhase.AtObjective, HeistPhase.ToDrop), (HeistPhase.ToDrop, HeistPhase.AtDrop), (HeistPhase.AtDrop, HeistPhase.Delivered),
+            (HeistPhase.ToVan, HeistPhase.AtObjective), (HeistPhase.AtObjective, HeistPhase.ToDrop), (HeistPhase.ToDrop, HeistPhase.AtDrop), (HeistPhase.AtDrop, HeistPhase.Delivered),
         }, seen);
         Assert.Equal(HeistPhase.AtDrop, h.Previous);
     }

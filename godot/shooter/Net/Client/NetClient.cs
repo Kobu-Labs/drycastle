@@ -146,6 +146,7 @@ public partial class NetClient : Node
     ShotsClient _shots = null!;
     OwnReconcile _reconcile = null!;
     DeathView _death = null!;
+    JobDoneCamera _jobDoneCamera = null!;
     VehiclesClient _vehicles = null!;
     HudClient _hud = null!;
     EffectEvents _effects = null!;
@@ -357,7 +358,8 @@ public partial class NetClient : Node
         _drills = new DrillsClient(Ctx, _interact); // the Drills on the Trap houses' safes (#496)
         _cartel = new CartelClient(Ctx, Cartel, () => Chat.Context.IsAdmin, () => _screens.OpenContactPanel());
         _harvestFill = new HarvestFillClient(Ctx, _status, Cartel); // the Harvest's fill hold in the plantation: prompt, ring, rustle
-        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _drills.HoldFraction, () => _cartel.HoldFraction, () => _harvestFill.HoldFraction);
+        _holdRing = new HoldRing(Ctx, (() => _crates.HoldFraction, () => "hud.crate.opening"), (() => _rozhlas.HoldFraction, () => "hud.ring.rozhlas"), (() => _thieves.Loot.HoldFraction, () => "hud.ring.loot"), (() => _minerals.HoldFraction, () => "hud.ring.mineral"),
+            (() => _drills.HoldFraction, () => _drills.RingKey), (() => _cartel.HoldFraction, () => "cartel.ring.handover"), (() => _harvestFill.HoldFraction, () => "cartel.ring.fill"));
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
@@ -370,6 +372,8 @@ public partial class NetClient : Node
         _binoculars = new BinocularsClient(Ctx, Items, ItemData, _hulls, _animals, () => _pounce.Pinned);
         Ctx.Remotes.Appeared += _binoculars.OnAppeared;
         _death = new DeathView(Ctx, _pounce, _corpses);
+        _jobDoneCamera = new JobDoneCamera(Ctx, _cartel.Done);
+        _death.Pulled = _jobDoneCamera.Camera; // a Job done: the camera backs off from the player for a few seconds
         _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, at => _rockets.HomingKillShown(at));
@@ -477,6 +481,7 @@ public partial class NetClient : Node
         Ctx.Hud.AttachMineralLog(); // N
         Ctx.Hud.AttachContactPanel(new Drycastle.Shooter.Cartel.ContactPanel(_cartel)); // the interact key at the Contact (#494)
         Ctx.Hud.AttachJobTracker(_cartel.Tracker, _cartel.KindName, id => Ctx.Names.GetValueOrDefault(id, Strings.F("player.unknown", id)));
+        Ctx.Hud.AttachJobDone(_cartel.Done);
         _hunts.Data.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         Ctx.Hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         Ctx.Hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
@@ -618,6 +623,8 @@ public partial class NetClient : Node
     {
         _water.Render();
         _held.ShowViewmodel();
+        if (_jobDoneCamera.Active) Ctx.Viewmodel.Visible = false; // the camera is out from the body: the weapon in the hand would hang in the air
+        _ownFigure.Seen = _jobDoneCamera.Active; // ...and the body is drawn instead
         // the own body's shadow on foot (#319); seated, the rider's own figure is the body
         _ownFigure.Update(Ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && !Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle && _rider.SelfView == null, _held.ShownId, _status.Has(Ctx.MyId, StatusKind.Filling));
         _thrower.UpdateArc();
