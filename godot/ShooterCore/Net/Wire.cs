@@ -449,6 +449,7 @@ public static class Wire
     //   vNEXT (Squad leader): the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494)
     //   vNEXT (Cartel van vehicle): vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine)
     //   vNEXT (Trap house dressing): events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0046)
+    //   vNEXT (Gunman + posted defenders): Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind)
     public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

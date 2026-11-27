@@ -6,6 +6,7 @@ using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
+using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.Careers;
 using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.ChatRoom;
@@ -112,6 +113,7 @@ public partial class NetServer : Node
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
+    RivalCrewServer _rivals = null!;
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
     EventServer _eventServer = null!; GunshipServer _gunships = null!; FlakServer _flak = null!; StreakServer _streaks = null!; LockOnServer _lockOn = null!;
     ScoreboardServer _scoreboard = null!; MatchEventsServer _matchEvents = null!;
@@ -307,6 +309,7 @@ public partial class NetServer : Node
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
             _cartel.RoundReset, // every running Job fails
             _trapHouses.RoundStart, // no Job outlives the round: every Trap house stripped
+            _rivals.RoundReset, // the test Gunmen went with the world's entities
             rounds.Started);
         var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Config.Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, Config.WeaponsSmoke, Config.RpgSmoke, _harvester.OnKill, _diag.Loss.Kill, _diag.Loss.Death);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, rounds.Ended, _diag.Loss.RoundStart, _dummies.OnKilled);
@@ -363,7 +366,8 @@ public partial class NetServer : Node
     ThievesServer BuildThieves()
     {
         var phase = new ThievesEvent();
-        var gangs = new GangServer(_ctx, Config.ThievesData, Config.Weapons, Config.Items, _corpses, _damage.Deal, () => _navMesh.Mesh, _navMesh.NextTicket, () => _walkers, _progress.Scores, _progress.Award);
+        var gangs = new GangServer(_ctx, Config.ThievesData, Config.Weapons, Config.Items, _corpses, _damage.Deal, () => _navMesh.Mesh, _navMesh.NextTicket, () => _walkers, _progress.Scores, _progress.Award, _shot, _targets, _impacts);
+        _rivals = new RivalCrewServer(_ctx, Config.ThievesData, gangs); // the cartel's Rival crew: Gang members on the same roster
         var raids = new RaidServer(_ctx, Config.ThievesData, phase, gangs, Config.Map, Config.World, _fleet, () => Config.Vehicles, () => _navMesh.Mesh, () => _fleet.FlightBounds,
             () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash);
         var loot = new LootServer(_ctx, Config.ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Config.Map, () => _navMesh.Mesh, Config.ArenaMode, Config.MapDir);
@@ -665,7 +669,7 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses, _rivals);
         _chat.Register("duffel", _duffels.ChatCommand); // TEST: a Duffel in the admin's hands (#494)
     }
 }

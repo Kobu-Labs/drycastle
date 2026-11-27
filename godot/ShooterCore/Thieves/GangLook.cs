@@ -9,7 +9,7 @@ public readonly record struct BlowPlan(float DelayS, float FromS);
 /// </summary>
 public static class GangLook
 {
-    const uint ModelSalt = 1, AtlasSalt = 2, SmokeSalt = 3, DeathSalt = 4, BlowSalt = 5;
+    const uint ModelSalt = 1, AtlasSalt = 2, SmokeSalt = 3, DeathSalt = 4, BlowSalt = 5, GunSalt = 6;
 
     /// <summary>A well mixed 32-bit number for a look and a purpose.</summary>
     public static uint Mix(ushort look, uint salt)
@@ -25,6 +25,9 @@ public static class GangLook
         var list = view.Models.Of(kind);
         return list[(int)(Mix(look, ModelSalt) % (uint)list.Count)];
     }
+
+    /// <summary>The weapon a Gunman carries, of its gun's list (the server fires it, every client draws it in the hand).</summary>
+    public static GangGunWeapon Gun(GangGun gun, ushort look) => gun.Weapons[(int)(Mix(look, GunSalt) % (uint)gun.Weapons.Count)];
 
     /// <summary>Whether the model is a feminine body (its clips are the _femn ones).</summary>
     public static bool IsFemn(GangView view, string model) => view.Models.Femn.Contains(model);

@@ -1,5 +1,6 @@
 using System.Numerics;
 using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Weapons;
@@ -30,6 +31,9 @@ public sealed class GangHitIds
     public int InUse => _used.Count;
 }
 
+/// <summary>Whose a gang is: a Raid of the Thieves event, or a crew of the cartel's Rival crew (GLOSSARY "Rival crew"). The Thieves event clears, credits and voices its Raids only.</summary>
+public enum GangCrew : byte { Raid = 0, RivalCrew = 1 }
+
 /// <summary>
 /// The Gang members of one Raid (GLOSSARY "Raid", "Gang member"), pure. It spawns them as world entities, keeps the hit ids, the aggro list and the queue of routes
 /// they wait for, and answers the hits on them. The Raid's van (ticket 03) sets <see cref="Post"/> and calls <see cref="Add"/>; the stealing loop (ticket 04) runs in the members through <see cref="Work"/>. The gang owns no clock: the server calls <see cref="Update"/> before the entities tick and
@@ -38,6 +42,10 @@ public sealed class GangHitIds
 /// Aggro is kept per Raid: a player who hit any member is fought by every member that can fight (Enforcers, the Gang boss, a Thief with free hands) for
 /// <see cref="GangAggro.ForgetSeconds"/> after their last hit (each hit starts it again), or until they die or are further than <see cref="GangAggro.GiveUpM"/> from every living member.
 /// When it lapses the members go back to what they did (Thieves steal, Enforcers and the boss guard).
+/// </para>
+/// <para>
+/// A Rival crew (<see cref="GangCrew.RivalCrew"/>, #495) is one of these too, with its own config (rival_crew.json, <see cref="Cartel.RivalCrewFile.GangOf"/>) and a set of players it attacks on sight
+/// (<see cref="HostileTo"/>): one of them within <see cref="GangSight.RadiusM"/> of a member that can see them joins the aggro list as if they had hit it. Everyone else is left alone until they hit a member.
 /// </para>
 /// </summary>
 public sealed class ThiefGang : IGangHits, IDisposable
@@ -55,13 +63,25 @@ public sealed class ThiefGang : IGangHits, IDisposable
     readonly List<ushort> _scratch = new();
     long _seq;
     Vector3 _post;
+    Countdown _spot; // the next look for the players attacked on sight
 
-    public ThiefGang(GangConfig cfg, IGangWorld world, WorldEntityManager entities, GangHitIds ids, Vector3 post, int seed = 0)
+    public ThiefGang(GangConfig cfg, IGangWorld world, WorldEntityManager entities, GangHitIds ids, Vector3 post, int seed = 0, GangCrew crew = GangCrew.Raid)
     {
-        _cfg = cfg; _world = world; _entities = entities; _ids = ids; _post = post;
+        _cfg = cfg; _world = world; _entities = entities; _ids = ids; _post = post; Crew = crew;
         _rng = new Random(seed);
         entities.Despawned += OnDespawned;
     }
+
+    /// <summary>A Raid of the Thieves or a Rival crew.</summary>
+    public GangCrew Crew { get; }
+
+    /// <summary>The numbers its members run on.</summary>
+    public GangConfig Config => _cfg;
+
+    /// <summary>
+    /// The players this gang attacks on sight (the Rival crew: a Job's players, given by its owner and asked every look, so it may change); null: nobody (a Raid fights only whoever hits it).
+    /// </summary>
+    public Func<ushort, bool>? HostileTo { get; set; }
 
     /// <summary>Raised once per member killed by a hit (not by the end of the event).</summary>
     public event Action<GangKilled>? Killed;
@@ -120,6 +140,14 @@ public sealed class ThiefGang : IGangHits, IDisposable
         _entityOfHit[hit] = entity;
         _hitOfEntity[entity] = hit;
         return member;
+    }
+
+    /// <summary>Puts one member in the world posted at <paramref name="at"/>, facing <paramref name="facing"/> (<see cref="GangMember.Post"/>: a trap house defender, no navigation mesh needed). Null when the world has no room.</summary>
+    public GangMember? AddPosted(GangMemberKind kind, Vector3 at, float facing)
+    {
+        var m = Add(kind, at, facing);
+        m?.Post(at, facing);
+        return m;
     }
 
     /// <summary>
@@ -186,6 +214,7 @@ public sealed class ThiefGang : IGangHits, IDisposable
                 else _aggro[id] = left;
             }
         }
+        if (HostileTo != null) Spot(dt, players);
 
         foreach (var m in _members)
         {
@@ -193,6 +222,25 @@ public sealed class ThiefGang : IGangHits, IDisposable
             m.SetTarget(_aggro.Count > 0 && m.CanFight ? NearestAggro(m.Position, players) : null);
         }
         AssignEscorts();
+    }
+
+    /// <summary>Every sight.check_seconds: each player attacked on sight whom a member that can fight sees (within the radius, a clear line from its eyes to their chest) is fought from now, as after a hit.</summary>
+    void Spot(float dt, IReadOnlyList<GangPlayer> players)
+    {
+        _spot.Tick(dt);
+        if (_spot.Running) return;
+        _spot.Start(_cfg.Sight.CheckSeconds);
+        foreach (var p in players)
+            if (HostileTo!(p.Id) && SeenByAny(p)) _aggro[p.Id] = _cfg.Aggro.ForgetSeconds;
+    }
+
+    bool SeenByAny(GangPlayer p)
+    {
+        var s = _cfg.Sight;
+        var chest = p.Feet + Vector3.UnitY * s.ChestM;
+        foreach (var m in _members)
+            if (m.CanFight && Flat(m.Position, p.Feet) <= s.RadiusM && _world.Clear(m.Position + Vector3.UnitY * s.EyeM, chest)) return true;
+        return false;
     }
 
     GangPlayer? NearestAggro(Vector3 from, IReadOnlyList<GangPlayer> players)
@@ -405,10 +453,10 @@ public sealed class GangRoster : IGangHits
     public IReadOnlyList<ThiefGang> Gangs => _gangs;
     public int MemberCount => _gangs.Sum(g => g.Count);
 
-    /// <summary>A new, empty Raid whose post is <paramref name="post"/>.</summary>
-    public ThiefGang NewGang(Vector3 post)
+    /// <summary>A new, empty gang whose post is <paramref name="post"/>: a Raid on the roster's config, or (<paramref name="crew"/>) a Rival crew on its own (<paramref name="cfg"/>, rival_crew.json's).</summary>
+    public ThiefGang NewGang(Vector3 post, GangConfig? cfg = null, GangCrew crew = GangCrew.Raid)
     {
-        var gang = new ThiefGang(_cfg, _world, _entities, _ids, post, _rng.Next()) { Log = Log, SourceOf = _sourceOf };
+        var gang = new ThiefGang(cfg ?? _cfg, _world, _entities, _ids, post, _rng.Next(), crew) { Log = Log, SourceOf = _sourceOf };
         gang.Killed += k => Killed?.Invoke(k);
         _gangs.Add(gang);
         return gang;
@@ -422,10 +470,23 @@ public sealed class GangRoster : IGangHits
         _gangs.Remove(gang);
     }
 
-    /// <summary>Removes every Raid and member.</summary>
+    /// <summary>Removes every gang and member.</summary>
     public void Clear()
     {
         foreach (var g in _gangs.ToList()) Remove(g);
+    }
+
+    /// <summary>Removes every gang of one crew and its members (the Thieves event clears its Raids, not a Job's Rival crew).</summary>
+    public void Clear(GangCrew crew)
+    {
+        foreach (var g in _gangs.Where(g => g.Crew == crew).ToList()) Remove(g);
+    }
+
+    /// <summary>The gang a member's hit id belongs to (the dead lying included), or null.</summary>
+    public ThiefGang? GangOf(ushort hitId)
+    {
+        foreach (var g in _gangs) if (g.Owns(hitId)) return g;
+        return null;
     }
 
     /// <summary>Once a tick (<paramref name="dt"/> seconds long, 60 Hz by default) before the entities tick: every Raid decides who it fights, then the chasers of one player get their own spots and walking members are nudged apart.</summary>
