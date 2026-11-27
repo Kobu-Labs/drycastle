@@ -52,13 +52,21 @@ public sealed class DeliveryJobKind : IJobKind
 
     public DeliveryJobKind(CartelFile file, IJobParties parties, Func<CartelMap> map, Random rng, IDeliveryWorld world)
     {
-        _data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.delivery");
-        CartelSpots.CheckPerTier(_data.Seconds, file, "jobs.delivery.seconds");
-        _duffel = DuffelRules.Parse(_data.Duffel) ?? throw new DataFileException($"cartel.json: jobs.delivery.duffel '{_data.Duffel}' is not weed, cash or product");
-        void Positive(float v, string what) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"cartel.json: jobs.delivery.{what} must be more than 0"); }
-        Positive(_data.RadiusM, "radius_m"); Positive(_data.HoldSeconds, "hold_seconds");
-        if (!float.IsFinite(_data.MinContactM) || _data.MinContactM < 0 || !float.IsFinite(_data.ApartM) || _data.ApartM < 0) throw new DataFileException("cartel.json: jobs.delivery.min_contact_m and apart_m must not be negative");
+        _data = Read(file);
+        _duffel = DuffelRules.Parse(_data.Duffel)!.Value;
         _parties = parties; _map = map; _rng = rng; _world = world;
+    }
+
+    /// <summary>cartel.json <c>jobs.delivery</c>, checked (the client reads it too: the hand-over's radius and hold for its prompt and ring).</summary>
+    public static Data Read(CartelFile file)
+    {
+        var data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.delivery");
+        CartelSpots.CheckPerTier(data.Seconds, file, "jobs.delivery.seconds");
+        if (DuffelRules.Parse(data.Duffel) == null) throw new DataFileException($"cartel.json: jobs.delivery.duffel '{data.Duffel}' is not weed, cash or product");
+        void Positive(float v, string what) { if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"cartel.json: jobs.delivery.{what} must be more than 0"); }
+        Positive(data.RadiusM, "radius_m"); Positive(data.HoldSeconds, "hold_seconds");
+        if (!float.IsFinite(data.MinContactM) || data.MinContactM < 0 || !float.IsFinite(data.ApartM) || data.ApartM < 0) throw new DataFileException("cartel.json: jobs.delivery.min_contact_m and apart_m must not be negative");
+        return data;
     }
 
     public string Id => KindId;
@@ -89,8 +97,6 @@ public sealed class DeliveryJobKind : IJobKind
 
         public Duffel Duffel { get; }
         public Vector3 Drop { get; }
-        /// <summary>How far the hand-over hold is (0 to 1), for a ring; 0 when nobody holds.</summary>
-        public float HoldFraction => _holder == 0 ? 0 : (float)Math.Clamp(_hold.Held / _k._data.HoldSeconds, 0, 1);
 
         bool Present => _k._world.Duffels.Find(Duffel.Id) == Duffel;
 
@@ -115,7 +121,7 @@ public sealed class DeliveryJobKind : IJobKind
 
         public string Objective(Job job) => !Present ? ""
             : Duffel.State != DuffelState.Carried ? "Pick the duffel up"
-            : CarrierAtDrop() != 0 ? "Hold E to hand the duffel over"
+            : CarrierAtDrop() != 0 ? $"Hold {JobText.Interact} to hand the duffel over"
             : "Take the duffel to the drop point";
 
         public Vector3? Marker(Job job) => !Present ? null : Duffel.State == DuffelState.Carried ? Drop : Duffel.Position;

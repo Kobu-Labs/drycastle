@@ -37,7 +37,8 @@ public static class CartelSpots
 
     /// <summary>
     /// Picks a random point of the kind at least <paramref name="minFromContactM"/> (ground metres) from the Contact and <paramref name="apartM"/> from every point a running Job holds, and claims it
-    /// for <paramref name="job"/>. Null with the reason when none is left (the book releases nothing: a refused Begin is released by the book).
+    /// for <paramref name="job"/>. Null with the reason when none is left: all held by Jobs, or none far enough from the Contact on this map (the book releases nothing: a refused Begin is
+/// released by the book).
     /// </summary>
     public static Vector3? Claim(Job job, JobBook book, CartelMap map, string zoneKind, Random rng, float minFromContactM, float apartM, out string? refusal)
     {
@@ -47,8 +48,14 @@ public static class CartelSpots
         if (pool.Count == 0) { refusal = $"This map has no {what}."; return null; }
         var apart = CartelMap.Apart(Held(book, map), apartM);
         var contact = map.Contact;
-        var pick = CartelMap.Pick(pool, rng, p => apart(p) && (contact is not { } c || c.GroundDistance(p) >= minFromContactM) && !book.IsReserved(Key(zoneKind, IndexOf(pool, p))));
-        if (pick is not { } at) { refusal = $"No {what} is free now: another job holds every one."; return null; }
+        bool FarEnough(Vector3 p) => contact is not { } c || c.GroundDistance(p) >= minFromContactM;
+        var pick = CartelMap.Pick(pool, rng, p => apart(p) && FarEnough(p) && !book.IsReserved(Key(zoneKind, IndexOf(pool, p))));
+        if (pick is not { } at)
+        {
+            // the Jobs free their points as they end; a map whose every point sits near the Contact never will
+            refusal = pool.Any(FarEnough) ? $"No {what} is free now: another job holds every one." : $"No {what} is far enough from the Contact on this map.";
+            return null;
+        }
         book.Reserve(job, Key(zoneKind, IndexOf(pool, at)));
         return at;
     }
