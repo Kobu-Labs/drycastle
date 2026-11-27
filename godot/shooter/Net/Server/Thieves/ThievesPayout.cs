@@ -40,7 +40,7 @@ internal sealed class ThievesPayout
     {
         _ctx = ctx; _cfg = data.Reward; _items = items; _weapons = weapons; _corpses = corpses; _broadcastCorpseItems = broadcastCorpseItems; _winXp = eventWinXp; _rng = rng; _scores = scores; _awardXp = awardXp; _gangs = gangs;
         ctx.Match.Gang = new CreditedGangHits(gangs, _credit, id => gangs.GangOf(id)?.Crew != GangCrew.RivalCrew); // a Job's Rival crew earns no part in the Thieves' reward
-        ctx.Match.Vans = new CreditedVanHits(raids, _credit);
+        ctx.Match.Vans = new CreditedVanHits(raids, _credit, id => raids.RaidOf(id)?.Gang.Crew != GangCrew.RivalCrew); // nor does a hit on a Heist's Assault van
         gangs.Killed += OnBossKilled;
     }
 

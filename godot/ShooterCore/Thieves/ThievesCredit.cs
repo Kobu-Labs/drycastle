@@ -70,12 +70,16 @@ public sealed class CreditedVanHits : IGangHits
     readonly IGangHits _inner;
     readonly ThievesCredit _credit;
 
-    public CreditedVanHits(IGangHits inner, ThievesCredit credit) { _inner = inner; _credit = credit; }
+    readonly Func<ushort, bool>? _credits;
+
+    /// <param name="credits">Which van hit ids count for the event (a Raid's van, not a Heist's Assault van); null: all.</param>
+    public CreditedVanHits(IGangHits inner, ThievesCredit credit, Func<ushort, bool>? credits = null) { _inner = inner; _credit = credit; _credits = credits; }
 
     public DamageResult Hit(ushort hitId, ushort attacker, byte weapon, float amount, KillCause cause)
     {
+        var counts = _credits?.Invoke(hitId) ?? true;
         var result = _inner.Hit(hitId, attacker, weapon, amount, cause);
-        if (result != DamageResult.Ignored) _credit.NoteVanHit(attacker);
+        if (result != DamageResult.Ignored && counts) _credit.NoteVanHit(attacker);
         return result;
     }
 }

@@ -265,6 +265,9 @@ public sealed class RaidRoster : IGangHits
 
     // ---- hits ----
 
+    /// <summary>The Raid whose van has the hit id <paramref name="hitId"/> (<see cref="RaidVanRules.IsHitId"/>), or null.</summary>
+    public Raid? RaidOf(ushort hitId) => RaidVanRules.IsHitId(hitId) ? _raids.FirstOrDefault(r => r.Van.Slot == RaidVanRules.SlotOf(hitId)) : null;
+
     /// <summary>
     /// A weapon hit a van's capsule (<see cref="MatchSim.ApplyDamage"/> routes the ids of the range here): a bullet counts 1 (a headshot is a body hit), an explosive or a vehicle weapon its
     /// weight; ramming counts nothing. The Raid fights the attacker from now on. Ignored for a destroyed van.
@@ -272,7 +275,7 @@ public sealed class RaidRoster : IGangHits
     public DamageResult Hit(ushort hitId, ushort attacker, byte weapon, float amount, KillCause cause)
     {
         if (!RaidVanRules.IsHitId(hitId) || !(amount > 0) || cause == KillCause.Roadkill) return DamageResult.Ignored;
-        var raid = _raids.FirstOrDefault(r => r.Van.Slot == RaidVanRules.SlotOf(hitId));
+        var raid = RaidOf(hitId);
         if (raid == null || !raid.Van.Alive || raid.Van.Ended != null) return DamageResult.Ignored;
         var source = SourceOf(weapon);
         var weight = GangRules.Weight(_cfg.Van.Hit, source, false);
