@@ -1,0 +1,32 @@
+# P-1054: two-storey house, peach render with brick plinth, dark tiled gabled roof, balcony on gable. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.65 m, roof top 5.95 m. Walls seen: edges [1, 2]. Not modelled: balcony on the gable, satellite dishes, air conditioner unit, wooden carport/shed roof beside the house, skylight window in roof.
+id: w378920467
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.56
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+gable_colour: '#f1ecdf'
+gable_from_m: 3.65
+ridge_caps: true
+plinth: {height_m: 0.44, colour: '#a7a6a5'}
+apron: {width_m: 0.3, colour: '#aea59a'}
+roof_tiles: true
+eaves: {colour: '#41424a', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 1, at_m: 7.91, colour: '#41424a', bends: true}
+- {edge: 3, at_m: 7.18, colour: '#41424a', bends: true}
+chimneys:
+- {x: -125.99, y: 118.22, top_m: 6.25, width_m: 0.5, depth_m: 0.5, cap: true}
+balconies:
+- {edge: 2, at_m: 0.5, width_m: 6.78, floor_m: 3.04}
+interior: true
+openings:
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.44, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 2.3, width_m: 1.0, height_m: 1.0, sill_m: 4.05, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 4.7, width_m: 1.0, height_m: 1.0, sill_m: 4.05, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 4.74, width_m: 1.78, height_m: 1.45, sill_m: 1.19, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 1.13, width_m: 1.78, height_m: 1.45, sill_m: 1.19, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w5, kind: window, edge: 1, at_m: 5.26, width_m: 1.78, height_m: 1.45, sill_m: 1.19, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w6, kind: window, edge: 3, at_m: 1.29, width_m: 1.78, height_m: 1.45, sill_m: 1.19, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 3, at_m: 4.36, width_m: 1.78, height_m: 1.45, sill_m: 1.19, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

@@ -143,13 +143,23 @@ def read_one(client, out: Path, again: bool, stage: str | None = None) -> dict |
             print(f"{out}: no question open")
             return None
         ask_name = found[0]
+    text, usage, stop_reason = ask_model(client, question(out, ask_name), str(out))
+    return take(out, text, usage, stop_reason, again, stage)
+
+
+def question(out: Path, ask_name: str) -> list[dict]:
+    """The message content of one question: its pictures, then the ask file."""
     ask = (out / ask_name).read_text()
     content: list[dict] = []
     for p in pictures(out, ask):
         content.append({"type": "text", "text": f"Picture `{p.name if p.parent == out else p}`:"})
         content.append(image_block(p))
     content.append({"type": "text", "text": ask + "\nReply with the JSON object only, nothing before or after it."})
-    text, usage, stop_reason = ask_model(client, content, str(out))
+    return content
+
+
+def take(out: Path, text: str, usage: dict, stop_reason: str, again: bool, stage: str | None) -> dict:
+    """Check a reply and write it (or report why not); the token usage, with ``problem`` when nothing was written."""
     if stop_reason != "end_turn":
         problem = f"the model stopped with {stop_reason}"
         print(f"PROBLEM: {out}: {problem}: not written")
@@ -162,9 +172,52 @@ def read_one(client, out: Path, again: bool, stage: str | None = None) -> dict |
     return usage
 
 
+def stage_read_batch(outs: list[Path], again: bool, poll_s: float = 20.0) -> None:
+    """The open question of every folder as one Message Batch (half the price; usually minutes, at most 24 h), then the
+    replies checked and written as ``read`` does. No server-side fallback in a batch: a refusal is reported."""
+    import time
+
+    import anthropic
+
+    from drycastle_pipeline.core.config import load_dotenv
+
+    load_dotenv()
+    client = anthropic.Anthropic()
+    asks = {}
+    for i, out in enumerate(outs):
+        found = pending(out, again)
+        if found is None:
+            print(f"{out}: no question open")
+            continue
+        asks[f"q{i}"] = (out, found[0])
+    if not asks:
+        return
+    batch = client.messages.batches.create(requests=[
+        {"custom_id": cid, "params": {"model": MODEL, "max_tokens": 16000, "output_config": {"effort": EFFORT},
+                                      "messages": [{"role": "user", "content": question(out, ask)}]}}
+        for cid, (out, ask) in asks.items()])
+    print(f"batch {batch.id}: {len(asks)} question(s) sent", flush=True)
+    while (batch := client.messages.batches.retrieve(batch.id)).processing_status != "ended":
+        time.sleep(poll_s)
+    total = {"in": 0, "out": 0}
+    for res in client.messages.batches.results(batch.id):
+        out, _ = asks[res.custom_id]
+        if res.result.type != "succeeded":
+            print(f"PROBLEM: {out}: batch request {res.result.type}: not written")
+            continue
+        m = res.result.message
+        usage = {"in": m.usage.input_tokens, "out": m.usage.output_tokens}
+        take(out, "".join(b.text for b in m.content if b.type == "text"), usage, m.stop_reason, again, None)
+        total = {k: total[k] + usage[k] for k in total}
+    print(f"tokens: {total['in']} in, {total['out']} out over {len(asks)} question(s) (batch: half price)")
+
+
 def stage_read(outs: list[Path], again: bool) -> None:
     import anthropic  # the pipeline runs without it; only this command needs it (uv sync --extra reader)
 
+    from drycastle_pipeline.core.config import load_dotenv
+
+    load_dotenv()
     client = anthropic.Anthropic()
     total = {"in": 0, "out": 0}
     for out in outs:

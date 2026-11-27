@@ -1,0 +1,26 @@
+# P-0953: bungalow with attic dormer, cream render, dark shingle roof, hidden behind spruce trees. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 2.25 m, roof top 4.30 m. Walls seen: edges [3]. Not modelled: TV antenna on the roof, dormer with white frame, spruce trees in front of the wall.
+id: w378920441
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#3a3a3c'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.28, colour: '#807e70'}
+apron: {width_m: 0.75, colour: '#89887f'}
+roof_tiles: true
+eaves: {colour: '#747a6b', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#3a3a3c'
+downpipes:
+- {edge: 1, at_m: 13.05, colour: '#747a6b', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#747a6b', bends: true}
+- {edge: 3, at_m: 13.54, colour: '#747a6b', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#747a6b', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.33, width_m: 1.2, height_m: 1.3, sill_m: 0.65, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 3.85, width_m: 1.2, height_m: 1.3, sill_m: 0.65, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w3, kind: window, edge: 1, at_m: 4.6, width_m: 1.2, height_m: 1.3, sill_m: 0.65, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 7.5, width_m: 1.2, height_m: 1.3, sill_m: 0.65, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 10.4, width_m: 1.2, height_m: 1.3, sill_m: 0.65, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

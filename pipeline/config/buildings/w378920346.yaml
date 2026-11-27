@@ -5,8 +5,9 @@ source: Street View captures, measured by facade_pipeline; walls no capture saw,
 overhang_m: 0.25
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.71, height_m: 0.1}
 ridge_caps: true
-plinth: {height_m: 0.41, colour: '#747474'}
 apron: {width_m: 0.91, colour: '#a2a399', joints_m: 0.5}
 roof_tiles: true
 eaves: {colour: '#ece6d8', fascia_m: 0.18, gutter: true, rafters: true, gutter_colour: '#41424a'}
@@ -21,12 +22,13 @@ skylights:
 - {edge: 0, at_m: 7.94, up_m: 1.22}
 interior: true
 openings:
-  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.41, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 0, at_m: 2.15, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
-  - {id: w2, kind: window, edge: 0, at_m: 5.4, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
-  - {id: w3, kind: window, edge: 0, at_m: 8.66, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
-  - {id: w4, kind: window, edge: 1, at_m: 1.98, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 2.15, width_m: 1.1, height_m: 1.63, sill_m: 0.42, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
+  - {id: w2, kind: window, edge: 0, at_m: 5.4, width_m: 1.1, height_m: 1.63, sill_m: 0.42, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
+  - {id: w3, kind: window, edge: 0, at_m: 8.66, width_m: 1.1, height_m: 1.63, sill_m: 0.42, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
+  - {id: w4, kind: window, edge: 1, at_m: 1.98, width_m: 1.1, height_m: 1.63, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
   - {id: w5, kind: window, edge: 1, at_m: 2.35, width_m: 1.0, height_m: 1.0, sill_m: 4.12, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 4.8, width_m: 1.0, height_m: 1.0, sill_m: 4.12, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w7, kind: window, edge: 1, at_m: 5.07, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
-  - {id: w8, kind: window, edge: 3, at_m: 4.95, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.88], sill: true, lintel_m: 0.18}
+  - {id: w7, kind: window, edge: 1, at_m: 5.07, width_m: 1.1, height_m: 1.63, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}
+  - {id: w8, kind: window, edge: 3, at_m: 1.97, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.5], lintel_m: 0.18}
+  - {id: w9, kind: window, edge: 3, at_m: 4.77, width_m: 1.1, height_m: 1.63, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, lintel_m: 0.18}

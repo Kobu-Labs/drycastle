@@ -1,0 +1,46 @@
+# P-0360: single-storey house, cream render, red tiled roof, brown wooden garage-type door. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.55 m, roof top 6.79 m. Walls seen: edges [2, 6]. Not modelled: small roof vents on the roof, TV antenna, utility pole in front.
+id: w378900336
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+ridge_caps: true
+plinth: {height_m: 0.31, colour: '#7b7a79'}
+apron: {width_m: 0.31, colour: '#bab4a6'}
+roof_tiles: true
+eaves: {colour: '#897e78', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 13.03, colour: '#897e78', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#897e78', bends: true}
+- {edge: 2, at_m: 7.64, colour: '#897e78', bends: true}
+- {edge: 5, at_m: 14.97, colour: '#897e78', bends: true}
+- {edge: 5, at_m: 0.16, colour: '#897e78', bends: true}
+- {edge: 6, at_m: 22.37, colour: '#897e78', bends: true}
+- {edge: 6, at_m: 0.16, colour: '#897e78', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.82, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 3.02, width_m: 0.59, height_m: 1.0, sill_m: 3.95, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 4.23, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.31, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w4, kind: window, edge: 1, at_m: 2.18, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 4.96, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 1, at_m: 7.73, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 1, at_m: 10.5, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 3, at_m: 1.75, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w9, kind: window, edge: 4, at_m: 1.79, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w10, kind: window, edge: 4, at_m: 2.98, width_m: 0.59, height_m: 1.0, sill_m: 3.95, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 4, at_m: 4.17, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 5, at_m: 2.57, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 5, at_m: 5.74, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 5, at_m: 8.9, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w15, kind: window, edge: 5, at_m: 12.06, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w16, kind: window, edge: 6, at_m: 2.04, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w17, kind: window, edge: 6, at_m: 4.64, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w18, kind: window, edge: 6, at_m: 8.62, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w19, kind: window, edge: 6, at_m: 12.1, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w20, kind: window, edge: 6, at_m: 16.4, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: g1, kind: garage_door, edge: 6, at_m: 19.03, width_m: 0.75, height_m: 2.57, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: w21, kind: window, edge: 6, at_m: 19.99, width_m: 0.59, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}

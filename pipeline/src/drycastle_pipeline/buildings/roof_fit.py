@@ -29,6 +29,7 @@ _LEAN_TO_M = 4.5  # a part standing no further than this out of an eave wall of 
 _LEAN_LOW_M = 2.4  # whose low edge is no lower than this
 _GABLE_WING_M = 2.0  # a wing standing this far out of an eave wall gets a gable end, a shallower one a hipped end
 _BIG = 500.0
+_WIDE_GABLE_M = 12.0  # a gable wall longer than this, and half as long again as the house is deep behind it, is not believed
 _WEDGE_M = 5.5  # how far a wall may run away from a rectangle's side it touches and still be that side's wall
 _FOLLOW_M = 0.8  # how far from a rectangle's side the wall may run that a hipped part's side is laid on
 _REACH_M = 0.6  # how far outside a rectangle a wall along its side may run and still be its wall
@@ -102,6 +103,12 @@ class Fit:
         if not hs:  # past every part's rim: the nearest part's roof carried on
             return self.eave + min(self.parts, key=lambda p: _outside(p._domain_h, x, y)).height(x, y)
         return self.eave + max(hs)
+
+
+def gable_believable(wall_m: float, depth_m: float) -> bool:
+    """Can a wall ``wall_m`` long, of a house ``depth_m`` deep behind it, be a gable wall? Not one far wider than the house
+    is deep: its ridge would run across the house's short way and its roof rise like a tower (a gable read on a long side)."""
+    return not (wall_m > _WIDE_GABLE_M and wall_m > 1.5 * depth_m)
 
 
 def _halves(poly: Polygon) -> list[tuple[float, float, float]]:
@@ -579,6 +586,7 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
         if core.is_empty or core.geom_type != "Polygon":
             continue
         parts.append(Part(core, domain, planes, r, form, None if ridge is None else math.atan2(ridge[1], ridge[0]) % math.pi, h, _halves(core), _halves(domain)))
+    _stop_at_ridges(parts)
     for g in bumps(shape, chosen):
         g = _ccw(g)
         inradius = _inradius(g)
@@ -608,6 +616,48 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
     wall_lines = unary_union([g.exterior for g, _ in wall_pieces] + [g.exterior for g in reach] + step(reach))
     rim_lines = unary_union([lines] + [p.domain.exterior for p in parts] + step([p.domain for p in parts]))
     return Fit(parts, eave, angle, (float(mid[0]), float(mid[1])), half, pieces, lines, wall_lines, rim_lines, grown, _steps(pieces))
+
+
+def _top_of(p: Part) -> float:
+    x0, y0, x1, y1 = p.core.bounds
+    return max((p.height(x, y) for x in np.linspace(x0, x1, 21) for y in np.linspace(y0, y1, 21) if _within(p._core_h, x, y, 1e-6)), default=0.0)
+
+
+def _stop_at_ridges(parts: list[Part]) -> None:
+    """A part that runs into a higher gabled part at an angle stops at that part's ridge: its roof dies into the near
+    slope, as on a real house, and does not come up again through the far slope (nor its gable end with it). In place."""
+    tops = [_top_of(p) for p in parts]
+    for k, p in enumerate(parts):
+        if p.form not in ("gabled", "hipped"):
+            continue
+        for j, q in enumerate(parts):
+            if j == k or q.form != "gabled" or len(q.planes) != 2:
+                continue
+            if tops[j] < tops[k] - 0.05 or (abs(tops[j] - tops[k]) <= 0.05 and j > k):  # the higher one (of two as high: the house) stays whole
+                continue
+            if p.ridge is not None and q.ridge is not None:
+                turn = abs((p.ridge - q.ridge + math.pi / 2) % math.pi - math.pi / 2)
+                if turn < math.radians(30):  # in line with it (a lower part carried on): not this case
+                    continue
+            both = p.core.intersection(q.core)
+            own = p.core.difference(q.core.buffer(0.05, join_style=2))
+            if both.area < 0.5 or own.area < 0.5:
+                continue
+            (a1, b1, c1), (a2, b2, c2) = q.planes
+            g = (a1 - a2, b1 - b2, c1 - c2)
+            ridge = _half_plane(g, tuple(q.rect.middle))
+            if ridge is None or ridge.is_empty or not both.intersection(ridge.exterior).length > 0.3:
+                continue
+            at = max(_polys(own), key=lambda s: s.area).representative_point()
+            side = 1.0 if g[0] * at.x + g[1] * at.y + g[2] >= 0 else -1.0
+            cut = _half_plane((side * g[0], side * g[1], side * g[2]), (at.x, at.y))
+            if own.difference(cut).buffer(-0.3, join_style=2).area > 0.5:  # it runs on out of the far side too (a cross): it passes through
+                continue
+            core, domain = p.core.intersection(cut), p.domain.intersection(cut)
+            if core.geom_type != "Polygon" or domain.geom_type != "Polygon" or core.area < 0.3 * p.core.area:
+                continue
+            p.core, p.domain = _ccw(core), _ccw(domain)
+            p._core_h, p._domain_h = _halves(p.core), _halves(p.domain)
 
 
 def _steps(pieces: list) -> list:

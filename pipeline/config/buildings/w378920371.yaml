@@ -1,0 +1,27 @@
+# P-0927: single-storey village house, light grey render, tiled gabled roof, hedge in front. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.16 m, roof top 4.87 m. Walls seen: edges [1, 2]. Not modelled: low outbuilding with dark roof attached at the gable end, chimneys.
+id: w378920371
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#f2f0ea'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.6, colour: '#5c5a6c'}
+apron: {width_m: 0.6, colour: '#84857d'}
+roof_tiles: true
+eaves: {colour: '#704533', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 13.29, colour: '#704533', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#704533', bends: true}
+- {edge: 3, at_m: 13.3, colour: '#704533', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#704533', bends: true}
+chimneys:
+- {x: -5.57, y: 435.89, top_m: 5.37, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 2, at_m: 3.25, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.6, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 4}
+  - {id: w2, kind: window, edge: 3, at_m: 4.68, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 7.64, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 10.6, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

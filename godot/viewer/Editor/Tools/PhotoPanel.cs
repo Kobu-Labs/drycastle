@@ -25,6 +25,7 @@ public sealed class PhotoPanel
 
     // top
     Label _noBuilding = null!, _buildingOne = null!;
+    Button _copyIds = null!;
     VBoxContainer _buildingList = null!;
     string _buildingSig = "";
     // photos
@@ -66,8 +67,13 @@ public sealed class PhotoPanel
         page.AddChild(Ui.Note("Model a real house from its Street View captures or a photo of your own, then adjust it: every change shows in 3D within a second."));
         _noBuilding = Ui.Note("Select a parcel with a house: click it in the 3D view.", "Warn");
         page.AddChild(_noBuilding);
-        _buildingOne = new Label { ThemeTypeVariation = "Dim" };
-        page.AddChild(_buildingOne);
+        _buildingOne = new Label { ThemeTypeVariation = "Dim", SizeFlagsHorizontal = Control.SizeFlags.ExpandFill };
+        _copyIds = Ui.FocusBtn("Copy IDs", CopyIds);
+        _copyIds.TooltipText = "Copy the group ID (or the parcel ID if it is in no group) and the building ID";
+        var idRow = new HBoxContainer();
+        idRow.AddChild(_buildingOne);
+        idRow.AddChild(_copyIds);
+        page.AddChild(idRow);
         _buildingList = new VBoxContainer();
         page.AddChild(_buildingList);
 
@@ -337,12 +343,24 @@ public sealed class PhotoPanel
         }
     }
 
+    void CopyIds()
+    {
+        if (_t.Current == null) return;
+        var parcel = _t.Buildings.FirstOrDefault(b => b.Id == _t.Current)?.Parcel ?? "";
+        var owner = _host.Map.Parcels.TryGetValue(parcel, out var p) && p.Group != null ? p.Group : parcel;
+        var ids = $"{owner} {_t.Current}".Trim();
+        DisplayServer.ClipboardSet(ids);
+        Ui.FlashCopied(_copyIds);
+        _host.Say("copied: " + ids);
+    }
+
     void RefreshBuildings()
     {
         var sig = string.Join("|", _t.Buildings.Select(b => b.Id)) + "#" + _t.Current + _t.Locked;
         var many = _t.Buildings.Count > 1;
         _buildingList.Visible = many;
         _buildingOne.Visible = !many && _t.Current != null;
+        _copyIds.Visible = _t.Current != null;
         if (_t.Current != null && !many) _buildingOne.Text = $"{_t.Current}  on  {_t.Buildings.FirstOrDefault(b => b.Id == _t.Current)?.Parcel}";
         if (sig == _buildingSig) return;
         _buildingSig = sig;
