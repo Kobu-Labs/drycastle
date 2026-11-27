@@ -43,7 +43,7 @@ internal sealed class TrapHouseJobKind : IJobKind
         refusal = null;
         if (_s.Map().Contact is not { } contact) { refusal = "This map has no Cartel."; return null; }
         if (_houses.Data is not { } houseData) { refusal = "This map has no hollow house to take."; return null; }
-        var min = HeistRules.MinDuffels(_data, job.Tier, _s.Parties.MembersOf(job.Owner).Count); // before the van's capacity: never fewer than the Heist's
+        var min = HeistRules.MinDuffels(_data, job.Tier, job.Party.Count); // before the van's capacity: never fewer than the Heist's
         // planned only: the props go up once the run began, so a start the drop point or the van refuses shows nobody anything
         if (_houses.Pick(min) is not { } picked) { refusal = $"No trap house is free now (road access, nobody inside, {min} duffel spots or more)."; return null; }
         var (candidate, dressing) = picked;
@@ -86,7 +86,7 @@ internal sealed class TrapHouseJobKind : IJobKind
             foreach (var spot in dressing.Duffels.Take(tables))
                 if (DuffelRules.Parse(spot.Kind) is { } k && kind._s.Duffels.Book.Place(k, party, spot.Pos, spot.Yaw) != null) placed++;
             var (gunmen, enforcers) = TrapHouseHeistRules.Defenders(kind._data, tier, party.Count, dressing.Posts.Count);
-            _crew = kind._rivals.NewCrew(centre, p => party.Contains(p));
+            _crew = kind._rivals.NewCrew(centre, party.Contains);
             var posted = 0;
             var order = CrewRules.Order(gunmen, enforcers);
             for (var i = 0; i < order.Count; i++)

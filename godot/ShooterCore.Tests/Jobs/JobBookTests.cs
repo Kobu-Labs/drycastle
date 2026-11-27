@@ -57,7 +57,7 @@ public class JobBookTests
     }
 
     static Job Start(JobBook book, IJobParties parties, IJobKind kind, ushort leader, int tier = 1) =>
-        book.Start(CartelRules.Giver, kind, tier, parties.OwnerOf(leader), leader, out var why) ?? throw new Xunit.Sdk.XunitException(why);
+        book.Start(CartelRules.Giver, kind, tier, parties.OwnerOf(leader), leader, parties, out var why) ?? throw new Xunit.Sdk.XunitException(why);
 
     [Fact]
     public void OneJobPerOwnerButManyOwnersAtOnce()
@@ -66,7 +66,7 @@ public class JobBookTests
         var (book, parties, _) = Setup(test);
         parties.Squads[1] = new() { 3, 4 };
         var a = Start(book, parties, test, 1);
-        Assert.Null(book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, out var why));
+        Assert.Null(book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, parties, out var why));
         Assert.NotNull(why);
         var b = Start(book, parties, test, 2);
         var c = Start(book, parties, test, 3);
@@ -86,7 +86,7 @@ public class JobBookTests
         var (book, parties, ended) = Setup(kind);
         var a = Start(book, parties, kind, 1);
         Assert.True(book.IsReserved("cartel_drop:3"));
-        Assert.Null(book.Start(CartelRules.Giver, kind, 1, JobOwner.Solo(2), 2, out var why));
+        Assert.Null(book.Start(CartelRules.Giver, kind, 1, JobOwner.Solo(2), 2, parties, out var why));
         Assert.Equal("taken", why);
         Assert.Single(book.Running);
         Assert.Equal(new[] { "cartel_drop:3" }, book.ReservedBy(a));
@@ -114,6 +114,29 @@ public class JobBookTests
         Assert.Equal(new ushort[] { 1, 3 }, end.Members);
         Assert.Empty(book.Running);
         Assert.Equal(CartelFile.Default.RespectFor(1), CartelRules.Reward(CartelFile.Default, job));
+    }
+
+    [Fact]
+    public void AMateWhoJoinsTheSquadIsInTheJobsPartySetAfterTheNextTick()
+    {
+        var kind = new SpotKind("a");
+        var (book, parties, ended) = Setup(kind);
+        parties.Squads[1] = new() { 1, 2 };
+        var job = Start(book, parties, kind, 1);
+        var party = job.Party;
+        Assert.Equal(new ushort[] { 1, 2 }, party.Order());
+        parties.Squads[1].Add(3);
+        Assert.False(party.Contains(3)); // not before the book looks
+        book.Tick(0.1f, parties, ended);
+        Assert.True(party.Contains(3));
+        parties.Squads[1].Remove(2);
+        book.Tick(0.1f, parties, ended);
+        Assert.False(party.Contains(2)); // one who leaves is out
+        Assert.Same(party, job.Party); // one set for the whole Job: what its Duffels and crews hold
+        var version = party.Version;
+        Assert.False(party.Refresh(parties)); // nothing changed: no new version
+        Assert.Equal(version, party.Version);
+        Assert.Empty(ended);
     }
 
     [Fact]
@@ -231,7 +254,7 @@ public class JobBookTests
         var ended = new List<JobEnded>();
         var solo = Start(book, parties, kind, 1);
         Assert.Equal(JobOwner.Solo(1), solo.Owner);
-        var squadJob = book.Start(CartelRules.Giver, other, 1, parties.OwnerOf(3), 3, out var why) ?? throw new Xunit.Sdk.XunitException(why);
+        var squadJob = book.Start(CartelRules.Giver, other, 1, parties.OwnerOf(3), 3, parties, out var why) ?? throw new Xunit.Sdk.XunitException(why);
         Assert.True(parties.Has(solo.Owner, 1));
         Assert.False(parties.Has(squadJob.Owner, 1));
 

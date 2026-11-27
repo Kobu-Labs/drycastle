@@ -238,7 +238,7 @@ public class HeistTests
         var got = new List<Vector3>();
         for (ushort p = 1; p <= 3; p++)
         {
-            var job = book.Start("cartel", kind, 1, JobOwner.Solo(p), p, out _);
+            var job = book.Start("cartel", kind, 1, JobOwner.Solo(p), p, new NoParties(), out _);
             if (job != null) got.Add(kind.Got!.Value);
         }
         Assert.Equal(2, got.Count); // (10,0,0) is too near, 500 and 520 are too close to share
@@ -259,7 +259,7 @@ public class HeistTests
             var book = new JobBook();
             var kind = new DropKind(map, Vector3.Zero, minM, 40);
             book.Register(kind);
-            Assert.Null(book.Start("cartel", kind, 1, JobOwner.Solo(1), 1, out var why));
+            Assert.Null(book.Start("cartel", kind, 1, JobOwner.Solo(1), 1, new NoParties(), out var why));
             return why;
         }
         Assert.Equal("This map has no drop point.", Why(CartelMap.Empty, 300));

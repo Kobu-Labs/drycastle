@@ -54,7 +54,7 @@ public sealed class Drill
     /// <summary>The building id of its Trap house.</summary>
     public string House { get; }
     public int Tier { get; }
-    /// <summary>The player ids that may set and fix it (the Job's party, read live).</summary>
+    /// <summary>The player ids that may set and fix it (the Job's party set, refreshed each tick).</summary>
     public IReadOnlySet<ushort> Party { get; }
     public float RunSeconds { get; }
     public DrillState State => _fsm.Current;

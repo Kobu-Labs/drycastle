@@ -58,6 +58,7 @@ public sealed class Job
     internal Job(int id, string giver, IJobKind kind, int tier, JobOwner owner, ushort leader, float seconds)
     {
         Id = id; Giver = giver; Kind = kind; Tier = tier; Owner = owner; Leader = leader; Seconds = seconds;
+        Party = new JobParty(owner);
         _run.Restart(seconds);
     }
 
@@ -68,6 +69,8 @@ public sealed class Job
     public IJobKind Kind { get; }
     public int Tier { get; }
     public JobOwner Owner { get; }
+    /// <summary>The owner's members as of the last tick (the book refreshes it): the one set the Job's Duffels, crews and Drill read.</summary>
+    public JobParty Party { get; }
     /// <summary>The leader as of the last tick: the solo player, or the Squad's leader (who may change while it runs).</summary>
     public ushort Leader { get; internal set; }
     /// <summary>The timer it started with.</summary>

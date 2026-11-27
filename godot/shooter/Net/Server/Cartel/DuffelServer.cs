@@ -16,7 +16,7 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// follows what it carries: set in one place, from the book's <see cref="DuffelBook.CarrierChanged"/>, whoever changed the carrier.
 /// <para>
 /// Seams for the other packages: a Job gives or places Duffels for its party with <see cref="Give"/> and <see cref="Book"/> (<see cref="DuffelBook.Place"/>) and takes them away with
-/// <see cref="RemoveParty"/>, the Cartel van registers its cargo box with <see cref="DuffelBook.AddVolume"/>. The admin's <c>/duffel kind</c> gives one to the admin (a party of one).
+/// <see cref="DuffelBook.RemoveParty"/> (its carriers are unburdened here, from <see cref="DuffelBook.CarrierChanged"/>), the Cartel van registers its cargo box with <see cref="DuffelBook.AddVolume"/>. The admin's <c>/duffel kind</c> gives one to the admin (a party of one).
 /// </para>
 /// </summary>
 internal sealed class DuffelServer
@@ -53,9 +53,6 @@ internal sealed class DuffelServer
         if (Book.CarriedBy(carrier.Id) != null) { _ctx.SendEvent(carrier, EventKind.DuffelNotice, DuffelCodec.EncodeNotice(DuffelNotice.CarryingOne)); return null; }
         return Book.Give(kind, party, carrier.Id, Feet(carrier));
     }
-
-    /// <summary>Takes every Duffel of the party out of the world (its Job ended); whoever carried one is unburdened (<see cref="DuffelBook.CarrierChanged"/>). The count removed. The Jobs' entry point.</summary>
-    public int RemoveParty(IReadOnlySet<ushort> party) => Book.RemoveParty(party);
 
     /// <summary>
     /// The one place a body's burden follows what it carries: a new carrier is slowed and stands where they took it, one who carries none any more walks free. The throw key starts a fresh
@@ -109,7 +106,7 @@ internal sealed class DuffelServer
 
     /// <summary>
     /// Every tick, after the shots and blasts: carried Duffels stay with their carriers; a carrier who died drops it where they fell, one who left or was put in a seat where they last stood on foot,
-    /// one who left the party (a squad mate who quit the squad: the Job's party is read live) at their feet, so a party player can take it on. Then each human is told the Duffel in reach when
+    /// one who left the party (a squad mate who quit the squad: out of the Job's party from the next tick) at their feet, so a party player can take it on. Then each human is told the Duffel in reach when
     /// that changed.
     /// </summary>
     public void Tick()

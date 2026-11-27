@@ -61,7 +61,7 @@ internal sealed class HarvestJobKind : IJobKind, IPlantationFill
         // the Assault clock starts when the van reaches the area: filling before that would load the most at the edge and drive through with no Assault at all
         if (run.Heist.Phase == HeistPhase.ToObjective) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"Bring the Cartel van to {Place} first."); return; }
         if (run.Filled >= run.Heist.Max) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"All {run.Heist.Max} duffels of the harvest are filled: load them and drive."); return; }
-        run.SyncParty(); // a squad mate who just joined is in the party the Duffel belongs to
+        run.Party.Refresh(_s.Parties); // a squad mate who joined since the last tick is in the party the Duffel belongs to
         if (_s.Duffels.Give(DuffelKind.Weed, run.Party, c) == null) return; // carrying one already (told), or not alive
         run.Filled++;
         GD.Print($"server: {c.Name} #{c.Id} filled a weed duffel for {run.Job} ({run.Filled}/{run.Heist.Max})");

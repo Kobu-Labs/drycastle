@@ -78,12 +78,11 @@ public sealed class HitJobKind : IJobKind
     }
 
     readonly Data _data;
-    readonly IJobParties _parties;
     readonly Func<CartelMap> _map;
     readonly Random _rng;
     readonly IHitWorld _world;
 
-    public HitJobKind(CartelFile file, IJobParties parties, Func<CartelMap> map, Random rng, IHitWorld world)
+    public HitJobKind(CartelFile file, Func<CartelMap> map, Random rng, IHitWorld world)
     {
         _data = DataFile.Section<Data>(file.JobSection(KindId), "cartel.json: jobs.hit");
         var tiers = file.Tiers.Count;
@@ -95,7 +94,7 @@ public sealed class HitJobKind : IJobKind
         if (_data.MaxGuards < 0) throw Bad("max_guards must not be negative");
         if (!float.IsFinite(_data.RingM) || _data.RingM <= 0 || !float.IsFinite(_data.RevealM) || _data.RevealM <= 0) throw Bad("ring_m and reveal_m must be more than 0");
         if (!float.IsFinite(_data.MinContactM) || _data.MinContactM < 0 || !float.IsFinite(_data.ApartM) || _data.ApartM < 0) throw Bad("min_contact_m and apart_m must not be negative");
-        _parties = parties; _map = map; _rng = rng; _world = world;
+        _map = map; _rng = rng; _world = world;
     }
 
     public string Id => KindId;
@@ -110,7 +109,7 @@ public sealed class HitJobKind : IJobKind
     {
         var map = _map();
         if (CartelSpots.Claim(job, book, map, CartelZones.HitKind, _rng, map.Contact?.Position, "the Contact", _data.MinContactM, _data.ApartM, out refusal) is not { } spot) return null;
-        var party = new JobPartySet(_parties, job.Owner);
+        var party = job.Party;
         var (gunmen, enforcers) = Guards(job.Tier, party.Count);
         if (_world.Spawn(new HitCrewOrder(spot, gunmen, enforcers, _data.RingM), party.Contains) is not { } crew) { refusal = "The rival crew could not be put down now (the world is full)."; return null; }
         return new Run(this, party, crew, spot);
@@ -120,10 +119,10 @@ public sealed class HitJobKind : IJobKind
     public sealed class Run : IJobObjective
     {
         readonly HitJobKind _k;
-        readonly JobPartySet _party;
+        readonly JobParty _party;
         readonly StateMachine<HitPhase> _phase = new(Spec);
 
-        internal Run(HitJobKind kind, JobPartySet party, IHitCrew crew, Vector3 spot)
+        internal Run(HitJobKind kind, JobParty party, IHitCrew crew, Vector3 spot)
         {
             _k = kind; _party = party; Crew = crew; Spot = spot;
         }

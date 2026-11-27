@@ -95,7 +95,7 @@ public sealed class Duffel : IWorldEntity
     /// <summary>The world entity id (0 until it is spawned).</summary>
     public ushort Id { get; internal set; }
     public DuffelKind Kind { get; }
-    /// <summary>The player ids that may pick it up: the Job's party, read live (a squad mate who joins later is in it when the Job's set has them).</summary>
+    /// <summary>The player ids that may pick it up: the Job's party set (<see cref="Jobs.Job.Party"/>: a squad mate who joins later is in it from the next tick).</summary>
     public IReadOnlySet<ushort> Party { get; }
     public DuffelState State => _fsm.Current;
     /// <summary>The player who carries it; 0 when nobody does.</summary>

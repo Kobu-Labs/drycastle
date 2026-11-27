@@ -158,7 +158,7 @@ internal sealed class CartelServer
             _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin);
         var why = CartelRules.CanStart(_data, facts);
         if (why != JobStartRefusal.None) { Refuse(c, CartelAction.StartJob, (byte)why, CartelRules.Words(why, _data, tier), admin); return; }
-        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, out var refusal) is not { } job)
+        if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, _parties, out var refusal) is not { } job)
         {
             Refuse(c, CartelAction.StartJob, (byte)JobStartRefusal.CannotBegin, refusal ?? CartelWords.Start.Text(JobStartRefusal.CannotBegin), admin);
             return;

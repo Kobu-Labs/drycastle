@@ -53,7 +53,6 @@ public class SimpleJobsTests
         public World() => Duffels = new DuffelBook(DuffelsFile.Default, Entities, new Flat());
         public DuffelBook Duffels { get; }
         public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier) => Duffels.Give(kind, party, carrier, At.GetValueOrDefault(carrier));
-        public void RemoveParty(IReadOnlySet<ushort> party) => Duffels.RemoveParty(party);
         public Vector3? Feet(ushort p) => At.TryGetValue(p, out var f) ? f : null;
         public bool UseHeld(ushort p) => Holding.Contains(p);
         public Func<ushort, bool>? Hostile;
@@ -74,15 +73,15 @@ public class SimpleJobsTests
         var parties = new Parties();
         var world = new World();
         var data = CartelFile.Default;
-        var delivery = new DeliveryJobKind(data, parties, () => Map, new Random(seed), world);
-        var hit = new HitJobKind(data, parties, () => Map, new Random(seed), world);
+        var delivery = new DeliveryJobKind(data, () => Map, new Random(seed), world);
+        var hit = new HitJobKind(data, () => Map, new Random(seed), world);
         var book = new JobBook();
         book.Register(delivery); book.Register(hit);
         return (book, parties, world, delivery, hit);
     }
 
     static Job Start(JobBook book, IJobParties parties, IJobKind kind, ushort leader, int tier = 1) =>
-        book.Start(CartelRules.Giver, kind, tier, parties.OwnerOf(leader), leader, out var why) ?? throw new Xunit.Sdk.XunitException(why);
+        book.Start(CartelRules.Giver, kind, tier, parties.OwnerOf(leader), leader, parties, out var why) ?? throw new Xunit.Sdk.XunitException(why);
 
     static void Ticks(JobBook book, IJobParties parties, List<JobEnded> ended, int n)
     {
@@ -94,8 +93,8 @@ public class SimpleJobsTests
     {
         var file = CartelFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "cartel.json"));
         var parties = new Parties();
-        Assert.Equal(240f, new DeliveryJobKind(file, parties, () => Map, new Random(1), new World()).Seconds(1));
-        Assert.Equal(300f, new HitJobKind(file, parties, () => Map, new Random(1), new World()).Seconds(1));
+        Assert.Equal(240f, new DeliveryJobKind(file, () => Map, new Random(1), new World()).Seconds(1));
+        Assert.Equal(300f, new HitJobKind(file, () => Map, new Random(1), new World()).Seconds(1));
     }
 
     [Fact]
@@ -110,7 +109,7 @@ public class SimpleJobsTests
             Assert.DoesNotContain(new Vector3(20, 0, 0), drops); // too near the Contact
             Assert.True(Vector2.Distance(new(drops[0].X, drops[0].Z), new(drops[1].X, drops[1].Z)) >= delivery.Numbers.ApartM);
             Assert.Contains(new Vector3(0, 0, -400), drops); // 200 and 210 east are within apart_m of one another: one of them, and the north one
-            Assert.Null(book.Start(CartelRules.Giver, delivery, 1, JobOwner.Solo(3), 3, out var why));
+            Assert.Null(book.Start(CartelRules.Giver, delivery, 1, JobOwner.Solo(3), 3, parties, out var why));
             Assert.Contains("free", why);
             Assert.Null(world.Duffels.CarriedBy(3)); // a refused start gives nothing
             Assert.Equal(2, CartelSpots.Held(book, Map).Count);
@@ -178,7 +177,7 @@ public class SimpleJobsTests
         Assert.True(world.Duffels.Drop(1, new Vector3(5, 0, 5)));
         Assert.Equal("Pick the duffel up", o.Objective(job));
         Assert.Equal(new Vector3(5, 0, 5), o.Marker(job));
-        Assert.True(world.Duffels.PickUp(2, new Vector3(5, 0, 5))); // the mate is of the party (read live)
+        Assert.True(world.Duffels.PickUp(2, new Vector3(5, 0, 5))); // the mate is of the party
         world.At[2] = o.Drop; world.Duffels.Follow(2, o.Drop);
         world.Holding.Add(2);
         var ended = new List<JobEnded>();
@@ -196,8 +195,9 @@ public class SimpleJobsTests
         var o = (DeliveryJobKind.Run)job.Objective;
         Assert.False(o.Duffel.MayTouch(3));
         parties.Squads[1].Add(3);
-        Assert.True(o.Duffel.MayTouch(3));
         var ended = new List<JobEnded>();
+        Ticks(book, parties, ended, 1); // the book refreshes the Job's party each tick
+        Assert.True(o.Duffel.MayTouch(3));
         book.PlayerDied(1, parties, ended);
         Assert.False(Assert.Single(ended).Succeeded);
         Assert.Equal(0, world.Duffels.Count);
@@ -256,9 +256,9 @@ public class SimpleJobsTests
     public void Per_tier_numbers_are_checked()
     {
         var bad = CartelFile.Parse("""{"version":1,"jobs":{"hit":{"gunmen":[1,2]}}}""");
-        Assert.Throws<ShooterCore.Data.DataFileException>(() => new HitJobKind(bad, new Parties(), () => Map, new Random(1), new World()));
+        Assert.Throws<ShooterCore.Data.DataFileException>(() => new HitJobKind(bad, () => Map, new Random(1), new World()));
         var kind = CartelFile.Parse("""{"version":1,"jobs":{"delivery":{"duffel":"gold"}}}""");
-        Assert.Throws<ShooterCore.Data.DataFileException>(() => new DeliveryJobKind(kind, new Parties(), () => Map, new Random(1), new World()));
+        Assert.Throws<ShooterCore.Data.DataFileException>(() => new DeliveryJobKind(kind, () => Map, new Random(1), new World()));
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class SimpleJobsTests
         var book = new JobBook();
         var test = new TestJobKind(CartelFile.Default);
         book.Register(test);
-        var job = book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, out _)!;
+        var job = book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, new Parties(), out _)!;
         var contact = Map.Contact!.Value.Position;
         Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.DropKind, new Random(1), contact, "the Contact", 10_000, 0, out var why));
         Assert.Equal("No drop point is far enough from the Contact on this map.", why);

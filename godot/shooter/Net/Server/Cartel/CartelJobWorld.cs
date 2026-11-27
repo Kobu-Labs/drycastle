@@ -30,8 +30,6 @@ internal sealed class CartelJobWorld : IDeliveryWorld, IHitWorld
     public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier) =>
         _ctx.Players.TryGetValue(carrier, out var c) ? _duffels.Give(kind, party, c) : null;
 
-    public void RemoveParty(IReadOnlySet<ushort> party) => _duffels.RemoveParty(party);
-
     public NVec3? Feet(ushort player) =>
         _ctx.Players.TryGetValue(player, out var c) && c.Car == null && _ctx.IsAlive(player) ? c.Body.GlobalPosition.ToNumerics() : null;
 

@@ -293,8 +293,8 @@ public partial class NetServer : Node
         var parties = new MatchJobParties(_match);
         _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, parties, new MapContactSite(() => _areas.Cartel, Config.Cartel.ContactReachM), _chat.IsAdmin);
         var jobWorld = new CartelJobWorld(_ctx, _duffels, _rivals, _rng); // the simple Jobs' Duffels, Rival crews and players (#494, #497)
-        _cartel.Register(new DeliveryJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));
-        _cartel.Register(new HitJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));
+        _cartel.Register(new DeliveryJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
+        _cartel.Register(new HitJobKind(Config.Cartel, () => _areas.Cartel, _rng, jobWorld));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
         _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
