@@ -40,6 +40,8 @@ public static class DuffelRules
     public const byte TypeId = 62;
 
     public static readonly DuffelKind[] AllKinds = { DuffelKind.Weed, DuffelKind.Cash, DuffelKind.Product };
+    /// <summary>The kinds' names by kind (read every frame by the client's hint: no string is built).</summary>
+    static readonly string[] Names = { "weed", "cash", "product" };
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -47,7 +49,7 @@ public static class DuffelRules
     }
 
     /// <summary>The kind's name in duffels.json and in /duffel ("weed", "cash", "product").</summary>
-    public static string NameOf(DuffelKind kind) => kind.ToString().ToLowerInvariant();
+    public static string NameOf(DuffelKind kind) => Names[(int)kind];
 
     public static DuffelKind? Parse(string name) => AllKinds.Where(k => NameOf(k) == name.Trim().ToLowerInvariant()).Select(k => (DuffelKind?)k).FirstOrDefault();
 
@@ -108,12 +110,10 @@ public sealed class Duffel : IWorldEntity
 
     public byte TypeId => DuffelRules.TypeId;
     public ushort Owner => Carrier;
-    public WorldDespawnReason? Ended { get; private set; }
+    /// <summary>Never ends by itself: the book despawns it (<see cref="DuffelBook.Remove"/>, the round's reset).</summary>
+    public WorldDespawnReason? Ended => null;
 
     public bool MayTouch(ushort player) => Party.Contains(player);
-
-    /// <summary>It is gone (the Job ended, the round reset); the manager despawns it on the next tick.</summary>
-    public void End(WorldDespawnReason reason) => Ended ??= reason;
 
     internal void TakeUp(ushort carrier, Vector3 feet)
     {
@@ -124,7 +124,7 @@ public sealed class Duffel : IWorldEntity
     internal void Launch(Vector3 from, Vector3 velocity)
     {
         Carrier = 0; Position = from; Velocity = velocity;
-        Yaw = MathF.Atan2(-velocity.X, -velocity.Z);
+        if (velocity.X != 0 || velocity.Z != 0) Yaw = MathF.Atan2(-velocity.X, -velocity.Z); // a straight fall (a drop from high up) keeps how it lay
         _fsm.Enter(DuffelState.Flying);
     }
 
@@ -142,7 +142,7 @@ public sealed class Duffel : IWorldEntity
 
     public void Tick(float dt)
     {
-        if (Ended != null || dt <= 0) return;
+        if (dt <= 0) return;
         _fsm.Tick(dt);
         if (_fsm.Is(DuffelState.Flying)) _book.StepFlight(this, dt);
     }

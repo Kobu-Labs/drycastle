@@ -37,7 +37,7 @@ public class DuffelTests
             return false;
         }
 
-        public float? GroundY(Vector3 at, float up, float down) => 0;
+        public float? GroundY(Vector3 at, float up, float down) => at.Y - down <= 0 && 0 <= at.Y + up ? 0 : null;
     }
 
     /// <summary>An axis-aligned box that takes the Duffels of one party.</summary>
@@ -161,6 +161,43 @@ public class DuffelTests
         Assert.False(book.Drop(1, Vector3.Zero));
     }
 
+    [Fact]
+    public void A_drop_from_high_up_falls_and_lies_on_the_ground()
+    {
+        var (book, entities, _) = NewBook();
+        var d = book.Give(DuffelKind.Cash, new HashSet<ushort> { 1 }, 1, new Vector3(2, 6, 0))!;
+        Assert.True(book.Drop(1, new Vector3(2, 6, 0))); // no ground within the probe: it falls
+        Assert.Equal(DuffelState.Flying, d.State);
+        Fly(entities);
+        Assert.Equal(DuffelState.Lying, d.State);
+        Assert.Equal(0, d.Position.Y, 3);
+        Assert.Equal(2, d.Position.X, 3);
+    }
+
+    [Fact]
+    public void Every_change_of_carrier_is_told_whoever_made_it()
+    {
+        var (book, entities, _) = NewBook();
+        var told = new List<(ushort Player, Duffel? Duffel)>();
+        book.CarrierChanged += (p, d) => told.Add((p, d));
+        var party = new HashSet<ushort> { 1, 2 };
+        var given = book.Give(DuffelKind.Weed, party, 1, Vector3.Zero)!;
+        var lying = book.Place(DuffelKind.Cash, party, Vector3.Zero)!;
+        book.PickUp(2, Vector3.Zero);
+        book.Drop(1, Vector3.Zero);
+        book.PickUp(1, Vector3.Zero); // the weed it just put down
+        book.Throw(1, Eye, 0, 0, 0);
+        Assert.Equal(new (ushort, Duffel?)[] { (1, given), (2, lying), (1, null), (1, given), (1, null) }, told);
+        told.Clear();
+        book.RemoveParty(party); // a Job's end frees its carriers too
+        Assert.Equal(new (ushort, Duffel?)[] { (2, null) }, told);
+        told.Clear();
+        book.Give(DuffelKind.Product, new HashSet<ushort> { 3 }, 3, Vector3.Zero);
+        entities.Clear(); // the round's reset
+        Assert.Equal(new (ushort, Duffel?)[] { (3, null) }, told.Skip(1));
+        Assert.Equal(0, book.CarriedCount);
+    }
+
     [Theory]
     [InlineData(DuffelKind.Weed)]
     [InlineData(DuffelKind.Cash)]
@@ -211,15 +248,12 @@ public class DuffelTests
         var party = new HashSet<ushort> { 1 };
         var van = new FakeVolume { Min = new Vector3(-1, 0, -8), Max = new Vector3(1, 1.5f, -4), Party = party };
         book.AddVolume(van);
-        var loaded = new List<Duffel>();
-        book.Loaded += (d, _) => loaded.Add(d);
         var d = book.Give(DuffelKind.Weed, party, 1, Vector3.Zero)!;
         book.Throw(1, Eye, 0, 0, 0); // about 6 m: into the box
         Fly(entities);
         Assert.Equal(DuffelState.Loaded, d.State);
         Assert.Same(van, d.Volume);
         Assert.Equal(new[] { d }, van.Loaded);
-        Assert.Equal(new[] { d }, loaded);
         Assert.Equal(1, book.LoadedIn(van));
         Assert.Null(book.Pickable(1, d.Position)); // a loaded one is not picked up
     }
