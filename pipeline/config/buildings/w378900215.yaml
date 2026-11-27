@@ -1,0 +1,37 @@
+# P-0608: small single-storey house, white render, gable facing street, tiled roof, attached garage with brown door. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.27 m, roof top 5.71 m. Walls seen: edges [5, 7, 9]. Not modelled: attached garage with lower roof, small dormer on the roof behind, pergola with vines.
+id: w378900215
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#3a3a3c'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.44, colour: '#787b77'}
+apron: {width_m: 0.2, colour: '#787b77'}
+roof_tiles: true
+eaves: {colour: '#5b5a59', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#3a3a3c'
+downpipes:
+- {edge: 0, at_m: 14.38, colour: '#5b5a59', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#5b5a59', bends: true}
+- {edge: 2, at_m: 12.15, colour: '#5b5a59', bends: true}
+- {edge: 2, at_m: 0.16, colour: '#5b5a59', bends: true}
+- {edge: 6, at_m: 4.51, colour: '#5b5a59', bends: true}
+- {edge: 9, at_m: 3.39, colour: '#5b5a59', bends: true}
+- {edge: 10, at_m: 5.82, colour: '#5b5a59', bends: true}
+chimneys:
+- {x: -443.08, y: 208.15, top_m: 6.21, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.94, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 5.11, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 8.29, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 0, at_m: 11.46, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 1.93, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 1, at_m: 2.39, width_m: 1.0, height_m: 1.0, sill_m: 3.67, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 1, at_m: 5.09, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 6, at_m: 1.77, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w9, kind: window, edge: 7, at_m: 2.05, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: g1, kind: garage_door, edge: 9, at_m: 0.74, width_m: 2.16, height_m: 2.09, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: w10, kind: window, edge: 10, at_m: 1.2, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 11, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.44, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}

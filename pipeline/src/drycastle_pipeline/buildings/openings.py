@@ -151,6 +151,7 @@ PIPE_M, PIPE_OFF_M = 0.09, 0.02
 CHIMNEY_BELOW_M = 0.3
 BAND_PROUD_M, CORNER_PROUD_M, LINTEL_PROUD_M, PANEL_PROUD_M = 0.04, 0.035, 0.05, 0.015
 STEP_TREAD_M, STEP_SIDE_M, DOORSTEP_M = 0.28, 0.15, 0.06
+THRESHOLD_M = 0.03  # a doorway whose sill is on the ground has its floor this high (never in the terrain's plane)
 DEFAULT_STEP = "#9a958c"
 CAP_COLOUR = (88, 86, 84)
 SKYLIGHT_GLASS, SKYLIGHT_FRAME = (62, 78, 94), (58, 56, 54)
@@ -746,6 +747,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
     from drycastle_pipeline.buildings import interior
 
     inside = interior.inside_of(b, d)
+    inner_walls: list = []
     out = _Tris()
     windows: list[WindowTag] = []
     ring = list(poly.exterior.coords)[:-1]
@@ -835,12 +837,19 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             deep = max(r, interior.WALL_M) if thru else r
             mid = to3((x0 + x1) / 2, (z0 + z1) / 2, (base + deep) / 2)
             frame = hex_to_rgb(d.frame_colour)
+            reveal_c = hex_to_rgb(o.colour or DEFAULT_PANEL["recess"]) if o.kind == "recess" else frame
+            zb = z0
+            if z0 < THRESHOLD_M:
+                # a doorway at the ground: its floor is a threshold a little above it, with a riser in front (a face on the
+                # ground itself lies in the terrain's plane, and the two flicker)
+                zb = THRESHOLD_M
+                out.quad([to3(x0, z0, base), to3(x1, z0, base), to3(x1, zb, base), to3(x0, zb, base)], reveal_c, to3((x0 + x1) / 2, zb, base - 1.0))
             for (sa_, za_), (sb_, zb_) in (
-                ((x0, z0), (x1, z0)), ((x1, z0), (x1, z1)), ((x1, z1), (x0, z1)), ((x0, z1), (x0, z0))
+                ((x0, zb), (x1, zb)), ((x1, z0), (x1, z1)), ((x1, z1), (x0, z1)), ((x0, z1), (x0, z0))
             ):
                 out.quad(
                     [to3(sa_, za_, base), to3(sb_, zb_, base), to3(sb_, zb_, deep), to3(sa_, za_, deep)],
-                    hex_to_rgb(o.colour or DEFAULT_PANEL["recess"]) if o.kind == "recess" else frame,
+                    reveal_c,
                     mid,
                 )
             if o.frame_m:
@@ -851,7 +860,7 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                 for ss, zz in (((x0 - m, x0), (max(zlo, 0.0), z1 + m)), ((x1, x1 + m), (max(zlo, 0.0), z1 + m)), ((x0, x1), (z1, z1 + m)),
                                *([((x0, x1), (zlo, z0))] if zlo < z0 else [])):  # fmt: skip
                     out.cuboid(to3, ss, zz, dd, sc, ("d0", "s0", "s1", "z0", "z1"))
-            if o.sill:
+            if o.sill and z0 > THRESHOLD_M:  # (none on the ground: it would lie flat in the terrain)
                 out.cuboid(
                     to3, (x0 - SILL_EXTRA_M, x1 + SILL_EXTRA_M), (max(z0 - SILL_THICK_M, 0.0), z0), (base - SILL_PROUD_M, base),
                     frame, ("d0", "s0", "s1", "z0", "z1"),
@@ -925,8 +934,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         for o in edge_ops:
             if o.parent is None:
                 emit(o, 0.0)
-        if inside is not None:
-            interior.add_inner_wall(out, to3, ring, i, edge_ops, inside)
+        if inside is not None:  # built once the roof is known: the inside stays under it
+            inner_walls.append((to3, i, edge_ops))
         for bal in d.balconies:
             if bal.edge == i:
                 if bal.at_m + bal.width_m > length + 0.01:
@@ -977,6 +986,16 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
             if d.overhang_m:  # underside, so the eaves are not see-through
                 under = [(x, y, z - ROOF_THICKNESS_M) for x, y, z in reversed(v3)]
                 out.add(under, SOFFIT_COLOUR)
+    cap = None
+    if inside is not None:
+        if flat:
+            cap = None
+        elif planes is not None:  # a fitted roof: each piece has its own plane
+            cap = interior.RoofCap(tuple((g, (pa, pb, eave + pc - interior.CAP_BELOW_M)) for g, (pa, pb, pc) in zip(pieces, planes)))
+        else:
+            cap = interior.RoofCap.of(pieces, roof_z)
+        for to3_, i_, ops_ in inner_walls:
+            interior.add_inner_wall(out, to3_, ring, i_, ops_, inside, cap=cap)
     if fitted is not None:  # where one part of the roof stands above the next: the wall between them
         for p, q, lo_p, hi_p, lo_q, hi_q in fitted.steps:
             face = [(*p, eave + lo_p - ROOF_THICKNESS_M), (*q, eave + lo_q - ROOF_THICKNESS_M), (*q, eave + hi_q), (*p, eave + hi_p)]
@@ -1023,8 +1042,8 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
         order = (a0, a1, a2) if area < 0 else (a0, a2, a1)
         out.add([(x, y, 0.0) for x, y in order], wall_c)
     if inside is not None:
-        interior.add_floor_ceiling(out, poly, inside, inset=interior.WALL_M)
-        interior.add_partitions(out, interior.plan_of(b, d, inside), inside)
+        interior.add_floor_ceiling(out, poly, inside, inset=interior.WALL_M, cap=cap)
+        interior.add_partitions(out, interior.plan_of(b, d, inside), inside, cap=cap)
     if d.apron is not None:
         _add_apron(out, poly, d.apron)
     return out.mesh(), windows

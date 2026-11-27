@@ -1,0 +1,27 @@
+# P-0462: small bungalow, white render partly covered in ivy, brown tiled roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 4.03 m, roof top 7.43 m. Walls seen: edges [1]. Not modelled: satellite dishes and TV antenna on the gable wall, ivy on the wall, chimney on the left of the roof.
+id: w378920358
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.27, colour: '#888981'}
+apron: {width_m: 0.2, colour: '#888981'}
+roof_tiles: true
+eaves: {colour: '#4e5447', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 1, at_m: 10.3, colour: '#4e5447', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#4e5447', bends: true}
+- {edge: 3, at_m: 8.0, colour: '#4e5447', bends: true}
+chimneys:
+- {x: 306.53, y: 386.11, top_m: 7.93, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 1, at_m: 3.05, width_m: 1.05, height_m: 1.7, sill_m: 1.33, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.13, 0.77], rails: [0.75], sill: true}
+  - {id: w2, kind: window, edge: 2, at_m: 1.92, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 2, at_m: 1.95, width_m: 1.0, height_m: 1.0, sill_m: 4.43, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.27, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w4, kind: window, edge: 3, at_m: 2.05, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 3, at_m: 5.15, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

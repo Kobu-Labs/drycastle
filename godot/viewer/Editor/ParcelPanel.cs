@@ -11,7 +11,7 @@ public sealed class ParcelPanel
     readonly ParcelGroups _groups;
 
     Label _selLabel = null!, _groupLabel = null!, _groupCount = null!;
-    Button _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
+    Button _btnCopy = null!, _btnGroup = null!, _btnMerge = null!, _btnAdd = null!, _btnRemove = null!, _btnDissolve = null!;
 
     public ParcelPanel(IEditorHost host, ParcelGroups groups) => (_host, _groups) = (host, groups);
 
@@ -26,6 +26,19 @@ public sealed class ParcelPanel
     {
         _selLabel = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MouseFilter = Control.MouseFilterEnum.Ignore };
         page.AddChild(_selLabel);
+        _btnCopy = Ui.FocusBtn("Copy parcel ID", CopySelection);
+        _btnCopy.TooltipText = "Copy the group ID of the selection, or the parcel ID where a parcel is in no group (space-separated)";
+        page.AddChild(_btnCopy);
+    }
+
+    void CopySelection()
+    {
+        var map = _host.Map;
+        var ids = string.Join(" ", _host.Selection.Where(map.Parcels.ContainsKey).Select(id => map.Parcels[id].Group ?? id).Distinct());
+        if (ids.Length == 0) return;
+        DisplayServer.ClipboardSet(ids);
+        Ui.FlashCopied(_btnCopy);
+        _host.Say("copied: " + ids);
     }
 
     public void BuildGroup(VBoxContainer page)
@@ -73,6 +86,10 @@ public sealed class ParcelPanel
             var lines = sel.Take(12).Select(p => $"{p.Id}  {p.Kind}  {p.AreaM2:F0} m2" + (p.Group != null ? $"  [{p.Group}]" : ""));
             _selLabel.Text = $"{sel.Count} parcels selected\n" + string.Join("\n", lines) + (sel.Count > 12 ? $"\n... +{sel.Count - 12} more" : "");
         }
+        _btnCopy.Visible = sel.Count > 0;
+        var copyIds = sel.Select(p => p.Group ?? p.Id).Distinct().ToList();
+        var copyText = copyIds.Count > 1 ? $"Copy {copyIds.Count} IDs" : sel.Count > 0 && sel[0].Group != null ? "Copy group ID" : "Copy parcel ID";
+        if (Ui.Flashing(_btnCopy)) _btnCopy.SetMeta("flash_text", copyText); else _btnCopy.Text = copyText;
         var gids = sel.Select(p => p.Group).Where(g => g != null).Distinct().ToList();
         if (gids.Count == 0) _groupLabel.Text = "Selection is not in a group.";
         else

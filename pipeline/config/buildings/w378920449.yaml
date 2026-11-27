@@ -1,0 +1,32 @@
+# P-0926: single-storey village house, peach render, brown tiled roof. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.63 m, roof top 5.34 m. Walls seen: edges [3]. Not modelled: utility pole and meter boxes in front of the wall, attached neighbouring house to the right.
+id: w378920449
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.33, colour: '#875e50'}
+apron: {width_m: 0.61, colour: '#948f89'}
+roof_tiles: true
+eaves: {colour: '#7a736f', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 1, at_m: 16.46, colour: '#7a736f', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#7a736f', bends: true}
+- {edge: 3, at_m: 20.53, colour: '#7a736f', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#7a736f', bends: true}
+chimneys:
+- {x: 11.08, y: 431.6, top_m: 5.84, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.33, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 1, at_m: 4.4, width_m: 1.76, height_m: 1.09, sill_m: 1.25, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 7.47, width_m: 1.76, height_m: 1.09, sill_m: 1.25, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 10.55, width_m: 1.76, height_m: 1.09, sill_m: 1.25, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 13.63, width_m: 1.76, height_m: 1.09, sill_m: 1.25, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 1.92, width_m: 1.76, height_m: 1.09, sill_m: 1.25, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 3, at_m: 3.44, width_m: 1.76, height_m: 1.09, sill_m: 1.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w7, kind: window, edge: 3, at_m: 7.85, width_m: 1.76, height_m: 1.09, sill_m: 1.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w8, kind: window, edge: 3, at_m: 12.25, width_m: 1.76, height_m: 1.09, sill_m: 1.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w9, kind: window, edge: 3, at_m: 16.66, width_m: 1.76, height_m: 1.09, sill_m: 1.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}

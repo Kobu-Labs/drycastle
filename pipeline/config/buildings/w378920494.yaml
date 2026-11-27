@@ -2,7 +2,6 @@
 # Wall top 3.25 m, roof top 5.86 m. Walls seen: edges [2, 5]. Not modelled: flue pipe on roof, satellite dish, downpipe, meter box.
 id: w378920494
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
@@ -17,6 +16,7 @@ downpipes:
 - {edge: 5, at_m: 5.65, colour: '#8d8281', bends: true}
 chimneys:
 - {x: -47.97, y: 94.6, top_m: 6.36, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.56, width_m: 0.92, height_m: 1.46, sill_m: 1.04, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 2.69, width_m: 0.92, height_m: 1.0, sill_m: 3.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

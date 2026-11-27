@@ -672,7 +672,10 @@ For each wall answer:
   `"no"` for the other. A window whose lower part is hidden by a fence is still a `"window"`.
 - `dormers_missed`: for every dormer above this wall whose window has NO rectangle you named `"dormer"`: the place of
   the middle of its window read off the ruler at the bottom, in metres, e.g. `[5.9]`. None: `[]`.
-- `missed`: windows or doors of this wall that have no rectangle, in a few words (`""` if none).
+- `missed`: every window or door of this wall that has NO rectangle you named for it (hidden behind a tree, a pole, a
+  car, or simply not found): `{{"kind": "window" | "door" | "garage_door" | "glass_door", "at": the middle of it read off
+  the ruler in metres, "floor": "ground" | "upper"}}`, e.g. `[{{"kind": "window", "at": 5.5, "floor": "ground"}}]`.
+  None: `[]`. A window you can only guess is there because the row of windows has a gap where one belongs counts too.
 
 Then look at the photos themselves for the whole house:
 {photos}
@@ -1362,7 +1365,36 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                                  "frame_m": FRAME_M, **({"posts": posts} if posts else {}), **({"rails": rails} if rails else {}), **({"sill": True} if kind == "window" else {}),
                                  "_off": w["off_square_deg"]})  # fmt: skip
             if said.get("missed"):
-                problems.append(f"{key}: openings with no rectangle, left out: {said['missed']}")
+                placed = []
+                for m in hr.missed_items(said["missed"]) if guess else ():
+                    edge_i = int(w["edge"])
+                    upper = m["floor"] == "upper"
+                    mine = [o for o in openings if o["edge"] == edge_i and o["kind"] == "window"]
+                    ref = [o for o in mine if (o["sill_m"] >= 2.3) == upper] or ([] if upper else mine)
+                    if m["kind"] == "window":
+                        if ref:
+                            ww, wh, sill = (float(np.median([o[k] for o in ref])) for k in ("width_m", "height_m", "sill_m"))
+                        elif upper:
+                            continue
+                        else:
+                            ww, wh, sill = 1.2, 1.3, 0.95
+                        if m["small"]:
+                            sill, ww, wh = sill + wh - hr.SMALL_WINDOW_M, hr.SMALL_WINDOW_M, hr.SMALL_WINDOW_M
+                    elif m["kind"] == "garage_door":
+                        ww, wh, sill = max(m["s1"] - m["s0"], hr.GARAGE_W_M), hr.GARAGE_H_M, 0.0
+                    else:
+                        ww, wh, sill = hr.DOOR_W_M, hr.DOOR_H_M, 0.0
+                    mid = (m["s0"] + m["s1"]) / 2
+                    o = {"kind": m["kind"], "edge": edge_i, "at_m": round(along(mid - ww / 2, mid + ww / 2), 2), "width_m": round(ww, 2), "height_m": round(wh, 2),
+                         "sill_m": round(sill, 2), "recess_m": 0.12, "confidence": "low", "frame_m": FRAME_M, **({"sill": True} if m["kind"] == "window" else {}),
+                         **({"posts": list(ref[0]["posts"])} if m["kind"] == "window" and ref and ref[0].get("posts") and not m["small"] else {}), "_off": w["off_square_deg"]}  # fmt: skip
+                    if 0.1 <= o["at_m"] and o["at_m"] + ww <= length - 0.1 and hr._clear(o, [k for k in openings if k["edge"] == edge_i], length, 0.1):
+                        openings.append(o)
+                        placed.append(f"{m['kind']} at {mid:g} m")
+                if placed:
+                    invented.append(f"{key}: openings the answer saw with no rectangle put where it said: {', '.join(placed)}")
+                else:
+                    problems.append(f"{key}: openings with no rectangle, left out: {said['missed']}")
     # an opening seen in two captures: the one seen most square-on
     openings.sort(key=lambda o: o["_off"])
     kept: list[dict] = []
@@ -1460,6 +1492,13 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         # gable wall: a garage's front, a porch) is a door's head or a lower roof's edge, not the house's eave
         _, kind0, i0 = min(roof_edges)
         e0 = next(x for x in edges if x["i"] == i0)
+        from drycastle_pipeline.buildings.roof_fit import gable_believable
+
+        across0 = [p[0] * e0["normal"][0] + p[1] * e0["normal"][1] for p in ring]
+        if kind0 == "gable" and not gable_believable(e0["length"], max(across0) - min(across0)):
+            problems.append(f"edge {i0} was named a gable wall, but it is {e0['length']:.1f} m long on a house {max(across0) - min(across0):.1f} m deep: taken as an eave wall")
+            roof_edges = [(s, "eave" if i == i0 else k, i) for s, k, i in roof_edges]
+            kind0 = "eave"
         way0 = math.atan2(e0["q"][1] - e0["p"][1], e0["q"][0] - e0["p"][0]) + (0.0 if kind0 == "eave" else math.pi / 2)
         if kind0 == "gable":
             lead = [[round(float(v), 2) for v in e0["p"]], [round(float(v), 2) for v in e0["q"]]]
@@ -1668,6 +1707,9 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     if tidied != kept:
         invented.append("measured walls: openings centred on their wall, doors at least " + f"{hr.DOOR_MIN_W_M} m wide")
     kept = tidied
+    if guess:  # as a builder sets them: one opening per floor, rows on one line, a lone window mirrored (docs/house-anomalies.md)
+        kept, evened = hr.regularise(kept, {e["i"]: e["length"] for e in edges}, eave, set(seen))
+        invented += evened
     openings = sorted(kept, key=lambda o: (o["edge"], o["at_m"]))
     counts: dict[str, int] = {}
     for o in openings:
@@ -1807,7 +1849,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         if made_d:
             detail["dormers"] = [{"id": dm["id"], **{k: v for k, v in dm.items() if k != "id"}} for dm in made_d]
 
-    if guess and front is not None and roof != "flat":
+    if guess and front is not None and (roof != "flat" or hr.levels_of(eave) == 2):
         said_b = names.get("balcony") or ("yes" if "balcony" in str(names.get("not_modelled") or "").lower() else "no")
         bal = hr.invent_balcony(said_b, front[1], roles[front[1]], eave, top, openings)
         if bal is not None:
@@ -1920,6 +1962,7 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("read", help="answer the open question of each run folder by one API call (needs ANTHROPIC_API_KEY)")
     r.add_argument("outs", type=_run_dir, nargs="+", help="run folders or building ids")
     r.add_argument("--again", action="store_true", help="ask the last question again though it is answered")
+    r.add_argument("--batch", action="store_true", help="all folders as one Message Batch: half price, waits for it (minutes)")
     au = sub.add_parser("auto", help="the whole thing in one command, for a UI: ends, read, walls, read, apply (or a photo of your own); see auto_build.py")
     from drycastle_pipeline.photos import auto_build
 
@@ -1936,7 +1979,7 @@ def main(argv: list[str] | None = None) -> int:
         from drycastle_pipeline.photos import facade_reader
 
         if args.cmd == "read":
-            facade_reader.stage_read(args.outs, args.again)
+            (facade_reader.stage_read_batch if args.batch else facade_reader.stage_read)(args.outs, args.again)
         else:
             facade_reader.stage_answers(args.reply, args.again, _run_dir)
     elif args.cmd == "ends":

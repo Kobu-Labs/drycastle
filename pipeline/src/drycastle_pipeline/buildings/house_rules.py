@@ -437,7 +437,20 @@ def invent_balcony(said: str | None, edge: int, role: dict, eave: float, top: fl
     """The balcony a capture saw (``said`` yes) on the gable wall it was seen on: at the attic's floor, which is the
     wall's top, nearly as wide as the wall, clear of the ground floor's openings. None when the roof has no room for
     an attic or the wall is too short."""
-    if str(said).lower() != "yes" or role["roof_edge"] != "gable" or top - eave < MIN_ATTIC_RISE_M or role["length"] < 4.0:
+    if str(said).lower() != "yes" or role["length"] < 4.0:
+        return None
+    if levels_of(eave) == 2:  # a two-storey house: on the floor above the ground floor's openings, in front of the upper floor's
+        heads = [o["sill_m"] + o["height_m"] + (0.25 if o["kind"] == "window" else 0.55) for o in openings if o["edge"] == edge and storey(o, eave) == 0]
+        floor = max(max(heads, default=0.0), eave / 2 - 0.2)
+        ups = [o for o in openings if o["edge"] == edge and storey(o, eave) == 1]
+        if not 1.8 <= floor <= eave - 1.6:
+            return None
+        lo, hi = (min(o["at_m"] for o in ups) - 0.6, max(o["at_m"] + o["width_m"] for o in ups) + 0.6) if ups else (0.5, role["length"] - 0.5)
+        if hi - lo < 3.0:
+            lo, hi = (lo + hi) / 2 - 1.5, (lo + hi) / 2 + 1.5
+        lo, hi = max(lo, 0.3), min(hi, role["length"] - 0.3)
+        return {"edge": edge, "at_m": round(lo, 2), "width_m": round(min(hi - lo, 20.0), 2), "floor_m": round(floor, 2)}
+    if role["roof_edge"] != "gable" or top - eave < MIN_ATTIC_RISE_M:
         return None
     # the slab lies over the ground floor's doors and windows
     heads = [o["sill_m"] + o["height_m"] + (0.25 if o["kind"] == "window" else 0.55) for o in openings if o["sill_m"] < 1.5]
@@ -464,4 +477,348 @@ def invent_skylights(building_id: str, roles: dict[int, dict], seen: set[int], r
             continue
         n = 1 if r["length"] < 8.0 else 2
         out += [{"edge": i, "at_m": round(r["length"] * (k + 1) / (n + 1), 2), "up_m": up} for k in range(n)]
+    return out
+
+
+# ---- regularise: the openings as a builder sets them, after measuring (docs/house-anomalies.md) ----
+
+TALL_M = 2.7  # a window or glazed door this high spans two floors: two openings, one per floor
+GARAGE_W_M, GARAGE_H_M = 2.4, 2.1  # a garage door read smaller than 2.0 x 1.8 is one half hidden
+DOUBLE_GARAGE_M = 4.2  # a garage door at least this wide is two, side by side
+PIER_M = 0.4
+MIRROR_M = (4.0, 12.0)  # a wall this long with one window off its middle has a second one, mirrored
+ROW_ALIGN_M = 1.0  # a window whose head is within this of its row's is on that row
+
+
+def levels_of(eave: float) -> int:
+    return 1 if eave < 4.2 else 2
+
+
+def storey(o: dict, eave: float) -> int:
+    """0 the ground floor, 1 the floor above, -1 the attic (a window in the gable, its sill at or over the eave)."""
+    if o["sill_m"] >= eave - 0.1:
+        return -1
+    if levels_of(eave) == 1:
+        return 0
+    return 0 if o["sill_m"] + o["height_m"] / 2 < eave / 2 else 1
+
+
+def _clear(o: dict, others: list[dict], length: float, gap: float = 0.3) -> bool:
+    """The opening stands on its wall, WALL_END_M from the ends and ``gap`` from every other one it overlaps in height."""
+    if o["at_m"] < WALL_END_M or o["at_m"] + o["width_m"] > length - WALL_END_M:
+        return False
+    return not any(k is not o and k["edge"] == o["edge"] and k["at_m"] < o["at_m"] + o["width_m"] + gap and o["at_m"] < k["at_m"] + k["width_m"] + gap
+                   and k["sill_m"] < o["sill_m"] + o["height_m"] and o["sill_m"] < k["sill_m"] + k["height_m"] for k in others)  # fmt: skip
+
+
+def _to_head(o: dict, head: float) -> None:
+    """The window's head put at ``head``: lowered, it keeps its sill and gets shorter (to 0.8 m at least, then it moves
+    down whole); raised, it keeps its height."""
+    if head < o["sill_m"] + o["height_m"] and head - o["sill_m"] >= 0.8:
+        o["height_m"] = round(head - o["sill_m"], 2)
+    else:
+        o["sill_m"] = round(max(0.3, head - o["height_m"]), 2)
+        o["height_m"] = round(head - o["sill_m"], 2)
+
+
+def split_tall(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
+    """A window or glazed door higher than TALL_M is two openings, one per floor (the rectangle took in both floors'
+    windows and the wall between). On a one-storey house it is cut down under the eave."""
+    out, said = [], []
+    for o in openings:
+        if o["kind"] not in ("window", "glass_door") or o["height_m"] <= TALL_M:
+            out.append(o)
+            continue
+        head = o["sill_m"] + o["height_m"]
+        if levels_of(eave) == 1:
+            out.append({**o, "height_m": round(min(head, eave - 0.3) - o["sill_m"], 2)})
+            said.append(f"{o['kind']} on edge {o['edge']} at {o['at_m']} m cut down under the eave (it was {o['height_m']} m high)")
+            continue
+        row = [k for k in openings if k is not o and k["kind"] == "window" and k["height_m"] <= TALL_M]
+        g = [k for k in row if storey(k, eave) == 0]
+        u = [k for k in row if storey(k, eave) == 1]
+        g_head = float(np.median([k["sill_m"] + k["height_m"] for k in g])) if g else min(2.25, eave / 2 - 0.2)
+        g_h = float(np.median([k["height_m"] for k in g])) if g else 1.3
+        u_sill = float(np.median([k["sill_m"] for k in u])) if u else g_head - g_h + eave / 2
+        u_h = min(float(np.median([k["height_m"] for k in u])) if u else g_h, eave - 0.3 - u_sill)
+        low = {**o, "height_m": round(g_head - o["sill_m"], 2)} if o["sill_m"] < 0.3 else {**o, "kind": "window", "sill_m": round(g_head - g_h, 2), "height_m": round(g_h, 2)}
+        high = {**o, "kind": "window", "sill_m": round(u_sill, 2), "height_m": round(u_h, 2), "sill": True}
+        rest = [k for k in openings if k is not o]
+        u_sill = max(u_sill, low["sill_m"] + low["height_m"] + 0.5)
+        u_h = min(u_h, eave - 0.3 - u_sill)
+        high.update({"sill_m": round(u_sill, 2), "height_m": round(u_h, 2)})
+        out += [x for x in ([low] + ([high] if u_h >= 0.6 else [])) if _clear(x, rest, 1e9, 0.05)]  # (one that lands on a window measured on its own is that window)
+        said.append(f"{o['kind']} on edge {o['edge']} at {o['at_m']} m, {o['height_m']} m high, split into one opening per floor")
+    return out, said
+
+
+def fix_garages(openings: list[dict], lengths: dict[int, float], eave: float) -> tuple[list[dict], list[str]]:
+    """A garage door is at least GARAGE_W_M x GARAGE_H_M, standing on the ground (one read smaller was half hidden or
+    is a strip of it); one at least DOUBLE_GARAGE_M wide is two doors with a pier between."""
+    out, said = [], []
+    for o in openings:
+        if o["kind"] != "garage_door":
+            out.append(o)
+            continue
+        g = dict(o)
+        # what stands over it (a window above the garage) caps it
+        above = [k["sill_m"] for k in openings if k is not o and k["edge"] == o["edge"] and k["sill_m"] > 0.5
+                 and k["at_m"] < o["at_m"] + o["width_m"] and o["at_m"] < k["at_m"] + k["width_m"]]  # fmt: skip
+        cap = min([eave - 0.4, *(s - 0.15 for s in above)])
+        if g["height_m"] < 1.8 or g["sill_m"] > 0.3:
+            g.update({"sill_m": 0.0, "height_m": round(min(GARAGE_H_M, cap), 2)})
+        elif g["height_m"] > min(2.6, cap):
+            g["height_m"] = round(min(2.4, cap), 2)
+        if g["width_m"] < 2.0:
+            mid = g["at_m"] + g["width_m"] / 2
+            g.update({"at_m": round(mid - GARAGE_W_M / 2, 2), "width_m": GARAGE_W_M})
+            if not _clear(g, openings, lengths.get(g["edge"], 1e9), 0.1):
+                g.update({"at_m": o["at_m"], "width_m": o["width_m"]})
+        if g["width_m"] >= DOUBLE_GARAGE_M:
+            w = round((g["width_m"] - PIER_M) / 2, 2)
+            out += [{**g, "width_m": w}, {**g, "at_m": round(g["at_m"] + w + PIER_M, 2), "width_m": w}]
+            said.append(f"garage door on edge {o['edge']} at {o['at_m']} m, {o['width_m']} m wide, built as two doors")
+            continue
+        if g != o:
+            said.append(f"garage door on edge {o['edge']} at {o['at_m']} m brought to a garage door's size ({g['width_m']} x {g['height_m']} m, from {o['width_m']} x {o['height_m']} m)")
+        out.append(g)
+    return out, said
+
+
+def fix_rows(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
+    """The windows of one floor of one wall are built in one row: their heads on one line (any within ROW_ALIGN_M of
+    the row's), and in a row of three or more the odd one out (a third of the row at most, read smaller behind a bush or
+    a pole) takes the size of the rest about its own middle. A window much narrower than the row's widest that has its
+    height is one half hidden: it takes the house's usual width, at most the widest's."""
+    out = [dict(o) for o in openings]
+    said = []
+    wins = [o for o in out if o["kind"] == "window"]
+    ground = [o for o in wins if storey(o, eave) == 0]
+    usual_w = float(np.median([o["width_m"] for o in ground])) if ground else 1.2
+    for edge in sorted({o["edge"] for o in wins}):
+        for level in (0, 1):
+            row = [o for o in wins if o["edge"] == edge and storey(o, eave) == level]
+            if len(row) < 2:
+                continue
+            # the row's kind: the size most of its windows have (the larger on a tie)
+            groups = [[k for k in row if abs(k["width_m"] - o["width_m"]) <= 0.25 * o["width_m"] and abs(k["height_m"] - o["height_m"]) <= 0.25 * o["height_m"]] for o in row]
+            kind = max(groups, key=lambda g: (len(g), float(np.median([k["width_m"] * k["height_m"] for k in g]))))
+            head = float(np.median([o["sill_m"] + o["height_m"] for o in kind]))
+            w, h = (float(np.median([o[k] for o in kind])) for k in ("width_m", "height_m"))
+            # (only the smaller: a window is read smaller than it is, behind a bush or a pole, not larger)
+            odd = [o for o in row if (o["width_m"] < 0.75 * w or o["height_m"] < 0.75 * h) and o["width_m"] <= w * 1.05 and o["height_m"] <= h * 1.05]
+            if len(row) >= 3 and len(kind) >= 2 and 0 < len(odd) <= len(row) // 3:
+                for o in list(odd):
+                    mid = o["at_m"] + o["width_m"] / 2
+                    was = dict(o)
+                    o.update({"at_m": round(mid - w / 2, 2), "width_m": round(w, 2), "height_m": round(h, 2)})
+                    if not _clear(o, out, 1e9, 0.1):  # no room for it there: as measured
+                        o.clear()
+                        o.update(was)
+                        odd.remove(o)
+                        continue
+                    for key in ("posts", "rails"):
+                        src = next((k[key] for k in kind if k.get(key)), None)
+                        if src:
+                            o[key] = list(src)
+                        else:
+                            o.pop(key, None)
+                if odd:
+                    said.append(f"edge {edge}: {len(odd)} window(s) brought to the size of the rest of their row")
+            widest = max(row, key=lambda o: o["width_m"])
+            for o in row:
+                if o is not widest and o["width_m"] < 0.6 * widest["width_m"] and abs(o["height_m"] - widest["height_m"]) <= 0.15 and o.get("confidence") != "low":
+                    nw = round(min(widest["width_m"], max(o["width_m"], usual_w)), 2)
+                    mid = o["at_m"] + o["width_m"] / 2
+                    was = (o["at_m"], o["width_m"])
+                    o.update({"at_m": round(mid - nw / 2, 2), "width_m": nw})
+                    if nw == was[1] or not _clear(o, out, 1e9, 0.2):
+                        o.update({"at_m": was[0], "width_m": was[1]})
+                    else:
+                        said.append(f"edge {edge}: a window {was[1]} m wide (half hidden) widened to {nw} m")
+            moved = False
+            for o in row:
+                oh = o["sill_m"] + o["height_m"]
+                if 0.02 < abs(oh - head) <= ROW_ALIGN_M:
+                    was = (o["sill_m"], o["height_m"])
+                    _to_head(o, head)
+                    if _clear(o, out, 1e9, 0.05):
+                        moved = True
+                    else:
+                        o["sill_m"], o["height_m"] = was
+            if moved:
+                said.append(f"edge {edge}: the window heads of floor {level} put on one line ({head:.2f} m)")
+    return out, said
+
+
+def mirror_lone(openings: list[dict], lengths: dict[int, float], eave: float, walls: set[int] | None = None) -> tuple[list[dict], list[str]]:
+    """A wall of MIRROR_M length whose ground floor has one window off its middle is built symmetrical: the window
+    mirrored about the wall's middle (or, when the wall has one door near its middle, about the door's). A mirror
+    that would hit another opening is not made; one that would nearly touch the window centres the window instead."""
+    out = [dict(o) for o in openings]
+    said = []
+    for edge, length in lengths.items():
+        if walls is not None and edge not in walls or not MIRROR_M[0] <= length <= MIRROR_M[1]:
+            continue
+        ground = [o for o in out if o["edge"] == edge and o["sill_m"] < eave - 0.3 and (o["kind"] != "window" or storey(o, eave) == 0)]
+        wins = [o for o in ground if o["kind"] == "window"]
+        doors = [o for o in ground if o["kind"] != "window"]
+        if 2 <= len(wins) <= 3 and not doors and all(abs(k["width_m"] - wins[0]["width_m"]) <= 0.05 for k in wins):
+            # a row of like windows on a wall with no door stands about the wall's middle
+            lo, hi = min(k["at_m"] for k in wins), max(k["at_m"] + k["width_m"] for k in wins)
+            shift = length / 2 - (lo + hi) / 2
+            if abs(shift) > OFF_MIDDLE_M:
+                moved = [{**k, "at_m": round(k["at_m"] + shift, 2)} for k in wins]
+                if all(_clear(m, [x for x in out if x not in wins] + moved, length, 0.1) for m in moved):
+                    for k, m in zip(wins, moved):
+                        k["at_m"] = m["at_m"]
+                    said.append(f"edge {edge}: its row of {len(wins)} windows put about the wall's middle")
+            continue
+        if len(wins) != 1 or len(doors) > 1:
+            continue
+        o = wins[0]
+        axis = length / 2
+        if doors:
+            dmid = doors[0]["at_m"] + doors[0]["width_m"] / 2
+            if abs(dmid - axis) > 1.0:
+                continue
+            axis = dmid
+        mid = o["at_m"] + o["width_m"] / 2
+        if abs(mid - axis) <= OFF_MIDDLE_M:
+            continue
+        twin = {**o, "at_m": round(2 * axis - mid - o["width_m"] / 2, 2), "confidence": "low"}
+        twin.pop("id", None)
+        if abs(2 * axis - 2 * mid) - o["width_m"] < 0.6:
+            if not doors:
+                o["at_m"] = round(axis - o["width_m"] / 2, 2)
+                said.append(f"edge {edge}: its one window centred")
+            continue
+        if _clear(twin, out, length):
+            out.append(twin)
+            said.append(f"edge {edge}: a second window, mirroring the one measured about the {'door' if doors else 'wall'}'s middle")
+    return out, said
+
+
+OFF_MIDDLE_M = 0.5
+
+
+def under_eave(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
+    """A window that reaches up to the eave but is no gable window (its sill under the eave) was read too high: its
+    head is put on the head line of its floor's other windows, else 0.3 m under the eave."""
+    out = [dict(o) for o in openings]
+    said = []
+    for o in out:
+        if o["kind"] != "window" or o["sill_m"] >= eave - 0.1 or o["sill_m"] + o["height_m"] <= eave - 0.15:
+            continue
+        level = levels_of(eave) - 1
+        like = [k for k in out if k is not o and k["kind"] == "window" and storey(k, eave) == level and k["sill_m"] + k["height_m"] <= eave - 0.15]
+        head = float(np.median([k["sill_m"] + k["height_m"] for k in like])) if like else eave - 0.3
+        h = min(o["height_m"], head - (eave / 2 if level else 0.3))
+        was = (o["sill_m"], o["height_m"])
+        o.update({"sill_m": round(head - h, 2), "height_m": round(h, 2)})
+        if not _clear(o, out, 1e9, 0.05):
+            o["sill_m"], o["height_m"] = was
+            continue
+        said.append(f"window on edge {o['edge']} at {o['at_m']} m reached the eave: moved down under it")
+    return out, said
+
+
+def join_sashes(openings: list[dict]) -> tuple[list[dict], list[str]]:
+    """Two windows side by side at one height with under MERGE_GAP_M of wall between them are one window's sashes."""
+    out: list[dict] = []
+    said = []
+    for o in sorted((dict(k) for k in openings), key=lambda k: (k["edge"], k["at_m"])):
+        k = next((k for k in reversed(out) if k["kind"] == o["kind"] == "window" and k["edge"] == o["edge"]
+                  and abs(k["sill_m"] - o["sill_m"]) <= 0.15 and abs(k["height_m"] - o["height_m"]) <= 0.15
+                  and 0 <= o["at_m"] - (k["at_m"] + k["width_m"]) < MERGE_GAP_M), None)  # fmt: skip
+        if k is None:
+            out.append(o)
+            continue
+        gap = o["at_m"] - k["at_m"] - k["width_m"]
+        k.update({"width_m": round(o["at_m"] + o["width_m"] - k["at_m"], 2), "posts": [0.5]})
+        k.pop("rails", None)
+        said.append(f"edge {o['edge']}: two windows {gap:.2f} m apart joined into one with two sashes")
+    return out, said
+
+
+def door_heads(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
+    """On a wall with an entrance door, the ground floor's windows have their heads on the door's head line (a window
+    read up to ROW_ALIGN_M higher or lower stood behind something)."""
+    out = [dict(o) for o in openings]
+    said = []
+    for d in [o for o in out if o["kind"] == "door" and o["sill_m"] < 0.6]:
+        head = d["sill_m"] + d["height_m"]
+        if not 1.9 <= head <= 2.6:
+            continue
+        moved = 0
+        for o in out:
+            if o["kind"] == "window" and o["edge"] == d["edge"] and storey(o, eave) == 0 and 0.3 < abs(o["sill_m"] + o["height_m"] - head) <= ROW_ALIGN_M:
+                was = (o["sill_m"], o["height_m"])
+                _to_head(o, head)
+                if _clear(o, out, 1e9, 0.05):
+                    moved += 1
+                else:
+                    o["sill_m"], o["height_m"] = was
+        if moved:
+            said.append(f"edge {d['edge']}: {moved} ground-floor window head(s) put on the door's head line ({head:.2f} m)")
+    return out, said
+
+
+def drop_overlaps(openings: list[dict]) -> tuple[list[dict], list[str]]:
+    """Two openings of one wall that overlap: the guessed one goes (of two alike, the larger: a box over two windows)."""
+    rank = {"low": 0, "medium": 1, "high": 2}
+    first = {"door": 0, "garage_door": 1, "glass_door": 2}
+    order = sorted(openings, key=lambda o: (-rank.get(o.get("confidence", "medium"), 1), first.get(o["kind"], 3), o["width_m"] * o["height_m"]))
+    kept: list[dict] = []
+    said = []
+    for o in order:
+        if o["kind"] == "recess" or o.get("parent") or any(k.get("parent") == o.get("id") for k in openings if o.get("id")):
+            kept.append(o)
+            continue
+        if any(not k.get("parent") and k["kind"] != "recess" and k["edge"] == o["edge"] and k["at_m"] < o["at_m"] + o["width_m"] and o["at_m"] < k["at_m"] + k["width_m"]
+               and k["sill_m"] < o["sill_m"] + o["height_m"] and o["sill_m"] < k["sill_m"] + k["height_m"] for k in kept):  # fmt: skip
+            said.append(f"{o['kind']} on edge {o['edge']} at {o['at_m']} m left out: it overlapped another opening")
+            continue
+        kept.append(o)
+    return [o for o in openings if any(o is k for k in kept)], said
+
+
+def regularise(openings: list[dict], lengths: dict[int, float], eave: float, walls: set[int] | None = None) -> tuple[list[dict], list[str]]:
+    """All of the above, in order: tall openings split, windows at the eave moved under it, sashes joined, garage doors
+    sized, rows evened, ground windows on the door's head line, lone windows mirrored. Returns
+    (openings, one line per change). ``walls``: the walls the mirroring may touch (None: all)."""
+    said: list[str] = []
+    out = [dict(o) for o in openings]
+    for step in (lambda x: split_tall(x, eave), lambda x: under_eave(x, eave), join_sashes, lambda x: fix_garages(x, lengths, eave),
+                 lambda x: fix_rows(x, eave), lambda x: door_heads(x, eave), lambda x: mirror_lone(x, lengths, eave, walls), drop_overlaps):
+        out, more = step(out)
+        said += more
+    return out, said
+
+
+MISSED_KINDS = {"garage door": "garage_door", "garage_door": "garage_door", "glass door": "glass_door", "glass_door": "glass_door", "door": "door", "window": "window"}
+
+
+def missed_items(missed) -> list[dict]:
+    """The openings an answer says it saw with no rectangle, as {kind, s0, s1, floor ("ground" | "upper"), small}: from
+    the list the wall question asks for ([{kind, at, floor}], ``at`` the middle on the ruler) or, in older answers, from
+    the words ("upper window at about 8 m behind the pole; garage door at about 1.0-2.7 m")."""
+    import re
+
+    out: list[dict] = []
+    if isinstance(missed, list):
+        for m in missed:
+            if isinstance(m, dict) and isinstance(m.get("at"), (int, float)):
+                kind = MISSED_KINDS.get(str(m.get("kind", "window")).lower().replace("_", " "), "window")
+                out.append({"kind": kind, "s0": float(m["at"]), "s1": float(m["at"]), "floor": "upper" if str(m.get("floor")).lower() == "upper" else "ground", "small": False})
+        return out
+    if not isinstance(missed, str):
+        return out
+    pat = re.compile(r"(?P<what>garage[ _]door|glass[ _]door|door|window)\b[^;]*?\b(?:at|around|about)\s*(?:about\s*)?(?P<a>\d+(?:\.\d+)?)(?:\s*-\s*(?P<b>\d+(?:\.\d+)?))?\s*m\b", re.I)
+    for clause in missed.split(";"):
+        for m in pat.finditer(clause):
+            before = clause[: m.end()].lower()
+            a = float(m["a"])
+            out.append({"kind": MISSED_KINDS[m["what"].lower().replace("_", " ")], "s0": a, "s1": float(m["b"]) if m["b"] else a,
+                        "floor": "upper" if re.search(r"\b(upper|top|first floor|second floor|attic)\b", before) else "ground", "small": "small" in before})  # fmt: skip
     return out

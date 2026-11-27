@@ -1,0 +1,26 @@
+# P-1067: small cottage, white render, red-brown roof, gable end facing street. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.42 m, roof top 5.50 m. Walls seen: edges [2]. Not modelled: chimneys on the neighbouring roof only; flower box under window.
+id: w378920431
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.35
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.37, colour: '#818784'}
+apron: {width_m: 0.57, colour: '#8d8f89'}
+roof_tiles: true
+eaves: {colour: '#5f6364', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 1, at_m: 12.63, colour: '#5f6364', bends: true}
+- {edge: 1, at_m: 0.16, colour: '#5f6364', bends: true}
+- {edge: 3, at_m: 12.63, colour: '#5f6364', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#5f6364', bends: true}
+interior: true
+openings:
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.37, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 1, at_m: 1.08, width_m: 1.87, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 4.03, width_m: 1.87, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 6.98, width_m: 1.87, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 9.93, width_m: 1.87, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 1.7, width_m: 1.87, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}

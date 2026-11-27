@@ -13,6 +13,24 @@ public static class Ui
         return b;
     }
 
+    /// <summary>Shows "Copied" on the button for a moment, then its own text again.</summary>
+    public static void FlashCopied(Button b)
+    {
+        var text = b.HasMeta("flash_text") ? (string)b.GetMeta("flash_text") : b.Text;
+        b.SetMeta("flash_text", text);
+        b.SetMeta("flash_until", (long)Time.GetTicksMsec() + 1500);
+        b.Text = "Copied";
+        b.GetTree().CreateTimer(1.5).Timeout += () =>
+        {
+            if (!GodotObject.IsInstanceValid(b) || Flashing(b)) return;
+            b.Text = (string)b.GetMeta("flash_text");
+            b.RemoveMeta("flash_text");
+        };
+    }
+
+    /// <summary>The button shows "Copied" now (its text must not be overwritten).</summary>
+    public static bool Flashing(Button b) => b.HasMeta("flash_until") && (long)Time.GetTicksMsec() < (long)b.GetMeta("flash_until");
+
     /// <summary>A button that gives the focus back when pressed: Enter and Space belong to the viewport again.</summary>
     public static Button FocusBtn(string text, Action onPress, string? variation = null)
     {

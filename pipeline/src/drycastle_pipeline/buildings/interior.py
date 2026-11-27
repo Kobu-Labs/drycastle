@@ -68,6 +68,65 @@ def inside_of(b: dict, d) -> Inside | None:
     return Inside(round(floor, 3), round(ceiling, 3))
 
 
+CAP_BELOW_M = 0.07  # what is inside stays this far under the roof's surface (within the roof's own thickness: never seen from outside)
+
+
+@dataclass(frozen=True)
+class RoofCap:
+    """How high the inside may reach under the roof: the roof's underside, less a hair, piece by piece. A low roof (a single
+    slope over a wing, the eaves of a steep roof) comes down below the ceiling: walls, partitions and the ceiling stop under
+    it there instead of passing through it. ``pieces`` are (polygon, (a, b, c)) with the cap at a*x + b*y + c."""
+
+    pieces: tuple
+
+    def z(self, x: float, y: float) -> float | None:
+        from shapely.geometry import Point
+
+        pt = Point(x, y)
+        got = [a * x + b * y + c for g, (a, b, c) in self.pieces if g.distance(pt) < 1e-6]
+        return max(got) if got else None
+
+    @classmethod
+    def of(cls, pieces: list, roof_z, below: float = CAP_BELOW_M) -> "RoofCap":
+        """From the roof's pieces (polygons) and its height function: one plane per piece, through three of its points."""
+        out = []
+        for g in pieces:
+            tris = triangulate(g)
+            if not tris:
+                continue
+            (x0, y0), (x1, y1), (x2, y2) = max(tris, key=lambda t: abs((t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[1][1] - t[0][1]) * (t[2][0] - t[0][0])))
+            z0, z1, z2 = roof_z(x0, y0), roof_z(x1, y1), roof_z(x2, y2)
+            den = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0)
+            if abs(den) < 1e-12:
+                continue
+            a = ((z1 - z0) * (y2 - y0) - (z2 - z0) * (y1 - y0)) / den
+            b = ((x1 - x0) * (z2 - z0) - (x2 - x0) * (z1 - z0)) / den
+            out.append((g, (a, b, z0 - a * x0 - b * y0 - below)))
+        return cls(tuple(out))
+
+
+def _under(cap: "RoofCap | None", to3, s0: float, s1: float, depth: float, step: float = 0.1):
+    """The part of a wall's (s, z) plane under the cap, from s0 to s1 (None: no cap, or the cap is nowhere over the line)."""
+    if cap is None or s1 - s0 < 1e-6:
+        return None
+    n = max(1, math.ceil((s1 - s0) / step))
+    top = []
+    for k in range(n + 1):
+        s = s0 + (s1 - s0) * k / n
+        x, y, _ = to3(s, 0.0, depth)
+        z = cap.z(x, y)
+        if z is not None:
+            top.append((s, z))
+    if len(top) < 2:
+        return None
+    return Polygon([(top[0][0], -100.0), (top[-1][0], -100.0), *reversed(top)])
+
+
+def _clip(face, cap, to3, s0: float, s1: float, depth: float):
+    under = _under(cap, to3, s0 - 0.01, s1 + 0.01, depth)
+    return face if under is None else face.intersection(under)
+
+
 def _holes(ops, ins: Inside):
     return [box(o.at_m, o.sill_m, o.at_m + o.width_m, o.sill_m + o.height_m) for o in ops if ins.through(o)]
 
@@ -81,8 +140,9 @@ def _face(out, to3, face, depth: float, colour, inward: bool) -> None:
             out.add([to3(*c, depth) for c in order], colour)
 
 
-def add_inner_wall(out, to3, ring: list, i: int, ops, ins: Inside, colour=INNER_WALL) -> None:
-    """The room's side of wall ``i``: floor to ceiling between the corners' diagonals, with the holes of what goes through."""
+def add_inner_wall(out, to3, ring: list, i: int, ops, ins: Inside, colour=INNER_WALL, cap: RoofCap | None = None) -> None:
+    """The room's side of wall ``i``: floor to ceiling between the corners' diagonals, with the holes of what goes through
+    (and under the roof, ``cap``, where that comes lower)."""
     from drycastle_pipeline.buildings.openings import _band_ends
 
     lo, hi = _band_ends(ring, i, -WALL_M)
@@ -92,22 +152,44 @@ def add_inner_wall(out, to3, ring: list, i: int, ops, ins: Inside, colour=INNER_
     holes = _holes(ops, ins)
     if holes:
         face = face.difference(unary_union(holes))
+    face = _clip(face, cap, to3, lo, hi, WALL_M)
     _face(out, to3, face, WALL_M, colour, inward=True)
     for o in ops:  # under a garage door that starts below the floor, the floor's edge closes the bottom of the hole
         if o.kind == "garage_door" and ins.through(o) and o.sill_m < ins.floor - 0.005:
             _face(out, to3, box(o.at_m, o.sill_m, o.at_m + o.width_m, ins.floor), WALL_M, colour, inward=False)
 
 
-def add_floor_ceiling(out, poly: Polygon, ins: Inside, floor=FLOOR, ceiling=CEILING, inset: float = 0.0) -> None:
+def add_floor_ceiling(out, poly: Polygon, ins: Inside, floor=FLOOR, ceiling=CEILING, inset: float = 0.0, cap: RoofCap | None = None) -> None:
     """The floor (seen from above) and the ceiling (seen from below), over the footprint shrunk by ``inset``. The visual passes
     the wall's width: the floor then ends at the walls' inner faces and never lies under a doorway's reveal, whose bottom is
-    at the floor's height (two faces in one plane flicker). The collision keeps the whole footprint: its rims are in the walls."""
+    at the floor's height (two faces in one plane flicker). The collision keeps the whole footprint: its rims are in the walls.
+    Where the roof (``cap``) comes lower than the ceiling, the ceiling follows the roof's underside there."""
+
+    def tris_of(g):
+        for tri in (t for part in getattr(g, "geoms", [g]) if not part.is_empty and part.geom_type == "Polygon" for t in triangulate(part)):
+            a0, a1, a2 = tri
+            ccw = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0]) > 0
+            yield (a0, a1, a2) if ccw else (a0, a2, a1)
+
     area = poly if inset <= 0 else poly.buffer(-inset, join_style=2)
-    for tri in (t for part in getattr(area, "geoms", [area]) if not part.is_empty for t in triangulate(part)):
-        a0, a1, a2 = tri
-        ccw = (a1[0] - a0[0]) * (a2[1] - a0[1]) - (a1[1] - a0[1]) * (a2[0] - a0[0]) > 0
-        up = (a0, a1, a2) if ccw else (a0, a2, a1)
+    for up in tris_of(area):
         out.add([(x, y, ins.floor) for x, y in up], floor)
+    flat = area
+    if cap is not None:
+        from drycastle_pipeline.buildings.roof_fit import _half_plane
+
+        near = (area.centroid.x, area.centroid.y)
+        for g, (a, b, c) in cap.pieces:
+            low = _half_plane((-a, -b, ins.ceiling - c), near)  # where the cap is below the ceiling
+            if low is not None and low.is_empty:
+                continue
+            sloped = area.intersection(g) if low is None else area.intersection(g).intersection(low)
+            if sloped.is_empty or sloped.area < 1e-4:
+                continue
+            flat = flat.difference(sloped)
+            for up in tris_of(sloped):
+                out.add([(x, y, max(a * x + b * y + c, ins.floor + 0.05)) for x, y in reversed(up)], ceiling)
+    for up in tris_of(flat):
         out.add([(x, y, ins.ceiling) for x, y in reversed(up)], ceiling)
 
 
@@ -128,9 +210,33 @@ def prepare_plans(houses: list[tuple]) -> None:
         floorplan.make_plans(hollow)
 
 
-def add_partitions(out, plan, ins: Inside, colour=INNER_WALL) -> None:
+def _slab(out, to3, s: tuple, z: tuple, half: float, colour, faces: tuple, cap: RoofCap | None) -> None:
+    """A partition's box (``out.cuboid`` of the partition's frame) with its top under the roof (``cap``) where that comes lower."""
+    (s0, s1), (z0, z1) = s, z
+    under = [_under(cap, to3, s0, s1, dd) for dd in (-half, half)]
+    if all(u is None for u in under) or all(u is None or u.contains(box(s0, z0, s1, z1)) for u in under):
+        out.cuboid(to3, s, z, (-half, half), colour, faces)
+        return
+    for dd, u in zip((-half, half), under):
+        name = "d0" if dd < 0 else "d1"
+        if name in faces:
+            face = box(s0, z0, s1, z1) if u is None else box(s0, z0, s1, z1).intersection(u)
+            _face(out, lambda a, b, c, dd=dd: to3(a, b, dd + c), face, 0.0, colour, inward=dd > 0)
+    for name, sv in (("s0", s0), ("s1", s1)):
+        if name not in faces:
+            continue
+        tops = [cap.z(*to3(sv, 0.0, dd)[:2]) for dd in (-half, half)] if cap is not None else [None, None]
+        t0, t1 = (min(z1, t) if t is not None else z1 for t in tops)
+        if max(t0, t1) - z0 > 1e-3:
+            quad = [to3(sv, z0, -half), to3(sv, z0, half), to3(sv, max(t1, z0), half), to3(sv, max(t0, z0), -half)]
+            out.quad(quad, colour, to3(sv + (-1.0 if name == "s0" else 1.0), (z0 + z1) / 2, 0.0))
+    if "z0" in faces:
+        out.quad([to3(s0, z0, -half), to3(s1, z0, -half), to3(s1, z0, half), to3(s0, z0, half)], colour, to3((s0 + s1) / 2, z0 - 1.0, 0.0))
+
+
+def add_partitions(out, plan, ins: Inside, colour=INNER_WALL, cap: RoofCap | None = None) -> None:
     """The partitions of the plan: a slab per wall from floor to ceiling, left out where a doorway is, with the piece of
-    wall over a door or an archway."""
+    wall over a door or an archway; under the roof (``cap``) where that comes lower than the ceiling."""
     from drycastle_pipeline.buildings import floorplan as fp
 
     if plan is None:
@@ -148,10 +254,10 @@ def add_partitions(out, plan, ins: Inside, colour=INNER_WALL) -> None:
         cursor = 0.0
         for s0, s1, kind in [*w.gaps, (length, length, "end")]:
             if s0 - cursor > 0.02:
-                out.cuboid(to3, (cursor, s0), (ins.floor, ins.ceiling), (-half, half), colour, ("s0", "s1", "d0", "d1"))
+                _slab(out, to3, (cursor, s0), (ins.floor, ins.ceiling), half, colour, ("s0", "s1", "d0", "d1"), cap)
             head = ins.floor + (fp.DOOR_H_M if kind == "door" else fp.ARCH_H_M)
             if kind in ("door", "arch") and ins.ceiling - head > 0.05:
-                out.cuboid(to3, (s0, s1), (head, ins.ceiling), (-half, half), colour, ("z0", "d0", "d1"))
+                _slab(out, to3, (s0, s1), (head, ins.ceiling), half, colour, ("z0", "d0", "d1"), cap)
             cursor = max(cursor, s1)
 
 
