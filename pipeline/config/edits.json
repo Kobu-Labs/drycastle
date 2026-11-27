@@ -57110,6 +57110,15 @@
     -1248899.1
    ],
    "rotation_deg": 225.5
+  },
+  {
+   "asset": "prim:cartel_pallet",
+   "id": "o-4859",
+   "position": [
+    -588412.3,
+    -1248899.7
+   ],
+   "rotation_deg": 225.5
   }
  ],
  "parcels": {
