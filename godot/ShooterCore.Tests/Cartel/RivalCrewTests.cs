@@ -109,6 +109,21 @@ public class RivalCrewTests
         Assert.Null(crew.Add(GangMemberKind.Enforcer, Vector3.Zero, 0)!.Weapon);
     }
 
+    [Fact]
+    public void ARivalCrewMemberCarriesTheCrewBitSoTheClientDrawsItApartFromTheThieves()
+    {
+        var hp = GangRules.PackHp(GangMemberKind.GangBoss, true, 5, speaker: true, rival: true);
+        Assert.True(GangRules.RivalOf(hp));
+        Assert.Equal((GangMemberKind.GangBoss, true, (byte)5, true), (GangRules.KindOf(hp), GangRules.AliveOf(hp), GangRules.CarriedOf(hp), GangRules.SpeakerOf(hp))); // bit 7 is free: nothing else moves
+        Assert.False(GangRules.RivalOf(GangRules.PackHp(GangMemberKind.GangBoss, true, 5, speaker: true)));
+        var rig = new Rig();
+        var dealer = rig.Crew(_ => false).Add(GangMemberKind.GangBoss, Vector3.Zero, 0)!;
+        Assert.True(GangRules.RivalOf(dealer.Serialize().Hp));
+        var thief = rig.Roster.NewGang(Vector3.Zero).Add(GangMemberKind.GangBoss, new Vector3(5, 0, 0), 0)!;
+        Assert.False(GangRules.RivalOf(thief.Serialize().Hp));
+        Assert.Matches("^#[0-9a-fA-F]{6}$", Shipped.Thieves.RivalCrew.View.Tint);
+    }
+
     // ---- the Gunman ----
 
     [Fact]
