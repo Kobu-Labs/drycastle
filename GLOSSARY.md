@@ -821,3 +821,62 @@ A rare Mystery Animal of the night sky (`phoenix` in `animals.json`, model `phoe
 **When it comes**: the server's day clock counts a night each time it passes midnight (`spawn_hour` 0, `phoenix` block of `wildlife.json`) and every `nights_between`th (5) one puts a Phoenix in the sky at that hour (the first on the 5th night), if a round is running and none is still alive. The count is the server's own, not reset by a round; a stopped clock never passes midnight; an admin who sets the time moves it without counting a night. **Flying**: a slow circle (`patrol_radius_m` 350, cut to fit the map, `speed_mps` 14) with its body centre 80-140 m above the ground; bullets, blasts and rockets hit it (its hit box is the wingspan 3 m by 1.1 m by 4 m long), a knife cannot reach it, a vehicle never runs it over. **Falling**: any hit that deals damage, from any weapon, however big, starts a straight dive of `fall_seconds` (4) to the crash site, speeding up; it is not a hit target while it dives (`Animal.Targetable`): bullets and blasts pass through it, so no more hits count. Its hit box height has 0.5 m of margin (3 m by 1.1 m by 4 m). **Crash site**: ground 40-120 m from the hit, ahead of it if that is clear (else all round), with a free 6 m circle (`crash_clear_m` 3): ground all over it (not deep water), no more than 0.9 m up or down across it, nothing solid in it, 10 m from every building. **Crashed**: alive and still until killed or the round ends. **Burning**: the second hit; the shooter is the Killer, the Mystery creature Phoenix is caught (a Hunt, with that shot's distance), a flame burns `burn_seconds` (6). **Dead**: the body is gone at once on every client (the flame consumed it, embers rise) and the entity ends `dead_seconds` (6) later; the Mineral pheonixite lies where it burned for a minute, free for anybody who has not found it (the server keeps it in `WildlifeKeeper.Drops`, raises `MineralDropped` and makes it a dynamic Mineral node there). **Dawn**: at `dawn_hour` (5) a Phoenix still Flying flies off and is gone; one that was hit stays. It counts toward `max_animals`. Nothing announces it (the first catch and a longest shot are announced like any Mystery creature's). The fire, embers and flame are client-only looks (`"fx": "phoenix"`). Admins can call one at once with `/phoenix`. Phases are the `Flying`, `Falling`, `Crashed` and `Burning` states of `AnimalState` (the state byte's low four bits 11-14); the wire carries them with the dive's pitch, and event `PhoenixFall` (the line of the fall).
 _Avoid_: firebird, Event (it is not an Event), boss
 
+**Cartel**:
+The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Planned (#437).
+_Avoid_: gang (the Rival crew and the Thieves' Raids are gangs), faction, mafia
+
+**Cartel rank**:
+A Cartel member's position on their own ladder (Runner, Dealer, Sicario, Capo, Patrón), climbed with Respect. Kept on the Profile; a player who quits keeps it frozen until they rejoin. Planned (#437).
+_Avoid_: level (that is XP's), title, position
+
+**Respect**:
+What a finished cartel Job pays, and all it pays: the Cartel rank's own experience, apart from XP. Planned (#437).
+_Avoid_: XP, rep, reputation, money
+
+**Contact**:
+The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. Planned (#437).
+_Avoid_: NPC (alone), quest giver, dealer
+
+**Job**:
+One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. Planned (#437).
+_Avoid_: quest, mission, task, Event (a Job is not one)
+
+**Heist**:
+A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. Planned (#437).
+_Avoid_: raid (that is the Thieves'), robbery
+
+**Duffel**:
+A bag of goods (weed, cash, product) a Job's player carries, one at a time and slowed by its weight, throws to a mate or into the Cartel van, and drops at death. Not an Item and not in the Bag. Planned (#437).
+_Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
+
+**Cartel van**:
+The drivable van of a Heist: only the Job's players get in or load Duffels; it is put down for the Job and goes with it, and its destruction fails the Heist. Planned (#437).
+_Avoid_: getaway car, Raid van (that is the Thieves')
+
+**Drop point**:
+A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success. Planned (#437).
+_Avoid_: secure zone, delivery spot
+
+**Assault**:
+A van of the Rival crew that comes in to attack a Heist's objective, one after another until the Cartel van leaves. Planned (#437).
+_Avoid_: wave, attack, Raid
+
+**Rival crew**:
+The gang that works against the Cartel: it holds Trap houses, guards a Rival dealer and sends the Assaults. Its people are Gang members. Planned (#437).
+_Avoid_: enemy, rival gang, cops
+
+**Gunman**:
+A Gang member of the Rival crew who fights at range with a gun, where the Thieves' kinds fight hand to hand. Planned (#437).
+_Avoid_: shooter, bot
+
+**Trap house**:
+A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job, its defenders posted in its rooms, a safe inside; stripped again when the Job ends. Planned (#437).
+_Avoid_: stash house, drug den, hideout
+
+**Rival dealer**:
+The target of a Hit: a Gang member of the Rival crew standing outdoors with guards. Planned (#437).
+_Avoid_: target (alone), boss (that is the Gang boss)
+
+**Drill**:
+What a Job's player sets on a Trap house's safe to open it: it runs a while, jams now and then, and is fixed by hand. Planned (#437).
+_Avoid_: hack, timer
