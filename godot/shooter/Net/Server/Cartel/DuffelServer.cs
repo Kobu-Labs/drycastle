@@ -143,13 +143,6 @@ internal sealed class DuffelServer
         foreach (var gone in _reachSent.Keys.Where(id => !_ctx.Players.ContainsKey(id)).ToList()) _reachSent.Remove(gone);
     }
 
-    /// <summary>Takes every Duffel of a Job's party out of the world (the Job ended): a carrier is unburdened. The count removed.</summary>
-    public int RemoveParty(IReadOnlySet<ushort> party)
-    {
-        foreach (var d in Book.Carried()) if (ReferenceEquals(d.Party, party)) Unburden(d.Carrier);
-        return Book.RemoveParty(party);
-    }
-
     /// <summary>A new round: the match cleared the entities; every body is unburdened and nothing is in reach.</summary>
     public void RoundStart()
     {
