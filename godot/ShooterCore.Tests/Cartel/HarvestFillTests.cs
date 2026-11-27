@@ -1,7 +1,6 @@
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Hud;
-using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Status;
 using Xunit;

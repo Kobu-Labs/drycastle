@@ -97,6 +97,7 @@ internal sealed class InputServer
         var canThrow = c.Car == null && !controlled && _ctx.Match.Get(c.Id)?.Life == PlayerLife.Alive && _ctx.Tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pounce.IsPinned(c.Id)
             && !c.Body.State.OnLadder && _ctx.Now >= c.LaunchGraceUntil;
         var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
+        var duffelEdge = c.DuffelKey.Pressed((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0); // fed on every input, held or not, as the client feeds it: a press during a hold is not fresh after it
         if (_ctx.Match.Get(c.Id)?.Life != PlayerLife.Alive) return; // dead or waiting: inputs are acked but ignored
         if (c.Car == null && _ctx.Tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
         if (c.Car == null && _sitters.Input(c, i, useEdge)) return; // seated in the church: no walking, no weapon
@@ -108,7 +109,7 @@ internal sealed class InputServer
         var useAct = _scudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
         // a Duffel of the player's party in reach: the press takes it (it outranks Loot, doors and seats); the body walks on this input, slowed already, as the client predicts it
         var tookDuffel = useAct && _duffels.TryPickUp(c);
-        _duffels.OnInput(c, i); // the Duffel throw key, followed on every input on foot: a fresh press while carrying throws it
+        _duffels.OnInput(c, i, duffelEdge); // the Duffel throw key's press (its edge is followed above, on every input): a fresh press while carrying throws it
         if (useAct && !tookDuffel && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _receivers.Use(c) || _cargo.Use(c) || _duffels.RefuseSeat(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat; a Duffel carrier takes none; at a cargo vehicle's access point the key works its doors before the seat is taken or refused
         WalkAndFire(c, i, dt, throwStep);
     }

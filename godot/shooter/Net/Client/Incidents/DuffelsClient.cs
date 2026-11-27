@@ -215,7 +215,7 @@ public sealed class DuffelsClient
         return DoorsPrompt();
     }
 
-    /// <summary>The prompt of the nearest cargo vehicle with doors whose access point the own body stands at (the server's rule, from the drawn pose), or null.</summary>
+    /// <summary>The prompt of the nearest cargo vehicle with doors whose access point the own body stands at (the server's rule, from the drawn pose, its slope too), or null.</summary>
     string? DoorsPrompt()
     {
         if (_ctx.Me == null || _ctx.Vehicles == null) return null;
@@ -226,7 +226,8 @@ public sealed class DuffelsClient
         {
             if (car.Destroyed || car.Kind >= _ctx.Vehicles.Vehicles.Count || _ctx.Vehicles.Vehicles[car.Kind].CargoVolume is not { Doors.Count: > 0 } def) continue;
             var p = car.Node.GlobalPosition;
-            if (CargoVolume.AccessDistance(def, new NVec3(p.X, p.Y, p.Z), car.Node.Rotation.Y, 0, 0, at) is { } d && d < bd) { best = car; bestDef = def; bd = d; }
+            var rot = car.Node.Rotation; // Godot's order, as the server's attitude is (FlightMath.Rotate): x pitch, y yaw, z roll; a car on a slope has them
+            if (CargoVolume.AccessDistance(def, new NVec3(p.X, p.Y, p.Z), rot.Y, rot.X, rot.Z, at) is { } d && d < bd) { best = car; bestDef = def; bd = d; }
         }
         if (best == null || bestDef == null) return null;
         var open = _ctx.Cars.CargoOpen.Contains(best.Id);

@@ -105,7 +105,7 @@ internal sealed class ReceiverServer
     {
         var map = _map();
         if (CartelSpots.Claim(job, book, map, CartelZones.HeliKind, _rng, objective, objectiveName, data.DropMinM, data.DropApartM, out _) is not { } at) return null;
-        var spot = map.Helis[IndexOf(map.HeliPoints, at)];
+        var spot = map.Helis[CartelSpots.IndexOf(map.HeliPoints, at)];
         var y = _ground(spot.At.X, spot.At.Y);
         GD.Print($"server: {job}: helicopter on the landing spot at ({spot.At.X:F0}, {spot.At.Y:F0})");
         return new ReceiverPlan(ReceiverKind.Helicopter, new NVec3(spot.At.X, y, spot.At.Y), spot.YawRad, ExitOf(spot.At), null);
@@ -115,16 +115,10 @@ internal sealed class ReceiverServer
     {
         var map = _map();
         if (CartelSpots.Claim(job, book, map, CartelZones.BoatKind, _rng, objective, objectiveName, data.DropMinM, data.DropApartM, out _) is not { } at) return null;
-        var spot = map.Boats[IndexOf(map.BoatPoints, at)];
+        var spot = map.Boats[CartelSpots.IndexOf(map.BoatPoints, at)];
         var y = SurfaceAt(spot.At);
         GD.Print($"server: {job}: boat at the mooring at ({spot.At.X:F0}, {spot.At.Y:F0}), water at {y:F2}, {spot.Route.Count} route point(s)");
         return new ReceiverPlan(ReceiverKind.Boat, new NVec3(spot.At.X, y, spot.At.Y), spot.YawRad, null, spot.Route.Select(p => new NVec3(p.X, y, p.Y)).ToList());
-    }
-
-    static int IndexOf(IReadOnlyList<NVec3> pool, NVec3 p)
-    {
-        for (var i = 0; i < pool.Count; i++) if (pool[i] == p) return i;
-        return 0;
     }
 
     /// <summary>The surface of the water body under the point, or the ground there when it is on none.</summary>
@@ -234,7 +228,7 @@ internal sealed class ReceiverServer
     /// <summary>A new round: the match cleared its entities; nothing is live.</summary>
     public void RoundStart()
     {
-        foreach (var r in _live.ToList()) { _book.RemoveVolume(r); }
+        foreach (var r in _live) _book.RemoveVolume(r);
         _live.Clear();
         foreach (var c in _ctx.Roster) c.ReceiverReach = 0;
     }

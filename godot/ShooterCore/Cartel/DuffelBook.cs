@@ -11,7 +11,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <item>A Job (or <c>/duffel</c>) makes one for a party with <see cref="Give"/> (in a player's hands) or <see cref="Place"/> (on the ground), and takes its own away with <see cref="Remove"/> or <see cref="RemoveParty"/>.</item>
 /// <item>One per player: a party player who carries none picks up the nearest lying one in reach (<see cref="PickUp"/>).</item>
 /// <item>The carrier throws it (<see cref="Throw"/>: one press, a fixed range, an arc); it is put down where they stand only when they cannot carry it on (<see cref="Drop"/>: death, a seat, leaving the party or the server).</item>
-/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's, and every Heist's <see cref="Receiver"/>) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot (<see cref="LoadedIn"/>); one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
+/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's, and every Heist's <see cref="Receiver"/>) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot; one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
 /// </list>
 /// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a throw, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
 /// </summary>
@@ -51,7 +51,6 @@ public sealed class DuffelBook
 
     public Duffel? Find(ushort id) => _byId.GetValueOrDefault(id);
     public Duffel? CarriedBy(ushort player) => _byCarrier.GetValueOrDefault(player);
-    public int LoadedIn(ICargoVolume volume) => _byId.Values.Count(d => d.State == DuffelState.Loaded && d.Volume == volume);
 
     /// <summary>A Duffel of the party in the hands of <paramref name="carrier"/> (standing at <paramref name="feet"/>). Null when the carrier carries one already or the world is full.</summary>
     public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier, Vector3 feet)
@@ -285,17 +284,14 @@ public sealed class DuffelBook
 /// <summary>The throw's arc, shared by the server (which flies it) and the tests: the one range, and the launch velocity for a look.</summary>
 public static class DuffelThrow
 {
-    /// <summary>Metres a throw reaches on flat ground: throw_m, the same for every kind.</summary>
-    public static float RangeM(DuffelsFile data) => (float)data.ThrowM;
-
     /// <summary>
-    /// The launch velocity: along the look (yaw), at the look's pitch plus lift_deg (held between min and max elevation), with the speed that carries <see cref="RangeM"/> at the lift's elevation from a
+    /// The launch velocity: along the look (yaw), at the look's pitch plus lift_deg (held between min and max elevation), with the speed that carries throw_m (the same range for every kind) at the lift's elevation from a
     /// standing eye's height (<see cref="MoveConsts.EyeHeight"/>) down to flat ground (a level look throws that far, a look up throws higher and about as far).
     /// </summary>
     public static Vector3 Velocity(DuffelsFile data, float yaw, float pitch)
     {
         var lift = (float)(data.LiftDeg * Math.PI / 180);
-        var range = RangeM(data);
+        var range = (float)data.ThrowM;
         // x = v cos(a) t and 0 = h + v sin(a) t - g t^2 / 2 give v^2 = g R^2 / (2 cos^2(a) (h + R tan(a)))
         var (ls, lc) = MathF.SinCos(lift);
         var speed = MathF.Sqrt(MoveConsts.Gravity * range * range / (2 * lc * lc * (MoveConsts.EyeHeight + range * ls / lc)));

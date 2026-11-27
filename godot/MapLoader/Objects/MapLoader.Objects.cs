@@ -51,12 +51,12 @@ public sealed partial class MapLoader
     public readonly record struct ObjectPose(string Id, Vector3 Position, float YawDeg, float Scale);
 
     /// <summary>
-    /// The first placed object of an asset (the lowest object id, ordinal) and where it stands now; null when none is placed. From the
+    /// The first placed object of an asset (the lowest object id: by the number after the prefix, so "o-4859" comes before "o-10000"; ordinal where there is none) and where it stands now; null when none is placed. From the
     /// object's own node transform, which comes from objects.json (position, rotation, scale, terrain height), never from the model.
     /// </summary>
     public ObjectPose? FirstObjectOfAsset(string asset)
     {
-        foreach (var (id, node) in _objectNodes.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        foreach (var (id, node) in _objectNodes.OrderBy(kv => ObjectNumber(kv.Key)).ThenBy(kv => kv.Key, StringComparer.Ordinal))
         {
             if (!GodotObject.IsInstanceValid(node) || !_objectAssets.TryGetValue(id, out var a) || a != asset) continue;
             var x = node.Basis.X; // the turn from the axis, not from Euler angles, which fold a turn past 90 degrees into the other axes
@@ -64,6 +64,9 @@ public sealed partial class MapLoader
         }
         return null;
     }
+
+    /// <summary>The number after an object id's prefix ("o-4859" is 4859); an id without one sorts last.</summary>
+    static long ObjectNumber(string id) => long.TryParse(id.AsSpan(id.LastIndexOf('-') + 1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : long.MaxValue;
 
     /// <summary>
     /// Opens parts of a placed object's model: every node of the object named in <paramref name="names"/> (a door of a prefab) is

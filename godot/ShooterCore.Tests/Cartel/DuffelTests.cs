@@ -72,7 +72,7 @@ public class DuffelTests
         Assert.True(weed.WeightKg < cash.WeightKg && cash.WeightKg < product.WeightKg);
         Assert.True(weed.SpeedScale > cash.SpeedScale && cash.SpeedScale > product.SpeedScale);
         Assert.Equal(8, shipped.ThrowM); // one range for every kind: the weight slows the carrier only
-        Assert.Equal(8, DuffelThrow.RangeM(shipped));
+        Assert.Equal(8, (float)shipped.ThrowM);
     }
 
     [Fact]
