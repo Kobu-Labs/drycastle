@@ -1,6 +1,6 @@
 {
   "version": 1,
-  // The Duffels of the cartel's Jobs (GLOSSARY "Duffel", docs/cartel.md "Duffels"; ShooterCore/Cartel/Duffels). A Duffel is made for a party (the Job's players); only they pick it up (the interact key,
+  // The Duffels of the cartel's Jobs (GLOSSARY "Duffel", docs/cartel.md "Duffels"; ShooterCore/Cartel/Duffel*.cs). A Duffel is made for a party (the Job's players); only they pick it up (the interact key,
   // within reach_m flat and reach_up_m up or down of the feet). One per player. A carrier cannot sprint, walks at speed_scale of the speed, can still shoot, and takes no vehicle seat.
   // Nothing here was seen in the game: tune by feel.
   //

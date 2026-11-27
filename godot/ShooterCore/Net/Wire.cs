@@ -443,14 +443,9 @@ public static class Wire
     //   v84 the Companion picker (#488): events 114 CompanionPick and 115 Companions (CompanionRoster); the scout kind's marks: event 116 CompanionMarks
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
-    //   vNEXT (Duffels, #494): world entity type 62 (Duffel: state byte state bits 0-1 + kind bits 2-3, owner field the carrier); events 42 DuffelNotice and 43 DuffelReach (server to one player); input button bit 8192 DuffelThrow
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
-    //   vNEXT (Cartel profile + Job core): events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec)
-    //   vNEXT (Squad leader): the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494)
-    //   vNEXT (Cartel van vehicle): vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine)
-    //   vNEXT (Trap house dressing): events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0046)
-    //   vNEXT (Gunman + posted defenders): Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind)
-    public const byte ProtocolVersion = 87;
+    //   v88 the drug Cartel (#437, docs/cartel.md): Cartel profile + Job core: events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec); Squad leader: the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494); Cartel van vehicle: vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine); Duffels, #494: world entity type 62 (Duffel: state byte state bits 0-1 + kind bits 2-3, owner field the carrier); events 42 DuffelNotice and 43 DuffelReach (server to one player); input button bit 8192 DuffelThrow; Trap house dressing: events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0046); Gunman + posted defenders: Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind)
+    public const byte ProtocolVersion = 88;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {
