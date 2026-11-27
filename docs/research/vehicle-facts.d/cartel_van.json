@@ -388,6 +388,8 @@
   }
  ],
  "nodes": [
+  "cargo_door_l",
+  "cargo_door_r",
   "cartel_van",
   "glass_0",
   "glass_1",
@@ -409,5 +411,17 @@
   "wheel_fr_steer",
   "wheel_rl",
   "wheel_rr"
- ]
+ ],
+ "hinges": {
+  "cargo_door_l": [
+   -0.806,
+   1.085,
+   2.369
+  ],
+  "cargo_door_r": [
+   0.806,
+   1.085,
+   2.369
+  ]
+ }
 }

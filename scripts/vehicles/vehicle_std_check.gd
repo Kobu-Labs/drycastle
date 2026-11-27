@@ -1,6 +1,6 @@
 # Reloads the standardized vehicle GLBs (scripts/vehicles/standardize_vehicle.py) the way the game does and checks the contract of docs/standards/car-design.md part A:
 # hull is a direct child of the root, wheels are its siblings (Position.Y = radius, a _steer parent on the steered ones), glass_N / seat_* / steering_wheel_* / light_*
-# nodes are under the hull, no collision bodies, every material name is in the pack's materials.json, the bounds are the facts file's.
+# nodes are under the hull, the swinging doors' nodes (facts "hinges") sit on their hinge points, no collision bodies, every material name is in the pack's materials.json, the bounds are the facts file's.
 #   godot --headless --script scripts/vehicles/vehicle_std_check.gd -- <assets-private dir> <facts.json> [<facts.json> ...]     (docs/research/vehicle-facts.d/<id>.json)
 # Exit code 1 on any problem.
 extends SceneTree
@@ -78,6 +78,12 @@ func _check(name: String, root: Node, facts: Dictionary, mats: Dictionary) -> in
 		var g := root.find_child("glass_%d" % i, true, false)
 		if g == null or not hull.is_ancestor_of(g):
 			print("glass_%d not under hull in %s" % [i, name])
+			bad += 1
+	for hn in facts.get("hinges", {}):
+		var hd: Array = facts["hinges"][hn]
+		var hnode: Node3D = root.find_child(hn, true, false)
+		if hnode == null or hnode.get_parent() != hull or hnode.position.distance_to(Vector3(hd[0], hd[1], hd[2])) > 0.002:
+			print("HINGE node %s is not a child of the hull at %s in %s" % [hn, hd, name])
 			bad += 1
 	for n in facts["nodes"]:
 		if (String(n).begins_with("seat_") or String(n).begins_with("steering_wheel_") or String(n).begins_with("light_")):

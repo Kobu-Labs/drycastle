@@ -61,6 +61,7 @@ internal sealed class VehiclesClient
             if (ShotFx.Enabled && _ctx.Vehicles.Vehicles[v.Kind].Drive != null) v.Drive = DriveNodes.Find(v.Node, _ctx.Vehicles.Vehicles[v.Kind]);
             if (ShotFx.Enabled) v.Wheels = CarView.FindWheels(v.Node);
             if (ShotFx.Enabled && GenericWheels(_ctx.Vehicles.Vehicles[v.Kind])) v.Roller = VehicleWheels.Find(v.Node);
+            if (ShotFx.Enabled) v.CargoDoors = CargoDoorsView.Find(v.Node, _ctx.Vehicles.Vehicles[v.Kind]);
             if (_ctx.Vehicles.Vehicles[v.Kind].Trailer != null) v.Trailer = _tow.MakeView(v);
             _ctx.Cars.Add(v);
             _glass.ShowOf(id); // panes whose state arrived before the vehicle was drawn (ADR 0007)
@@ -206,6 +207,7 @@ internal sealed class VehiclesClient
         else _ctx.Cars.Sounds.Engine(v, p, dt, _drive.StateOf(v)?.Speed);
         if (drive != null) _drive.StepFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
         else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
+        v.CargoDoors?.Step(dt); // a boot lid, hatch or van door on its way open or shut
         var seat = _ctx.Driving && _ctx.Me != null ? _rider.OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
         if (seat >= 0) _rider.Track(v, seat);
         if (seat == 0 || seat > 0 && !flakMine) RideCar(v, seat, p, rot, s.Yaw, flies, drive, dt);

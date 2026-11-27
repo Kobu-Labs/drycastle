@@ -21,6 +21,12 @@ What is generic (this file; no vehicle's numbers in it):
   - `parts`: more prefab meshes that join the body in the hull (racks, a swing arm)
   - `nodes`: prefab meshes that keep a node of their own under the hull, under the name given (a harvester's reel that spins about its `pivot`; a glass mesh that is
     not a breakable pane, `glass: true`: drawn in the standard glass material, hidden by the cockpit rig). Nothing is split or renamed
+  - `doors`: prefab meshes that stay a swinging node of their own under the hull (a van's rear doors: `cargo_door_l/r`), the node's origin ON the hinge line (`hinge`: "pivot" = the pack's own
+    pivot, which Synty puts on the hinge, or a source-frame point); `glass` names the glass mesh that rides on the door: its panes become `glass_N` nodes under the door node
+  - `cuts`: a lid the pack does not have. The body triangles whose centroid lies in `box` (source frame) move into a node of their own (`cargo_door`) with its origin on `hinge`
+    (a point on the top hinge line); the box is measured, never guessed. `lining` generates the open cavity's walls so it is not see-through (the pack's boot is single-skinned): quads
+    on the faces of a source-frame box (floor, side_lo/side_hi = x min/max, front = z max), their normals into the cavity, UVs on one atlas texel (the skin's atlas, so skins still apply;
+    lift the floor off a pack floor by a few mm in the box itself)
   - seat empties (`seat_*`, at the rider's feet), lamp empties (`light_*`) + emissive lens plates, optional extra empties
   - colour variants: the same model once per skin, only the atlas material name differs (`<id>_<skin>.glb`); materials.json gets the atlases
   - the pack manifest rows, the measured numbers (docs/research/vehicle-facts.d/<id>.json) and, with --vehicles-json, the model-owned keys of the
@@ -164,6 +170,28 @@ def pane_id(normal, centre, taken):
     return "side_left" if centre[0] < 0 else "side_right"
 
 
+def lining_meshes(spec, atlas, M):
+    """The walls of a cavity the cut opened (a boot): one quad per listed face of the box (source frame), normals INTO the box, every vertex on the atlas texel `uv` of the skin's
+    material (so the colour follows the skin), moved to the game frame by M."""
+    lo, hi = np.array(spec["min"], float), np.array(spec["max"], float)
+    a, b = lo, hi
+    faces = {
+        "floor":   ([a[0], a[1], a[2]], [b[0], a[1], a[2]], [b[0], a[1], b[2]], [a[0], a[1], b[2]], [0, 1, 0]),
+        "side_lo": ([a[0], a[1], a[2]], [a[0], a[1], b[2]], [a[0], b[1], b[2]], [a[0], b[1], a[2]], [1, 0, 0]),
+        "side_hi": ([b[0], a[1], a[2]], [b[0], b[1], a[2]], [b[0], b[1], b[2]], [b[0], a[1], b[2]], [-1, 0, 0]),
+        "front":   ([a[0], a[1], b[2]], [b[0], a[1], b[2]], [b[0], b[1], b[2]], [a[0], b[1], b[2]], [0, 0, -1]),
+    }
+    out = []
+    for name in spec["faces"]:
+        *q, n = faces[name]
+        q = np.array(q, float)
+        if np.dot(np.cross(q[1] - q[0], q[2] - q[0]), n) < 0:
+            q = q[::-1]                                  # counter-clockwise seen from inside the cavity
+        m = Mesh(q, [[0, 1, 2], [0, 2, 3]], np.tile(np.array(n, float), (4, 1)), np.tile(np.array(spec["uv"], float), (4, 1)), atlas, "lining_" + name)
+        out.append(m.apply(M))
+    return out
+
+
 # ----------------------------------------------------------------------------- build
 
 def build(cfg, parts, skin_mat, info=None):
@@ -173,16 +201,19 @@ def build(cfg, parts, skin_mat, info=None):
     wheel_src = {w["name"]: parts[w["node"]] for w in cfg["wheels"]}
     extra_src = [parts[n] for n in cfg.get("parts", [])]
     node_src = [(n, parts[n["node"]]) for n in cfg.get("nodes", [])]
+    door_src = [(d, parts[d["node"]]) for d in cfg.get("doors", [])]
+    door_of_glass = {d["glass"]: d["name"] for d in cfg.get("doors", []) if d.get("glass")}
     control_src = {c["name"]: [parts[n] for n in c["nodes"]] for c in cfg.get("controls", [])}
     glass_nodes = ([cfg["glass"]["node"]] if isinstance(cfg["glass"]["node"], str) else cfg["glass"]["node"]) if cfg.get("glass") else []
     glass_srcs = [parts[n] for n in glass_nodes]           # one glass mesh, or several (a van's rear door windows are their own meshes)
+    glass_owner = [door_of_glass.get(n) for n in glass_nodes]   # the door node a glass mesh rides on (None: the hull)
     steer_src = parts[cfg["steering"]["node"]] if cfg.get("steering") else None
     dx_of = {w["name"]: w.get("dx", 0.0) for w in cfg["wheels"]}
 
     # frame: yaw, then ground = lowest wheel point, then the footprint centre
     wm = {n: m.apply(yaw @ w) for n, (m, w) in wheel_src.items()}
     ground = -min(bbox(m)[0][1] for m in wm.values())
-    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + glass_srcs + [t for t in (steer_src,) if t] + [t for _, t in node_src] + list(wheel_src.values())
+    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + glass_srcs + [t for t in (steer_src,) if t] + [t for _, t in node_src] + [t for _, t in door_src] + list(wheel_src.values())
     pts = np.vstack([m.apply(yaw @ w).v for m, w in drawn])
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     cz = -(lo[2] + hi[2]) / 2 if cfg["origin"]["centre"] == "bounds" else 0.0
@@ -208,7 +239,26 @@ def build(cfg, parts, skin_mat, info=None):
         return out
 
     hull = mdl.node("hull", cfg["id"])
-    mdl.add(hull, final(body_l, body_w))
+    body_cut, lids = body_l, []
+    for cut in cfg.get("cuts", []):
+        # the lid: the body triangles whose centroid is in the box (source frame; the body node's own matrix puts its mesh there)
+        lo, hi = np.array(cut["box"]["min"], float), np.array(cut["box"]["max"], float)
+        cen = body_cut.v[body_cut.f].mean(axis=1) @ body_w[:3, :3].T + body_w[:3, 3]
+        inside = np.all((cen >= lo) & (cen <= hi), axis=1)
+        assert inside.any(), f"cut {cut['name']}: no body triangle in the box"
+        lids.append((cut, body_cut.subset(inside), int(inside.sum())))
+        body_cut = body_cut.subset(~inside)
+    mdl.add(hull, final(body_cut, body_w))
+    for cut, piece, _ in lids:
+        mdl.node(cut["name"], hull, put(cut["hinge"]))
+        mdl.add(cut["name"], final(piece, body_w))
+        if cut.get("lining"):
+            mdl.add(hull, *lining_meshes(cut["lining"], atlas, M))
+    door_pos = {}
+    for d, src in door_src:
+        door_pos[d["name"]] = put(src[1][:3, 3] if d.get("hinge", "pivot") == "pivot" else d["hinge"])
+        mdl.node(d["name"], hull, door_pos[d["name"]])
+        mdl.add(d["name"], final(*src))
     for e in extra_src:
         mdl.add(hull, final(*e))
 
@@ -276,6 +326,7 @@ def build(cfg, parts, skin_mat, info=None):
         gs = [g_l.apply(M @ g_w) for g_l, g_w in glass_srcs]
         g = K.merge(gs) if len(gs) > 1 else gs[0]
         comp = components(g)
+        face_owner = np.concatenate([np.full(len(x.f), i) for i, x in enumerate(gs)])
         inside = put(cfg["glass"]["inside"])
     for ci in range(comp.max() + 1 if glass_srcs else 0):
         sub = g.subset(comp == ci)
@@ -286,20 +337,23 @@ def build(cfg, parts, skin_mat, info=None):
         if np.dot(nrm, c0 - inside) < 0:
             nrm = -nrm
         outline = convex_outline(pts, nrm)
-        found.append((pane_id(nrm, c0, None), c0, sub, outline))
+        found.append((pane_id(nrm, c0, None), c0, sub, outline, glass_owner[face_owner[int(np.argmax(comp == ci))]]))
     # order: windscreen, rear, then the sides from the front to the back, left (-x) before right
     rank = {"windscreen": 0, "rear": 1}
     found.sort(key=lambda t: (rank.get(t[0], 2), t[0], t[1][2], t[1][0]))
     counted = {}
     kit_node = K.Node("panes")
-    for pid, c0, sub, outline in found:
+    for pid, c0, sub, outline, owner in found:
         k = counted.get(pid, 0)
         counted[pid] = k + 1
         total = sum(1 for t in found if t[0] == pid)
         name = pid if total == 1 else f"{pid}_{k + 1}"
         gl.pane(kit_node, name, [], [tuple(float(x) for x in p) for p in outline], inside=tuple(inside))
         n = len(gl.panes) - 1
-        mdl.node(f"glass_{n}", hull)
+        if owner:                                      # a door leaf's pane is a child of the leaf (docs/glass.md): the closed pose is what vehicles.json declares
+            mdl.node(f"glass_{n}", owner, door_pos[owner])
+        else:
+            mdl.node(f"glass_{n}", hull)
         sub.mat, sub.n, sub.uv = GLASS_MAT, None, None
         mdl.add(f"glass_{n}", sub)
     mdl.glass = gl
@@ -337,7 +391,10 @@ def build(cfg, parts, skin_mat, info=None):
             mdl.add(hull, box(centre, (lp["lens"][0], lp["lens"][1], 0.012), HEAD_MAT if lp["kind"] == "head" else TAIL_MAT, lp["name"] + "_lens"))
     for e in cfg.get("empties", []):
         mdl.node(e["name"], hull, put(e["pos"]))
-    return mdl, dict(M=M, wheels=wheels, controls=controls, gl=gl, seats=seats, lamps=lamps, body=final(body_l, body_w), ground=ground, centre_z=cz)
+    hinges = {d["name"]: r3(door_pos[d["name"]]) for d, _ in door_src}
+    hinges.update({cut["name"]: r3(put(cut["hinge"])) for cut, _, _ in lids})
+    cuts = {cut["name"]: dict(box=cut["box"], triangles=n_tri, hinge=r3(put(cut["hinge"])), **({"lining": cut["lining"]} if cut.get("lining") else {})) for cut, _, n_tri in lids}
+    return mdl, dict(M=M, hinges=hinges, cuts=cuts, wheels=wheels, controls=controls, gl=gl, seats=seats, lamps=lamps, body=final(body_l, body_w), ground=ground, centre_z=cz)
 
 
 def ceiling_above(body, p):
@@ -559,6 +616,10 @@ def main():
         "glass": [{"id": p["id"], "centre": r3(p["centre"]), "normal": r3(p["normal"]), "size": r3(p["size"]), "outline": [r3(q) for q in p["outline"]]} for p in info["gl"].panes],
         "nodes": sorted(n for n in mdl.nodes),
     }
+    if info["hinges"]:                                   # the swinging nodes (doors, a cut lid): the hinge point of each, game frame, the node's origin
+        facts["hinges"] = info["hinges"]
+    if info["cuts"]:
+        facts["cuts"] = info["cuts"]
     problems = []
     box_ = facts["suggested"]
     for k, s in facts["seats"].items():
