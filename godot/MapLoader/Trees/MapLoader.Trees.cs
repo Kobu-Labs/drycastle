@@ -4,6 +4,8 @@ using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Data;
 using GVector3 = Godot.Vector3;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 /// <summary>
@@ -40,30 +42,44 @@ public sealed partial class MapLoader
     /// <c>model.base_uv2</c>) and where the two data files are (not in the viewer): else the trees keep the code-built solids. It does not ask whether
     /// this machine has the pack or has pack trees switched off: the server and every client must build the same solids.
     /// </summary>
-    TreeModel DressTrees(TreeModel model)
+    static TreeModel DressTrees(List<TreeInstance> trees, TreeModel model, string treesJson, out string? warning)
     {
-        if (_trees.Count == 0 || !PackTreeSettings.ReadBaseUv2(TreesJson)) return model;
+        warning = null;
+        if (trees.Count == 0 || !PackTreeSettings.ReadBaseUv2(treesJson)) return model;
         if (!Godot.FileAccess.FileExists(TreeLimbsPath) || !Godot.FileAccess.FileExists(PackTreeConfigPath)) return model;
         try
         {
             var limbs = TreeLimbsFile.Parse(Godot.FileAccess.Open(TreeLimbsPath, Godot.FileAccess.ModeFlags.Read).GetAsText());
             var cfg = PackTreeConfig.Parse(Godot.FileAccess.Open(PackTreeConfigPath, Godot.FileAccess.ModeFlags.Read).GetAsText());
-            return PackTreeLimbs.Dress(_trees, model, TreesJson, cfg, limbs);
+            return PackTreeLimbs.Dress(trees, model, treesJson, cfg, limbs);
         }
         catch (DataFileException e)
         {
-            PackWarn("limbs", $"tree solids: {e.Message}; the trees keep the code-built solids");
+            warning = $"tree solids: {e.Message}; the trees keep the code-built solids";
             return model;
         }
+    }
+
+    /// <summary>trees.json parsed and dressed (<see cref="DressTrees"/>): pure, safe on a worker thread.</summary>
+    static (List<TreeInstance> Trees, TreeModel Model, string? Warning) ParseTrees(string treesJson)
+    {
+        var trees = TreeColliders.Parse(treesJson, out var model).ToList();
+        var dressed = DressTrees(trees, model, treesJson, out var warning);
+        return (trees, dressed, warning);
     }
 
     /// <summary>Tree colliders in batches (thousands of shapes): yields the fraction done after each batch so a loading screen can redraw.</summary>
     IEnumerable<float> BuildTreeColliderSteps()
     {
         const int Batch = 300;
+        var tp = LoadTimers.Start();
         _trees.Clear();
-        _trees.AddRange(TreeColliders.Parse(TreesJson, out var model));
-        model = DressTrees(model);
+        var ahead = Ahead?.Trees;
+        if (ahead != null) foreach (var w in WaitFor(ahead, 0f)) yield return w;
+        var (parsed, model, warning) = ahead != null ? ahead.GetAwaiter().GetResult() : ParseTrees(TreesJson);
+        _trees.AddRange(parsed);
+        if (warning != null) PackWarn("limbs", warning);
+        LoadTimers.Lap("trees.parse", tp);
         TreeModel = model;
         var bodies = new Dictionary<(int, int, PartRole), StaticBody3D>();
         var n = 0;
@@ -79,7 +95,7 @@ public sealed partial class MapLoader
                     body = NewSolidBody(part.Role == PartRole.Trunk ? "TreeTrunks" : "TreeCrowns", part.Layer, part.Group);
                     bodies[key] = body;
                 }
-                body.AddChild(SolidShape(part));
+                AddSolid(body, part);
             }
         }
         // Bodies are filled while detached and attached once each: adding a shape to a body that is already in the tree
@@ -145,6 +161,25 @@ public sealed partial class MapLoader
     /// <summary>The Godot shape of one solid part: a box with the part's yaw, or a convex pyramid. Shapes are shared by key.</summary>
     CollisionShape3D SolidShape(SolidPart p)
     {
+        var (shape, xf) = SolidShapeOf(p);
+        return new CollisionShape3D { Shape = shape, Transform = xf };
+    }
+
+    /// <summary>
+    /// Adds one solid part to a body as a shape owner of the body itself, without a CollisionShape3D node: the trees and ground objects of
+    /// the village have about 150,000 parts, and a node each made them half the scene tree. Fill the body before it enters the tree.
+    /// </summary>
+    void AddSolid(CollisionObject3D body, SolidPart p)
+    {
+        var (shape, xf) = SolidShapeOf(p);
+        var owner = body.CreateShapeOwner(body);
+        body.ShapeOwnerAddShape(owner, shape);
+        body.ShapeOwnerSetTransform(owner, xf);
+    }
+
+    /// <summary>The shared Godot shape of one solid part and its transform in the body: a box with the part's yaw, or a convex pyramid.</summary>
+    (Shape3D Shape, Transform3D Transform) SolidShapeOf(SolidPart p)
+    {
         var key = SolidShapeKeys.Of(p);
         if (!_solidShapes.TryGetValue(key, out var shape))
         {
@@ -154,10 +189,10 @@ public sealed partial class MapLoader
         var basis = Basis.Identity.Rotated(GVector3.Up, p.Yaw);
         if (p.Shape != PartShape.Box)
             // the pyramid and the frustum are built around their base centre, in the solid's yawed frame
-            return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)) };
+            return (shape, new Transform3D(basis, ToGodot(p.X, p.Y, p.Z0)));
         var mid = (p.Z0 + p.Z1) / 2;
         // a rotation about Godot's up axis by the map yaw maps the box's X onto the map u axis (cos, sin)
-        return new CollisionShape3D { Shape = shape, Transform = new Transform3D(basis, ToGodot(p.X, p.Y, mid)) };
+        return (shape, new Transform3D(basis, ToGodot(p.X, p.Y, mid)));
     }
 
     static BoxShape3D BoxShape(SolidShapeKeys.Key k)
