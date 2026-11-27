@@ -108,7 +108,8 @@ public sealed class HitJobKind : IJobKind
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {
-        if (CartelSpots.Claim(job, book, _map(), CartelZones.HitKind, _rng, _data.MinContactM, _data.ApartM, out refusal) is not { } spot) return null;
+        var map = _map();
+        if (CartelSpots.Claim(job, book, map, CartelZones.HitKind, _rng, map.Contact?.Position, "the Contact", _data.MinContactM, _data.ApartM, out refusal) is not { } spot) return null;
         var party = new JobPartySet(_parties, job.Owner);
         var (gunmen, enforcers) = Guards(job.Tier, party.Count);
         if (_world.Spawn(new HitCrewOrder(spot, gunmen, enforcers, _data.RingM), party.Contains) is not { } crew) { refusal = "The rival crew could not be put down now (the world is full)."; return null; }

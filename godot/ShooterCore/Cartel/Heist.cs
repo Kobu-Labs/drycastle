@@ -287,41 +287,6 @@ public static class HeistRules
 }
 
 /// <summary>
-/// The Drop point of a Job (docs/cartel.md "Who runs a job": two Jobs never share one): a random <c>cartel_drop</c> candidate that no other Job holds, at least <c>minFrom</c> from a point (the
-/// objective) and <c>apart</c> from every drop point another Job holds, reserved in the book as <see cref="Key"/>.
-/// </summary>
-public static class JobDrops
-{
-    const string Prefix = CartelZones.DropKind + ":";
-
-    /// <summary>The book's name of drop point number <paramref name="index"/> of <see cref="CartelMap.DropPoints"/>.</summary>
-    public static string Key(int index) => Prefix + index;
-
-    /// <summary>The drop points other Jobs hold now.</summary>
-    public static IEnumerable<Vector3> Held(CartelMap map, JobBook book)
-    {
-        for (var i = 0; i < map.DropPoints.Count; i++) if (book.IsReserved(Key(i))) yield return map.DropPoints[i];
-    }
-
-    /// <summary>Picks and reserves a drop point for <paramref name="job"/>; null when none is left that keeps the rules.</summary>
-    public static Vector3? Reserve(CartelMap map, JobBook book, Job job, Random rng, Vector3 from, float minFromM, float apartM)
-    {
-        var apart = CartelMap.Apart(Held(map, book).ToList(), apartM);
-        var min2 = minFromM * minFromM;
-        var free = new List<int>();
-        for (var i = 0; i < map.DropPoints.Count; i++)
-        {
-            var p = map.DropPoints[i];
-            var dx = p.X - from.X; var dz = p.Z - from.Z;
-            if (!book.IsReserved(Key(i)) && dx * dx + dz * dz >= min2 && apart(p)) free.Add(i);
-        }
-        if (free.Count == 0) return null;
-        var pick = free[rng.Next(free.Count)];
-        return book.Reserve(job, Key(pick)) ? map.DropPoints[pick] : null;
-    }
-}
-
-/// <summary>
 /// The objective's area of a Harvest (docs/cartel.md "Harvest"): a plantation's outline (Godot ground axes x, z) grown by a margin. The van stands in it while it is inside the outline or
 /// within the margin of its edge; its centre (the outline's mean) is where the marker points and the Assaults head.
 /// </summary>

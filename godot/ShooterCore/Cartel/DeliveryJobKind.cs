@@ -76,7 +76,8 @@ public sealed class DeliveryJobKind : IJobKind
 
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {
-        if (CartelSpots.Claim(job, book, _map(), CartelZones.DropKind, _rng, _data.MinContactM, _data.ApartM, out refusal) is not { } drop) return null;
+        var map = _map();
+        if (CartelSpots.Claim(job, book, map, CartelZones.DropKind, _rng, map.Contact?.Position, "the Contact", _data.MinContactM, _data.ApartM, out refusal) is not { } drop) return null;
         var party = new JobPartySet(_parties, job.Owner);
         if (_world.Give(_duffel, party, job.Leader) is not { } duffel) { refusal = "No duffel for you: you carry one already, or the world is full."; return null; }
         return new Run(this, party, duffel, drop);

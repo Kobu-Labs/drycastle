@@ -82,11 +82,7 @@ internal sealed class HeistServer
     {
         refusal = null;
         var members = Parties.MembersOf(job.Owner);
-        if (JobDrops.Reserve(Map(), book, job, _rng, goal.Centre, data.DropMinM, data.DropApartM) is not { } drop)
-        {
-            refusal = $"No drop point is free {data.DropMinM:F0} m or more from {goal.Place}.";
-            return null;
-        }
+        if (CartelSpots.Claim(job, book, Map(), CartelZones.DropKind, _rng, goal.Centre, goal.Place, data.DropMinM, data.DropApartM, out refusal) is not { } drop) return null;
         var (at, yaw) = VanSpot(contact, data.VanSpawnMinM);
         if (Vehicles.Spawn(data.VanType, at, yaw, members) is not { } van) { refusal = "The Cartel van cannot be put down."; return null; }
         var capacity = CarCargo.Capacity(van);

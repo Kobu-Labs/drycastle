@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <summary>
 /// The Drop points and Hit spots the running Jobs hold (docs/cartel.md "Who runs a job": two Jobs never share a drop point or a target spot). A Job claims one in the book under
 /// <see cref="Key"/> (<c>"cartel_drop:3"</c>, the index in <see cref="CartelMap.DropPoints"/> or <see cref="CartelMap.HitSpots"/>); a new pick stays <c>apart_m</c> from every point any running Job holds
-/// (of both kinds) and a data distance from the Contact. Heists that end at a drop point claim it the same way.
+/// (of both kinds) and a data distance from a point: the Contact for a simple Job, the objective for a Heist's Drop point.
 /// </summary>
 public static class CartelSpots
 {
@@ -36,24 +36,25 @@ public static class CartelSpots
     }
 
     /// <summary>
-    /// Picks a random point of the kind at least <paramref name="minFromContactM"/> (ground metres) from the Contact and <paramref name="apartM"/> from every point a running Job holds, and claims it
-    /// for <paramref name="job"/>. Null with the reason when none is left: all held by Jobs, or none far enough from the Contact on this map (the book releases nothing: a refused Begin is
-/// released by the book).
+    /// Picks a random point of the kind at least <paramref name="minFromM"/> (ground metres) from <paramref name="from"/> (the Contact for a simple Job, the objective for a Heist's Drop point;
+    /// none: no such rule) and <paramref name="apartM"/> from every point a running Job holds, and claims it for <paramref name="job"/>. Null with the reason when there is none: the map has none of
+    /// the kind, none lies far enough from <paramref name="fromName"/> ("the Contact", "the plantation"), or the Jobs hold every one that does (the book releases nothing: a refused Begin is
+    /// released by the book).
     /// </summary>
-    public static Vector3? Claim(Job job, JobBook book, CartelMap map, string zoneKind, Random rng, float minFromContactM, float apartM, out string? refusal)
+    public static Vector3? Claim(Job job, JobBook book, CartelMap map, string zoneKind, Random rng, Vector3? from, string fromName, float minFromM, float apartM, out string? refusal)
     {
         refusal = null;
         var pool = Pool(map, zoneKind);
         var what = zoneKind == CartelZones.HitKind ? "hit spot" : "drop point";
         if (pool.Count == 0) { refusal = $"This map has no {what}."; return null; }
         var apart = CartelMap.Apart(Held(book, map), apartM);
-        var contact = map.Contact;
-        bool FarEnough(Vector3 p) => contact is not { } c || c.GroundDistance(p) >= minFromContactM;
+        var min2 = minFromM * minFromM;
+        bool FarEnough(Vector3 p) => from is not { } f || Vector2.DistanceSquared(new Vector2(p.X, p.Z), new Vector2(f.X, f.Z)) >= min2;
         var pick = CartelMap.Pick(pool, rng, p => apart(p) && FarEnough(p) && !book.IsReserved(Key(zoneKind, IndexOf(pool, p))));
         if (pick is not { } at)
         {
-            // the Jobs free their points as they end; a map whose every point sits near the Contact never will
-            refusal = pool.Any(FarEnough) ? $"No {what} is free now: another job holds every one." : $"No {what} is far enough from the Contact on this map.";
+            // the Jobs free their points as they end; a map whose every point sits near the from point never will
+            refusal = pool.Any(FarEnough) ? $"No {what} {minFromM:F0} m or more from {fromName} is free now: another job holds every one." : $"No {what} is far enough from {fromName} on this map.";
             return null;
         }
         book.Reserve(job, Key(zoneKind, IndexOf(pool, at)));

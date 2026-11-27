@@ -268,10 +268,14 @@ public class SimpleJobsTests
         var test = new TestJobKind(CartelFile.Default);
         book.Register(test);
         var job = book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, out _)!;
-        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.DropKind, new Random(1), 10_000, 0, out var why));
+        var contact = Map.Contact!.Value.Position;
+        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.DropKind, new Random(1), contact, "the Contact", 10_000, 0, out var why));
         Assert.Equal("No drop point is far enough from the Contact on this map.", why);
-        Assert.NotNull(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), 100, 0, out _));
-        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), 100, 1_000, out why)); // the other is within apart_m of the one held
-        Assert.Equal("No hit spot is free now: another job holds every one.", why);
+        Assert.NotNull(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), contact, "the Contact", 100, 0, out _));
+        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), contact, "the Contact", 100, 1_000, out why)); // the other is within apart_m of the one held
+        Assert.Equal("No hit spot 100 m or more from the Contact is free now: another job holds every one.", why);
+        // a Heist's drop keeps apart from the held hit spot too: every drop point lies within 1 000 m of it
+        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.DropKind, new Random(1), contact, "the plantation", 100, 1_000, out why));
+        Assert.Equal("No drop point 100 m or more from the plantation is free now: another job holds every one.", why);
     }
 }

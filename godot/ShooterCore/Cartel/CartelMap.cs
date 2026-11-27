@@ -44,11 +44,11 @@ public readonly record struct ContactPose(Vector3 Position, Vector2 Facing)
 
 /// <summary>
 /// The cartel's map data as the server needs it (static, never sent: a client reads the same map): the Contact's pose and the candidate points of the
-/// Drop point and Hit spot zones. Pure, like <see cref="ZonePoints"/>: the server owns the pick and its random generator. A map without a Contact has no
-/// cartel (<see cref="HasCartel"/> false, no error); a map without a zone of a kind has no point of it, and a pick returns null (the Job refuses to start).
+/// Drop point and Hit spot zones. Pure, like <see cref="ZonePoints"/>: the server owns the random generator; a Job claims its point with <see cref="CartelSpots.Claim"/>. A map
+/// without a Contact has no cartel (<see cref="HasCartel"/> false, no error); a map without a zone of a kind has no point of it, and a claim refuses (the Job does not start).
 /// <para>
-/// Points of one kind can lie in one drawn zone, so "two jobs never share a drop point" is kept by distance: pass <see cref="Apart"/> (the running jobs'
-/// points) as the filter of a pick, combined with any other rule (far from the objective) by the caller.
+/// Points of one kind can lie in one drawn zone, so "two jobs never share a drop point" is kept by distance too: the claim's filter is <see cref="Apart"/> (the running jobs'
+/// points) with its other rules (far from the Contact or the objective).
 /// </para>
 /// </summary>
 public sealed class CartelMap
@@ -70,12 +70,6 @@ public sealed class CartelMap
 
     public static CartelMap From(ZonePoints points, ContactPose? contact)
         => new(contact, points.Points(CartelZones.DropKind), points.Points(CartelZones.HitKind));
-
-    /// <summary>A random drop point that <paramref name="allowed"/> accepts (every one when null); null when none does.</summary>
-    public Vector3? PickDrop(Random rng, Func<Vector3, bool>? allowed = null) => Pick(DropPoints, rng, allowed);
-
-    /// <summary>A random hit spot that <paramref name="allowed"/> accepts (every one when null); null when none does.</summary>
-    public Vector3? PickHit(Random rng, Func<Vector3, bool>? allowed = null) => Pick(HitSpots, rng, allowed);
 
     /// <summary>A uniform pick among the points of <paramref name="pool"/> that <paramref name="allowed"/> accepts; null when none does.</summary>
     public static Vector3? Pick(IReadOnlyList<Vector3> pool, Random rng, Func<Vector3, bool>? allowed = null)

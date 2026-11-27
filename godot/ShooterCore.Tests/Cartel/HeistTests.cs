@@ -215,15 +215,15 @@ public class HeistTests
     sealed class DropKind(CartelMap map, Vector3 from, float minM, float apartM) : IJobKind
     {
         public Vector3? Got;
+        public string? Why;
         public string Id => "drop";
         public string Name => "Drop";
         public float Seconds(int tier) => 60;
         public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
         {
-            refusal = null;
-            Got = JobDrops.Reserve(map, book, job, new Random(1), from, minM, apartM);
-            if (Got == null) { refusal = "none"; return null; }
-            return new Obj();
+            Got = CartelSpots.Claim(job, book, map, CartelZones.DropKind, new Random(1), from, "the objective", minM, apartM, out refusal);
+            Why = refusal;
+            return Got == null ? null : new Obj();
         }
         sealed class Obj : IJobObjective { public JobStep Step(Job job, float dt) => JobStep.Running; }
     }
@@ -244,10 +244,26 @@ public class HeistTests
         Assert.Equal(2, got.Count); // (10,0,0) is too near, 500 and 520 are too close to share
         Assert.DoesNotContain(new Vector3(10, 0, 0), got);
         Assert.Contains(new Vector3(0, 0, 900), got);
-        Assert.Equal(2, JobDrops.Held(map, book).Count());
+        Assert.Equal("No drop point 300 m or more from the objective is free now: another job holds every one.", kind.Why);
+        Assert.Equal(2, CartelSpots.Held(book, map).Count);
         var ended = new List<JobEnded>();
         book.FailAll(JobFailReason.RoundReset, new NoParties(), ended);
-        Assert.Empty(JobDrops.Held(map, book)); // released with the Jobs
+        Assert.Empty(CartelSpots.Held(book, map)); // released with the Jobs
+    }
+
+    [Fact]
+    public void AHeistsDropRefusalSaysWhetherTheMapHasNoneNoneFarEnoughOrNoneFree()
+    {
+        string? Why(CartelMap map, float minM)
+        {
+            var book = new JobBook();
+            var kind = new DropKind(map, Vector3.Zero, minM, 40);
+            book.Register(kind);
+            Assert.Null(book.Start("cartel", kind, 1, JobOwner.Solo(1), 1, out var why));
+            return why;
+        }
+        Assert.Equal("This map has no drop point.", Why(CartelMap.Empty, 300));
+        Assert.Equal("No drop point is far enough from the objective on this map.", Why(MapWithDrops(new Vector3(10, 0, 0)), 300));
     }
 
     [Fact]
