@@ -85,6 +85,26 @@ public sealed class CartelFile : IVersioned
     /// <summary>A kind's own section, or an undefined element when the file has none (the kind's defaults).</summary>
     public JsonElement JobSection(string kind) => Jobs.TryGetValue(kind, out var s) ? s : default;
 
+    /// <summary>
+    /// The top speed (m/s) of a Cartel van that has a Duffel loaded: <c>loaded_max_kmh</c> of the Heist whose <c>van_type</c> is this vehicle type (the slowest, should two name it), or null for a type no Heist
+    /// uses as its van. The server and the driver's client both ask this, so they hold the same cap (<see cref="Vehicles.SpeedGovernor"/>).
+    /// </summary>
+    public float? LoadedCapMps(string vehicleType)
+    {
+        if (_caps.TryGetValue(vehicleType, out var known)) return known;
+        float? cap = null;
+        foreach (var kind in new[] { HarvestData.KindId, TrapHouseHeistData.KindId }) // the Heists; a section the file lacks is the kind's defaults
+        {
+            var data = DataFile.Section<HeistData>(JobSection(kind), $"cartel.json: jobs.{kind}");
+            if (data.VanType != vehicleType) continue;
+            var mps = data.LoadedMaxKmh / 3.6f;
+            cap = cap is { } c ? MathF.Min(c, mps) : mps;
+        }
+        return _caps[vehicleType] = cap;
+    }
+
+    readonly Dictionary<string, float?> _caps = new(); // the loaded cap by vehicle type, read from the sections once
+
     CartelFile Validate()
     {
         static DataFileException Bad(string text) => new($"cartel.json: {text}");

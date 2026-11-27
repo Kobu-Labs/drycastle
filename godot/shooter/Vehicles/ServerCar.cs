@@ -354,7 +354,7 @@ public partial class ServerCar : CharacterBody3D
     public void StepDrive(in DriveInput input, float dt)
     {
         var before = Drive;
-        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld!, TowEffectNow());
+        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : SpeedGovernor.Apply(input, Drive.Speed, SpeedCap?.Invoke()), dt, DriveWorld!, TowEffectNow());
         if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
         if (Drive.Impact > DriveImpact) DriveImpactVelocity = before.Velocity;
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
@@ -391,6 +391,8 @@ public partial class ServerCar : CharacterBody3D
     /// inputs would (<see cref="StepDrive"/>), and the car is hurt by what it hits. Null: nobody drives it (it coasts hands off).
     /// </summary>
     public DriveInput? NpcInput;
+    /// <summary>The top speed (m/s) its driver's throttle may not push it past right now, or null (none): the Cartel van with a Duffel loaded (<c>CargoServer</c>, cartel.json <c>loaded_max_kmh</c>). Asked at every drive step; the driver's client holds the same cap in its prediction (<see cref="SpeedGovernor"/>).</summary>
+    public Func<float?>? SpeedCap;
 
     /// <summary>The brakes are on and the driver's keys ignored (a Scud truck while its rack moves): every drive step is <see cref="DriveInput.Held"/>. The driver's client does the same from the launcher's state.</summary>
     public bool Immobilised;

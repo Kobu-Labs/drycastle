@@ -191,6 +191,8 @@
       // The Cartel van: van_type (vehicles.json) on the road spot nearest the Contact at least van_spawn_min_m from him, reserved for the party. Its bay takes a duffel up to
       // van_load_margin_m outside its volume too (the closed rear doors).
       "van_type": "cartel_van",
+      // The van's top speed with any duffel loaded, km/h (empty it drives as vehicles.json says): a governor on the driver's throttle, the same on the server and the predicting client.
+      "loaded_max_kmh": 60,
       "van_spawn_min_m": 8,
       "van_load_margin_m": 0.35,
       // The drop (a Receiver, see "receivers": a stash house, a helicopter or a boat; the heists no longer use cartel_drop points): at least drop_min_m from the plantation's centre and drop_apart_m from another job's.
@@ -285,6 +287,8 @@
       "max_crew": 8,
       "max_assaults_alive": 3,
       "van_type": "cartel_van",
+      // The van's top speed with any duffel loaded, km/h (empty it drives as vehicles.json says): a governor on the driver's throttle, the same on the server and the predicting client.
+      "loaded_max_kmh": 60,
       "van_spawn_min_m": 8,
       "van_load_margin_m": 0.35,
       "drop_min_m": 300,

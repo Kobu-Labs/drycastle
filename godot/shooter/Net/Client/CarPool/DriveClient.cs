@@ -25,13 +25,15 @@ internal sealed class DriveClient
     readonly Func<ushort, bool> _carThrown;
     readonly Action<CarView> _placeSolid;
     readonly Func<ushort, bool> _immobilised;
+    readonly Func<ushort, float?> _speedCap;
 
     /// <param name="carThrown">The Bigfoot holds or threw this vehicle: the server flies it and ignores the driver's input.</param>
     /// <param name="placeSolid">Puts a vehicle's solid box where its records say.</param>
     /// <param name="immobilised">A Scud truck's rack moves: the brakes are on, as the server steps it.</param>
-    public DriveClient(ClientContext ctx, Func<ushort, bool> carThrown, Action<CarView> placeSolid, Func<ushort, bool> immobilised)
+    /// <param name="speedCap">The top speed (m/s) the vehicle's throttle is governed to now (a Cartel van with a Duffel loaded), or null: the server holds the same cap in its step (<see cref="SpeedGovernor"/>).</param>
+    public DriveClient(ClientContext ctx, Func<ushort, bool> carThrown, Action<CarView> placeSolid, Func<ushort, bool> immobilised, Func<ushort, float?> speedCap)
     {
-        _ctx = ctx; _carThrown = carThrown; _placeSolid = placeSolid; _immobilised = immobilised;
+        _ctx = ctx; _carThrown = carThrown; _placeSolid = placeSolid; _immobilised = immobilised; _speedCap = speedCap;
     }
 
     /// <summary>A vehicle left the world.</summary>
@@ -210,6 +212,7 @@ internal sealed class DriveClient
     {
         if (_drive == null || _ctx.Dead) return;
         var input = DriverInput(ni);
+        _drive.Predict.SpeedCapMps = _speedCap(_drive.CarId); // the governor: what the server will hold it to at this input
         if (input.Throttle != _latKeys.Throttle || input.Steer != _latKeys.Steer || input.Handbrake != _latKeys.Handbrake)
         {
             _latKeys = input; _latSeq = ni.Seq; _latAt = _ctx.Now; // the first input with new keys: its drawn change is timed below
@@ -239,6 +242,7 @@ internal sealed class DriveClient
             var ahead = (float)Engine.GetPhysicsInterpolationFraction();
             if (ahead > 0.001f && !_ctx.Dead)
             {
+                _drive.Predict.SpeedCapMps = _speedCap(_drive.CarId);
                 var now = NetInput.From(0, _ctx.Me.Sample(), 0, 0);
                 var stepped = _drive.Predict.Ahead(DriverInput(now), ahead / Wire.TickRate); // the vehicle and, with a trailer on the hook, the trailer after it
                 s = stepped.State; _drive.DrawnPhi = stepped.Trailer.Phi;

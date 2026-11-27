@@ -12,18 +12,19 @@ namespace Drycastle.Shooter.Net.Server.CarPool;
 /// The cargo vehicles on the server (GLOSSARY "Cargo volume"; docs/cartel.md "Cargo vehicles"; vehicles.json <c>cargo_volume</c>): every live vehicle whose type has one gets a <see cref="VehicleCargo"/>, added to
 /// the <see cref="DuffelBook"/> when the vehicle appears and removed when it is retired. The interact key of a player on foot at the access point works the doors (<see cref="Use"/>; the doors win the key
 /// there, <see cref="DoorsInReach"/>), they stay as left, everybody is told (<see cref="EventKind.CargoDoors"/>, a joiner too: <see cref="SendOnJoin"/>). A vehicle destroyed, retired or reset (<see cref="ServerCar.LifeEnded"/>)
-/// shuts its doors and its loaded Duffels are destroyed. Which party a volume takes (the Cartel van: its Job's) and who counts what loaded is the loader's (<see cref="VehicleCargo.Restrict"/>).
+/// shuts its doors and its loaded Duffels are destroyed. A Cartel van (the type a Heist's <c>van_type</c> names) with any Duffel loaded is held to cartel.json <c>loaded_max_kmh</c> (<see cref="ServerCar.SpeedCap"/>). Which party a volume takes (the Cartel van: its Job's) and who counts what loaded is the loader's (<see cref="VehicleCargo.Restrict"/>).
 /// </summary>
 internal sealed class CargoServer
 {
     readonly ServerContext _ctx;
     readonly DuffelBook _book;
     readonly float _margin;
+    readonly CartelFile _cartel;
     readonly Dictionary<ushort, (ServerCar Car, VehicleCargo Bay)> _bays = new();
 
-    public CargoServer(ServerContext ctx, Fleet fleet, DuffelBook book, DuffelsFile data)
+    public CargoServer(ServerContext ctx, Fleet fleet, DuffelBook book, DuffelsFile data, CartelFile cartel)
     {
-        _ctx = ctx; _book = book; _margin = (float)data.CargoMarginM;
+        _ctx = ctx; _book = book; _margin = (float)data.CargoMarginM; _cartel = cartel;
         foreach (var car in fleet.Cars) Add(car);
         fleet.Made += Add;
     }
@@ -36,6 +37,7 @@ internal sealed class CargoServer
         if (car.Def.CargoVolume is not { } def || _bays.ContainsKey(car.Id)) return;
         var bay = new VehicleCargo(car.Id, def, () => car.Destroyed || car.Retired ? null : CarPose.Present(car), _margin);
         _bays[car.Id] = (car, bay);
+        if (_cartel.LoadedCapMps(car.Def.Id) is { } cap) car.SpeedCap = () => bay.Loaded > 0 ? cap : null; // a Cartel van with any Duffel loaded: its driver's throttle is governed (cartel.json loaded_max_kmh)
         _book.AddVolume(bay);
         car.LifeEnded += OnLifeEnded;
     }

@@ -323,7 +323,7 @@ public partial class NetClient : Node
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _server.Peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
         _houses.PaneFrameChanged = _glass.OnHousePaneFrame; // a hollow house's pane without a frame shows no shard rim
-        _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
+        _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id), id => _duffels.SpeedCapOf(id, Cartel));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), _session.FlightCorrection);
@@ -590,6 +590,7 @@ public partial class NetClient : Node
     void RenderVehicles(double delta)
     {
         _vehicles.Render(delta);
+        _duffels.RenderLoaded(); // the bags on the vehicles and Receivers, from the transforms they were just drawn at
         _harvester.Render((float)delta);
         _aircraftClient.Render(delta);
     }

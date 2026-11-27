@@ -267,6 +267,8 @@ public class HeistData
     public int MaxAssaultsAlive { get; set; } = 3;
     /// <summary>The vehicle type the Heist puts down (vehicles.json), on the road spot nearest the Contact at least van_spawn_min_m from him.</summary>
     public string VanType { get; set; } = "cartel_van";
+    /// <summary>The van's top speed with any Duffel loaded, km/h (empty it drives as vehicles.json says): a governor on the throttle, held by the server and the driver's predicting client alike (<see cref="Vehicles.SpeedGovernor"/>, <see cref="CartelFile.LoadedCapMps"/>).</summary>
+    public float LoadedMaxKmh { get; set; } = 60;
     public float VanSpawnMinM { get; set; } = 8;
     /// <summary>The van's bay takes a Duffel this much outside its volume too (the closed rear doors).</summary>
     public float VanLoadMarginM { get; set; } = 0.35f;
@@ -297,6 +299,7 @@ public class HeistData
         if (MaxCrew is < 1 or > Thieves.RaidVanRules.MaxInside) throw Bad($"max_crew must be 1 to {Thieves.RaidVanRules.MaxInside}");
         if (MaxAssaultsAlive < 1) throw Bad("max_assaults_alive must be at least 1");
         if (string.IsNullOrWhiteSpace(VanType)) throw Bad("van_type names a vehicles.json type");
+        if (!float.IsFinite(LoadedMaxKmh) || LoadedMaxKmh <= 0) throw Bad("loaded_max_kmh must be more than 0");
         foreach (var (v, name) in new[] { (VanSpawnMinM, "van_spawn_min_m"), (VanLoadMarginM, "van_load_margin_m"), (DropMinM, "drop_min_m"), (DropApartM, "drop_apart_m") })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
         if (!float.IsFinite(DropGraceSeconds) || DropGraceSeconds < 0) throw Bad("drop_grace_seconds must be 0 or more");
