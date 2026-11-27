@@ -321,6 +321,9 @@ public sealed class VanConfig
     public float RamMassScale { get; set; } = 3;
     public float RamFallbackDamage { get; set; } = 100;
     public VanView View { get; set; } = new();
+
+    /// <summary>A shallow copy (a Heist's Assault van is the Raid van that never leaves: another stay).</summary>
+    public VanConfig Copy() => (VanConfig)MemberwiseClone();
 }
 
 /// <summary>

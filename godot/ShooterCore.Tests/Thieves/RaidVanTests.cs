@@ -501,6 +501,35 @@ public class RaidVanTests
     }
 
     [Fact]
+    public void AHeistsAssaultIsARivalCrewRaidThatHeadsForItsPostStaysFightsOnByItsWreckAndOnlyItsJobRemovesIt()
+    {
+        var rig = new Rig();
+        var path = new RoadPath(new[] { new Vector2(-20, 0), new Vector2(60, 0) });
+        var post = new Vector3(60, 0, 40);
+        var gang = rig.Gangs.NewGang(post, rig.Cfg.Gang, GangCrew.RivalCrew);
+        var stays = rig.Cfg.Van.Copy();
+        stays.StaySeconds = float.PositiveInfinity;
+        var assault = rig.Raids.Launch(Rig.PlanTo(path.End, path), new RoadPath(new[] { path.End, path.End + new Vector2(300, 0) }), new Vector3(-20, 0, 0),
+            new[] { GangMemberKind.Enforcer, GangMemberKind.Enforcer }, gang, stays, null, p => new Vector3(1000, 0, 0), null, post)!;
+        Assert.Same(gang, assault.Gang);
+        Assert.Equal(0, rig.Raids.Active); // the Thieves' wave does not wait for it
+        Assert.Empty(rig.Raids.UsedStops);
+        rig.RunUntil(() => assault.Gang.Count == 2);
+        Assert.Equal(post, assault.Gang.Post); // out of the van, the crew heads for the objective, not the door
+        rig.Run(400);
+        Assert.Equal(RaidVanState.Parked, assault.Van.State); // it never drives off
+        assault.Van.Hit(1, 1000, false);
+        rig.Run(1);
+        Assert.DoesNotContain(assault.Gang.Members, m => m.State == GangMemberState.Flee); // a wreck does not send an Assault's crew off
+        rig.Raids.Clear(); // the Thieves event's end
+        Assert.Contains(assault, rig.Raids.Raids);
+        rig.Raids.Remove(assault); // its Job ended
+        Assert.Empty(rig.Raids.Raids);
+        Assert.Equal(0, assault.Gang.Count);
+        rig.Raids.Remove(assault); // twice does nothing
+    }
+
+    [Fact]
     public void AVanPutAtItsStopWithNoWayInOpensAtOnceAndTheCrewComesOutAtItsDoor()
     {
         var rig = new Rig();

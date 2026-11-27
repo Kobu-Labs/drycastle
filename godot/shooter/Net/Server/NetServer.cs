@@ -114,6 +114,8 @@ public partial class NetServer : Node
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
     RivalCrewServer _rivals = null!;
+    RaidServer _raidVans = null!; // the Thieves' Raid vans, also a Heist's Assaults
+    HeistServer _heists = null!;
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
     EventServer _eventServer = null!; GunshipServer _gunships = null!; FlakServer _flak = null!; StreakServer _streaks = null!; LockOnServer _lockOn = null!;
     ScoreboardServer _scoreboard = null!; MatchEventsServer _matchEvents = null!;
@@ -290,6 +292,9 @@ public partial class NetServer : Node
         // the Cartel's Jobs (#494): parties from the match (Squads and their leaders), the map's placed Contact
         _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, new MatchJobParties(_match), new MapContactSite(() => _areas.Cartel, Config.Cartel.ContactReachM));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
+        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, new MatchJobParties(_match), _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
+            (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
+        _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         BuildVehicles();
         BuildShooting();
         var rounds = new RoundHooks(_streaks, _gunships, _flak, _progress, _bigfoot, _thieves);
@@ -370,6 +375,7 @@ public partial class NetServer : Node
         _rivals = new RivalCrewServer(_ctx, Config.ThievesData, gangs); // the cartel's Rival crew: Gang members on the same roster
         var raids = new RaidServer(_ctx, Config.ThievesData, phase, gangs, Config.Map, Config.World, _fleet, () => Config.Vehicles, () => _navMesh.Mesh, () => _fleet.FlightBounds,
             () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash);
+        _raidVans = raids;
         var loot = new LootServer(_ctx, Config.ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Config.Map, () => _navMesh.Mesh, Config.ArenaMode, Config.MapDir);
         var payout = new ThievesPayout(_ctx, Config.ThievesData, Config.Levels.Awards.EventWin, Config.Items, Config.Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, _progress.Scores, _progress.Award, gangs.Roster, raids.Roster);
         return new ThievesServer(_ctx, Config.ThievesData, _events, _intel, _rng, () => _navMesh.Mesh, gangs, raids, loot, payout, phase);
