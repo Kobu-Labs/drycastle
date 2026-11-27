@@ -26,7 +26,7 @@ public static class HarvestFillRules
     /// all), then a Duffel in the hands, then the maximum filled; else it fills.
     /// </summary>
     public static FillReach Reach(HeistPhase phase, int filled, int max, bool carrying) =>
-        phase == HeistPhase.ToObjective ? FillReach.VanFirst
+        phase is HeistPhase.ToVan or HeistPhase.ToObjective ? FillReach.VanFirst
         : carrying ? FillReach.Carrying
         : filled >= max ? FillReach.Full
         : FillReach.Ready;

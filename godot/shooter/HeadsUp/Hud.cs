@@ -83,6 +83,7 @@ public partial class Hud : CanvasLayer
     SeatPanel _seats = null!;
     TopBar _top = null!;
     JobTracker _job = null!;
+    JobDoneBanner _jobDone = null!;
     KillFeed _feed = null!;
     FpsCounter _fps = null!;
     RespawnScreen _respawn = null!;
@@ -122,6 +123,7 @@ public partial class Hud : CanvasLayer
         _seats = new SeatPanel(_root); // the vehicle seat schematic above the vehicle readout
         _top = new TopBar(_root, _state);
         _job = new JobTracker(_root, _mapMarkers); // the cartel Job's tracker and end card at the right edge, under the kill feed (#494)
+        _jobDone = new JobDoneBanner(_root); // the "Job done" banner of a succeeded Job, upper middle
         _feed = new KillFeed(this, _root.Theme, _state, id => KillWeaponName?.Invoke(id)); // beside the panels root, not under it: a control session hides the panels and keeps the feed (ticket #154)
         _fps = new FpsCounter(_root, _feed, _state); // after the feed: it moves the feed clear of the chip
         _protection.AddChip(_root);
@@ -177,6 +179,7 @@ public partial class Hud : CanvasLayer
         var now = HudUi.Now;
         _top.Tick();
         _job.Tick();
+        _jobDone.Tick();
         _respawn.Tick();
         _protection.Tick(now);
         _hit.Tick(now);
@@ -251,8 +254,8 @@ public partial class Hud : CanvasLayer
     /// <summary>Context prompt under the crosshair, e.g. "E  Enter car"; null hides it.</summary>
     public void SetPrompt(string? text) => _prompt.SetPrompt(text);
 
-    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
-    public void SetRadial(float? fraction) => _prompt.SetRing(fraction);
+    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set; the Harvest's fill): a fill from 0 to 1, or null to hide it, with the string key of its label.</summary>
+    public void SetRadial(float? fraction, string? labelKey = null) => _prompt.SetRing(fraction, labelKey);
 
     /// <summary>The Drill on the safe a party player is near (#496); null hides the panel.</summary>
     public void SetDrill(DrillHudInfo? info) => _drill.Set(info);
@@ -425,6 +428,9 @@ public partial class Hud : CanvasLayer
     // ---- the cartel (#494) ----
     /// <summary>The player's Job tracker: its panel and its marker on the maps and in the world follow it every frame.</summary>
     public void AttachJobTracker(CartelTracker tracker, Func<string, string> kindName, Func<ushort, string> nameOf) => _job.Attach(tracker, kindName, nameOf);
+
+    /// <summary>The "Job done" banner follows this (the Cartel client's).</summary>
+    public void AttachJobDone(JobDone done) => _jobDone.Attach(done);
 
     public bool ContactPanelOpen => _screens?.ContactPanelOpen ?? false;
     public void AttachContactPanel(ContactPanel panel) => _screens.AttachContactPanel(panel);

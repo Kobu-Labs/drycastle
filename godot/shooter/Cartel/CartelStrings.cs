@@ -14,6 +14,8 @@ public static class CartelStrings
     static (string Key, string Text)[] Own() => new[]
     {
         ("cartel.handover", "Hold {0}: hand the duffel over"),
+        ("cartel.ring.handover", "Handing over..."),
+        ("cartel.ring.fill", "Filling..."),
         ("cartel.fill", "Hold {0}: fill a duffel"),
         ("cartel.fill.carrying", "You're carrying a duffel: {0} throws it"),
         ("cartel.fill.full", "All {0} duffels are filled"),
