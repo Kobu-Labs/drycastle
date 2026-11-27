@@ -75,6 +75,20 @@ public class LoadoutWiringTests
     }
 
     [Fact]
+    public void HeldIndexOnTheWireNamesTheWeaponInHand()
+    {
+        // #407: a remote player with the knife out was drawn holding the rpg (the index before it)
+        var w = new PlayerWeapons(Shipped.Weapons, null, LoadoutHotbar.Build(Shipped.Weapons, Kit()));
+        w.Reset(0);
+        foreach (var id in new[] { "knife", "deagle", "ak47", "grenade" })
+        {
+            w.Update(1, new WeaponInput(false, false, IndexOf(id) + 1, false));
+            Assert.Equal(id, Shipped.Weapons.IdAt(w.HeldIndex));
+        }
+        Assert.Equal("", Shipped.Weapons.IdAt(Shipped.Weapons.Weapons.Count));
+    }
+
+    [Fact]
     public void AmmoStillListsEveryWeaponSoTheSlotsLineUp()
     {
         var w = new PlayerWeapons(Shipped.Weapons, null, LoadoutHotbar.Build(Shipped.Weapons, Kit()));

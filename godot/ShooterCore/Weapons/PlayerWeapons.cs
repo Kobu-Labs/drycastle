@@ -85,8 +85,10 @@ public sealed class PlayerWeapons
     public IReadOnlyList<WeaponDef> Hotbar => _hotbar.Select(i => _file.Weapons[i]).ToList();
     /// <summary>Whether a 1-based weapon slot is on the hotbar.</summary>
     public bool OnHotbar(int slot) => Array.IndexOf(_hotbar, slot - 1) >= 0;
-    /// <summary>Selected hotbar slot, 1-based.</summary>
+    /// <summary>The selected weapon: its weapons.json index + 1 (not its hotbar position).</summary>
     public int Slot { get; private set; }
+    /// <summary>The selected weapon's 0-based weapons.json index: what a snapshot's player record carries (read with <see cref="WeaponsFile.IdAt"/>, #407).</summary>
+    public byte HeldIndex => (byte)(Slot - 1);
     public WeaponDef Current => _file.Weapons[Slot - 1];
     public bool Reloading { get; private set; }
     /// <summary>Sandbox mode (#156): shots do not use up the magazine and a reload is never needed.</summary>
