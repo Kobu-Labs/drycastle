@@ -13,7 +13,8 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// <summary>
 /// The Harvest heist (#495; GLOSSARY "Heist"; docs/cartel.md "Harvest"), the first Heist on the template (<see cref="HeistServer"/>): the objective is the Contact's own plantation (the plantation zone
 /// nearest him), its area the outline grown by area_margin_m. While it runs, a party member's hold of the interact key in a plantation (fill_hold_seconds) fills a weed Duffel in their hands instead
-/// of High, until the maximum is filled; outside a Harvest the plantation is unchanged. The Assaults come in from the road side. Numbers in cartel.json <c>jobs.harvest</c>.
+/// of High, until the maximum is filled, once the van has reached the plantation (before that the Assault clock has not started: <see cref="Completed"/> fills nothing); a hold that cannot
+/// fill (carrying a Duffel, the maximum filled) does not count (<see cref="Blocks"/>). Outside a Harvest the plantation is unchanged. The Assaults come in from the road side. Numbers in cartel.json <c>jobs.harvest</c>.
 /// </summary>
 internal sealed class HarvestJobKind : IJobKind, IPlantationFill
 {
@@ -28,8 +29,6 @@ internal sealed class HarvestJobKind : IJobKind, IPlantationFill
         _s = s;
         _data = DataFile.Section<HarvestData>(file.JobSection(KindId), Section);
         _data.Validate(Section, file.Tiers.Count);
-        if (!float.IsFinite(_data.FillHoldSeconds) || _data.FillHoldSeconds <= 0) throw new DataFileException($"{Section}: fill_hold_seconds must be more than 0");
-        if (!float.IsFinite(_data.AreaMarginM) || _data.AreaMarginM < 0) throw new DataFileException($"{Section}: area_margin_m must be 0 or more");
     }
 
     public string Id => KindId;
@@ -53,9 +52,14 @@ internal sealed class HarvestJobKind : IJobKind, IPlantationFill
 
     public double? HoldSecondsFor(ServerClient c) => RunOf(c) != null ? _data.FillHoldSeconds : null;
 
+    /// <summary>A hold that cannot fill: the player carries a Duffel already (one per player), or the harvest's maximum is filled. It does not count, rather than run its seconds and be refused.</summary>
+    public bool Blocks(ServerClient c) => RunOf(c) is { } run && (run.Filled >= run.Heist.Max || _s.Duffels.Book.CarriedBy(c.Id) != null);
+
     public void Completed(ServerClient c)
     {
         if (RunOf(c) is not { } run) return;
+        // the Assault clock starts when the van reaches the area: filling before that would load the most at the edge and drive through with no Assault at all
+        if (run.Heist.Phase == HeistPhase.ToObjective) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"Bring the Cartel van to {Place} first."); return; }
         if (run.Filled >= run.Heist.Max) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"All {run.Heist.Max} duffels of the harvest are filled: load them and drive."); return; }
         run.SyncParty(); // a squad mate who just joined is in the party the Duffel belongs to
         if (_s.Duffels.Give(DuffelKind.Weed, run.Party, c) == null) return; // carrying one already (told), or not alive
@@ -63,10 +67,12 @@ internal sealed class HarvestJobKind : IJobKind, IPlantationFill
         GD.Print($"server: {c.Name} #{c.Id} filled a weed duffel for {run.Job} ({run.Filled}/{run.Heist.Max})");
     }
 
+    const string Place = "the plantation";
+
     sealed class Goal(PlantationArea area, NVec3 centre) : IHeistGoal
     {
-        public string Place => "the plantation";
-        public string FillLine => "Fill weed duffels in the plantation (hold E) and throw them in the van";
+        public string Place => HarvestJobKind.Place;
+        public string FillLine => "Fill weed duffels in the plantation (hold {interact}) and throw them in the van";
         public NVec3 Centre => centre;
         public bool InArea(NVec3 p) => area.Contains(p.X, p.Z);
     }
