@@ -26,6 +26,8 @@ public partial class TrapHousesNode : Node3D
 
     bool _draw;
     readonly Dictionary<string, Node3D> _dressed = new();
+    /// <summary>Each dressed house's safe prop (its pivot: +Z is its front), for the Drill.</summary>
+    readonly Dictionary<string, Node3D> _safes = new();
 
     /// <summary>The Trap house props of the map in <paramref name="mapDir"/>, or null when it has no hollow house with a floor plan, or a file is broken (logged).</summary>
     public static TrapHousesNode? Create(string mapDir, bool draw)
@@ -62,15 +64,21 @@ public partial class TrapHousesNode : Node3D
 
     public IEnumerable<string> Dressed => _dressed.Keys;
 
+    /// <summary>House <paramref name="house"/>'s safe prop (a pivot at its foot, +Z its front; its model under it), or null. A new dressing makes a new one.</summary>
+    public Node3D? SafeOf(string house) => _safes.TryGetValue(house, out var s) && IsInstanceValid(s) ? s : null;
+
     /// <summary>House <paramref name="house"/> stands dressed with <paramref name="props"/> (what it had before goes). A kind this file does not know is skipped.</summary>
     public void Show(string house, IReadOnlyList<TrapProp> props)
     {
         Hide(house);
         var root = new Node3D { Name = "Trap_" + house };
+        var safe = Data.KindOf(Data.Safe.Prop);
         foreach (var p in props)
         {
             if (p.Kind >= Data.Props.Count) continue;
-            root.AddChild(Prop(Data.Props[p.Kind], p));
+            var node = Prop(Data.Props[p.Kind], p);
+            root.AddChild(node);
+            if (p.Kind == safe) _safes[house] = node;
         }
         AddChild(root);
         _dressed[house] = root;
@@ -79,6 +87,7 @@ public partial class TrapHousesNode : Node3D
     /// <summary>House <paramref name="house"/>'s props are taken away; false when it had none.</summary>
     public bool Hide(string house)
     {
+        _safes.Remove(house);
         if (!_dressed.Remove(house, out var root)) return false;
         RemoveChild(root);
         root.QueueFree();

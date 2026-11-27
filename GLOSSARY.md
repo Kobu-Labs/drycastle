@@ -882,5 +882,5 @@ The target of a Hit: a Gang member of the Rival crew standing outdoors at a Hit 
 _Avoid_: target (alone), boss (that is the Gang boss)
 
 **Drill**:
-What a Job's player sets on a Trap house's safe to open it: it runs a while, jams now and then, and is fixed by hand. Planned (#437).
+What a Job's player sets on a Trap house's safe to open it: a party player holds the interact key at the safe to set it, it runs a while (by tier) and jams one to three times at random moments, a party player holds the key again to fix each jam, and through, the safe opens and cash Duffels lie by it for the party. Built (#496: machine `Drill.Run`, `trap_house.json` `drill`, `/drill`); the Trap house Heist that arms it is planned (#437).
 _Avoid_: hack, timer

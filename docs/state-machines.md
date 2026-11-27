@@ -600,6 +600,25 @@ stateDiagram-v2
 - **Asleep**: Resting phases show as Waiting; the health is back to full and the pounce, flame and leap clocks are cleared.
 - **Awake**: Fighting: the hits needed grow with the players inside and never shrink; the fight clock, the roar clock and the leap clock run.
 
+## Drill.Run
+
+The drill on a Trap house's safe: armed for a Job's party, set by one of them, running toward the open safe, jammed now and then until one of them fixes it, done.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Armed
+    Armed --> Running
+    Running --> Jammed
+    Running --> Done
+    Jammed --> Running
+    Done --> [*]
+```
+
+- **Armed**: The safe waits for the party: a party player's hold of the interact key at its stand spot (drill.set_hold_seconds) sets the drill on it. No clock.
+- **Running**: Drills: the progress grows with time. Clock: the seconds to the next stop, the next jam (drill.jams, at random moments inside drill.jam_window) or the end (drill.run_seconds by tier).
+- **Jammed**: Stuck at its progress, sparking: a party player's hold at the safe (drill.fix_hold_seconds) sets it running again. No clock: it waits as long as it takes.
+- **Done**: Through: the safe stands open and its cash Duffels lie by it (drill.cash_duffels by tier). Never left; the Drill goes when its house is stripped.
+
 ## Duffel.Place
 
 A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a cargo volume (the Cartel van's back).

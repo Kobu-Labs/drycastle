@@ -172,6 +172,7 @@ public partial class NetClient : Node
     /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     DuffelsClient _duffels = null!;
+    DrillsClient _drills = null!;
     SessionLog _session = null!;
     PerfLog _perf = null!;
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
@@ -327,7 +328,8 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
         _duffels = new DuffelsClient(Ctx, Duffels, _interact);
-        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction);
+        _drills = new DrillsClient(Ctx); // the Drills on the Trap houses' safes (#496)
+        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction, () => _drills.HoldFraction);
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
@@ -386,6 +388,7 @@ public partial class NetClient : Node
         foreach (var r in Ctx.Rockets.Values) r.Snd?.Release();
         Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
+        _drills.Reset(); // the drills' sounds stop
         _server.Disconnect();
         Ctx.Remotes.Clear();
         foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
@@ -415,7 +418,7 @@ public partial class NetClient : Node
     /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
     string? PromptLine(string? ride) =>
         _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
-        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _duffels.CarryHint();
+        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _duffels.CarryHint();
 
     void HudWelcome()
     {
@@ -504,6 +507,7 @@ public partial class NetClient : Node
         _corpses.Render(delta);
         _groundItems.Render();
         _duffels.Render(); // the Duffels: on backs, on the ground, in flight; the own one burdens the body
+        _drills.Render(delta); // the drills on the safes, their sound and sparks, the opened doors, the Drill panel
         _crates.Render();
         _minerals.Render();
         _turrets.Render();
@@ -611,6 +615,7 @@ public partial class NetClient : Node
     void OnWelcome(WelcomeMsg w)
     {
         Ctx.MyId = w.PlayerId; _welcomed = true; _link.Enter(LinkPhase.Welcomed);
+        _drills.Reset(); // nothing is known of the safes until the server says so
         _rozhlas.Reset(); Rozhlas.Reset(); // a new connection starts with the loudspeaker Idle until the server says otherwise
         DayNightCycle.Current?.SetServerClock(new DayClock { StartMinute = w.StartMinute, DayLengthSeconds = w.DayLengthMs / 1000.0, Frozen = w.Frozen }, w.ServerTick);
         CasingFx.Water = Water;
@@ -659,6 +664,7 @@ public partial class NetClient : Node
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
+        _drills.OnEvent(kind, payload); // the Drills on the safes near the player, and what the key's hold would do (#496)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
         _match.OnEvent(kind, payload); // the match: phase, scoreboard, kills, the own spawn and death
         Loadouts.OnEvent(kind, payload);
@@ -743,6 +749,7 @@ public partial class NetClient : Node
         var use = Ctx.InteractHeld;
         _crates.Tick(use, dt);
         _rozhlas.TickHold(use, dt);
+        _drills.TickHold(use, dt);
         _holdRing.Show(dt);
     }
 

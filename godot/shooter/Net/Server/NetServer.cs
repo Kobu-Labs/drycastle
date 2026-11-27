@@ -108,6 +108,7 @@ public partial class NetServer : Node
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     DuffelServer _duffels = null!;
+    DrillServer _drills = null!;
     // the village and its animals
     SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
@@ -286,6 +287,7 @@ public partial class NetServer : Node
         _duffels = new DuffelServer(_ctx, Config.Duffels, () => _shot.Query, _seats.EnterableCar, _crates.AnyInReach); // the cartel's Duffels (#494): world entity 62
         var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null);
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
+        _drills = new DrillServer(_ctx, _trapHouses, _duffels, keys, _sitters, _pounce, _streaks); // the Drills on the Trap houses' safes (#496): events 62-64
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
         // the Cartel's Jobs (#494): parties from the match (Squads and their leaders), the map's placed Contact
         var parties = new MatchJobParties(_match);
@@ -312,6 +314,7 @@ public partial class NetServer : Node
             _duffels.RoundStart, // nobody carries a Duffel into a new round
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
             _cartel.RoundReset, // every running Job fails
+            _drills.RoundStart, // and no Drill on a safe
             _trapHouses.RoundStart, // no Job outlives the round: every Trap house stripped
             _rivals.RoundReset, // the test Gunmen went with the world's entities
             rounds.Started);
@@ -328,7 +331,7 @@ public partial class NetServer : Node
         var pellets = new PelletFan(_ctx, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _wildlife, Config.Vehicles, _rng, baleShot);
         _shots = new ShotServer(_ctx, _rewind, _shot, _glass, _carDamage, _targets, _damage.Deal, _scenery, _sentries, _wildlife, _lockOn, _rockets, pellets, _impacts, _smoke, Config.Vehicles, _rng, Config.Turret.KnifeDamage, Config.WeaponsSmoke,
             baleShot, new LagCompLog(Config.PerfOut, Config.PerfLagComp, _ctx, _rewind, _shot, _targets).Shot);
-        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, _plantation.Use, _scud.UseKey, _duffels, Config.KillY);
+        _input = new InputServer(_ctx, _streaks, _rozhlas, _thieves, _gear, _sitters, _pounce, _sandbox, _mass, _garage, _houses, _seats, _guns, _shots, _smoke, (c, use) => { _plantation.Use(c, use); _drills.Use(c, use); }, _scud.UseKey, _duffels, Config.KillY);
         _snapshots = new SnapshotServer(_ctx, _fleet, _sitters, _dummies, _rockets, Config.Vehicles, _diag.Perf.AuditTick, _diag.Loss.LogStates);
     }
 
@@ -592,6 +595,7 @@ public partial class NetServer : Node
         _status.Tick(dt); // burns tick
         _plantation.Tick(dt); // highs run out
         _duffels.Tick(); // carried Duffels follow their carriers; a carrier who died drops one where they fell
+        _drills.Tick(dt); // the Drills on the safes run, jam and open; the players near are told
         _gunships.TickShells();  // shells whose tracer has arrived burst now (#162)
         _flak.Tick();    // flak shells that have arrived burst now
         _lockOn.StepVehicleHoming(dt); // missiles homing on flown helicopters fly and hit now
@@ -675,5 +679,6 @@ public partial class NetServer : Node
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
         ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses, _rivals);
         _chat.Register("duffel", _duffels.ChatCommand); // TEST: a Duffel in the admin's hands (#494)
+        _chat.Register("drill", _drills.Chat); // TEST: arm the nearest dressed safe for the admin (#496)
     }
 }

@@ -119,6 +119,12 @@ public enum EventKind : byte
     TrapHouseDressed = 66,
     /// <summary>Server broadcast: a Trap house is stripped, its props gone (<see cref="Drycastle.ShooterCore.Cartel.TrapHouseCodec"/>: the house id).</summary>
     TrapHouseStripped = 67,
+    /// <summary>Server to a player near a Trap house's safe (within trap_house.json drill.near_m), on every change and when they come near: its Drill's state and progress (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: house, state, party flag, progress and run seconds). Kinds 62-65 belong to the Drill (#496); 65 is free.</summary>
+    DrillState = 62,
+    /// <summary>Server to a player told of a Drill: it is gone (disarmed, its house stripped, a round reset) or they went far from it (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: the house).</summary>
+    DrillCleared = 63,
+    /// <summary>Server to one player: what their interact key's hold at a safe would do now, set or fix the Drill, or nothing (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: u8 DrillHold, house), sent when it changes. Only the server knows the party and what else wins the key.</summary>
+    DrillReach = 64,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
     // 120 was Ac130Blast (one message per shell, protocol 11); protocol 12 coalesces the gunship FX into 121-123, so 120 is not reused.
@@ -446,6 +452,7 @@ public static class Wire
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
     //   v88 the drug Cartel (#437, docs/cartel.md): Cartel profile + Job core: events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec); Squad leader: the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494); Cartel van vehicle: vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine); Duffels, #494: world entity type 62 (Duffel: state byte state bits 0-1 + kind bits 2-3, owner field the carrier); events 42 DuffelNotice and 43 DuffelReach (server to one player); input button bit 8192 DuffelThrow; Trap house dressing: events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0046); Gunman + posted defenders: Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind)
     //   vNEXT (Delivery + Hit jobs, #494, #497): no wire change: kinds "delivery" and "hit" ride CartelJob (35); the Rival dealer is a Rival crew's Gang boss (kind 2), the Duffel the existing entity 62
+    //   vNEXT (Safe + Drill): the Drill on a Trap house's safe (#496): events 62 DrillState and 63 DrillCleared (to the players near the safe) and 64 DrillReach (to one player) (DrillCodec)
     public const byte ProtocolVersion = 88;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

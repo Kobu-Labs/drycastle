@@ -109,6 +109,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - **Posted defenders**: each holds a spot in a room (picked from the floor plan), turns and shoots, never walks (no NPC goes inside a house today: the navigation mesh stops at the 0.95 m doorways).
 - Duffels: product and cash on the tables, plus the safe.
 - **Safe and drill**: hold E to place a drill; it runs a tier time (about 90 s) and jams at random one to three times; a job player holds E to fix it. Open, the safe gives bonus cash duffels.
+- Built (#496): `Drill` (machine `Drill.Run`: armed, running, jammed, done) and `DrillRules` (ShooterCore/Cartel; run seconds and cash Duffels by tier, the jams' moments, the holds, who may hold and from where), numbers in `trap_house.json` `drill`; `DrillServer` (`Arm(house, party, tier)`, `Disarm`, `Of`, `Done` event with the paid-out Duffels; the hold of E via `KeyCompetition`; a stripped house or a round reset disarms; events 62 DrillState and 63 DrillCleared to the players within `near_m`, 64 DrillReach to one player); `DrillsClient` (the drill on the safe prop, Apocalypse `SM_Prop_Drill_01` or a box, the running loop, the jam's sparks and clunk, the safe's door swings open, the hold ring and prompt) and the HUD's Drill panel for party players near it; admin `/drill [tier|off]` arms the nearest dressed safe for the admin.
 
 ## Docs, ADRs, state machines
 
