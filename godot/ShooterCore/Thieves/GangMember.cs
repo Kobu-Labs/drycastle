@@ -98,7 +98,7 @@ public static class GangRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "gang member", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "gang member", HasHp: true));
     }
 
     /// <summary>What a hit counts, by what made it (the Bigfoot's rules with a headshot worth <see cref="GangHitWeights.HeadshotWeight"/>). Ramming has no weight: it kills outright.</summary>

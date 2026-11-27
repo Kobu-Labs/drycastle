@@ -11,7 +11,7 @@ public static class LootRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "loot", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "loot", HasHp: false));
     }
 
     /// <summary>A state byte as a kind; a value this build does not know is read as null (the client draws nothing).</summary>

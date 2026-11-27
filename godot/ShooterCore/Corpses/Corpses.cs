@@ -72,7 +72,7 @@ public static class CorpseRules
     /// <summary>Registers the corpse type once (idempotent), so the snapshot encoder knows it carries hp (here: ammo).</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "corpse", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "corpse", HasHp: true));
     }
 
     /// <summary>

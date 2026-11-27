@@ -43,7 +43,7 @@ public static class DuffelRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "duffel", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "duffel", HasHp: false));
     }
 
     /// <summary>The kind's name in duffels.json and in /duffel ("weed", "cash", "product").</summary>

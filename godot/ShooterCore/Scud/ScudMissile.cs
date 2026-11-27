@@ -12,7 +12,7 @@ public static class ScudMissileRules
     /// <summary>Registers the type once (idempotent) so the snapshot codec knows it. Not an Interest type: every client sees it at every range.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "scud_missile", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "scud_missile", HasHp: false));
     }
 }
 

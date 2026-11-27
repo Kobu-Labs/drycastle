@@ -16,7 +16,7 @@ public static class AttackMissileRules
     /// <summary>Registers the type once (idempotent) so the snapshot codec knows it.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "attack_missile", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "attack_missile", HasHp: false));
     }
 }
 
