@@ -88,6 +88,8 @@ public sealed class MatchPlayer
     public byte Team;
     /// <summary>The squad (#379, <see cref="MatchSim.CreateSquad"/>): an opt-in tag inside the team, 0 for none. Bots and the teamless never have one; it clears with a team change.</summary>
     public byte Squad;
+    /// <summary>When the player entered <see cref="Squad"/> (a join counter, 0 for none): the smallest in a squad is its leader (#494, <see cref="MatchSim.SquadLeader"/>).</summary>
+    public ulong SquadSince { get; internal set; }
     /// <summary>A bot: the balance moves bots before humans.</summary>
     public bool Bot;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>

@@ -10,9 +10,9 @@ public static class SquadsStrings
     public static readonly (string Key, string Text)[] Table =
     {
         ("pause.squads", "Squads"),
-        ("squad.tag", "{0} [{1}]"),
+        ("squad.tag", "{0} [{1}]"), ("squad.tag.leader", "{0} [{1}, leader]"),
         ("squads.title", "Squads"),
-        ("squads.hint", "A squad is a small group inside your team, up to 4 players. Squad mates are blue on the minimap and the map, with their names, and their name tags show the squad. Join one or start your own; you can be in one squad. Esc goes back."),
+        ("squads.hint", "A squad is a small group inside your team, up to 4 players. Whoever starts a squad leads it; when the leader leaves, the player in it longest takes over. Squad mates are blue on the minimap and the map, with their names, and their name tags show the squad. Join one or start your own; you can be in one squad. Esc goes back."),
         ("squads.status.in", "Your squad: {0}  ({1}/{2})"), ("squads.status.none", "You are not in a squad."),
         ("squads.leave", "Leave squad"), ("squads.leave.tip", "Leave your squad. It disappears when its last player leaves."),
         ("squads.name", "New squad name"), ("squads.name.tip", "Up to {0} characters. Empty: \"{1}\"."),
@@ -24,12 +24,13 @@ public static class SquadsStrings
         ("squads.join", "Join"), ("squads.join.tip", "Join this squad. You leave your current squad."),
         ("squads.join.full", "This squad is full."),
         ("squads.mine", "Your squad"),
+        ("squads.leader", "{0} (leader)"), ("squads.leader.you", "{0} (you, leader)"),
         ("squads.refused", "The squad request did not work: {0}"),
     };
 }
 
 /// <summary>
-/// The Squads screen (#379, Pause, team deathmatch): the player's status, a name field with Create, Leave, and the own team's squads as cards (name, count out of 4, members, Join). Opt-in: nobody is put in a
+/// The Squads screen (#379, Pause, team deathmatch): the player's status, a name field with Create, Leave, and the own team's squads as cards (name, count out of 4, members with the leader first and named so, Join). Opt-in: nobody is put in a
 /// squad. A request applies at once through the server and the cards follow the scoreboard, so joins, leaves and other players' squads show live. Refilled only when the squads change. Keyboard: Tab or Up and Down
 /// move between the controls, Enter presses (in the name field it creates), Esc goes back. A full squad and the own squad have no Join; both say so in words.
 /// </summary>
@@ -167,7 +168,7 @@ public sealed partial class SquadsScreen : MenuScreen
         _seen = rows;
         var squads = OwnSquads(rows).ToList();
         var mySquad = _client.Match.SquadOf(_client.Ctx.MyId);
-        var sig = string.Join('|', squads.Select(g => $"{g.Key}:{_client.Match.SquadNameOf(g.Key)}:{string.Join(',', g.Select(r => $"{r.Id}={r.Name}"))}")) + $"#{mySquad}";
+        var sig = string.Join('|', squads.Select(g => $"{g.Key}:{_client.Match.SquadNameOf(g.Key)}:{_client.Match.LeaderOf(g.Key)}:{string.Join(',', g.Select(r => $"{r.Id}={r.Name}"))}")) + $"#{mySquad}";
         if (!force && sig == _signature) { UpdateControls(); return; }
         _signature = sig;
         var focus = _focusSquad != 0 ? _focusSquad : FocusedSquad();
@@ -199,7 +200,14 @@ public sealed partial class SquadsScreen : MenuScreen
         var text = Ui.VBox();
         text.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         text.AddChild(Ui.Lbl(_client.Match.SquadNameOf(squad), "HudHead"));
-        var names = members.OrderBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => r.Id == _client.Ctx.MyId ? Strings.F("score.you", r.Name) : r.Name);
+        var leader = _client.Match.LeaderOf(squad);
+        var names = members.OrderBy(r => r.Id != leader).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase).Select(r => (r.Id == leader, r.Id == _client.Ctx.MyId) switch
+        {
+            (true, true) => Strings.F("squads.leader.you", r.Name),
+            (true, false) => Strings.F("squads.leader", r.Name),
+            (false, true) => Strings.F("score.you", r.Name),
+            _ => r.Name,
+        }); // the leader is named in words, not by colour or place alone
         text.AddChild(Ui.Lbl(string.Join(", ", names), "HudDim", 0, true));
         h.AddChild(text);
         var full = members.Count >= Squads.MaxMembers;

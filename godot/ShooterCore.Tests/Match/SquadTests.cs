@@ -278,7 +278,9 @@ public class SquadTests
     {
         var rows = new[] { new ScoreRow(1, "a", 1, 2, 3, Teams.A, Squad: 7), new ScoreRow(2, "b", 0, 0, 5, Teams.B) };
         var full = MatchCodec.Encode(new MatchStateMsg(MatchPhase.Running, 9, Array.Empty<ushort>(), rows, MatchMode.TeamDeathmatch, 1, 2, new[] { new SquadName(7, "Foxes") }));
-        var noSquads = full[..(full.Length - (rows.Length + 1 + 2 + "Foxes".Length))]; // what v70 sent: ends after the team tail
+        var noLeaders = MatchCodec.DecodeMatchState(full[..^2])!; // what v72 sent: ends after the squad names
+        Assert.Equal(new[] { new SquadName(7, "Foxes") }, noLeaders.Squads);
+        var noSquads = full[..(full.Length - (rows.Length + 1 + 2 + "Foxes".Length + 2))]; // what v70 sent: ends after the team tail
         var old = MatchCodec.DecodeMatchState(noSquads)!;
         Assert.Equal(new[] { Teams.A, Teams.B }, old.Rows.Select(r => r.Team).ToArray());
         Assert.All(old.Rows, r => Assert.Equal(0, r.Squad));
@@ -383,8 +385,126 @@ public class SquadTests
         Assert.Contains("no squads", SquadRules.List(m, 1).Single());
         var s = Make(m, 1, "Alpha");
         m.JoinSquad(2, s);
-        Assert.Equal(new[] { "1. Alpha (2/4): p1, p2 (yours)" }, SquadRules.List(m, 1).ToArray());
-        Assert.Equal(new[] { "1. Alpha (2/4): p1, p2" }, SquadRules.List(m, 3).ToArray());
+        Assert.Equal(new[] { "1. Alpha (2/4): p1 (leader), p2 (yours)" }, SquadRules.List(m, 1).ToArray());
+        Assert.Equal(new[] { "1. Alpha (2/4): p1 (leader), p2" }, SquadRules.List(m, 3).ToArray());
+    }
+
+    [Fact]
+    public void ListNamesTheLeaderFirst()
+    {
+        var m = Match(3);
+        var s = Make(m, 2, "Alpha");
+        m.JoinSquad(1, s); // a lower id joined later: the creator still leads and comes first
+        Assert.Equal(new[] { "1. Alpha (2/4): p2 (leader), p1 (yours)" }, SquadRules.List(m, 1).ToArray());
+    }
+
+    // ---- leader (#494) ----
+
+    static List<SquadLeaderChanged> Leaders(MatchSim m)
+    {
+        var seen = new List<SquadLeaderChanged>();
+        m.Event += e => { if (e is SquadLeaderChanged lc) seen.Add(lc); };
+        return seen;
+    }
+
+    [Fact]
+    public void TheCreatorLeads()
+    {
+        var m = Match();
+        var seen = Leaders(m);
+        var s = Make(m, 3);
+        m.JoinSquad(1, s);
+        m.JoinSquad(2, s);
+        Assert.Equal(3, m.SquadLeader(s));
+        Assert.True(m.IsSquadLeader(3));
+        Assert.False(m.IsSquadLeader(1));
+        Assert.False(m.IsSquadLeader(5)); // in no squad: not a leader
+        Assert.Equal(0, m.SquadLeader(0));
+        Assert.Equal(0, m.SquadLeader(99));
+        Assert.Equal(new ushort[] { 3, 1, 2 }, m.SquadMembers(s).Select(p => p.Id).ToArray()); // by seniority
+        Assert.Equal(new SquadName(s, "p3's squad", 3), m.SquadList.Single());
+        Assert.Equal(new[] { new SquadLeaderChanged(s, 0, 3) }, seen); // joins do not move it
+    }
+
+    [Fact]
+    public void WhenTheLeaderLeavesTheLongestStandingMemberLeads()
+    {
+        var m = Match();
+        var s = Make(m, 1);
+        foreach (ushort i in new ushort[] { 4, 2, 3 }) m.JoinSquad(i, s);
+        var seen = Leaders(m);
+        m.LeaveSquad(3); // not the leader: nothing moves
+        Assert.Empty(seen);
+        m.LeaveSquad(1);
+        Assert.Equal(4, m.SquadLeader(s)); // joined before 2
+        m.JoinSquad(1, s); // back, but now the newest
+        Assert.Equal(4, m.SquadLeader(s));
+        m.LeaveSquad(4);
+        Assert.Equal(2, m.SquadLeader(s));
+        Assert.Equal(new[] { new SquadLeaderChanged(s, 1, 4), new SquadLeaderChanged(s, 4, 2) }, seen);
+    }
+
+    [Fact]
+    public void EveryWayOutHandsTheLeadOn()
+    {
+        var m = Match(7);
+        var s = Make(m, 1);
+        foreach (ushort i in new ushort[] { 2, 3, 4 }) m.JoinSquad(i, s);
+        var seen = Leaders(m);
+        m.SetTeam(1, Teams.B); // a team change
+        Assert.Equal(2, m.SquadLeader(s));
+        m.RemovePlayer(2); // leaving the match
+        Assert.Equal(3, m.SquadLeader(s));
+        Make(m, 3, "Other"); // creating another squad
+        Assert.Equal(4, m.SquadLeader(s));
+        m.SetSandbox(4, true); // sandbox: no team
+        Assert.Empty(m.SquadMembers(s));
+        Assert.Equal(0, m.SquadLeader(s));
+        Assert.Equal(new[] { new SquadLeaderChanged(s, 1, 2), new SquadLeaderChanged(s, 2, 3), new SquadLeaderChanged(s, 3, 4), new SquadLeaderChanged(s, 4, 0) },
+            seen.Where(e => e.Squad == s).ToArray());
+    }
+
+    [Fact]
+    public void AModeChangeEndsEveryLead()
+    {
+        var m = Match();
+        var a = Make(m, 1, "Alpha");
+        var b = Make(m, 2, "Bravo");
+        m.JoinSquad(3, a);
+        var seen = Leaders(m);
+        m.Restart(MatchMode.FreeForAll);
+        Assert.False(m.IsSquadLeader(1));
+        Assert.Equal(new[] { new SquadLeaderChanged(a, 1, 0), new SquadLeaderChanged(b, 2, 0) }, seen);
+    }
+
+    [Fact]
+    public void AHandoverIsToldToTheSquad()
+    {
+        var m = Match();
+        var s = Make(m, 1);
+        m.JoinSquad(2, s);
+        m.JoinSquad(3, s);
+        Assert.Empty(SquadRules.LeaderTold(m, new SquadLeaderChanged(s, 0, 1))); // creation
+        m.LeaveSquad(1);
+        Assert.Equal(new[] { ((ushort)2, "You lead the squad now."), ((ushort)3, "p2 leads the squad now.") }, SquadRules.LeaderTold(m, new SquadLeaderChanged(s, 1, 2)).ToArray());
+        Assert.Empty(SquadRules.LeaderTold(m, new SquadLeaderChanged(s, 2, 0))); // gone
+    }
+
+    [Fact]
+    public void TheLeaderTravelsToTheClient()
+    {
+        var rows = new[] { new ScoreRow(1, "a", 0, 0, 0, Teams.A, Squad: 7), new ScoreRow(2, "b", 0, 0, 0, Teams.A, Squad: 7), new ScoreRow(3, "c", 0, 0, 0, Teams.A) };
+        var squads = new[] { new SquadName(7, "Foxes", 2) };
+        var bytes = MatchCodec.Encode(new MatchStateMsg(MatchPhase.Running, 9, Array.Empty<ushort>(), rows, MatchMode.TeamDeathmatch, 0, 0, squads));
+        Assert.Equal(squads, MatchCodec.DecodeMatchState(bytes)!.Squads);
+        Assert.Null(MatchCodec.DecodeMatchState(bytes[..^1])); // half a leader
+        var c = new ClientMatchState();
+        c.Apply(EventKind.MatchState, bytes, 0);
+        Assert.Equal(2, c.LeaderOf(7));
+        Assert.True(c.IsSquadLeader(2));
+        Assert.False(c.IsSquadLeader(1));
+        Assert.False(c.IsSquadLeader(3));
+        Assert.Equal(0, c.LeaderOf(8));
     }
 
     // ---- /squad ----

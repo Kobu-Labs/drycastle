@@ -150,7 +150,8 @@ internal sealed class Scoreboard
             t.Row[i].ThemeTypeVariation = mine ? "HudRowMine" : "HudRow";
             var c = t.Cells[i];
             var who = mine ? Strings.F("score.you", r.Name) : r.Name; // the team is the table's heading
-            if (r.Squad != 0 && _state.Team?.SquadNameOf(r.Squad) is { Length: > 0 } squad) who = Strings.F("squad.tag", who, squad); // the squad's members sit together, the name says which
+            if (r.Squad != 0 && _state.Team?.SquadNameOf(r.Squad) is { Length: > 0 } squad) // the squad's members sit together, the name says which; the leader's tag says so (#494)
+                who = Strings.F(_state.Team.LeaderOf(r.Squad) == r.Id ? "squad.tag.leader" : "squad.tag", who, squad);
             HudUi.Set(c[0], who);
             HudUi.Tint(c[0], _state.RelationColor(r.Team));
             HudUi.Set(c[1], r.Kills.ToString()); HudUi.Set(c[2], r.Deaths.ToString()); HudUi.Set(c[3], Strings.F("score.ping", r.Ping));
