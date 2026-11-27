@@ -188,7 +188,7 @@ public class JobBookTests
     }
 
     [Fact]
-    public void TheMatchMakesFfaSoloAndATdmSquadThePartyLedByItsFirstMember()
+    public void TheMatchMakesFfaSoloAndATdmSquadThePartyLedByItsLeader()
     {
         double t = 0;
         var ffa = new MatchSim(new MatchConfig { Mode = "ffa" }, () => t, new[] { Vector3.Zero }, new Random(1));
@@ -207,9 +207,11 @@ public class JobBookTests
         var q = new MatchJobParties(tdm);
         Assert.Equal(JobOwner.Squad(squad), q.OwnerOf(1));
         Assert.Equal(JobOwner.Solo(2), q.OwnerOf(2)); // in no squad: alone
-        Assert.Equal(new ushort[] { 1, 3 }, q.MembersOf(JobOwner.Squad(squad)));
-        Assert.Equal(1, q.LeaderOf(JobOwner.Squad(squad))); // the creator leads
-        tdm.LeaveSquad(1); tdm.LeaveSquad(3);
+        Assert.Equal(new ushort[] { 3, 1 }, q.MembersOf(JobOwner.Squad(squad))); // longest-standing first
+        Assert.Equal(3, q.LeaderOf(JobOwner.Squad(squad))); // the creator leads
+        tdm.LeaveSquad(3);
+        Assert.Equal(1, q.LeaderOf(JobOwner.Squad(squad))); // then the longest-standing member
+        tdm.LeaveSquad(1);
         Assert.Equal(0, q.LeaderOf(JobOwner.Squad(squad)));
         Assert.Empty(q.MembersOf(JobOwner.Squad(squad)));
     }
