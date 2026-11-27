@@ -293,7 +293,7 @@ public partial class NetServer : Node
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
         // the Cartel's Jobs (#494): parties from the match (Squads and their leaders), the map's placed Contact
         var parties = new MatchJobParties(_match);
-        _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, parties, new MapContactSite(() => _areas.Cartel, Config.Cartel.ContactReachM));
+        _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, parties, new MapContactSite(() => _areas.Cartel, Config.Cartel.ContactReachM), _chat.IsAdmin);
         var jobWorld = new CartelJobWorld(_ctx, _duffels, _rivals, _rng); // the simple Jobs' Duffels, Rival crews and players (#494, #497)
         _cartel.Register(new DeliveryJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));
         _cartel.Register(new HitJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));

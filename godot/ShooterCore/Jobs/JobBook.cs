@@ -39,7 +39,7 @@ public sealed class JobBook
     /// <summary>The running Job whose party the player is in now, or null.</summary>
     public Job? Involving(ushort player, IJobParties parties)
     {
-        foreach (var j in _running) if (parties.MembersOf(j.Owner).Contains(player)) return j;
+        foreach (var j in _running) if (parties.Has(j.Owner, player)) return j;
         return null;
     }
 

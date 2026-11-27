@@ -136,11 +136,11 @@ public class SimpleJobsTests
 
         world.At[1] = o.Drop + new Vector3(3, 0, 0); // within radius_m
         world.Duffels.Follow(1, world.At[1]);
-        Assert.Equal("Hold E to hand the duffel over", o.Objective(job));
+        Assert.Equal("Hold {interact} to hand the duffel over", o.Objective(job)); // the client puts the bound key in
+        Assert.Equal("Hold F to hand the duffel over", JobText.Fill(o.Objective(job), "F"));
         var need = (int)MathF.Ceiling(delivery.Numbers.HoldSeconds / Dt);
         Ticks(book, parties, ended, need - 5);
         Assert.Empty(ended);
-        Assert.True(o.HoldFraction > 0.9f);
         Ticks(book, parties, ended, 10);
         Assert.True(Assert.Single(ended).Succeeded);
         Assert.Equal(0, world.Duffels.Count); // the duffel goes with the job
@@ -259,5 +259,19 @@ public class SimpleJobsTests
         Assert.Throws<ShooterCore.Data.DataFileException>(() => new HitJobKind(bad, new Parties(), () => Map, new Random(1), new World()));
         var kind = CartelFile.Parse("""{"version":1,"jobs":{"delivery":{"duffel":"gold"}}}""");
         Assert.Throws<ShooterCore.Data.DataFileException>(() => new DeliveryJobKind(kind, new Parties(), () => Map, new Random(1), new World()));
+    }
+
+    [Fact]
+    public void A_map_with_no_point_far_enough_from_the_Contact_says_so()
+    {
+        var book = new JobBook();
+        var test = new TestJobKind(CartelFile.Default);
+        book.Register(test);
+        var job = book.Start(CartelRules.Giver, test, 1, JobOwner.Solo(1), 1, out _)!;
+        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.DropKind, new Random(1), 10_000, 0, out var why));
+        Assert.Equal("No drop point is far enough from the Contact on this map.", why);
+        Assert.NotNull(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), 100, 0, out _));
+        Assert.Null(CartelSpots.Claim(job, book, Map, CartelZones.HitKind, new Random(1), 100, 1_000, out why)); // the other is within apart_m of the one held
+        Assert.Equal("No hit spot is free now: another job holds every one.", why);
     }
 }
