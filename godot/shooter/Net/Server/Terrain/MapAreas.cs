@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Bunkers;
 using Drycastle.ShooterCore.Bunkers;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Churches;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Scenery;
@@ -20,6 +21,7 @@ internal sealed class MapAreas
     Shelters? _shelters;
     ZonePoints? _points;
     ZonePolygons? _polygons;
+    CartelMap? _cartel;
 
     public MapAreas(Drycastle.MapLoader.MapLoader? map, Func<ChurchShell?> church, Random rng) { _map = map; _church = church; _rng = rng; }
 
@@ -61,6 +63,23 @@ internal sealed class MapAreas
             _polygons = ZonePolygons.FromJsonOrEmpty(_map?.ZonePolygonsJson, m => GD.PrintErr($"server: {m}; there are no zone polygons"));
             if (_polygons.Has(PlantationRules.Kind)) GD.Print($"server: plantation: {_polygons.Rings(PlantationRules.Kind).Count} outline(s)");
             return _polygons;
+        }
+    }
+
+    /// <summary>
+    /// The cartel's map data (docs/cartel.md): the Contact (null on a map without his marker: then there is no cartel) and the Drop point and Hit spot
+    /// candidate points. Read once; the Job picks from it with the server's random generator.
+    /// </summary>
+    public CartelMap Cartel
+    {
+        get
+        {
+            if (_cartel != null) return _cartel;
+            _cartel = Drycastle.Shooter.Cartel.ContactMarker.Of(_map, ZonePoints);
+            GD.Print(_cartel.Contact is { } c
+                ? $"server: cartel: Contact at ({c.Position.X:F1}, {c.Position.Z:F1}), {_cartel.DropPoints.Count} drop points, {_cartel.HitSpots.Count} hit spots"
+                : "server: cartel: no Contact on this map, no cartel");
+            return _cartel;
         }
     }
 

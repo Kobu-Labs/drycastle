@@ -431,8 +431,9 @@ public static class SolidShapeKeys
 /// </summary>
 public static class ObjectColliders
 {
-    /// <summary>Assets that stop nothing whatever their category: the satellite dish (category "other" so the editor palette shows it, but a fitting on a wall).</summary>
-    public static bool IsPassThrough(string asset) => asset == DishSource.AssetId;
+    /// <summary>Assets that stop nothing whatever their category: the satellite dish (category "other" so the editor palette shows it, but a fitting on a wall) and the
+    /// cartel Contact's marker (no weapon is tested against him, docs/cartel.md).</summary>
+    public static bool IsPassThrough(string asset) => asset == DishSource.AssetId || asset == Cartel.CartelZones.ContactAsset;
 
     /// <summary>An object stops nothing when its asset is a pass-through one or it was placed with <c>solid: false</c> (dressing over a climbable prim).</summary>
     public static bool IsPassThrough(string asset, bool solid) => !solid || IsPassThrough(asset);

@@ -167,7 +167,7 @@ attribute (the flat surface of the body of water, metres on the terrain datum) a
 ### Zones (ADR 0022)
 
 A **zone kind** says what a marked area means in play. The kinds are a fixed catalog in code (`zones.KINDS`; a kind needs
-something in the pipeline or the game that reads it): `bigfoot` and `scud` (group event), `player_spawn` (group player), and one kind per
+something in the pipeline or the game that reads it): `bigfoot` and `scud` (group event), `player_spawn` (group player), `cartel_drop` and `cartel_hit` (group cartel: the Drop points and Hit spots of docs/cartel.md), and one kind per
 wild species (group wildlife: `deer`, `doe`, `stag`, `moose`, `boar`, `bear`, `fox`, `wolf`, `rabbit`, `raccoon`, `skunk`;
 the ids of `godot/shooter/data/animals.json`, a test checks it). A **zone** is an area of one kind. A zone never changes the
 terrain (a zone over a forest does not cut the forest), and zones overlap freely and add up. Zones come from two places that
@@ -866,7 +866,7 @@ it, rounded to a millimetre and kept only if still inside). Rules per kind:
 | `building_clearance_m`, `water_clearance_m` | metres kept clear of buildings and of the water bodies of `water.json` (shore included) |
 
 There is no clearance from trees (the Bigfoot walks through and tramples them) and none from fences, roads or placed objects.
-Today `bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water; `scud` (the Scud event's hidden truck, 12 m long) has 2000 m2 per point, 10 to 200 points, 15 m from buildings and 10 m from water, no rule zone (drawn only: the village map has none yet, and the server then falls back to open ground, docs/events/scud.md); the wildlife species have
+Today `bigfoot` has 1000 m2 per point, 30 to 300 points, 10 m from buildings and 5 m from water; `scud` (the Scud event's hidden truck, 12 m long) has 2000 m2 per point, 10 to 200 points, 15 m from buildings and 10 m from water, no rule zone (drawn only: the village map has none yet, and the server then falls back to open ground, docs/events/scud.md); `cartel_drop` (Drop points, where the Cartel van stops) has 150 m2 per point, 4 to 200 points, 3 m from buildings and 5 m from water, `cartel_hit` (Hit spots) 400 m2 per point, 10 to 300 points, 6 m from buildings and 5 m from water, both drawn only (none drawn: no Delivery or Hit, the Job refuses to start; read as `ShooterCore.Cartel.CartelMap`); the wildlife species have
 20000 m2 per point, 5 to 80 points, 15 m from buildings and 5 m from water.
 
 The file is listed under `files.zone_points` in `manifest.json` and written **only when some zone has an area**; otherwise it

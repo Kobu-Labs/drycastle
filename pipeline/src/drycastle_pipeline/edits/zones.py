@@ -2,7 +2,8 @@
 
 A **zone kind** says what an area means in play: ``bigfoot`` (the event may start there), ``scud`` (the Scud event hides its truck
 there), ``player_spawn`` (players may
-spawn there), one kind per wild species (``deer`` ... that species may live there). The kinds are a fixed catalog in code
+spawn there), one kind per wild species (``deer`` ... that species may live there), ``cartel_drop`` and ``cartel_hit`` (the
+cartel's Drop points and Hit spots, docs/cartel.md). The kinds are a fixed catalog in code
 (:data:`KINDS`): a kind needs something in the pipeline or the game that reads it, so a new kind is one entry here, its
 section in ``rules.yaml`` ``zones`` and the code that reads it. The editor shows the catalog from ``parcels.json``
 ``zone_kinds``.
@@ -63,6 +64,10 @@ POLYGON_KINDS = (PLANTATION,)
 BIGFOOT = "bigfoot"
 #: The Scud event's truck hides at one of the points of this kind (``NetServer.PickEventSpawn("scud")``); with no zone drawn the server falls back to open ground.
 SCUD = "scud"
+#: The cartel's Drop points (docs/cartel.md): a Delivery's duffel or a loaded Cartel van is handed over at one of these points.
+CARTEL_DROP = "cartel_drop"
+#: The cartel's Hit spots: a Hit job's Rival dealer stands outdoors with his guards at one of these points.
+CARTEL_HIT = "cartel_hit"
 
 #: The wildlife species that are zone kinds. They must match the species ids of godot/shooter/data/animals.json
 #: (a test checks it); the server spawns a species at the points of its kind.
@@ -82,7 +87,7 @@ MAX_ATTEMPTS_PER_POINT = 30  # rejected draws (a rounded point that falls just o
 class ZoneKind:
     name: str
     label: str
-    group: str  # event, player or wildlife
+    group: str  # event, player, cartel or wildlife
     tint: str  # the colour of its overlay in the editor
 
 
@@ -90,6 +95,7 @@ EVENT_TINT = "#c46be0"
 PLAYER_TINT = "#4aa3e8"
 PLANTATION_TINT = "#8bc34a"
 WILDLIFE_TINT = "#6bc27a"
+CARTEL_TINT = "#e8823a"
 
 #: The catalog, in order: the order of ``zone_kinds`` of parcels.json and of the entries of zone_points.json.
 KINDS: tuple[ZoneKind, ...] = (
@@ -97,6 +103,8 @@ KINDS: tuple[ZoneKind, ...] = (
     ZoneKind(SCUD, "Scud truck", "event", EVENT_TINT),
     ZoneKind(PLAYER_SPAWN, "Player spawn", "player", PLAYER_TINT),
     ZoneKind(PLANTATION, "Plantation", "player", PLANTATION_TINT),
+    ZoneKind(CARTEL_DROP, "Cartel drop point", "cartel", CARTEL_TINT),
+    ZoneKind(CARTEL_HIT, "Cartel hit spot", "cartel", CARTEL_TINT),
     *(ZoneKind(w, w.capitalize(), "wildlife", WILDLIFE_TINT) for w in (*WILDLIFE, *FLOCKS)),
 )
 KIND_NAMES = tuple(k.name for k in KINDS)
