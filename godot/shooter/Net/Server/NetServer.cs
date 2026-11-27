@@ -102,7 +102,7 @@ public partial class NetServer : Node
     BotServer _bots = null!; AdminSpawner _spawner = null!; SandboxServer _sandbox = null!; TeamServer _teams = null!; ChatServer _chat = null!; ProfileServer _profiles = null!;
     ItemsServer _gear = null!; HuntLogServer _hunts = null!; StatusServer _status = null!; CompanionServer _companions = null!; PlantationServer _plantation = null!;
     // the village and its animals
-    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
+    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
@@ -195,6 +195,7 @@ public partial class NetServer : Node
         _damage = new DamageServer(_ctx, _animals, _progress, _bots, _smoke, () => _streaks, () => _demon, () => _hunts, () => _status, () => _gunships, (attacker, weapon) => _bigfoot.Hit(attacker, weapon), _diag.Loss.Hit);
         _garage = new GarageServer(_ctx, Config.ArenaMode, Config.MapDir, _fleet.Cars, () => Config.Vehicles);
         _houses = new HouseDoorServer(_ctx, Config.ArenaMode, _fleet.Cars);
+        _trapHouses = new TrapHouseServer(_ctx, Config.ArenaMode, Config.Map); // the Trap houses' props (#496): dressed for a Job, stripped after
         _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops);
         _hunts = new HuntLogServer(_ctx, Config.Progression, Config.AnimalData, Config.Weapons, Config.Items, Config.CompanionData, _progress.Scores, _progress.WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
@@ -291,6 +292,7 @@ public partial class NetServer : Node
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
             _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset,
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
+            _trapHouses.RoundStart, // no Job outlives the round: every Trap house stripped
             rounds.Started);
         var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Config.Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, Config.WeaponsSmoke, Config.RpgSmoke, _harvester.OnKill, _diag.Loss.Kill, _diag.Loss.Death);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, rounds.Ended, _diag.Loss.RoundStart, _dummies.OnKilled);
@@ -391,6 +393,7 @@ public partial class NetServer : Node
             _garage.SendOnJoin, // and the garage doors, when they are open
             _houses.SendOnJoin, // and the houses' open doors
             _houseDestruction.SendOnJoin, // the house destruction settings and every carved house's removed cells
+            _trapHouses.SendOnJoin, // every dressed Trap house's props
             _harvester.SendOnJoin, // the harvester's job and the bales that burn
             _scud.SendOnJoin, // the Scud trucks' racks and proposals
             _demon.SendOnJoin, // and the demon's pounce, when one is on
@@ -643,6 +646,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _trapHouses);
     }
 }

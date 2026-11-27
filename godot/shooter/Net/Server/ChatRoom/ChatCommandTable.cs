@@ -15,7 +15,7 @@ namespace Drycastle.Shooter.Net.Server.ChatRoom;
 internal static class ChatCommandTable
 {
     public static void Register(ChatServer chat, AdminCommands admin, BotServer bots, AdminSpawner spawner, WildlifeServer wildlife, SandboxServer sandbox, ItemsServer gear,
-        CompanionServer companions, CitizenServer citizens, ChurchServer church, RozhlasServer rozhlas, StatusServer status, ScudServer scud, TeamServer teams, HouseDestructionServer houses)
+        CompanionServer companions, CitizenServer citizens, ChurchServer church, RozhlasServer rozhlas, StatusServer status, ScudServer scud, TeamServer teams, HouseDestructionServer houses, TrapHouseServer trapHouses)
     {
         chat.Register("bots", bots.ChatCommand);
         chat.Register("spawn", spawner.ChatCommand);
@@ -37,5 +37,6 @@ internal static class ChatCommandTable
         chat.Register("carve", houses.ChatCarve);
         chat.Register("houses", houses.ChatHouses);
         chat.Register("rubble", houses.ChatRubble);
+        chat.Register("traphouse", trapHouses.ChatTrapHouse);
     }
 }

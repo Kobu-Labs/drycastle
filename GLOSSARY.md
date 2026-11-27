@@ -870,7 +870,7 @@ A Gang member of the Rival crew who fights at range with a gun, where the Thieve
 _Avoid_: shooter, bot
 
 **Trap house**:
-A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job, its defenders posted in its rooms, a safe inside; stripped again when the Job ends. Planned (#437).
+A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job (by room type, from its floor plan and a seed; tables and crates are solid), its defenders posted in its rooms, a safe inside; stripped again when the Job ends. The dressing is built (`trap_house.json`, `/traphouse`); the Heist is planned (#437).
 _Avoid_: stash house, drug den, hideout
 
 **Rival dealer**:

@@ -425,6 +425,7 @@ public partial class Shooter : Node3D
         if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
         if (HouseDoorsNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } houseDoors) AddChild(houseDoors); // the hollow houses' doors (interiors.json): shut until a player opens them, solid on the server too
+        if (TrapHousesNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } trapHouses) AddChild(trapHouses); // the Trap houses' props (#496): none until the server dresses a house; boxes on the server too
         if (!_map.CollisionOnly && Buildings.Destruction.HouseWorldNode.Create(_map, _data?.HouseDestruction ?? Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default) is { } houseWorld) AddChild(houseWorld); // destructible hollow houses (house_voxels.bin), client side
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)

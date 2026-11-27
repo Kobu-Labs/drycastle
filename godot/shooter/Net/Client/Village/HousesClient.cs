@@ -8,7 +8,7 @@ namespace Drycastle.Shooter.Net.Client.Village;
 /// <summary>
 /// House destruction's events (docs/house-destruction.md Contract 4, <see cref="HouseCodec"/>) to the client's houses (<see cref="HouseWorldNode"/>): 242 a carve op,
 /// 243 a house's removed cells (join catch-up, resync), 244 the rubble mode and the round reset. A desync is answered with 249 HouseResync. The houses' debris
-/// (<see cref="DebrisNode"/>) lives under <see cref="ClientContext.Owned"/>, so a leave frees it and the next server's first event makes a new one.
+/// (<see cref="DebrisNode"/>) lives under <see cref="ClientContext.Owned"/>, so a leave frees it and the next server's first event makes a new one. Also the Trap houses' props (66, 67; #496).
 /// </summary>
 public sealed class HousesClient
 {
@@ -25,6 +25,7 @@ public sealed class HousesClient
 
     public void OnEvent(EventKind kind, byte[] payload)
     {
+        if (kind is EventKind.TrapHouseDressed or EventKind.TrapHouseStripped) { TrapHouse(kind, payload); return; }
         if (kind is not (EventKind.HouseCarve or EventKind.HouseCells or EventKind.HouseSettings) || HouseWorldNode.Current is not { } houses) return;
         Wire(houses);
         switch (kind)
@@ -53,9 +54,18 @@ public sealed class HousesClient
         houses.Debris = debris;
     }
 
+    /// <summary>The Trap houses (#496): a dressed house's props appear (also a joiner's catch-up), a stripped one's go.</summary>
+    static void TrapHouse(EventKind kind, byte[] payload)
+    {
+        if (Drycastle.Shooter.Buildings.TrapHousesNode.Current is not { } traps) return;
+        if (kind == EventKind.TrapHouseDressed && Drycastle.ShooterCore.Cartel.TrapHouseCodec.DecodeDressed(payload) is { } dressed) traps.Show(dressed.House, dressed.Props);
+        else if (kind == EventKind.TrapHouseStripped && Drycastle.ShooterCore.Cartel.TrapHouseCodec.DecodeStripped(payload) is { } house) traps.Hide(house);
+    }
+
     /// <summary>Leaving the server: the houses whole again and the debris gone (the next server sends its own state).</summary>
     public void Teardown()
     {
+        Drycastle.Shooter.Buildings.TrapHousesNode.Current?.HideAll(); // the next server says which houses it has dressed
         if (HouseWorldNode.Current is not { } houses) return;
         houses.ResetAll();
         houses.Debris = null; // freed with Owned
