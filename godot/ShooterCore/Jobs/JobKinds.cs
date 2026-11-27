@@ -1,3 +1,5 @@
+using System.Numerics;
+
 namespace Drycastle.ShooterCore.Jobs;
 
 /// <summary>What an objective's step says (<see cref="IJobObjective.Step"/>).</summary>
@@ -31,4 +33,8 @@ public interface IJobObjective
     int BonusRespect => 0;
     /// <summary>The Job ended, whichever way: what the kind put in the world goes (NPCs, duffels, the van).</summary>
     void End(Job job) { }
+    /// <summary>The HUD tracker's objective line for the party now ("Take the duffel to the drop point"); empty: the kind's name only. Asked each tick; the server sends it when it changes.</summary>
+    string Objective(Job job) => "";
+    /// <summary>Where the party's marker points now (minimap and world, Godot axes), or null for none. Asked each tick; the server sends it when it changes.</summary>
+    Vector3? Marker(Job job) => null;
 }
