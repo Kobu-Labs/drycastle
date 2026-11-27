@@ -136,13 +136,35 @@ public sealed class DuffelsClient
             if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e)) { v.Node.Visible = false; continue; }
             var state = DuffelRules.StateOf(e.State.State);
             if (state == DuffelState.Carried) { PlaceCarried(v, e.State.Owner); continue; }
-            if (state == DuffelState.Loaded) { PlaceLoaded(v, e.State.Owner, DuffelRules.SlotOf(e.State.State)); continue; }
+            if (state == DuffelState.Loaded) continue; // placed by RenderLoaded, after the vehicles are drawn
             if (e.Buf.At(rt) is not { } s) { v.Node.Visible = false; continue; }
             v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
             v.Node.Visible = true;
         }
         _targets.Duffel = _reach != 0 && _carried == null && !_ctx.Dead && !_ctx.Driving && _views.ContainsKey(_reach) ? _reach : null;
+    }
+
+    /// <summary>
+    /// Every frame, after the vehicles and the Receivers are drawn (the same frame, so a bag never trails its vehicle by the frame's motion): places every loaded Duffel on its vehicle or Receiver from the drawn transform.
+    /// </summary>
+    public void RenderLoaded()
+    {
+        foreach (var (id, v) in _views)
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && DuffelRules.StateOf(e.State.State) == DuffelState.Loaded)
+                PlaceLoaded(v, e.State.Owner, DuffelRules.SlotOf(e.State.State));
+    }
+
+    /// <summary>
+    /// The top speed (m/s) the throttle of a vehicle is governed to, or null: it is a Cartel van (<see cref="CartelFile.LoadedCapMps"/>) with a Duffel loaded on it, as the replica says. The server holds the same cap from the
+    /// same fact (<c>CargoServer</c>), so the driver's prediction and the server step alike; a bag loaded or taken out reaches this client a round trip later than the server, and the prediction is corrected for that moment only.
+    /// </summary>
+    internal float? SpeedCapOf(ushort vehicle, CartelFile cartel)
+    {
+        if (!_ctx.Cars.TryGet(vehicle, out var car) || _ctx.Vehicles == null || car.Kind >= _ctx.Vehicles.Vehicles.Count || cartel.LoadedCapMps(_ctx.Vehicles.Vehicles[car.Kind].Id) is not { } cap) return null;
+        foreach (var (id, _) in _views)
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && DuffelRules.StateOf(e.State.State) == DuffelState.Loaded && e.State.Owner == vehicle) return cap;
+        return null;
     }
 
     /// <summary>

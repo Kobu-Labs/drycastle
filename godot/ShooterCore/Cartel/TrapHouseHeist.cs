@@ -9,6 +9,9 @@ namespace Drycastle.ShooterCore.Cartel;
 /// </summary>
 public sealed class TrapHouseHeistData : HeistData
 {
+    /// <summary>The kind's id in cartel.json <c>jobs</c>.</summary>
+    public const string KindId = "trap_house";
+
     public TrapHouseHeistData()
     {
         Name = "Trap house";
