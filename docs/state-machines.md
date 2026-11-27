@@ -285,6 +285,22 @@ stateDiagram-v2
 - **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
 - **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
+## Cartel.Membership
+
+Whether a player works for the Cartel: an outsider until they join at the Contact, a member who runs Jobs and earns Respect, or quit with rank and Respect frozen until they rejoin.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Outsider
+    Outsider --> Member
+    Member --> Quit
+    Quit --> Member
+```
+
+- **Outsider**: never joined: no rank, 0 Respect
+- **Member**: starts Jobs (as the leader of their party) and earns Respect
+- **Quit**: left the Cartel: rank and Respect kept frozen; a rejoin carries on from them
+
 ## Casing.Phase
 
 One spent casing: in the air or sliding, lying still on the floor, fading out, or a free slot.
@@ -1075,6 +1091,23 @@ stateDiagram-v2
 - **Idle**: Key up, or held with nothing in reach (Held is 0).
 - **Charging**: Key held at something in reach and the open request is not sent yet: Held counts up.
 - **Sent**: The open request is sent: nothing more until the key is released. Leaving reach zeroes Held but stays Sent; a despawn (Reset) ends it too.
+
+## Job.Run
+
+One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Succeeded
+    Active --> Failed
+    Succeeded --> [*]
+    Failed --> [*]
+```
+
+- **Active**: the objective runs and the timer counts down
+- **Succeeded**: the objective was met: every earning member of the party at that moment is paid
+- **Failed**: pays nothing; the reason says why
 
 ## Killstreak.Hold
 

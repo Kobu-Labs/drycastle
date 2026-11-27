@@ -1,4 +1,5 @@
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Progression;
 using Drycastle.ShooterCore.Tests.Support;
@@ -56,6 +57,24 @@ public class PersistenceTests
         await store.Profiles.SetCompanionAsync(p.Id, "firebird");
         Assert.Equal("firebird", await store.Profiles.GetCompanionAsync(p.Id));
         Assert.Equal("", await store.Profiles.GetCompanionAsync(999_999));
+    }
+
+    [Theory]
+    [MemberData(nameof(Backends))]
+    public async Task TheCartelStandingIsKeptAndRespectOnlyAdds(string backend)
+    {
+        using var store = Create(backend);
+        var p = await store.Profiles.GetOrCreateAsync("cartel-player");
+        Assert.Equal(CartelRecord.None, await store.Profiles.GetCartelAsync(p.Id));
+        await store.Profiles.SetCartelMembershipAsync(p.Id, CartelMembership.Member);
+        await store.Profiles.AddRespectAsync(p.Id, 150);
+        await store.Profiles.AddRespectAsync(p.Id, 100);
+        await store.Profiles.SetCartelMembershipAsync(p.Id, CartelMembership.Quit);
+        Assert.Equal(new CartelRecord(CartelMembership.Quit, 250), await store.Profiles.GetCartelAsync(p.Id)); // quit keeps the Respect
+        await store.Profiles.AddRespectAsync(p.Id, int.MaxValue);
+        Assert.Equal(int.MaxValue, (await store.Profiles.GetCartelAsync(p.Id)).Respect);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => store.Profiles.AddRespectAsync(p.Id, -1));
+        Assert.Equal(CartelRecord.None, await store.Profiles.GetCartelAsync(999_999));
     }
 
     [Theory]
@@ -154,8 +173,8 @@ public class PersistenceTests
         using (var conn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
         {
             conn.Open();
-            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds, 0010_companion, 0011_weapon_cut)
-            Assert.Equal(11L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
+            // one row per migration file (0001_init, 0002_roadkills, 0003_camo, 0004_loadout_camo, 0005_loadout_name, 0006_camo_character, 0007_hunts, 0008_player_kills, 0009_mineral_finds, 0010_companion, 0011_weapon_cut, 0012_cartel)
+            Assert.Equal(12L,(long)new Microsoft.Data.Sqlite.SqliteCommand("SELECT COUNT(*) FROM schema_migrations;", conn).ExecuteScalar()!);
         }
         using (var store = SqliteProgressionStore.Open(path, Logged.Add, Curve))
         {

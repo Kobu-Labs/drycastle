@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  // The drug Cartel (docs/cartel.md, ADR 0045; GLOSSARY "Cartel", "Cartel rank", "Respect", "Job"). Read by ShooterCore/Cartel/CartelFile.cs; nothing here was played: first guesses.
+  // ranks: the personal ladder, lowest first. respect: the total Respect a member needs to hold the rank (the first is 0, each next more). Respect only grows; a member who
+  // quits keeps it frozen until they rejoin. The name is what players see (the rank-up toast and chat line); the id is the key tiers name.
+  "ranks": [
+    { "id": "runner",  "name": "Runner",  "respect": 0 },
+    { "id": "dealer",  "name": "Dealer",  "respect": 1000 },
+    { "id": "sicario", "name": "Sicario", "respect": 3000 },
+    { "id": "capo",    "name": "Capo",    "respect": 7000 },
+    { "id": "patron",  "name": "Patrón",  "respect": 15000 }
+  ],
+  // tiers: the Contact lists jobs by tier, 1 first, numbered without a gap. rank: the lowest rank of the leader that opens it (never lower than the tier before's);
+  // respect: what a finished job of the tier pays EVERY earning member of the party at the moment of success (a member of the Cartel with a stored Profile, not in sandbox mode).
+  // A failed job pays nothing. Reward depends on the tier only (a heist adds its own bonus later).
+  "tiers": [
+    { "tier": 1, "rank": "runner",  "respect": 100 },
+    { "tier": 2, "rank": "dealer",  "respect": 200 },
+    { "tier": 3, "rank": "sicario", "respect": 350 },
+    { "tier": 4, "rank": "capo",    "respect": 550 },
+    { "tier": 5, "rank": "patron",  "respect": 800 }
+  ],
+  // One section per kind of Job, read only by that kind.
+  "jobs": {
+    // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when
+    // they run out. succeed_seconds: it succeeds once it has run this long (the leader alive, nothing else to do). Set it above a tier's seconds to test the timer.
+    "test": {
+      "name": "Test job",
+      "seconds": [120, 110, 100, 90, 80],
+      "succeed_seconds": 20
+    }
+  }
+}

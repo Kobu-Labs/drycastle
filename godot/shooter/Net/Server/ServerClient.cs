@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Hud;
@@ -156,6 +157,8 @@ internal sealed class PlayerProfile
     public CamoSpec Camo => Camos[Math.Clamp(Active, 0, Loadout.MaxSlot)];
     /// <summary>The Companion chosen on the Equipment screen (an id of companions.json, #488); empty: none chosen, the first one owned is out.</summary>
     public string Companion = "";
+    /// <summary>Where the player stands with the Cartel (ADR 0045): membership and Respect, stored with the Profile; a guest's is never stored (a guest cannot join).</summary>
+    public CartelStanding Cartel = new();
 }
 
 /// <summary>A profile still being read on the database thread. Only the task is shared; the result is applied on the tick.</summary>

@@ -1,4 +1,5 @@
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Demon;
@@ -61,6 +62,8 @@ public class GameData
     public PlantationFile Plantation { get; init; } = PlantationFile.Default;
     /// <summary>companions.json (the Companions a player can own). Empty when the file is absent.</summary>
     public CompanionsFile Companions { get; init; } = new();
+    /// <summary>cartel.json (the Cartel: ranks, tiers, each kind of Job's numbers; docs/cartel.md). The shipped defaults when the file is absent.</summary>
+    public CartelFile Cartel { get; init; } = CartelFile.Default;
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -79,7 +82,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -109,6 +112,7 @@ public class GameData
             Plantation = plantationJson == "" ? PlantationFile.Default : PlantationFile.Parse(plantationJson),
             Companions = companionsJson == "" ? new() : CompanionsFile.Parse(companionsJson).CheckAgainst(animals),
             HouseDestruction = houseDestructionJson == "" ? DestructionConfig.Default : DestructionConfig.Parse(houseDestructionJson),
+            Cartel = cartelJson == "" ? CartelFile.Default : CartelFile.Parse(cartelJson),
         };
     }
 
@@ -143,6 +147,7 @@ public class GameData
             Plantation = File.Exists(Path.Combine(dir, "plantation.json")) ? PlantationFile.Load(Path.Combine(dir, "plantation.json")) : PlantationFile.Default,
             Companions = File.Exists(Path.Combine(dir, "companions.json")) ? CompanionsFile.Load(Path.Combine(dir, "companions.json")).CheckAgainst(animals) : new(),
             HouseDestruction = File.Exists(Path.Combine(dir, "house_destruction.json")) ? DestructionConfig.Load(Path.Combine(dir, "house_destruction.json")) : DestructionConfig.Default,
+            Cartel = File.Exists(Path.Combine(dir, "cartel.json")) ? CartelFile.Load(Path.Combine(dir, "cartel.json")) : CartelFile.Default,
         };
     }
 }

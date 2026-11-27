@@ -822,15 +822,15 @@ A rare Mystery Animal of the night sky (`phoenix` in `animals.json`, model `phoe
 _Avoid_: firebird, Event (it is not an Event), boss
 
 **Cartel**:
-The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Planned (#437).
+The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Membership (machine `Cartel.Membership`: outsider, member, quit) and Respect are stored on the Profile; a guest cannot join, bots never do. The Contact's place is to come: until then he answers anywhere (#494).
 _Avoid_: gang (the Rival crew and the Thieves' Raids are gangs), faction, mafia
 
 **Cartel rank**:
-A Cartel member's position on their own ladder (Runner, Dealer, Sicario, Capo, Patrón), climbed with Respect. Kept on the Profile; a player who quits keeps it frozen until they rejoin. Planned (#437).
+A Cartel member's position on their own ladder (Runner, Dealer, Sicario, Capo, Patrón), climbed with Respect (the curve and names in `cartel.json`). Not stored itself: it follows from the Respect on the Profile; a player who quits keeps it frozen until they rejoin. A rank-up is told to everyone (#494).
 _Avoid_: level (that is XP's), title, position
 
 **Respect**:
-What a finished cartel Job pays, and all it pays: the Cartel rank's own experience, apart from XP. Planned (#437).
+What a finished cartel Job pays, and all it pays: the Cartel rank's own experience, apart from XP. A finished Job pays its tier's Respect (`cartel.json` tiers) to every member of the party at that moment who is in the Cartel, has a stored Profile and is not in sandbox mode (#494).
 _Avoid_: XP, rep, reputation, money
 
 **Contact**:
@@ -838,7 +838,7 @@ The cartel's man at the plantation, whom nothing can hurt: where a player joins 
 _Avoid_: NPC (alone), quest giver, dealer
 
 **Job**:
-One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. Planned (#437).
+One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. The core is built (#494, `JobBook`, machine `Job.Run`): one running Job per owner (a solo player, or in team deathmatch a Squad), many at once; a timer; it fails at the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, or when nobody is left; two Jobs never share a reserved thing (a drop point). Kinds of Job plug in; the objectives are their own.
 _Avoid_: quest, mission, task, Event (a Job is not one)
 
 **Heist**:

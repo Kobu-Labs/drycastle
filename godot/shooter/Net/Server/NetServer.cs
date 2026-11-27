@@ -6,6 +6,7 @@ using Drycastle.Shooter.Net.Server.BusGarage;
 using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
 using Drycastle.Shooter.Net.Server.Careers;
+using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.ChatRoom;
 using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
@@ -39,6 +40,7 @@ using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.CarePackages;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Colliders;
@@ -47,6 +49,7 @@ using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Items;
+using Drycastle.ShooterCore.Jobs;
 using Drycastle.ShooterCore.Killstreaks.Helicopter;
 using Drycastle.ShooterCore.Killstreaks.Moab;
 using Drycastle.ShooterCore.Killstreaks;
@@ -109,6 +112,7 @@ public partial class NetServer : Node
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
     EventServer _eventServer = null!; GunshipServer _gunships = null!; FlakServer _flak = null!; StreakServer _streaks = null!; LockOnServer _lockOn = null!;
     ScoreboardServer _scoreboard = null!; MatchEventsServer _matchEvents = null!;
+    CartelServer _cartel = null!;
     /// <summary>Which event runs (shared by every <c>/event</c> kind: one at a time).</summary>
     readonly EventBook _events = new();
 
@@ -276,6 +280,9 @@ public partial class NetServer : Node
         var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c));
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);
+        // the Cartel's Jobs (#494): parties from the match (SEAM: the Squad leader), the Contact everywhere until the map places him
+        _cartel = new CartelServer(_ctx, Config.Cartel, Config.Progression, new MatchJobParties(_match), AnywhereContact.Instance);
+        _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
         BuildVehicles();
         BuildShooting();
         var rounds = new RoundHooks(_streaks, _gunships, _flak, _progress, _bigfoot, _thieves);
@@ -291,6 +298,7 @@ public partial class NetServer : Node
             _scud.RoundReset, // the launchers start over; a Scud truck, which never returns, is retired
             _status.RoundStart, _plantation.RoundStart, _lockOn.RoundReset,
             _houseDestruction.RoundStart, // every hollow house whole again, the rubble mode back to house_destruction.json's
+            _cartel.RoundReset, // every running Job fails
             rounds.Started);
         var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Config.Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, Config.WeaponsSmoke, Config.RpgSmoke, _harvester.OnKill, _diag.Loss.Kill, _diag.Loss.Death);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, rounds.Ended, _diag.Loss.RoundStart, _dummies.OnKilled);
@@ -400,6 +408,7 @@ public partial class NetServer : Node
             _gear.SendBinocularsOnJoin, // and who holds the binoculars up
             _gear.SendHeadLampsOnJoin, // and whose head lamp is on
             _status.SendOnJoin, // who is blessed, cursed or burning
+            _cartel.SendOnJoin, // the joiner's own Cartel standing
         };
         _roster = new PlayerRoster(_ctx, Config, _host, _byId, _ids, _sentStates, _sentWorld, _progress, _areas, _animals, _profiles, _companions, _sandbox, _chat, _streaks, _status, _rozhlas, _sitters, _seats, tellJoiner);
         _connections = new ConnectionServer(_ctx, _host, _clients, _roster, _diag.Health, _sandbox, _profiles, Config.Map);
@@ -515,6 +524,7 @@ public partial class NetServer : Node
         audit?.Lap(7);
         _rozhlas.Tick(dt); // the village loudspeaker: the schedule and the hijack clock
         audit?.Lap(8);
+        _cartel.Tick(dt); // the Jobs: objectives, timers, rewards
         Prof.End(Prof.S.Events, pt);
         _diag.Lap(Ph.Match);
     }
@@ -625,6 +635,7 @@ public partial class NetServer : Node
         else if (m is EventMsg { Kind: (byte)EventKind.OpenCarePackage } oc) _crates.OnOpen(c, oc.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.MineralPick } mp && c.Joined) _minerals.OnPick(c, mp.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.CompanionPick } cp && c.Joined) _companions.OnPick(c, cp.Payload);
+        else if (m is EventMsg { Kind: (byte)EventKind.CartelRequest } cq && c.Joined) _cartel.OnRequest(c, cq.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxGrant } sg && c.Joined) _sandbox.OnGrant(c, sg.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxAction } sa && c.Joined) _sandbox.OnAction(c, sa.Payload);
         else if (m is EventMsg { Kind: (byte)EventKind.SandboxTeleportTo } st && c.Joined) _sandbox.OnTeleportTo(c, st.Payload);
@@ -643,6 +654,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel);
     }
 }

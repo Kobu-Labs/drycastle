@@ -1,4 +1,5 @@
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Hunts;
 using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Progression;
@@ -17,6 +18,7 @@ public sealed class InMemoryProgressionStore : IProgressionStore
     readonly Dictionary<long, Loadout[]> _loadouts = new();
     readonly Dictionary<long, int> _activeSlot = new();
     readonly Dictionary<long, string> _companion = new();
+    readonly Dictionary<long, CartelRecord> _cartel = new();
     readonly Dictionary<long, HashSet<Unlock>> _unlocks = new();
     readonly Dictionary<long, StatsRow> _stats = new();
     readonly Dictionary<(long Player, int Slot), CamoSpec> _camo = new();
@@ -96,6 +98,30 @@ public sealed class InMemoryProgressionStore : IProgressionStore
         {
             lock (s._gate)
                 if (s._byId.ContainsKey(playerId)) s._companion[playerId] = companionId ?? "";
+            return Task.CompletedTask;
+        }
+
+        public Task<CartelRecord> GetCartelAsync(long playerId)
+        {
+            lock (s._gate) return Task.FromResult(s._cartel.GetValueOrDefault(playerId, CartelRecord.None));
+        }
+
+        public Task SetCartelMembershipAsync(long playerId, CartelMembership membership)
+        {
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId)) s._cartel[playerId] = s._cartel.GetValueOrDefault(playerId, CartelRecord.None) with { Membership = membership };
+            return Task.CompletedTask;
+        }
+
+        public Task AddRespectAsync(long playerId, int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), amount, "Respect cannot go down");
+            lock (s._gate)
+                if (s._byId.ContainsKey(playerId))
+                {
+                    var r = s._cartel.GetValueOrDefault(playerId, CartelRecord.None);
+                    s._cartel[playerId] = r with { Respect = (int)Math.Min((long)r.Respect + amount, int.MaxValue) };
+                }
             return Task.CompletedTask;
         }
 
