@@ -39,11 +39,11 @@ internal sealed class ChaseUnit
     ThiefGang? _crew;
     Way _way = new(RoadPath.Empty, true, NVec2.Zero);
     Countdown _repath;
-    Countdown _wreck;
+    readonly ChaseCleanup _cleanup;
 
     ChaseUnit(ChaseServer s, HeistRun run, ChaseData d, ServerCar car, NVec3 van)
     {
-        _s = s; _run = run; _d = d; _car = car; _machine = new ChaseCar(d);
+        _s = s; _run = run; _d = d; _car = car; _machine = new ChaseCar(d); _cleanup = new ChaseCleanup(d);
         _crew = s.Rivals.NewCrew(van, id => _machine.Shoots && run.Party.Contains(id)); // it attacks the Job's party, only while the machine lets it shoot
         car.Exploded += OnExploded;
         _machine.Changed += (from, to) => GD.Print($"server: {_run.Job}: chase car {car.Id}: {from} -> {to}");
@@ -101,7 +101,7 @@ internal sealed class ChaseUnit
     /// <summary>One tick of the Heist (before the vehicles step): the machine, then what its state asks of the car and the crew.</summary>
     public void Tick(float dt, NVec3 van, float vanSpeed)
     {
-        if (_car is { Destroyed: true } && _wreck.Tick(dt)) RemoveCar(); // the wreck lies its time, then goes (before the type's return time brings it back)
+        if (_cleanup.WreckOver(_car is { Destroyed: true }, dt)) RemoveCar(); // the wreck lies its time, then goes (before the type's return time brings it back)
         if (_car is not { } car)
         {
             if (_machine.State == ChaseState.Out) TickOut(van);
@@ -116,7 +116,7 @@ internal sealed class ChaseUnit
         var gap = NVec2.Distance(pos, van2);
         var roadPointM = _way.VanOnRoad ? float.PositiveInfinity : NVec2.Distance(pos, _way.RoadPoint);
         var step = _machine.Step(new ChaseFacts(gap, vanSpeed, _way.VanOnRoad, roadPointM, MathF.Abs(speed), DriverAlive, car.Destroyed, !_way.Path.IsEmpty), dt);
-        if (step.Remove) { Remove(); _machine.End(); return; }
+        if (step.Remove) { Apply(ChaseCleanup.Due(ChaseState.GivingUp, Left())); _machine.End(); return; }
         if (step.GetOut) GetOut(car, van);
         switch (_machine.State)
         {
@@ -154,10 +154,16 @@ internal sealed class ChaseUnit
     }
 
     /// <summary>Gone: the car is taken out unless a player sits in it (they keep it until they leave or the Job ends), and the crew's bodies are given their time.</summary>
-    void Wind()
+    void Wind() => Apply(ChaseCleanup.Due(_machine.State, Left()));
+
+    /// <summary>What is left of the car in the world, for <see cref="ChaseCleanup"/>.</summary>
+    ChaseLeft Left() => new(_car != null, _car?.Destroyed ?? false, _car?.Seat.Occupied ?? false, _crew != null, _crew?.Count ?? 0);
+
+    /// <summary>Takes out what the clean-up says is due.</summary>
+    void Apply(ChaseDue due)
     {
-        if (_car is { Destroyed: false, Seat.Occupied: false }) RemoveCar();
-        if (_crew is { Count: 0 }) RemoveCrew();
+        if (due.Car) RemoveCar();
+        if (due.Crew) RemoveCrew();
     }
 
     // ---- the way ----
@@ -217,17 +223,13 @@ internal sealed class ChaseUnit
     void OnExploded(ServerCar car, ushort attacker)
     {
         foreach (var (m, _) in _riders) m.Kill(attacker);
-        _wreck.Start(_d.WreckSeconds);
+        _cleanup.Exploded();
     }
 
     // ---- removal ----
 
     /// <summary>Takes the car and the crew out of the world now (given up, or the Heist ended).</summary>
-    public void Remove()
-    {
-        RemoveCar();
-        RemoveCrew();
-    }
+    public void Remove() => Apply(ChaseCleanup.Due(_machine.State, Left(), ended: true));
 
     void RemoveCar()
     {
