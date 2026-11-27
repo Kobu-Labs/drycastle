@@ -27,6 +27,7 @@ using Drycastle.ShooterCore.Sandbox;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
@@ -85,6 +86,14 @@ public enum EventKind : byte
     HeadLampState = 31,
     /// <summary>Server broadcast: a Phoenix was first hit and starts to fall (<see cref="PhoenixFallCodec"/>: u16 world entity id, f32 x3 where it was hit, f32 x3 the crash site, f32 fall seconds, 30 bytes). Not sent to a joiner: its state and position say the rest.</summary>
     PhoenixFall = 32,
+    /// <summary>Client to server: a request at the Contact, join or quit the Cartel or start a Job (<see cref="CartelCodec.EncodeRequest"/>). Kinds 33-39 belong to the Cartel (#437); 37-39 are free.</summary>
+    CartelRequest = 33,
+    /// <summary>Server to the player: their Cartel standing, membership, Respect, rank and flags (<see cref="CartelCodec.EncodeStatus"/>), at join and after every change.</summary>
+    CartelStatus = 34,
+    /// <summary>Server to a Job's party: the receiver's Job, its state, timer, leader and, at its end, the reason and what they were paid (<see cref="CartelCodec.EncodeJob"/>); job id 0 clears it.</summary>
+    CartelJob = 35,
+    /// <summary>Server to everyone: a player reached a new Cartel rank (<see cref="CartelCodec.EncodeRankUp"/>: u16 player id, u8 rank); the client shows the toast (the chat line comes with it).</summary>
+    CartelRankUp = 36,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -427,6 +436,7 @@ public static class Wire
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
+    //   vNEXT (Cartel profile + Job core): events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec)
     public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

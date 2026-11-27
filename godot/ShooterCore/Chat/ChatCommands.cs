@@ -120,6 +120,8 @@ public static class ChatCommands
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
         new("carve", "TEST: carve a sphere of that radius (metres) out of the hollow houses where your crosshair meets the world. No damage, no glass, no blast", new[] { new ChatArg("radius", ChatArgKind.Int, true, 1, MaxCarveRadius) }),
         new("houses", "TEST: make every hollow house whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("cartel", "TEST: the Cartel, for yourself: join or quit anywhere, add Respect (respect <n>), start a Job of a kind at any tier anywhere (job <kind> [tier], e.g. job test 2), or show your standing (status)",
+            new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("value", ChatArgKind.Text, false) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
 
@@ -162,6 +164,7 @@ public static class ChatCommands
                 ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
+            ChatArgKind.Choice when cmd.Name == "cartel" => new[] { ("join", "join the Cartel (no Contact needed)"), ("quit", "quit the Cartel: rank and Respect are kept"), ("respect", "add that much Respect (a rank-up is announced)"), ("job", "start a Job: the kind, then the tier (1 by default; any tier)"), ("status", "your membership, Respect, rank and Job") },
             ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
             ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },

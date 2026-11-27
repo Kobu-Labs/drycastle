@@ -1,4 +1,5 @@
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Hunts;
 using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Progression;
@@ -19,6 +20,11 @@ public interface IProfileRepository
     /// <summary>The Companion the player chose (#488): an id of companions.json, empty for none chosen or an unknown player. Whether they own it is the caller's to check.</summary>
     Task<string> GetCompanionAsync(long playerId);
     Task SetCompanionAsync(long playerId, string companionId);
+    /// <summary>The player's Cartel standing (ADR 0045): membership and Respect; an outsider with 0 for an unknown player or one who never joined.</summary>
+    Task<CartelRecord> GetCartelAsync(long playerId);
+    Task SetCartelMembershipAsync(long playerId, CartelMembership membership);
+    /// <summary>Adds Respect (amount must be &gt;= 0), as "respect = respect + n" so a grant queued before a quick rejoin's read is never lost.</summary>
+    Task AddRespectAsync(long playerId, int amount);
 }
 
 public interface ILoadoutRepository
