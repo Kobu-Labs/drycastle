@@ -5,12 +5,14 @@
 // A fragment is discarded when its cell in the house's hidden grid is removed: the world position, stepped 0.01 m against the normal
 // (a face on a cell boundary reads the cell behind it), is mapped to grid cells by world_to_grid and looks up an R8 3D texture
 // (one texel a cell, nearest, 1 = hidden: near a hole, where voxel blocks are drawn instead, or air left with nothing next to it;
-// ShooterCore HouseDamageLook). Outside the grid nothing is discarded.
+// ShooterCore HouseDamageLook). Outside the grid nothing is discarded, except within edge_cells of it (fence walls: clamped to the nearest cell).
 shader_type spatial;
 render_mode blend_mix, depth_draw_opaque, cull_back, diffuse_burley, specular_schlick_ggx;
 
 uniform mat4 world_to_grid;
 uniform vec3 grid_size = vec3(1.0);
+// > 0 (fence walls): a fragment this many cells or fewer outside the grid reads the nearest cell, so faces beyond a thin wall's one row are cut too
+uniform float edge_cells = 0.0;
 uniform highp sampler3D removed : filter_nearest, repeat_disable;
 uniform sampler2D albedo_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 
@@ -26,6 +28,10 @@ void vertex() {
 
 void fragment() {
 	vec3 g = (world_to_grid * vec4(world_pos - normalize(world_normal) * 0.01, 1.0)).xyz;
+	// a fence wall's grid is one cell thick, its faces (and caps, piers) up to a cell or two outside it: they read the nearest cell
+	if (edge_cells > 0.0 && all(greaterThanEqual(g, vec3(-edge_cells))) && all(lessThan(g, grid_size + vec3(edge_cells)))) {
+		g = clamp(g, vec3(0.0), grid_size - vec3(0.001));
+	}
 	if (all(greaterThanEqual(g, vec3(0.0))) && all(lessThan(g, grid_size))) {
 		if (texture(removed, g / grid_size).r > 0.5) {
 			discard;

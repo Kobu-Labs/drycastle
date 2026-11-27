@@ -324,7 +324,7 @@ def test_tree_vertices_carry_their_base_and_fences_the_sentinel() -> None:
         {"x": 1234.5, "y": 678.25, "z": 3.0, "scale": 1.0, "rot": 0.3, "shape": "cone", "colour": "#2f6b2f", "parcel": "P-1"},
         {"x": -20.75, "y": 910.5, "z": 5.5, "scale": 1.4, "rot": 1.1, "shape": "box", "colour": "#3f7b3f", "parcel": "P-1", "forest": 1},
     ]
-    fences = [{"parcel": "P-1", "a": [10.0, 10.0], "b": [13.0, 10.0], "za": 0.0, "zb": 0.0, "type": "picket"}]  # its posts are flat
+    fences = [{"parcel": "P-1", "a": [10.0, 10.0], "b": [13.0, 10.0], "za": 0.0, "zb": 0.0, "type": "brick_red"}]  # its copings are flat
     visual, collision, textured = parcel_props_meshes(fences, trees, cfg)
     fence_only = parcel_props_meshes(fences, [], cfg)[0]
     n_tree = [trees_mesh([t], cfg["trees"]).face_count for t in trees]

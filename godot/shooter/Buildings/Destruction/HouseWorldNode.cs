@@ -22,6 +22,9 @@ public partial class HouseWorldNode : Node3D
     public const string ShaderPath = "res://shaders/house_destruction.gdshader";
     /// <summary>The same cut for a house's textured faces (fence walls): the library texture times the vertex colour.</summary>
     public const string TexShaderPath = "res://shaders/house_destruction_tex.gdshader";
+    /// <summary>A fence wall's grid (fence_&lt;index&gt;, docs/fence-destruction.md): one cell thick, its faces, caps and piers up to this many cells outside it read the nearest cell.</summary>
+    const string FenceGridPrefix = "fence_";
+    const float FenceEdgeCells = 2f;
     public static HouseWorldNode? Current { get; private set; }
     const double ResyncRetrySeconds = 5;
     /// <summary>A house still unlike the server's after this long of asking with the server's house unchanged (its map data differs: a full 243 never matches) is frozen as it is until the round resets.</summary>
@@ -387,12 +390,14 @@ public partial class HouseWorldNode : Node3D
             h.Texture = new ImageTexture3D();
             h.Texture.Create(Image.Format.R8, nx, ny, nz, false, h.Layers);
             var toGrid = new Projection((MapToWorld * GridToMap(g)).AffineInverse());
+            var edge = g.Id.StartsWith(FenceGridPrefix, StringComparison.Ordinal) ? FenceEdgeCells : 0f;
             if (visual)
             {
                 h.Material = new ShaderMaterial { Shader = _shader };
                 h.Material.SetShaderParameter("removed", h.Texture);
                 h.Material.SetShaderParameter("grid_size", new Vector3(nx, ny, nz));
                 h.Material.SetShaderParameter("world_to_grid", toGrid);
+                h.Material.SetShaderParameter("edge_cells", edge);
                 h.FlatMaterial = h.Visual!.MaterialOverride;
                 h.Visual.MaterialOverride = h.Material;
             }
@@ -405,6 +410,7 @@ public partial class HouseWorldNode : Node3D
                     mat.SetShaderParameter("grid_size", new Vector3(nx, ny, nz));
                     mat.SetShaderParameter("world_to_grid", toGrid);
                     mat.SetShaderParameter("albedo_tex", albedo);
+                    mat.SetShaderParameter("edge_cells", edge);
                     h.TexSwaps.Add((node, flat));
                     node.MaterialOverride = mat;
                 }

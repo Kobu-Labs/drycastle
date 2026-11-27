@@ -89,8 +89,11 @@ def test_style_tables_cover_the_schema() -> None:
 def test_every_type_builds_its_texture_and_flat_parts(ftype: str) -> None:
     flat, textured = styled_fence_meshes(run(ftype), FENCE)
     style = FENCE_STYLES[ftype]
-    assert style.texture in textured and flat.face_count > 0  # posts or caps
+    thin = style.panel == "sheet"
+    assert style.texture in textured and (("plain" in textured and flat.face_count == 0) if thin else flat.face_count > 0)  # posts (plain texture: they break) or caps
     for tid, mesh in textured.items():
+        if thin and tid == "plain":
+            continue  # the posts: their own colour
         assert mesh.tris.shape == (mesh.face_count, 3, 3) and mesh.uvs.shape == (mesh.face_count, 3, 2)
         assert np.isfinite(mesh.tris).all() and np.isfinite(mesh.uvs).all()
         want = FENCE_TYPES[ftype]["colour"]
@@ -113,7 +116,7 @@ def test_untyped_sections_are_boxes_of_the_plain_texture() -> None:
     assert not texture("plain").alpha and texture("plain").tintable
     # the rules can give every rule fence a type
     flat, textured = fence_meshes(plain, {**FENCE, "type": "wire"})
-    assert set(textured) == {"wire"} and flat.face_count > 0
+    assert set(textured) == {"wire", "plain"} and flat.face_count == 0  # its posts are the plain texture's
 
 
 def test_sheet_is_two_sided_and_follows_the_slope() -> None:
@@ -145,7 +148,7 @@ def test_wall_tops_are_level_and_the_pattern_runs_on_through_a_run() -> None:
 def test_columns_stand_at_joints_and_can_be_swapped() -> None:
     own = styled_fence_meshes(run("picket", n=2), FENCE)
     # 3 m sections, a post every 2 m at most: both ends, the joint and one inside each section
-    assert own[0].face_count == 5 * 10 and set(own[1]) == {"picket"}
+    assert own[0].face_count == 0 and own[1]["plain"].face_count == 5 * 10 and set(own[1]) == {"picket", "plain"}
     flat, textured = styled_fence_meshes(run("picket", n=2, column="brick_red"), FENCE)
     assert set(textured) == {"picket", "brick_red"}
     piers = textured["brick_red"]

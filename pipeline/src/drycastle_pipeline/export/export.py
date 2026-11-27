@@ -134,7 +134,10 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # and props_collision nodes: house_fence_<index:05d>_visual (flat parts), _visual_tex_<texture> and _collision (closed boxes of
 # the wall and the piers it owns), in the chunk of its midpoint, and house_voxels.bin gets a grid "fence_<index:05d>" for it
 # (materials 7 brick, 8 stone, 9 concrete). A loader that does not know them draws no walls and no pieces' texture coordinate.
-MAP_VERSION_BASE = "0.16.0"
+# 0.16.1: a thin section's posts (wood, metal) break with the piece they stand in: they leave the flat props node for its
+# props_tex_plain node (plain texture, their colour as tint) with TEXCOORD_1 = (index + 0.5, that piece + 0.5), and fences.json gains
+# posts ([along_m, width_m, z0, z1, colour] each) on the section a post breaks with (at a joint: the first section that met it).
+MAP_VERSION_BASE = "0.16.1"
 PROPS_LAYOUT = "per_parcel"
 ARTIFACT_FORMAT_VERSION = 1
 WORK_INPUTS = ("terrain.json", "terrain_heights.npy", "terrain_valid.npy", "roads.json",

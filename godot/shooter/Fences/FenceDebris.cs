@@ -116,6 +116,15 @@ public partial class FenceDebris : Node3D
         body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = new Vector3(width, height, Mathf.Max(thickness, MinColliderM)) } });
         var look = new MeshInstance3D { Mesh = LookMesh(s, from, to, width, height, thickness), MaterialOverride = LookMaterial(s) };
         body.AddChild(look);
+        // its posts fall with it (children of the look, so they rest and fade with it)
+        var mid = (from + to) / 2;
+        var centreY = (s.Bottom + s.Top) / 2;
+        foreach (var post in s.Posts)
+        {
+            if (post.Piece != piece) continue;
+            var size = new Vector3(post.Width, Mathf.Max(post.Z1 - post.Z0, 0.01f), post.Width);
+            look.AddChild(new MeshInstance3D { Mesh = PostMesh(size, TintOf(post.Colour)), MaterialOverride = MapLoaderT.SharedFlatMaterial, Position = new Vector3(post.Along - mid, (post.Z0 + post.Z1) / 2 - centreY, 0) });
+        }
         AddChild(body);
         _pieces.Add(new Piece { Root = body, Body = body, Look = look });
         _bodies++;
@@ -128,6 +137,18 @@ public partial class FenceDebris : Node3D
     /// <summary>The map's texture material of a picket or wire section (the flat vertex-colour look when the map has not got it); plain is flat.</summary>
     Material LookMaterial(FenceSectionInfo s) =>
         s.Kind is FenceKind.Picket or FenceKind.Wire && _map.LibraryMaterial(FenceDestructionConfig.KindKey(s.Kind)) is { } mat ? mat : MapLoaderT.SharedFlatMaterial;
+
+    /// <summary>A post's box, vertex colour = its colour.</summary>
+    static ArrayMesh PostMesh(Vector3 size, Color colour)
+    {
+        var arrays = new BoxMesh { Size = size }.GetMeshArrays();
+        var colours = new Color[arrays[(int)Mesh.ArrayType.Vertex].AsVector3Array().Length];
+        Array.Fill(colours, colour);
+        arrays[(int)Mesh.ArrayType.Color] = colours;
+        var mesh = new ArrayMesh();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+        return mesh;
+    }
 
     /// <summary>A two-sided quad (picket, wire; the panel's UVs) or a box (plain), in the body's frame, vertex colour = the tint.</summary>
     static ArrayMesh LookMesh(FenceSectionInfo s, float from, float to, float width, float height, float thickness)

@@ -56,7 +56,8 @@ public static class FenceFile
         var pieces = f.TryGetProperty("pieces", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out var n) ? Math.Clamp(n, 0, 64) : 0;
         var pieceM = Num(f, "piece_m", 0f);
         if (pieces == 0 || !(pieceM > 0)) return s;
-        return s with { Pieces = pieces, PieceM = pieceM, Piece0M = MathF.Min(0, Num(f, "piece0_m", 0f)), Uv = Uv(f) };
+        s = s with { Pieces = pieces, PieceM = pieceM, Piece0M = MathF.Min(0, Num(f, "piece0_m", 0f)), Uv = Uv(f) };
+        return s with { Posts = Posts(f, s) };
     }
 
     // "kind" when it names one; else the older maps' type (picket, wire, a masonry type is a wall, none is plain)
@@ -96,6 +97,26 @@ public static class FenceFile
     {
         var s = Str(f, "colour")?.TrimStart('#');
         return s is { Length: 6 } && uint.TryParse(s, System.Globalization.NumberStyles.HexNumber, null, out var c) ? c : DefaultTint;
+    }
+
+    // "posts": [[along_m, width_m, z0, z1, "#rrggbb"], ...]; an entry that cannot be read is skipped
+    static IReadOnlyList<FencePost> Posts(JsonElement f, FenceSectionInfo s)
+    {
+        if (!f.TryGetProperty("posts", out var e) || e.ValueKind != JsonValueKind.Array) return [];
+        var res = new List<FencePost>(e.GetArrayLength());
+        foreach (var p in e.EnumerateArray())
+        {
+            if (p.ValueKind != JsonValueKind.Array || p.GetArrayLength() < 5) continue;
+            var ok = true;
+            for (var i = 0; i < 4; i++) ok &= p[i].ValueKind == JsonValueKind.Number;
+            if (!ok) continue;
+            var along = p[0].GetSingle();
+            var hex = p[4].ValueKind == JsonValueKind.String ? p[4].GetString()?.TrimStart('#') : null;
+            var colour = hex is { Length: 6 } && uint.TryParse(hex, System.Globalization.NumberStyles.HexNumber, null, out var c) ? c : s.Tint;
+            var piece = Math.Clamp((int)MathF.Floor((along - s.Piece0M) / s.PieceM), 0, s.Pieces - 1);
+            res.Add(new FencePost(along, p[1].GetSingle(), p[2].GetSingle(), p[3].GetSingle(), colour, piece));
+        }
+        return res;
     }
 
     static Vector4 Uv(JsonElement f)

@@ -2,6 +2,9 @@ using System.Numerics;
 
 namespace Drycastle.ShooterCore.Fences;
 
+/// <summary>A post of a thin section (fences.json "posts"): <see cref="Along"/> metres from A, a square of <see cref="Width"/>, from <see cref="Z0"/> to <see cref="Z1"/> (Godot y), drawn <see cref="Colour"/> (0xRRGGBB); it is hidden and falls with piece <see cref="Piece"/>.</summary>
+public readonly record struct FencePost(float Along, float Width, float Z0, float Z1, uint Colour, int Piece);
+
 /// <summary>
 /// One section of fences.json (docs/fence-destruction.md Contract 1) in Godot axes, map-root local: A and B are the ground points (x, z = -north), ZA and ZB the ground
 /// heights (y) under them. A thin section (<see cref="Thin"/>) is cut into <see cref="Pieces"/> strips along A to B; piece j starts <see cref="Piece0M"/> + j * <see cref="PieceM"/>
@@ -34,6 +37,8 @@ public sealed record FenceSectionInfo
     public string? Collider { get; init; }
     /// <summary>Wall only: its grid id in house_voxels.bin ("fence_00042").</summary>
     public string? Grid { get; init; }
+    /// <summary>Thin only: the posts that break with it (each with the piece it stands in), as fences.json "posts".</summary>
+    public IReadOnlyList<FencePost> Posts { get; init; } = [];
 
     public bool Thin => Kind != FenceKind.Wall;
     public float Length => Vector2.Distance(A, B);

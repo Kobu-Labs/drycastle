@@ -157,7 +157,7 @@ def _export(tmp_path, fence_rules: dict):
 def test_export_of_thin_fences_names_the_collision_node_and_the_texture_node(tmp_path) -> None:
     _, manifest, fences = _export(tmp_path, {"type": "picket", "collision": True})
     tris = manifest["chunks"][0]["triangles"]
-    assert fences and manifest["map_version"].startswith("0.16.0")
+    assert fences and manifest["map_version"].startswith("0.16.1")
     for f in fences:
         assert f["kind"] == "picket" and 1 <= f["pieces"] <= 64 and f["collider"] == f"parcel_{f['parcel']}_props_collision"
         assert f["collider"] in tris and f"parcel_{f['parcel']}_props_tex_picket" in tris
@@ -176,3 +176,25 @@ def test_export_of_wall_fences_makes_house_fence_nodes_and_one_grid_each(tmp_pat
     grids = voxels.decode((ws["out"] / voxels.FILE_NAME).read_bytes())
     assert [g.id for g in grids if g.id.startswith("fence_")] == [f["grid"] for f in fences]  # sorted by id, one each
     assert manifest["files"]["house_voxels"] == voxels.FILE_NAME
+
+
+
+def test_a_thin_sections_posts_break_with_the_piece_they_stand_in() -> None:
+    sections = run("picket", n=2, first=4, length=3.0)
+    docs = section_docs(sections, FENCE)
+    flat, textured = styled_fence_meshes(sections, FENCE)
+    assert flat.face_count == 0  # no flat posts left: every post is breakable
+    plain = textured["plain"]
+    # the joint post at x = 3 is the first section's (its last piece), the end posts and the 2 m posts in between their own section's
+    for i, x0 in ((4, 0.0), (5, 3.0)):
+        d = docs[i]
+        along = [p[0] for p in d["posts"]]
+        assert all(-1e-6 <= a <= 3.0 + 1e-6 for a in along)
+        for a in along:
+            piece = min(max(int(np.floor((a - d["piece0_m"]) / d["piece_m"])), 0), d["pieces"] - 1)
+            sel = np.isclose(plain.tris[..., 0].mean(axis=1), x0 + a, atol=0.06)
+            assert sel.any() and np.allclose(plain.uv2[sel], [i + 0.5, piece + 0.5])
+    assert len(docs[4]["posts"]) + len(docs[5]["posts"]) == 5  # 0, 1.5, 3 | 4.5, 6
+    assert 3.0 in [round(p[0], 4) for p in docs[4]["posts"]] and 0.0 not in [round(p[0], 4) for p in docs[5]["posts"]]
+    w, z0, z1, colour = docs[4]["posts"][0][1:]
+    assert w == pytest.approx(0.10) and z0 < 0 < z1 and colour.startswith("#")

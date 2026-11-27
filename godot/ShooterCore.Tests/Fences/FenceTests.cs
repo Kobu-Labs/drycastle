@@ -85,6 +85,16 @@ public class FenceFileTests
         Assert.Empty(FenceFile.Parse("""{"version":1}"""));
         Assert.ThrowsAny<System.Text.Json.JsonException>(() => FenceFile.Parse("{"));
     }
+
+    [Fact]
+    public void Posts_are_read_with_the_piece_they_break_with()
+    {
+        var s = FenceFile.Parse("""{"version":1,"fences":[{"a":[0,0],"b":[2,0],"za":0,"height_m":1,"kind":"picket","pieces":16,"piece_m":0.125,"piece0_m":-0.05,"colour":"#102030","posts":[[0,0.1,-0.1,1.04,"#aabbcc"],[2,0.1,-0.1,1.04,"bad"],[1.0,0.1,-0.1,1.04],[0.3]]}]}""")[0];
+        Assert.Equal(2, s.Posts.Count);
+        Assert.Equal(new FencePost(0, 0.1f, -0.1f, 1.04f, 0xaabbcc, 0), s.Posts[0]);
+        Assert.Equal(15, s.Posts[1].Piece);
+        Assert.Equal(0x102030u, s.Posts[1].Colour);
+    }
 }
 
 public class FenceIndexTests

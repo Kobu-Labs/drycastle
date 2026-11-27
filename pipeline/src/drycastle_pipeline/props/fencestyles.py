@@ -185,9 +185,11 @@ def _v_range(tex, height: float) -> tuple[float, float]:
 
 def section_docs(sections: list[dict], cfg: dict) -> dict[int, dict]:
     """The fences.json keys that the drawing decides (kind, thickness_m, colour and, for a thin section, pieces, piece_m,
-    piece0_m, uv), by section ``index``; sections without an ``index`` are left out. Give the very list the meshes are
-    built from: along (and so the pickets) depends on its neighbours."""
+    piece0_m, uv and posts), by section ``index``; sections without an ``index`` are left out. Give the very list the meshes are
+    built from: along (and so the pickets, and which section a joint's post breaks with) depends on its neighbours.
+    posts: the posts that break with the section, [metres along from a, width_m, z0, z1, "#rrggbb"] each (map z)."""
     out = {}
+    posts = _build(sections, cfg, False)[2]
     for s, r, along in runs(sections, cfg):
         if "index" not in s:
             continue
@@ -199,6 +201,10 @@ def section_docs(sections: list[dict], cfg: dict) -> dict[int, dict]:
             pieces, piece_m, piece0 = _piece_layout(r, length, along)
             doc |= {"pieces": pieces, "piece_m": piece_m, "piece0_m": piece0,
                     "uv": [round(along / tex.tile_w, 6), round(1 / tex.tile_w, 6), round(lo, 6), round(hi, 6)]}
+            if s["index"] in posts:
+                d = _unit(s["a"], s["b"])[0]
+                doc["posts"] = [[round(float((p.x - s["a"][0]) * d[0] + (p.y - s["a"][1]) * d[1]), 4), p.col.width_m, round(p.z0, 4),
+                                 round(p.z1, 4), "#{:02x}{:02x}{:02x}".format(*p.tint)] for p in posts[s["index"]]]
         out[s["index"]] = doc
     return out
 
@@ -206,8 +212,8 @@ def section_docs(sections: list[dict], cfg: dict) -> dict[int, dict]:
 class _Pieces:
     """TEXCOORD_1 of a thin section's vertices: (index + 0.5, piece coordinate), the piece being the floor of the second."""
 
-    def __init__(self, index: int, a, d, piece0: float, piece_m: float) -> None:
-        self.index, self.a, self.d, self.piece0, self.piece_m = index, np.asarray(a, float), d, piece0, piece_m
+    def __init__(self, index: int, a, d, piece0: float, piece_m: float, count: int) -> None:
+        self.index, self.a, self.d, self.piece0, self.piece_m, self.count = index, np.asarray(a, float), d, piece0, piece_m, count
 
     def __call__(self, p) -> tuple[float, float]:
         return self.index + 0.5, (float((p[0] - self.a[0]) * self.d[0] + (p[1] - self.a[1]) * self.d[1]) - self.piece0) / self.piece_m
@@ -217,8 +223,8 @@ def _pieces(s: dict, r: Resolved, along: float) -> _Pieces | None:
     if "index" not in s or r.kind == "wall":
         return None
     d, length = _unit(s["a"], s["b"])
-    _, piece_m, piece0 = _piece_layout(r, length, along)
-    return _Pieces(s["index"], s["a"], d, piece0, piece_m)
+    n, piece_m, piece0 = _piece_layout(r, length, along)
+    return _Pieces(s["index"], s["a"], d, piece0, piece_m, n)
 
 
 @dataclass(frozen=True)
@@ -233,6 +239,8 @@ class Pier:
     d: np.ndarray
     col: ColumnStyle
     tint: tuple[int, ...]
+    thin: bool = False  # a thin section's post (flat colour): drawn with the plain texture, so it can break
+    uv2: tuple[float, float] | None = None  # such a post of an indexed section: TEXCOORD_1 of the piece it stands in (it breaks with it)
 
 
 @dataclass
@@ -246,6 +254,8 @@ class _Column:
     tint: tuple[int, ...]
     panel_tex: str
     owner: int | None  # the part it is drawn into: the section that first met it (walls drawn apart), else the shared one
+    thin: bool = False  # first met by a thin section
+    breaks: tuple[int, int] | None = None  # first met by a thin section with an index: (that index, the piece it stands in)
 
     def pier(self) -> Pier:
         col = COLUMN_STYLES[self.name]
@@ -253,7 +263,9 @@ class _Column:
             tint = tuple(hex_to_rgb(col.colour)) if col.colour else tuple(_shade(list(self.tint), 0.8))
         else:  # a pier of the same material as the panel takes the fence's tint, another one its own
             tint = self.tint if col.texture == self.panel_tex else tuple(hex_to_rgb(col.colour or "#ffffff"))
-        return Pier(self.x, self.y, self.ground - SINK_M, self.top + col.extra_m, self.d, col, tint)
+        thin = self.thin and col.texture is None
+        uv2 = (self.breaks[0] + 0.5, self.breaks[1] + 0.5) if thin and self.breaks else None
+        return Pier(self.x, self.y, self.ground - SINK_M, self.top + col.extra_m, self.d, col, tint, thin, uv2)
 
 
 @dataclass
@@ -363,10 +375,19 @@ class _Fence:
         col = p.col
         half = p.d * col.width_m / 2
         p0, p1 = np.array([p.x, p.y]) - half, np.array([p.x, p.y]) + half
+        v = np.array([-p.d[1], p.d[0]]) * col.width_m / 2
+        if p.thin:  # a thin fence's post: the plain texture (white: its tint), with TEXCOORD_1 hidden with its piece
+            ring = [p0 - v, p1 - v, p1 + v, p0 + v]
+            uvs = [(0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0)]
+            uv2 = [p.uv2] * 4 if p.uv2 else None
+            for k in range(4):
+                a, b = ring[k], ring[(k + 1) % 4]
+                self.tex.quad(PLAIN_TEXTURE, [(*a, p.z0), (*b, p.z0), (*b, p.z1), (*a, p.z1)], uvs, p.tint, uv2=uv2)
+            self.tex.quad(PLAIN_TEXTURE, [(*q, p.z1) for q in ring], uvs, p.tint, uv2=uv2)
+            return
         if col.texture is None:
             self.flat(box_tris(p0, p1, col.width_m, p.z0, p.z1, bottom=False), p.tint)
             return
-        v = np.array([-p.d[1], p.d[0]]) * col.width_m / 2
         ring = [p0 - v, p1 - v, p1 + v, p0 + v]
         for k in range(4):
             self.vquad(col.texture, ring[k], ring[(k + 1) % 4], p.z0, p.z1, 0.0, p.z1 - p.z0,
@@ -388,18 +409,21 @@ def _cap_colour(style: FenceStyle, tint) -> tuple[int, ...]:
     return tuple(_shade(list(tint), 0.9)) if style.cap == "tint" else tuple(hex_to_rgb(style.cap))
 
 
-def _build(sections: list[dict], cfg: dict, apart: bool) -> tuple[dict[int | None, _Fence], dict[int, WallSpec]]:
-    """The parts (key None: the shared one) and the wall specs by index. ``apart``: only the walls are built, each its own part
+def _build(sections: list[dict], cfg: dict, apart: bool) -> tuple[dict[int | None, _Fence], dict[int, WallSpec], dict[int, list[Pier]]]:
+    """The parts (key None: the shared one), the wall specs by index and the breakable posts (flat posts first met by a thin
+    section with an index) by that index. ``apart``: only the walls are built, each its own part
     with the piers it owns; else everything goes into the shared part."""
     parts: dict[int | None, _Fence] = {None: _Fence()}
     specs: dict[int, WallSpec] = {}
     columns: dict[tuple[float, float], _Column] = {}  # by rounded position: a joint's column is made once, the first section wins
+    posts: dict[int, list[Pier]] = {}  # the breakable posts by the index of the section they break with
 
-    def column_at(owner, xy, ground, top, d, name, tint, panel_tex) -> None:
+    def column_at(owner, xy, ground, top, d, name, tint, panel_tex, pieces=None, thin=False) -> None:
         key = (round(float(xy[0]), 2), round(float(xy[1]), 2))
         have = columns.get(key)
         if have is None:
-            columns[key] = _Column(float(xy[0]), float(xy[1]), ground, top, d, name, tint, panel_tex, owner)
+            breaks = None if pieces is None else (pieces.index, min(max(math.floor(pieces(xy)[1]), 0), pieces.count - 1))
+            columns[key] = _Column(float(xy[0]), float(xy[1]), ground, top, d, name, tint, panel_tex, owner, thin, breaks)
         else:
             have.ground, have.top = min(have.ground, ground), max(have.top, top)
 
@@ -418,24 +442,28 @@ def _build(sections: list[dict], cfg: dict, apart: bool) -> tuple[dict[int | Non
         elif r.kind == "plain":
             part.plain(s, r, along, _pieces(s, r, along))  # a box, no posts
             continue
-        else:
-            part.sheet(s, r, along, _pieces(s, r, along))
+        pieces = None
+        if not wall:
+            pieces = _pieces(s, r, along)
+            part.sheet(s, r, along, pieces)
             top_a, top_b = s["za"] + r.height, s["zb"] + r.height
         if r.column != "none":
-            column_at(owner, s["a"], s["za"], top_a, d, r.column, r.tint, r.style.texture)
-            column_at(owner, s["b"], s["zb"], top_b, d, r.column, r.tint, r.style.texture)
+            column_at(owner, s["a"], s["za"], top_a, d, r.column, r.tint, r.style.texture, pieces, not wall)
+            column_at(owner, s["b"], s["zb"], top_b, d, r.column, r.tint, r.style.texture, pieces, not wall)
             n = math.ceil(length / r.style.post_spacing_m) if r.style.post_spacing_m else 1
             for i in range(1, n):
                 t = i / n
                 xy = np.asarray(s["a"], float) * (1 - t) + np.asarray(s["b"], float) * t
                 z = s["za"] * (1 - t) + s["zb"] * t
-                column_at(owner, xy, z, z + r.height, d, r.column, r.tint, r.style.texture)
+                column_at(owner, xy, z, z + r.height, d, r.column, r.tint, r.style.texture, pieces, not wall)
     for c in columns.values():
         pier = c.pier()
         parts[c.owner].pier(pier)
         if apart:
             specs[c.owner].piers.append(pier)
-    return parts, specs
+        if pier.uv2 is not None:
+            posts.setdefault(c.breaks[0], []).append(pier)
+    return parts, specs, posts
 
 
 def styled_fence_meshes(sections: list[dict], cfg: dict) -> tuple[Mesh, dict[str, TexturedMesh]]:
@@ -454,5 +482,5 @@ def wall_parts(sections: list[dict], cfg: dict) -> dict[int, WallPart]:
     """The wall sections (every one with an ``index``; the others are skipped) each drawn apart, by index: its flat and textured
     parts and its spec. A pier at a joint of connected walls belongs to the first of them (the lowest index when
     ``sections`` is in index order) and is drawn and built once."""
-    parts, specs = _build(sections, cfg, True)
+    parts, specs, _ = _build(sections, cfg, True)
     return {i: WallPart(*parts[i].meshes(), spec) for i, spec in sorted(specs.items())}

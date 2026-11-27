@@ -433,7 +433,9 @@ everywhere): `kind` (`plain` = no type, `picket`, `wire` or `wall`), `thickness_
 section (plain, picket, wire) breaks in equal strips, its **pieces**, and also has `pieces` (1 to 64), `piece_m` (their width,
 metres along a to b), `piece0_m` (where piece 0 starts, metres from a, at most 0; piece j covers
 `[piece0_m + j piece_m, piece0_m + (j + 1) piece_m]` clipped to the section), `uv` (`[u at a, u per metre, v at the bottom, v at the top]`:
-the texture coordinates its panel is drawn with) and `collider` (the `props_collision` node that holds its box:
+the texture coordinates its panel is drawn with), `posts` (map 0.16.1, absent when none: the posts that break and fall with one of its pieces,
+`[along_m from a, width_m, z0, z1, "#rrggbb"]` each; a joint's post is the first section's; they are drawn in the `plain` textured node
+with that piece's TEXCOORD_1) and `collider` (the `props_collision` node that holds its box:
 `parcel_<ID>_props_collision`, or `props_collision@<ix>,<iy>` for a fence with no parcel in chunk ix, iy; `null` when the
 `props.fences.collision` rule is off, as it is in the village profile). A picket piece is one board: the run-continuous along that the
 panel's u uses puts the piece edges in the middle of the gaps between boards (the first piece may start before a), a wire piece is
