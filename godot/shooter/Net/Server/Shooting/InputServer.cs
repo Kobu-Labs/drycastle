@@ -103,9 +103,10 @@ internal sealed class InputServer
         if (c.Car is { Thrown: not null }) return; // the Bigfoot threw it: nobody steers, fires or gets out until it lands (issue #264)
         if (c.Car != null) { RideInput(c, i, dt, controlled, useDown, useEdge, lightsEdge); return; }
         var useAct = _scudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
-        if (useAct && _duffels.TryPickUp(c)) return; // a Duffel of the player's party in reach: the press takes it (it outranks Loot, doors and seats)
-        if (useAct && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _duffels.RefuseSeat(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat; a Duffel carrier takes none
-        _duffels.OnInput(c, i); // the Duffel throw key: a tap puts it down, a charged release throws it
+        // a Duffel of the player's party in reach: the press takes it (it outranks Loot, doors and seats); the body walks on this input, slowed already, as the client predicts it
+        var tookDuffel = useAct && _duffels.TryPickUp(c);
+        _duffels.OnInput(c, i); // the Duffel throw key, followed on every input on foot: a tap puts it down, a charged release throws it
+        if (useAct && !tookDuffel && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _duffels.RefuseSeat(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat; a Duffel carrier takes none
         WalkAndFire(c, i, dt, throwStep);
     }
 

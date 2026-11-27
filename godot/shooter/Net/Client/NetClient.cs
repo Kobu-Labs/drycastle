@@ -420,10 +420,16 @@ public partial class NetClient : Node
     /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
     void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); Items.DressPlayer(view, Ctx.MyId); }
 
-    /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
-    string? PromptLine(string? ride) =>
-        _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
-        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
+    /// <summary>
+    /// The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it). A Duffel in
+    /// reach comes right after: the server's interact key takes it before the Loot, the doors and the seats. While carrying one, the seat in reach is refused, so its "get in" says why instead.
+    /// </summary>
+    string? PromptLine(string? ride)
+    {
+        ride = _duffels.InsteadOfRide(ride);
+        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
+            ?? _minerals.Prompt() ?? _crates.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
+    }
 
     void HudWelcome()
     {
@@ -742,10 +748,11 @@ public partial class NetClient : Node
     MoveInput SampleInput(float dt)
     {
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
-        if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); _duffels.TickKey(dt); }
+        if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
+        _duffels.TickKey(mi, dt); // the own pick-up, drop and throw of a Duffel, predicted from the keys as sent: this input runs with the burden they leave
         _weapon.AimHeld = mi.Has(MoveButtons.Aim);
         if (_rider.HeadLookWanted()) mi.Buttons |= MoveButtons.HeadLook; // seated and looking out of their own eyes: the view is the head's, shown to everyone (ADR 0026)
         _aim.Tick(mi);

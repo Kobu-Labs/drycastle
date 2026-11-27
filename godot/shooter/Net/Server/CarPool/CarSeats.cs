@@ -1,7 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Net.Server.Shooting;
 using Drycastle.Shooter.Vehicles;
-using Drycastle.ShooterCore.Chat;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
@@ -50,7 +50,7 @@ internal sealed class CarSeats
 
     /// <summary>
     /// The player gets into the nearest vehicle in reach, in the free seat nearest to them. False when there is none. A vehicle reserved for other players (<see cref="VehicleSeat.Reserve"/>,
-    /// a Heist's Cartel van) refuses them with a notice: the key was used, nobody gets in.
+    /// a Heist's Cartel van) refuses them with a notice (a toast, <see cref="DuffelNotice.VanReserved"/>): the key was used, nobody gets in.
     /// </summary>
     public bool TryEnter(ServerClient c)
     {
@@ -58,7 +58,7 @@ internal sealed class CarSeats
         if (EnterableCar(p) is not { } best) return false;
         if (!best.Seat.Admits(c.Id))
         {
-            _ctx.ChatTo(c, ChatLineKind.Error, VehicleSeat.RefusedText);
+            _ctx.SendEvent(c, EventKind.DuffelNotice, DuffelCodec.EncodeNotice(DuffelNotice.VanReserved));
             GD.Print($"server: {c.Name} refused a seat in {best.Def.Id} {best.Id} (reserved for its crew)");
             return true;
         }

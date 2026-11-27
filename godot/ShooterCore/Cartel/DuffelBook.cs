@@ -12,8 +12,9 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <item>A Job (or <c>/duffel</c>) makes one for a party with <see cref="Give"/> (in a player's hands) or <see cref="Place"/> (on the ground), and takes its own away with <see cref="Remove"/> or <see cref="RemoveParty"/>.</item>
 /// <item>One per player: a party player who carries none picks up the nearest lying one in reach (<see cref="PickUp"/>).</item>
 /// <item>The carrier puts it down at the feet (<see cref="Drop"/>, the throw key's tap and the carrier's death) or throws it (<see cref="Throw"/>, an arc by charge and weight).</item>
-/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>) takes a Duffel that flies or is put down into it: Loaded, and the volume's owner counts it (<see cref="LoadedIn"/>, <see cref="Loaded"/>).</item>
+/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>) takes a Duffel that flies or is put down into it: Loaded, and the volume's owner counts it (<see cref="LoadedIn"/>).</item>
 /// </list>
+/// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
 /// </summary>
 public sealed class DuffelBook
 {
@@ -31,16 +32,19 @@ public sealed class DuffelBook
         entities.Despawned += w => Forget(w.Id);
     }
 
-    public DuffelsFile Data => _data;
-
-    /// <summary>A Duffel went into a cargo volume (after the volume's own <see cref="ICargoVolume.Load"/>).</summary>
-    public event Action<Duffel, ICargoVolume>? Loaded;
+    /// <summary>A player took a Duffel (the Duffel) or carries none any more (null): a pick-up, a gift, a drop, a throw, a load, a removal, a reset.</summary>
+    public event Action<ushort, Duffel?>? CarrierChanged;
 
     public int Count => _byId.Count;
-    public IEnumerable<Duffel> All => _byId.Values;
-    public IReadOnlyList<ICargoVolume> Volumes => _volumes;
-    /// <summary>The Duffels carried now, by carrier (a copy: safe to drop while iterating).</summary>
-    public List<Duffel> Carried() => _byCarrier.Values.ToList();
+    /// <summary>How many Duffels are carried now.</summary>
+    public int CarriedCount => _byCarrier.Count;
+
+    /// <summary>The Duffels carried now, copied into <paramref name="into"/> (cleared first; safe to drop while iterating, and the caller keeps the list so a tick allocates nothing).</summary>
+    public void Carried(List<Duffel> into)
+    {
+        into.Clear();
+        into.AddRange(_byCarrier.Values);
+    }
 
     public void AddVolume(ICargoVolume volume) { if (!_volumes.Contains(volume)) _volumes.Add(volume); }
     public bool RemoveVolume(ICargoVolume volume) => _volumes.Remove(volume);
@@ -56,7 +60,7 @@ public sealed class DuffelBook
         var d = new Duffel(this, kind, party, feet, 0);
         d.TakeUp(carrier, feet);
         if (!Spawn(d)) return null;
-        _byCarrier[carrier] = d;
+        SetCarrier(carrier, d);
         return d;
     }
 
@@ -83,9 +87,9 @@ public sealed class DuffelBook
         var bd = (float)_data.ReachM;
         foreach (var d in _byId.Values)
         {
-            if (d.State != DuffelState.Lying || !d.MayTouch(player) || MathF.Abs(d.Position.Y - feet.Y) > _data.ReachUpM) continue;
+            if (d.State != DuffelState.Lying || MathF.Abs(d.Position.Y - feet.Y) > _data.ReachUpM) continue;
             var dist = new Vector2(d.Position.X - feet.X, d.Position.Z - feet.Z).Length();
-            if (dist <= bd) { best = d; bd = dist; }
+            if (dist <= bd && d.MayTouch(player)) { best = d; bd = dist; } // the party last: the cheap distance rules out the most
         }
         return best;
     }
@@ -95,7 +99,7 @@ public sealed class DuffelBook
     {
         if (Pickable(player, feet) is not { } d) return false;
         d.TakeUp(player, feet);
-        _byCarrier[player] = d;
+        SetCarrier(player, d);
         return true;
     }
 
@@ -107,15 +111,16 @@ public sealed class DuffelBook
 
     /// <summary>
     /// The carrier puts it down at <paramref name="feet"/>: on the ground under them, or Loaded when that is inside a cargo volume that takes it (standing in the van's back). The throw key's tap,
-    /// the carrier's death (where they fell) and leaving. False when they carry none.
+    /// the carrier's death (where they fell), leaving the party or the server. No ground just below (put down from high up: a roof's edge, a ledge): it falls from the feet and lands as a
+    /// throw does, so it never hangs out of reach in the air. False when they carry none.
     /// </summary>
     public bool Drop(ushort player, Vector3 feet)
     {
-        if (!_byCarrier.Remove(player, out var d)) return false;
+        if (!TakeFrom(player, out var d)) return false;
         var probe = feet + new Vector3(0, 0.3f, 0);
         if (VolumeFor(d, probe) is { } v) { Load(d, v, probe); return true; }
-        var ground = _world.GroundY(feet, 0.5f, 3f) ?? feet.Y;
-        d.PutDown(new Vector3(feet.X, ground, feet.Z));
+        if (_world.GroundY(feet, 0.5f, 3f) is { } ground) d.PutDown(new Vector3(feet.X, ground, feet.Z));
+        else d.Launch(feet, Vector3.Zero);
         return true;
     }
 
@@ -125,7 +130,7 @@ public sealed class DuffelBook
     /// </summary>
     public bool Throw(ushort player, Vector3 eye, float yaw, float pitch, float charge)
     {
-        if (!_byCarrier.Remove(player, out var d)) return false;
+        if (!TakeFrom(player, out var d)) return false;
         var (sin, cos) = MathF.SinCos(yaw);
         var forward = new Vector3(-sin, 0, -cos);
         var from = eye + forward * (float)_data.HandAheadM;
@@ -173,7 +178,19 @@ public sealed class DuffelBook
     {
         d.LoadInto(v, at);
         v.Load(d);
-        Loaded?.Invoke(d, v);
+    }
+
+    void SetCarrier(ushort player, Duffel d)
+    {
+        _byCarrier[player] = d;
+        CarrierChanged?.Invoke(player, d);
+    }
+
+    bool TakeFrom(ushort player, out Duffel d)
+    {
+        if (!_byCarrier.Remove(player, out d!)) return false;
+        CarrierChanged?.Invoke(player, null);
+        return true;
     }
 
     /// <summary>Takes one Duffel out of the world (its Job ended). Its carrier carries nothing after it.</summary>
@@ -195,13 +212,14 @@ public sealed class DuffelBook
     public void Reset()
     {
         foreach (var d in _byId.Values.ToList()) if (d.Id != 0) _entities.Despawn(d.Id, WorldDespawnReason.Removed);
-        _byId.Clear(); _byCarrier.Clear();
+        foreach (var carrier in _byCarrier.Keys.ToList()) TakeFrom(carrier, out _);
+        _byId.Clear();
     }
 
     void Forget(ushort id)
     {
         if (!_byId.Remove(id, out var d)) return;
-        if (d.Carrier != 0 && _byCarrier.TryGetValue(d.Carrier, out var c) && c == d) _byCarrier.Remove(d.Carrier);
+        if (d.Carrier != 0 && _byCarrier.TryGetValue(d.Carrier, out var c) && c == d) TakeFrom(d.Carrier, out _);
     }
 }
 
@@ -293,13 +311,15 @@ public struct DuffelThrowKey
     }
 }
 
-/// <summary>Why the server refused a Duffel action, sent to the player (<see cref="EventKind.DuffelNotice"/>); the client words it.</summary>
+/// <summary>Why the server refused a Duffel action or a seat in the Cartel van, sent to the player (<see cref="EventKind.DuffelNotice"/>); the client words it (a toast).</summary>
 public enum DuffelNotice : byte
 {
     /// <summary>A carrier tried to take a vehicle seat.</summary>
     NoSeat = 0,
     /// <summary>The player carries one already (one per player).</summary>
     CarryingOne = 1,
+    /// <summary>A player outside a Heist's crew tried to get into its Cartel van (a reserved vehicle, <see cref="Vehicles.VehicleSeat.Reserve"/>).</summary>
+    VanReserved = 2,
 }
 
 /// <summary>The Duffel events' payloads: a notice (u8 <see cref="DuffelNotice"/>) and the Duffel in reach (u16 world entity id, 0 none).</summary>
@@ -310,7 +330,7 @@ public static class DuffelCodec
     public static bool TryDecodeNotice(ReadOnlySpan<byte> p, out DuffelNotice notice)
     {
         notice = default;
-        if (p.Length < 1 || p[0] > (byte)DuffelNotice.CarryingOne) return false;
+        if (p.Length < 1 || p[0] > (byte)DuffelNotice.VanReserved) return false;
         notice = (DuffelNotice)p[0];
         return true;
     }

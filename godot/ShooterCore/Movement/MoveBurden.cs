@@ -2,7 +2,8 @@ namespace Drycastle.ShooterCore.Movement;
 
 /// <summary>
 /// A load on the body that changes how it moves (a carried Duffel: no sprint, slower by its weight). Set on the body by its owner (the server from what the player carries, the client from what it
-/// is told the player carries) and applied to every input of the shared step, so prediction, replay and the server move the same way. <see cref="None"/> (and the default) change nothing.
+/// predicts the player carries, from the input that takes or lets go of it) and applied to every input of the shared step; each predicted input keeps the burden it ran with, so prediction,
+/// replay and the server move the same way. <see cref="None"/> (and the default) change nothing.
 /// </summary>
 public readonly record struct MoveBurden(float SpeedScale, bool NoSprint)
 {
