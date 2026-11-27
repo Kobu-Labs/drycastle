@@ -29,6 +29,8 @@ public class WeaponsFile
 
     Dictionary<string, WeaponDef>? _byId;
     public WeaponDef? Find(string id) => DataIndex.Find(ref _byId, Weapons, w => w.Id, id);
+    /// <summary>The id of the weapon at a 0-based weapons.json index (the wire's weapon field), "" when out of range.</summary>
+    public string IdAt(int index) => index >= 0 && index < Weapons.Count ? Weapons[index].Id : "";
 
     public static WeaponsFile Load(string path) => Resolve(DataFile.Load<WeaponsRaw>(path, SupportedVersion));
 

@@ -17,6 +17,7 @@ public sealed class RemotePlayer
     public readonly Interpolator Buf = new();
     public EntityState State;
     public Stance Stance;
+    /// <summary>The held weapon's 0-based weapons.json index, as the snapshot sends it.</summary>
     public byte Slot;
     public double FireUntil;
     public Vector3 LastPos;

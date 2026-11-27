@@ -151,7 +151,7 @@ internal sealed class InputServer
             { var fireT = Prof.Begin(Prof.S.Fire); _shots.Fire(c, i, nade); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) _ctx.SendAmmo(c);
-        c.Slot = (byte)(c.W.Slot - 1);
+        c.Slot = c.W.HeldIndex;
         if (c.Body.LastFallDamage > 0 && _ctx.Now >= c.LaunchGraceUntil) _ctx.Match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Fall, c.Body.LastFallDamage); // a launched player lands for the Bigfoot's damage, not the fall's
         if (c.Body.GlobalPosition.Y < _killY) GD.Print($"server: {c.Name} fell out of the world at {c.Body.GlobalPosition} (killY {_killY}, spawn {_ctx.Match.Get(c.Id)?.Position})");
         if (c.Body.GlobalPosition.Y < _killY) _ctx.Match.ApplyDamage(c.Id, c.Id, SpecialWeapons.Void, 9999, ignoreProtection: true);
@@ -176,7 +176,7 @@ internal sealed class InputServer
             { var fireT = Prof.Begin(Prof.S.Fire); _shots.Fire(c, i, shot, car); Prof.End(Prof.S.Fire, fireT); }
         }
         if (c.W.Changed) _ctx.SendAmmo(c);
-        c.Slot = (byte)(c.W.Slot - 1);
+        c.Slot = c.W.HeldIndex;
     }
 
     /// <summary>

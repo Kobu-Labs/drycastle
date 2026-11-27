@@ -137,7 +137,7 @@ internal sealed class RemotesClient
             if (r.State != EntityState.InVehicle) _ctx.Sound.RemoteStep(r, p, (float)(now - r.LastT));
         }
         r.LastPos = p; r.LastT = now;
-        var weaponId = _ctx.Weapons != null && r.Slot >= 1 && r.Slot <= _ctx.Weapons.Weapons.Count ? _ctx.Weapons.Weapons[r.Slot - 1].Id : "";
+        var weaponId = _ctx.Weapons?.IdAt(r.Slot) ?? ""; // the snapshot carries the 0-based weapons.json index (#407)
         r.View?.SetBinoculars(r.Binoculars);
         r.View?.Apply(r.Speed, now < r.FireUntil, r.State == EntityState.Dead || r.GuessRagdoll, weaponId);
     }
