@@ -30,7 +30,7 @@ public sealed partial class MapLoader
         var n = 0;
         foreach (var o in objects)
         {
-            if (n++ % Batch == Batch - 1) yield return (float)n / objects.Count;
+            if (n++ % Batch == Batch - 1) yield return 0.5f * n / objects.Count;
             foreach (var part in GroundObjectColliders.Parts(o, model))
             {
                 var key = (o.ChunkX, o.ChunkY, GroundObjectColliders.Surface(o.Kind));
@@ -40,8 +40,11 @@ public sealed partial class MapLoader
             }
         }
         // filled while detached, attached once each (see BuildTreeColliderSteps)
+        var attached = 0;
         foreach (var ((cx, cy, _), body) in bodies)
+        {
             (_chunkRoots.TryGetValue($"chunk_{cx}_{cy}", out var cr) ? cr : Root).AddChild(body);
-        yield return 1f;
+            yield return 0.5f + 0.5f * ++attached / bodies.Count; // one body a step: attaching one with its shapes costs milliseconds
+        }
     }
 }

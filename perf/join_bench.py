@@ -54,7 +54,7 @@ def client(r, args):
     return Proc(f'client{r+1}', [GODOT, '--path', GAME, '--', '--role', 'client', '--name', f'bench{r+1}', '--map', MAP] + args + EXTRA, window=True, cores=CLIENT_CORES)
 
 def run_record(c, la):
-    m = {k: c.first(k)[0] for k in ['Vulkan', 'sounds:', 'SHOOTER_MENU', 'map load phases', 'map 0.', 'client: connecting', 'SHOOTER_GAME_STARTED', 'client: welcome', 'SHOOTER_MAP_READY']}
+    m = {k: c.first(k)[0] for k in ['Vulkan', 'sounds:', 'SHOOTER_MENU', 'map load phases', 'map 0.', 'client: connecting', 'SHOOTER_GAME_STARTED', 'client: welcome', 'client: join synced', 'SHOOTER_MAP_READY']}
     hitches = [(round(t, 2), l) for t, l in c.lines if 'loading hitch' in l]
     run = {'load_before': la, 'marks': m, 'phases': c.first('map load phases')[1], 'map': c.first('map 0.')[1], 'hitches': len(hitches), 'hitch_by_stage': {}}
     for _, l in hitches:
@@ -84,6 +84,7 @@ for r in range(RUNS):
     else:
         c = client(r, ['--connect', f'127.0.0.1:{PORT}'])
         c.wait_for('client: welcome', 400)
+        c.wait_for('SHOOTER_GAME_STARTED', 60)  # the loading screen ends once the join is applied (JoinSynced)
         time.sleep(4)
         c.stop()
         run = run_record(c, la)

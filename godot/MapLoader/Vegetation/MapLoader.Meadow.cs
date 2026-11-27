@@ -362,8 +362,11 @@ public sealed partial class MapLoader
             if (Map._meadowFocusSet is { } f) { Map._meadowFocusSet = null; focus = f; }
             else if (GetViewport()?.GetCamera3D() is { } cam) focus = cam.GlobalPosition;
             else return;
+            var t = Core.LoadTimers.Start();
             Map.MeadowStep(focus);
+            var tm = Core.LoadTimers.Start();
             Map.PackTreeStep(focus, (float)delta);
+            if (Core.LoadTimers.Enabled && Core.LoadTimers.Ms(Core.LoadTimers.Start() - t) > 20) GD.Print($"loadpart meadow {Core.LoadTimers.Ms(tm - t):F0} ms, pack trees {Core.LoadTimers.Ms(Core.LoadTimers.Start() - tm):F0} ms"); // the join-time report
         }
     }
 }

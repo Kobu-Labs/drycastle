@@ -85,6 +85,8 @@ public enum EventKind : byte
     HeadLampState = 31,
     /// <summary>Server broadcast: a Phoenix was first hit and starts to fall (<see cref="PhoenixFallCodec"/>: u16 world entity id, f32 x3 where it was hit, f32 x3 the crash site, f32 fall seconds, 30 bytes). Not sent to a joiner: its state and position say the rest.</summary>
     PhoenixFall = 32,
+    /// <summary>Server to a joiner, last of what the join sends (the welcome, the world's entities, the houses): the client ends its loading screen once it has applied it. No payload.</summary>
+    JoinSynced = 33,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -427,7 +429,8 @@ public static class Wire
     //   v85 the binoculars seen by the others name the pair (#341): event 27 BinocularsRaised ends in the pair's item index (u8)
     //   v86 doors of hollow houses: event 239 HouseDoor (a door's index and whether it is open)
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
-    public const byte ProtocolVersion = 87;
+    //   v89 the join's end: event 33 JoinSynced (to a joiner, after the welcome and its world spawns); the client applies the join under its loading screen
+    public const byte ProtocolVersion = 89;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

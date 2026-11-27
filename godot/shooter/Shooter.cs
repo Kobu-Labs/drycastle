@@ -230,6 +230,7 @@ public partial class Shooter : Node3D
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
+        if (global::Drycastle.MapLoader.Core.LoadTimers.Enabled) AddChild(new LoadFrameProbe()); // the join-time frame log
         _ = MapLoad(); // the map loads behind the menu
         if (global::Drycastle.MapLoader.Core.LoadTimers.Enabled) // the join-time report: what the frames of the load cost the renderer
         {
@@ -322,6 +323,15 @@ public partial class Shooter : Node3D
                 if (m.StartsWith("pack:", StringComparison.Ordinal)) packs.Add(m);
                 else files.Add(Path.GetFullPath(Path.Combine(GamePaths.Assets(), m)));
             }
+        if (ShotFx.Enabled)
+        {
+            // the wild animals' looks: a joiner gets a WorldSpawn per animal, and each look's model first parsed there took the main thread 20 ms (about 60 files)
+            var wild = _data.Wildlife.Species.Select(s => s.Id).Concat(_data.Wildlife.Herds.SelectMany(h => h.Members.Select(m => m.Id))).Concat(_data.Wildlife.Rare.Select(r => r.Id)).ToHashSet();
+            foreach (var a in _data.Animals.Animals)
+                if (wild.Contains(a.Id))
+                    foreach (var m in a.Variants.Select(v => v.Model).Prepend(a.Model))
+                        if (ModelLib.Find(m) is { } p) files.Add(p);
+        }
         Drycastle.MapLoader.MapLoader.PrefetchGltf(files);
         _map.PrefetchAssetModels(packs); // the vehicles of the private packs, through the map's asset manifest
     }
@@ -335,23 +345,27 @@ public partial class Shooter : Node3D
             _map.YieldWhileWaiting = true;
             var slice = Time.GetTicksMsec();
             var stepStart = slice;
+            var stepT = System.Diagnostics.Stopwatch.GetTimestamp();
             foreach (var f in LoadMapSteps(_cfg))
             {
+                LoadFrameProbe.Step(stepT, "map", f);
                 if (_data == null && _dataAhead.IsCompletedSuccessfully) { _data = _dataAhead.Result; PrefetchWarmModels(); }
                 var now = Time.GetTicksMsec();
                 if (now - stepStart > _maxStepMs) { _maxStepMs = now - stepStart; _maxStepAt = f; }
                 _mapFraction = f;
-                _mapScreen?.Set("loading.map", 0.15f + 0.60f * f);
                 var waiting = _map.Waiting || _waitingForData;
                 if (waiting || now - slice >= SliceMs)
                 {
+                    _mapScreen?.Set("loading.map", 0.15f + 0.60f * f); // only for a frame that is drawn: setting the label costs more than a small step
                     var tw = global::Drycastle.MapLoader.Core.LoadTimers.Start();
                     await NextFrame();
                     global::Drycastle.MapLoader.Core.LoadTimers.Lap(waiting ? "frames.map_waiting" : "frames.map_slice", tw);
                     slice = Time.GetTicksMsec();
                 }
                 stepStart = Time.GetTicksMsec();
+                stepT = System.Diagnostics.Stopwatch.GetTimestamp();
             }
+            LoadFrameProbe.Step(stepT, "map post", 1f); // the work after the last yield: the shooter's props, doors, lamps
             _mapLoaded = true;
             t0 = global::Drycastle.MapLoader.Core.LoadTimers.Lap("map.total_wall", t0);
             await WarmInSlices(); // the models and shaders a match loads on first use (T2-18), still behind the menu
@@ -369,28 +383,28 @@ public partial class Shooter : Node3D
     /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use
     /// (T2-18). One step each, so the loading screen keeps drawing between them.
     /// </summary>
-    List<Action> WarmSteps()
+    List<(string Name, Action Run)> WarmSteps()
     {
-        var steps = new List<Action>();
-        foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
-        steps.Add(() => ModelLib.Warm(CharacterView.DefaultModel));
+        var steps = new List<(string Name, Action Run)>();
+        foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add((Path.GetFileName(file), () => ModelLib.Warm(file))); }
+        steps.Add(("character", () => ModelLib.Warm(CharacterView.DefaultModel)));
         foreach (var item in _data!.Items.Items)
         {
             if (item.Model == "") continue;
             var model = item.Model;
-            steps.Add(() => ModelLib.Warm(model)); // a worn item (#266) is on screen the moment someone puts it on
+            steps.Add((Path.GetFileName(model), () => ModelLib.Warm(model))); // a worn item (#266) is on screen the moment someone puts it on
         }
         foreach (var v in _data!.Vehicles.Vehicles)
         {
             if (v.Model == "") continue;
-            var def = v;
-            steps.Add(() => CarFx.Warm(def)); // the model and every skin
+            foreach (var m in v.Skins.Prepend(v.Model)) { var model = m; steps.Add(("vehicle " + Path.GetFileName(model), () => CarFx.Warm(model))); } // the model and every skin, one step each
         }
-        steps.Add(GlassFx.Load);
+        steps.Add(("glass", new Action(GlassFx.Load)));
+        steps.Add(("map picture", new Action(() => { if (ShotFx.Enabled) Maps.MapBase.For(_map)?.Prewarm(Intel.IntelMapTile.TextureSide); }))); // the village sheet of the minimap and the Intel screen: painted on a worker from here (it took the first frame in the match 1.1 s)
         foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath, Buildings.Destruction.HouseWorldNode.ShaderPath })
         {
             var path = sh;
-            steps.Add(() => GD.Load<Shader>(path));
+            steps.Add((Path.GetFileName(path), () => GD.Load<Shader>(path)));
         }
         return steps;
     }
@@ -399,10 +413,13 @@ public partial class Shooter : Node3D
     async Task WarmInSlices()
     {
         var steps = WarmSteps();
+        await NextFrame(); // the map's last step has used the slice
         var slice = Time.GetTicksMsec();
         for (var i = 0; i < steps.Count; i++)
         {
-            steps[i]();
+            var stepT = System.Diagnostics.Stopwatch.GetTimestamp();
+            steps[i].Run();
+            LoadFrameProbe.Step(stepT, "warm " + steps[i].Name, (float)i / steps.Count);
             _mapScreen?.Set("loading.world", 0.75f + 0.1f * (i + 1) / steps.Count);
             if (Time.GetTicksMsec() - slice < SliceMs) continue;
             var tw = global::Drycastle.MapLoader.Core.LoadTimers.Start();
@@ -428,6 +445,7 @@ public partial class Shooter : Node3D
             DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
             try { await MapLoad(); }
             finally { _mapScreen = null; }
+            LoadFrameProbe.Mark("connect");
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
             var tConn = global::Drycastle.MapLoader.Core.LoadTimers.Start();
@@ -452,6 +470,7 @@ public partial class Shooter : Node3D
             client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts()); // made in the client's _Ready
             client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             result = await done.Task;
+            LoadFrameProbe.Mark("welcome");
             global::Drycastle.MapLoader.Core.LoadTimers.Lap("connect.to_welcome", tConn);
             if (global::Drycastle.MapLoader.Core.LoadTimers.Enabled) PrintLoadTimes();
         }
@@ -516,7 +535,7 @@ public partial class Shooter : Node3D
     void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
 
     /// <summary>Worker threads that read the map ahead (half the cores, 2 to 8): the rest keep the menu and the main thread going.</summary>
-    static int PrefetchThreads => Math.Clamp(System.Environment.ProcessorCount / 2, 2, 8);
+    static int PrefetchThreads => int.TryParse(System.Environment.GetEnvironmentVariable("DRYCASTLE_PREFETCH_THREADS"), out var n) && n > 0 ? n : Math.Clamp(System.Environment.ProcessorCount / 2, 2, 8);
 
     /// <summary>Loads the map, yielding the fraction done after each chunk so the loading screen can draw a frame between steps.</summary>
     IEnumerable<float> LoadMapSteps(Config cfg)
@@ -549,20 +568,32 @@ public partial class Shooter : Node3D
         if (waterParts != null && !waterParts.IsCompleted) ((IAsyncResult)waterParts).AsyncWaitHandle.WaitOne();
         WaterSurfaces.Attach(this, _water, waterParts is { IsCompletedSuccessfully: true } ? waterParts.Result : null); // client-side meshes; null on a dry map or headless
         tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.water", tPost);
+        yield return 0.96f; // a frame can be drawn between the parts
         IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
         if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
+        yield return 0.96f;
         if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
+        yield return 0.96f;
         if (!_map.CollisionOnly && ChurchPaintings.Create(Path.GetFullPath(dir)) is { } churchPaintings) AddChild(churchPaintings); // the wall paintings, hellish once the demon is in (client only)
+        yield return 0.96f;
         if (ChurchDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchDoors) AddChild(churchDoors); // closed doors in the doorway, solid on the server too (ADR 0019)
+        yield return 0.96f;
         if (BunkerProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } bunkerProps) AddChild(bunkerProps); // beds, crates, the command post table: Synty models, boxes on the server too (ADR 0009)
+        yield return 0.96f;
         if (UradProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradProps) AddChild(uradProps); // desks, chairs: Synty models, boxes on the server too
+        yield return 0.96f;
         if (UradDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } uradDoor) AddChild(uradDoor); // the Obecny Urad's door: shut unless a rozhlas detour is open, solid on the server too
+        yield return 0.96f;
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
+        yield return 0.96f;
         if (HouseDoorsNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } houseDoors) AddChild(houseDoors); // the hollow houses' doors (interiors.json): shut until a player opens them, solid on the server too
+        yield return 0.96f;
         tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.props_doors", tPost);
         if (!_map.CollisionOnly && Buildings.Destruction.HouseWorldNode.Create(_map, _data?.HouseDestruction ?? Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default) is { } houseWorld) AddChild(houseWorld); // destructible hollow houses (house_voxels.bin), client side
+        yield return 0.96f;
         tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.house_world", tPost);
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
+        yield return 0.96f;
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
             var bunkers = Drycastle.ShooterCore.Bunkers.Shelters.FromJsonOrEmpty(_map.BunkersJson, m => GD.PrintErr($"{m}; bunkers are lit like the outdoors"));
@@ -570,6 +601,7 @@ public partial class Shooter : Node3D
             if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
         tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.garage_bunkers_intel", tPost);
+        yield return 0.96f;
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
         // The lamps of placed utility poles shine like the street lamps; their pole is the placed object, already solid (client only).
@@ -583,6 +615,7 @@ public partial class Shooter : Node3D
                 CollisionOnly = _map.CollisionOnly,
                 Look = _data.Environment.Lamp,
             });
+        yield return 0.96f;
         if (!_map.CollisionOnly && _map.ObjectSignPlates() is { Count: > 0 } signPlates) AddChild(new SignPlates { Map = _map, Plates = signPlates }); // the road signs' plates bend when shot (ADR 0039)
         if (!_map.CollisionOnly && _map.ObjectsOf(_data.Plantation.Reflectors.Asset) is { Count: > 0 } stands) // the plantation's reflector stands: real beams at night
             AddChild(new PlantationReflectors { Stands = stands.Select(o => o.Transform).ToList(), Data = _data.Plantation.Reflectors });

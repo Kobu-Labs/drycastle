@@ -87,6 +87,7 @@ internal sealed class PlayerRoster
         foreach (var tell in _tellJoiner) tell(c);
         _ctx.Match.AddPlayer(c.Id, c.Name, c.Sandbox, c.IsBot); // spawns the player (event) and broadcasts the scoreboard
         _sandbox.Announce(c); // sandbox name tags both ways, and the held streak (#156)
+        _ctx.Send(c, new EventMsg((byte)EventKind.JoinSynced, Array.Empty<byte>())); // the join is sent: the client's loading screen ends when it has applied it
         _host.Flush();
         GD.Print($"server: {c.Name} joined as #{c.Id} ({_byId.Count} players)");
     }

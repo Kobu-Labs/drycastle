@@ -100,15 +100,15 @@ public sealed partial class Minimap : Control
         return localPxPerMetre * Math.Max(0.01f, GetGlobalTransformWithCanvas().Scale.X);
     }
 
-    /// <summary>Takes a new terrain texture from the shared base when the on-screen scale asks for a different resolution (rare: resize, zoom, UI scale).</summary>
+    /// <summary>Takes a new terrain texture from the shared base when the on-screen scale asks for a different resolution (rare: resize, zoom, UI scale); while a worker makes it the old one (or none) shows.</summary>
     void EnsureTexture()
     {
         if (_map == null || Size.X <= 0) return;
         var wanted = MinimapView.TextureSide(_map.SideMetres, DevicePxPerMetre(), MinTextureSide, MaxTextureSide);
-        if (!MinimapView.NeedsRebuild(_side, wanted)) return;
-        _side = wanted;
-        _metresPerTexel = _map.SideMetres / wanted;
-        _base = _map.Texture(wanted);
+        if (!MinimapView.NeedsRebuild(_side, wanted) || _map.TryTexture(wanted, out var built) is not { } tex) return;
+        _side = built;
+        _metresPerTexel = _map.SideMetres / built;
+        _base = tex;
     }
 
     public override void _Process(double delta)
