@@ -68,9 +68,6 @@ public sealed class ChaseCar
     /// <summary>The crew sits in the car (not yet out).</summary>
     public bool CrewInside => _fsm.IsAny(ChaseState.Spawned, ChaseState.Chasing, ChaseState.Stopping);
 
-    /// <summary>Seconds of stopping left (infinite outside Stopping).</summary>
-    public float StopLeft => _fsm.Is(ChaseState.Stopping) ? _fsm.Left : float.PositiveInfinity;
-
     /// <summary>The car, its crew or its Heist is over: from any state it is Gone.</summary>
     public void End() => _fsm.Enter(ChaseState.Gone);
 

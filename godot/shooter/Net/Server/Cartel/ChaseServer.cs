@@ -30,7 +30,6 @@ internal sealed class ChaseServer
         _ctx = ctx; _vehicles = vehicles; Rivals = rivals; _roads = roads; Ground = ground; Rng = rng;
     }
 
-    public ServerContext Ctx => _ctx;
     public JobVehicles Vehicles => _vehicles();
     public RivalCrewServer Rivals { get; }
     /// <summary>The roads the Raid vans drive (the chase cars drive them too).</summary>
@@ -100,7 +99,15 @@ internal sealed class ChaseFleet
     }
 
     /// <summary>Chase cars still in the fight (a crew inside or a member alive).</summary>
-    public int Alive => _units.Count(u => u.InFight);
+    public int Alive
+    {
+        get
+        {
+            var n = 0;
+            foreach (var u in _units) if (u.InFight) n++;
+            return n;
+        }
+    }
 
     void OnLeft(HeistRun run)
     {

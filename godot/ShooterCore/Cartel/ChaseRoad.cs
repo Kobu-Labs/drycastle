@@ -81,14 +81,7 @@ public static class ChaseSpawn
         return fit.Count == 0 ? null : fit[rng.Next(fit.Count)];
     }
 
-    static float AngleBetween(float a, float b) => MathF.Abs(Wrap(a - b));
-
-    internal static float Wrap(float a)
-    {
-        while (a > MathF.PI) a -= MathF.Tau;
-        while (a < -MathF.PI) a += MathF.Tau;
-        return a;
-    }
+    static float AngleBetween(float a, float b) => MathF.Abs(FlightMath.Wrap(a - b));
 }
 
 /// <summary>
@@ -112,9 +105,9 @@ public static class ChasePilot
         var d = path.At(s + ld) - pos;
         var dist = d.Length();
         if (dist < 0.5f) return Stop(speed);
-        var err = ChaseSpawn.Wrap(RoadPath.Yaw(d) - yaw); // positive: the point ahead is to the left
+        var err = FlightMath.Wrap(RoadPath.Yaw(d) - yaw); // positive: the point ahead is to the left
         var steer = MathF.Abs(err) > MathF.PI / 2f ? -MathF.Sign(err) : Math.Clamp(-2f * MathF.Sin(err) / dist * turnRadiusM, -1f, 1f);
-        var bend = MathF.Abs(ChaseSpawn.Wrap(path.YawAt(s + 2f * ld) - path.YawAt(s)));
+        var bend = MathF.Abs(FlightMath.Wrap(path.YawAt(s + 2f * ld) - path.YawAt(s)));
         var want = wantSpeed * Math.Clamp(1.1f - bend / 1.2f, 0.35f, 1f) * Math.Clamp(1.2f - MathF.Abs(err) / 1.3f, 0.3f, 1f);
         return new DriveInput { Throttle = Math.Clamp((want - speed) * 0.9f, -1f, 1f), Steer = steer };
     }
