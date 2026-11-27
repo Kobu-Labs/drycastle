@@ -73,6 +73,7 @@ public sealed class FenceGates
     public bool Arm()
     {
         if (_host.Objects.PlacementAsset != null) _host.Objects.DisarmPlacement(false);
+        if (_fence.Sides.Armed) _fence.Sides.Cancel();
         if (!Allowed) { _host.Say("gates: select one parcel or one property group", true); return false; }
         if (_fence.Current.EffectiveMode != "custom") { _host.Say("gates need fence mode custom", true); return false; }
         if (_host.Map.OriginEpsg5514 == null) { _host.Say("this map has no origin_epsg5514 (export it again, map 0.4.0+)", true); return false; }
@@ -150,7 +151,7 @@ public sealed class FenceGates
     // ---- the fence boundary ----
 
     /// <summary>The fence boundary of the target in ground axes: a parcel's own edges, a group's outer perimeter; null for several loose parcels.</summary>
-    List<(Vector2 a, Vector2 b)>? Boundary()
+    internal List<(Vector2 a, Vector2 b)>? Boundary()
     {
         if (_fence.Target is not { } t) return null;
         if (t.IsGroup)

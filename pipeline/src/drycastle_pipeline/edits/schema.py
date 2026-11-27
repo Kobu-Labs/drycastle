@@ -32,9 +32,18 @@ formatting is fixed, so git diffs stay small. Version 1::
     colour            "#rrggbb" (custom only), overriding the type. It is a tint: picket, wire and
                       concrete are near-white textures, so the colour is their paint; brick and
                       stone carry their own colours (white = as drawn).
+    house_colour      true (custom only; type brick_red, brick_white or concrete, else ignored): the colour is the wall
+                      colour of the parcel's house (its largest building; a group member without one
+                      takes the group's), over ``colour``. No house: ``colour`` (or the type's) applies.
     gaps              list of {"at": [x, y], "width_m": n} (custom only). A gap is cut out of
                       the boundary, centred on the nearest boundary point to ``at``. ``at`` is
                       absolute EPSG:5514 (S-JTSK) metres, the same frame as objects.
+    sides             list of {"at": [x, y], "mode"?, type?, column?, height_m?, thickness_m?, colour?,
+                      house_colour?} (custom only): one side of the fence looks different. A side is the
+                      boundary between two corners (a vertex turning more than SIDE_CORNER_DEG) of the
+                      parcel, or of the group's outer edge; ``at`` (absolute, as gaps) picks the side
+                      nearest to it. Its keys win over the fence's (then the type table of its type);
+                      mode "none" leaves the side unfenced. A later entry for the same side wins.
 
 ``ground_type`` (a parcel's, optional)
     name of a ground type (as a patch's ``type``; not a water type): the parcel's ground looks like that type, its terrain
@@ -192,6 +201,8 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
     "concrete": {"height_m": 1.8, "thickness_m": 0.15, "colour": "#cfcac0"},
     "brick_wall": {"height_m": 1.8, "thickness_m": 0.3, "colour": "#ffffff"},  # old name of brick_red
 }
+# Types whose fence can take the house's wall colour (house_colour).
+HOUSE_COLOUR_TYPES = ("brick_red", "brick_white", "concrete", "brick_wall")
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
@@ -200,8 +211,11 @@ OUTLINE_OVERLAP_M2 = 0.01  # two edited parcel outlines may touch, or overlap by
 PATH_KEYS = ("points", "width_m", "closed")
 PATH_WIDTH_M = (0.3, 4.0)  # a footpath is this wide (metres); wider is a road
 PARCEL_KEYS = ("fence", "ground_type", "outline", "objects")  # "objects" only so a file of the old shape still validates; see parse()
-FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "gaps")
-CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "gaps")
+FENCE_KEYS = ("mode", "type", "column", "height_m", "thickness_m", "colour", "house_colour", "gaps", "sides")
+CUSTOM_FENCE_KEYS = ("type", "column", "height_m", "thickness_m", "colour", "house_colour", "gaps", "sides")
+SIDE_KEYS = ("at", "mode", "type", "column", "height_m", "thickness_m", "colour", "house_colour")
+SIDE_MODES = ("custom", "none")
+SIDE_CORNER_DEG = 10.0  # a boundary vertex that turns more than this splits two sides (props.fences, the editor's FenceSides)
 GAP_KEYS = ("at", "width_m")
 OBJECT_KEYS = ("id", "asset", "position", "z", "rotation_deg", "scale", "size_m", "colour", "solid")
 GROUP_KEYS = ("parcels", "fence")
@@ -265,6 +279,8 @@ class FenceSpec:
     colour: str
     gaps: tuple[tuple[float, float, float], ...] = ()
     column: str | None = None  # None = the type's own column
+    house_colour: bool = False  # the colour is the house's wall colour (props.make_fences), type permitting
+    sides: tuple[tuple[float, float, "FenceSpec"], ...] = ()  # (x, y, the side's own spec); x, y as gaps
 
 
 # --- validation -----------------------------------------------------------------------------
@@ -306,6 +322,24 @@ def _check_point(v: object, path: str, errors: list[str]) -> None:
         errors.append(f"{path}: must be [x, y] in absolute S-JTSK metres")
 
 
+def _check_style(v: dict, path: str, errors: list[str]) -> None:
+    """The look keys a fence and a side share: type, column, height_m, thickness_m, colour, house_colour."""
+    if "type" in v and not (isinstance(v["type"], str) and v["type"] in FENCE_TYPES):
+        errors.append(f"{path}.type: must be one of {', '.join(FENCE_TYPES)}")
+    if "column" in v and not (isinstance(v["column"], str) and v["column"] in COLUMN_TYPES):
+        errors.append(f"{path}.column: must be one of {', '.join(COLUMN_TYPES)}")
+    for key in ("height_m", "thickness_m"):
+        if key in v:
+            _check_positive(v[key], f"{path}.{key}", errors)
+    if "colour" in v:
+        _check_colour(v["colour"], f"{path}.colour", errors)
+    if "house_colour" in v:
+        if not isinstance(v["house_colour"], bool):
+            errors.append(f"{path}.house_colour: must be true or false")
+        elif v["house_colour"] and "type" in v and v["type"] not in HOUSE_COLOUR_TYPES:
+            errors.append(f"{path}.house_colour: only with type {', '.join(HOUSE_COLOUR_TYPES[:3])}")
+
+
 def _check_fence(v: object, path: str, errors: list[str]) -> None:
     if not _is_dict(v, path, errors):
         return
@@ -317,15 +351,28 @@ def _check_fence(v: object, path: str, errors: list[str]) -> None:
         for key in CUSTOM_FENCE_KEYS:
             if key in v:
                 errors.append(f"{path}.{key}: not used with mode {mode!r}")
-    if "type" in v and not (isinstance(v["type"], str) and v["type"] in FENCE_TYPES):
-        errors.append(f"{path}.type: must be one of {', '.join(FENCE_TYPES)}")
-    if "column" in v and not (isinstance(v["column"], str) and v["column"] in COLUMN_TYPES):
-        errors.append(f"{path}.column: must be one of {', '.join(COLUMN_TYPES)}")
-    for key in ("height_m", "thickness_m"):
-        if key in v:
-            _check_positive(v[key], f"{path}.{key}", errors)
-    if "colour" in v:
-        _check_colour(v["colour"], f"{path}.colour", errors)
+    _check_style(v, path, errors)
+    if "sides" in v:
+        sides = v["sides"]
+        if not isinstance(sides, list):
+            errors.append(f"{path}.sides: must be a list")
+        else:
+            for i, side in enumerate(sides):
+                spath = f"{path}.sides.{i}"
+                if not _is_dict(side, spath, errors):
+                    continue
+                _unknown_keys(side, SIDE_KEYS, spath, errors)
+                if "at" not in side:
+                    errors.append(f"{spath}.at: required")
+                else:
+                    _check_point(side["at"], f"{spath}.at", errors)
+                if side.get("mode", "custom") not in SIDE_MODES:
+                    errors.append(f"{spath}.mode: must be one of {', '.join(SIDE_MODES)}")
+                if side.get("mode") == "none":
+                    for key in SIDE_KEYS[2:]:
+                        if key in side:
+                            errors.append(f"{spath}.{key}: not used with mode 'none'")
+                _check_style(side, spath, errors)
     if "gaps" in v:
         gaps = v["gaps"]
         if not isinstance(gaps, list):
@@ -848,6 +895,7 @@ def resolve_fence(parcel_fence: dict | None, group_fence: dict | None = None) ->
     Gaps are returned as given (absolute metres); the props stage converts them.
     """
     merged = {**(group_fence or {}), **(parcel_fence or {})}
+    base = {k: v for k, v in merged.items() if k not in ("gaps", "sides")}
     mode = merged.get("mode")
     if mode is None:
         mode = "custom" if any(k in merged for k in CUSTOM_FENCE_KEYS) else "auto"
@@ -864,4 +912,10 @@ def resolve_fence(parcel_fence: dict | None, group_fence: dict | None = None) ->
             for g in merged.get("gaps", [])
         ),
         column=merged.get("column"),
+        house_colour=merged.get("house_colour") is True and fence_type in HOUSE_COLOUR_TYPES,
+        sides=tuple(
+            (float(s["at"][0]), float(s["at"][1]),
+             resolve_fence({**{k: v for k, v in s.items() if k != "at"}, "mode": s.get("mode", "custom")}, base))
+            for s in merged.get("sides", [])
+        ),
     )
