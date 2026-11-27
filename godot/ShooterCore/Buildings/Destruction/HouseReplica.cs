@@ -3,16 +3,95 @@ using System.Numerics;
 namespace Drycastle.ShooterCore.Buildings.Destruction;
 
 /// <summary>
-/// The client's copy of one house (WP-F): its <see cref="HouseCells"/> following the server's 242 ops, the desync check (op seq and hash),
+/// The client's copy of one house (WP-F): its <see cref="HouseCells"/> following the server's 242 and 254 ops, the desync check (op seq and hash),
 /// and the 243 catch-up (<see cref="HouseCellsCatchUp"/>). Pure: the Godot node (HouseWorldNode) draws what this says changed. The wire is <see cref="HouseCodec"/>'s.
+/// The driver's own plough is guessed ahead of the server (<see cref="Guess"/>): the cells it cut are gone from <see cref="View"/> (what is drawn and collided
+/// with) at once, keyed by the input that cut them, while <see cref="Cells"/> stays the server's word. A guess goes when the server's op has it, when the
+/// prediction's replay no longer cuts it, or <see cref="GuessGraceTicks"/> after its input was acknowledged without the server cutting it.
 /// </summary>
 public sealed class HouseReplica
 {
+    /// <summary>A guess the server has not confirmed this many inputs after it acknowledged the input that made it is taken back (the server did not cut there).</summary>
+    public const int GuessGraceTicks = 30;
+
     HouseCellsCatchUp _catchUp = new();
+    readonly Dictionary<int, ushort> _guess = new();
+    /// <summary>During a replay: the guesses of the inputs being replayed that the replay has not cut again yet.</summary>
+    readonly HashSet<int> _pending = new();
+    readonly List<int> _keys = new();
+    HouseCells? _view;
+    bool _viewStale = true;
 
     public HouseReplica(HouseGrid grid) { Cells = new HouseCells(grid); }
 
     public HouseCells Cells { get; }
+
+    /// <summary>Whether any cell is guessed cut.</summary>
+    public bool Guessing => _guess.Count > 0;
+
+    /// <summary>What the client draws and collides with: <see cref="Cells"/> less the guessed cells.</summary>
+    public HouseCells View
+    {
+        get
+        {
+            if (_guess.Count == 0) return Cells;
+            if (_viewStale)
+            {
+                _view ??= new HouseCells(Grid);
+                _view.CopyFrom(Cells);
+                foreach (var i in _guess.Keys) _view.Remove(i);
+                _viewStale = false;
+            }
+            return _view!;
+        }
+    }
+
+    static bool Before(ushort a, ushort b) => unchecked((short)(a - b)) < 0;
+
+    /// <summary>Whether cell <paramref name="i"/> is still there for the plough of input <paramref name="seq"/>: the server has not removed it, and no earlier input's guess has.</summary>
+    public bool PresentFor(int i, ushort seq) =>
+        Cells.Solid(i) && !(_guess.TryGetValue(i, out var g) && !_pending.Contains(i) && Before(g, seq));
+
+    /// <summary>Input <paramref name="seq"/>'s plough cut cell <paramref name="i"/>.</summary>
+    public void Guess(int i, ushort seq)
+    {
+        _guess[i] = seq;
+        _pending.Remove(i);
+        _viewStale = true;
+    }
+
+    /// <summary>
+    /// The server has stepped input <paramref name="ack"/>: guesses the server's cells now have are dropped (nothing changes in the view), guesses
+    /// <see cref="GuessGraceTicks"/> older than it that it does not have are taken back into <paramref name="back"/> (their cells show again).
+    /// </summary>
+    public void Acked(ushort ack, List<int> back)
+    {
+        if (_guess.Count == 0) return;
+        var old = unchecked((ushort)(ack - GuessGraceTicks));
+        _keys.Clear(); _keys.AddRange(_guess.Keys);
+        foreach (var i in _keys)
+        {
+            if (!Cells.Solid(i)) { _guess.Remove(i); _pending.Remove(i); continue; }
+            if (Before(_guess[i], old)) { _guess.Remove(i); _pending.Remove(i); back.Add(i); }
+        }
+        _viewStale = true;
+    }
+
+    /// <summary>The prediction replays the inputs after <paramref name="ack"/>: their guesses wait to be cut again.</summary>
+    public void BeginReplay(ushort ack)
+    {
+        _pending.Clear();
+        foreach (var (i, s) in _guess) if (Before(ack, s)) _pending.Add(i);
+    }
+
+    /// <summary>The replay is over: the guesses it did not cut again are taken back into <paramref name="back"/>.</summary>
+    public void EndReplay(List<int> back)
+    {
+        if (_pending.Count == 0) return;
+        foreach (var i in _pending) { _guess.Remove(i); if (Cells.Solid(i)) back.Add(i); }
+        _pending.Clear();
+        _viewStale = true;
+    }
     public HouseGrid Grid => Cells.Grid;
     /// <summary>A desync was seen and a 243 asked for: 242s are ignored until it is in (the 243 holds them).</summary>
     public bool AwaitingResync { get; private set; }
@@ -34,6 +113,28 @@ public sealed class HouseReplica
             return (CarveOutcome.Desync, null);
         }
         var r = Cells.Apply(m.Op, cfg);
+        _viewStale = true;
+        if (Cells.OpSeq != m.OpSeq || r.Hash != m.Hash)
+        {
+            AwaitingResync = true;
+            return (CarveOutcome.Desync, r);
+        }
+        return (CarveOutcome.Applied, r);
+    }
+
+    /// <summary>One 254, as <see cref="OnCarve"/>: the plough's cells and, when the op says so, the support pass.</summary>
+    public (CarveOutcome Outcome, CarveResult? Result) OnCut(HouseCutMsg m, DestructionConfig cfg)
+    {
+        if (AwaitingResync) return (CarveOutcome.Ignored, null);
+        var next = (ushort)(Cells.OpSeq + 1);
+        if (m.OpSeq != next)
+        {
+            if (unchecked((short)(m.OpSeq - Cells.OpSeq)) <= 0) return (CarveOutcome.Ignored, null);
+            AwaitingResync = true;
+            return (CarveOutcome.Desync, null);
+        }
+        var r = Cells.Cut(m.Cells, m.Settle, cfg);
+        _viewStale = true;
         if (Cells.OpSeq != m.OpSeq || r.Hash != m.Hash)
         {
             AwaitingResync = true;
@@ -52,6 +153,7 @@ public sealed class HouseReplica
     public CatchUpStep OnCells(HouseCellsMsg m)
     {
         var s = _catchUp.Add(m, Cells);
+        _viewStale = true;
         if (s == CatchUpStep.Done) AwaitingResync = false;
         return s;
     }
@@ -60,6 +162,7 @@ public sealed class HouseReplica
     public void Reset()
     {
         Cells.Restore();
+        _guess.Clear(); _pending.Clear(); _viewStale = true;
         AwaitingResync = false;
         _catchUp = new HouseCellsCatchUp();
     }

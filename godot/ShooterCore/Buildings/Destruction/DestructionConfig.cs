@@ -91,8 +91,8 @@ public sealed record DestructionConfig : IVersioned
         if (Fracture.DustBelowCells < 0) throw new DataFileException($"{f}: fracture.dust_below_cells must not be negative");
         if (Debris.FadeAfterS < 0 || Debris.FadeS < 0 || Debris.MaxBodies < 0 || Debris.MaxDistanceM < 0 || Debris.BreakImpulse < 0 || Debris.StayCapCells < 0)
             throw new DataFileException($"{f}: debris numbers must not be negative");
-        if (!(Ram.MinSpeed > 0) || !(Ram.MomentumPerCell > 0) || !(Ram.DentMaxM >= 0) || !(Ram.MarginM >= 0) || !(Ram.ProbeM > 0) || !(Ram.DepthM > 0))
-            throw new DataFileException($"{f}: ram numbers must be positive (dent_max_m and margin_m may be 0)");
+        if (!(Ram.MinSpeed > 0) || !(Ram.KeepSpeed > 0) || !(Ram.MomentumPerCell > 0) || !(Ram.MarginM >= 0) || !(Ram.LeadM >= 0) || !(Ram.ProbeM > 0) || Ram.SettleTicks < 1)
+            throw new DataFileException($"{f}: ram numbers must be positive (margin_m and lead_m may be 0, settle_ticks at least 1)");
         return this;
     }
 }
@@ -140,23 +140,25 @@ public sealed record FractureConfig
     public int DustBelowCells { get; init; } = 4;
 }
 
-/// <summary>house_destruction.json <c>ram</c>: a vehicle driven into a hollow house (<see cref="HouseRam"/>).</summary>
+/// <summary>house_destruction.json <c>ram</c>: a vehicle driven into a hollow house (<see cref="HousePlough"/>; the thin fences read min_speed, momentum_per_cell and probe_m too).</summary>
 public sealed record RamConfig
 {
     /// <summary>Off: vehicles stop at walls as at any other.</summary>
     public bool Enabled { get; init; } = true;
-    /// <summary>Speed the wall takes from the vehicle in one tick (m/s) from which it is a ram: 13.9 = 50 km/h.</summary>
+    /// <summary>Speed (m/s) from which a vehicle cuts into a house: 13.9 = 50 km/h. An aircraft: the speed the wall took from it in one tick.</summary>
     public float MinSpeed { get; init; } = 13.9f;
+    /// <summary>Once cutting, it goes on down to this speed (m/s; 4 = about 15 km/h): through the rooms behind the wall it broke.</summary>
+    public float KeepSpeed { get; init; } = 4f;
     /// <summary>Momentum (kg m/s) one cell of resist 1.0 takes to break; a cell of resist r takes r times it.</summary>
     public float MomentumPerCell { get; init; } = 130f; // calibrated on the village's houses, see docs/house-destruction.md "Ramming"
-    /// <summary>Radius of the dent a ram that does not go through leaves, at the momentum just short of it (metres; it shrinks with the momentum).</summary>
-    public float DentMaxM { get; init; } = 1.2f;
-    /// <summary>The hole is this much bigger than the vehicle's cross-section on every side (metres).</summary>
-    public float MarginM { get; init; } = 0.15f;
-    /// <summary>How far ahead of the stopped vehicle's box a wall is looked for (metres).</summary>
+    /// <summary>The cut is this much wider than the vehicle on each side and higher than its roof (metres), so the hull does not scrape the hole.</summary>
+    public float MarginM { get; init; } = 0.1f;
+    /// <summary>The sweep reaches this far past the motion of its look-ahead (metres).</summary>
+    public float LeadM { get; init; } = 0.15f;
+    /// <summary>How far ahead of an aircraft (or a fence-rammer) the wall it hit is looked for (metres).</summary>
     public float ProbeM { get; init; } = 0.5f;
-    /// <summary>The hole's sphere is centred half this past the wall's face (metres): the wall is cut through at least this deep.</summary>
-    public float DepthM { get; init; } = 0.6f;
+    /// <summary>A house being cut runs its support pass (what falls, what crumbles) at most this many ticks apart, and once the cutting stops.</summary>
+    public int SettleTicks { get; init; } = 6;
 }
 
 /// <summary>The rubble of fallen pieces (D8): sink away, or stay as frozen piles for the round.</summary>

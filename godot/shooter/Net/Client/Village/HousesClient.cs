@@ -6,7 +6,7 @@ using Drycastle.ShooterCore.Net;
 namespace Drycastle.Shooter.Net.Client.Village;
 
 /// <summary>
-/// House destruction's events (docs/house-destruction.md Contract 4, <see cref="HouseCodec"/>) to the client's houses (<see cref="HouseWorldNode"/>): 242 a carve op,
+/// House destruction's events (docs/house-destruction.md Contract 4, <see cref="HouseCodec"/>) to the client's houses (<see cref="HouseWorldNode"/>): 242 a carve op, 254 a vehicle's cut,
 /// 243 a house's removed cells (join catch-up, resync), 244 the rubble mode and the round reset. A desync is answered with 249 HouseResync. The houses' debris
 /// (<see cref="DebrisNode"/>) lives under <see cref="ClientContext.Owned"/>, so a leave frees it and the next server's first event makes a new one. Also the Trap houses' props (66, 67; #496).
 /// </summary>
@@ -21,17 +21,31 @@ public sealed class HousesClient
     {
         _ctx = ctx;
         _resync = house => ctx.Send(EventKind.HouseResync, HouseCodec.EncodeResync(house));
+        _due = cut => cut.Car == OwnCar() || cut.Tick <= ctx.RenderTick + 0.5; // another vehicle's hole opens as it is drawn reaching it (100 ms behind), the own one's at once
+    }
+
+    readonly Func<HouseCutMsg, bool> _due;
+
+    /// <summary>The vehicle this player drives (0: none).</summary>
+    ushort OwnCar()
+    {
+        if (!_ctx.Driving) return 0;
+        foreach (var v in _ctx.Cars.All) if (v.Driver == _ctx.MyId) return v.Id;
+        return 0;
     }
 
     public void OnEvent(EventKind kind, byte[] payload)
     {
         if (kind is EventKind.TrapHouseDressed or EventKind.TrapHouseStripped) { TrapHouse(kind, payload); return; }
-        if (kind is not (EventKind.HouseCarve or EventKind.HouseCells or EventKind.HouseSettings) || HouseWorldNode.Current is not { } houses) return;
+        if (kind is not (EventKind.HouseCarve or EventKind.HouseCut or EventKind.HouseCells or EventKind.HouseSettings) || HouseWorldNode.Current is not { } houses) return;
         Wire(houses);
         switch (kind)
         {
             case EventKind.HouseCarve when HouseCodec.DecodeCarve(payload) is { } carve:
                 houses.OnCarve(carve);
+                break;
+            case EventKind.HouseCut when HouseCodec.DecodeCut(payload) is { } cut:
+                houses.OnCut(cut);
                 break;
             case EventKind.HouseCells when HouseCodec.DecodeCells(payload) is { } cells:
                 houses.OnCells(cells);
@@ -46,6 +60,7 @@ public sealed class HousesClient
     void Wire(HouseWorldNode houses)
     {
         houses.RequestResync = _resync;
+        houses.Due = _due;
         houses.PaneFrameChanged = PaneFrameChanged;
         if (houses.Debris is DebrisNode d && GodotObject.IsInstanceValid(d) && d.IsInsideTree()) return;
         var owned = _ctx.Owned;

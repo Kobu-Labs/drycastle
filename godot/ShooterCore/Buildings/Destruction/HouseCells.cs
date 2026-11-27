@@ -60,6 +60,37 @@ public sealed class HouseCells
     }
 
     /// <summary>
+    /// A plough's cut (HousePlough, event 254): removes the listed cells that are solid and carvable (resist &gt; 0), then, when <paramref name="settle"/>,
+    /// <see cref="Support.Settle"/> (a cut without it leaves what lost its support for a later cut or settle-only op), OpSeq++. The hash is taken last.
+    /// </summary>
+    public CarveResult Cut(ReadOnlySpan<int> cells, bool settle, DestructionConfig cfg)
+    {
+        var carved = new List<int>(cells.Length);
+        var n = Grid.Count;
+        foreach (var i in cells)
+        {
+            if ((uint)i >= (uint)n || !Solid(i) || cfg.Resist(Grid.Material(i)) == 0) continue;
+            Remove(i);
+            carved.Add(i);
+        }
+        carved.Sort();
+        int[] crumbled = [];
+        IReadOnlyList<int[]> fallen = [];
+        if (settle) (crumbled, fallen) = Support.Settle(this, cfg);
+        OpSeq++;
+        return new CarveResult(carved.ToArray(), crumbled, fallen, Hash());
+    }
+
+    /// <summary>The same state as <paramref name="other"/> (a house of the same grid): its removed cells and op seq.</summary>
+    public void CopyFrom(HouseCells other)
+    {
+        if (other.Grid.Count != Grid.Count) throw new ArgumentException("another grid", nameof(other));
+        Array.Copy(other._removed, _removed, _removed.Length);
+        _removedCount = other._removedCount;
+        OpSeq = other.OpSeq;
+    }
+
+    /// <summary>
     /// The carve rule alone (no support pass, no OpSeq change): removes every cell that is solid, not foundation, of a material with resist r &gt; 0
     /// (1/16 units) and whose centre p (quarter-cells) has <c>d2(p, c) * r^2 &lt;= RadiusQ^2 * 256</c>. Returns the removed cells in ascending index order.
     /// </summary>

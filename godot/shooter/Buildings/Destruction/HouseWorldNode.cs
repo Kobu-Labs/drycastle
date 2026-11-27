@@ -15,9 +15,12 @@ namespace Drycastle.Shooter.Buildings.Destruction;
 /// becomes voxel trimesh columns (<see cref="HouseVoxelCollider"/>, the server's too). Texture, mesh and collider are rebuilt at most once per house per frame, and the houses of
 /// one frame beyond the first only within <see cref="RebuildBudgetMs"/> (the rest wait for the next frames). Fallen and crumbled cells go to <see cref="Debris"/> (WP-G) in the frame's
 /// rebuild, after the collider has its hole. The wire is <see cref="HouseCodec"/>'s. A different op seq or hash than the server's is logged ("house desync &lt;id&gt;") and a 249 asked for.
+/// The vehicle this client drives cuts its way through a house at once (<see cref="IHousePlough"/>, the guesses of <see cref="HouseReplica"/>): its prediction never
+/// stops at the wall and the hole is there before the server's op (254) comes. Another vehicle's cut waits until that vehicle is drawn there (<see cref="Due"/>), so the
+/// wall does not open ahead of it. Everything is drawn and collided from <see cref="HouseReplica.View"/>.
 /// One per map, client only: <see cref="Current"/>.
 /// </summary>
-public partial class HouseWorldNode : Node3D
+public partial class HouseWorldNode : Node3D, IHousePlough
 {
     public const string ShaderPath = "res://shaders/house_destruction.gdshader";
     /// <summary>The same cut for a house's textured faces (fence walls): the library texture times the vertex colour.</summary>
@@ -37,6 +40,11 @@ public partial class HouseWorldNode : Node3D
         get => _debris;
         set { _debris = value; _debris?.SetRubble(_rubbleStay); }
     }
+
+    /// <summary>Whether a plough's op (254) may be drawn now (set by the net client): the vehicle that cut it is drawn there, or it is this client's own. Null: at once.</summary>
+    public Func<HouseCutMsg, bool>? Due { get; set; }
+    /// <summary>A held op is applied after this long whatever <see cref="Due"/> says (seconds): a stalled render clock never keeps a wall up.</summary>
+    const double MaxHoldS = 0.4;
 
     /// <summary>Sends 249 HouseResync for a house (set by the net client).</summary>
     public Action<ushort>? RequestResync { get; set; }
@@ -126,7 +134,19 @@ public partial class HouseWorldNode : Node3D
         public ushort ResyncSeq;
         public ushort Index => Replica.Grid.Index;
         public string Id => Replica.Grid.Id;
+        /// <summary>The server's ops waiting for <see cref="Due"/> (and those after them, in order), with the time each came.</summary>
+        public readonly Queue<(object Msg, double At)> Held = new();
+        /// <summary>Where the last cut was (map local): a settle-only op's falling parts are pushed from there.</summary>
+        public NVec3 LastCut;
     }
+
+    /// <summary>Each house's bounding sphere (map local), by grid index: a plough far from it skips the exact test.</summary>
+    (NVec3 Centre, float Radius)[] _bounds = [];
+    readonly List<House> _holding = new();
+    readonly HashSet<House> _guessing = new();
+    readonly List<PloughCell> _cut = new();
+    readonly List<int> _near = new();
+    readonly List<int> _back = new(), _fresh = new();
 
     /// <summary>
     /// The houses of the map's house_voxels.bin matched to the map's house nodes by id, or null when destruction is off, the map has no file or the file is
@@ -157,6 +177,9 @@ public partial class HouseWorldNode : Node3D
             if (nodes?.Visual == null) unplaced++;
             node._houses[g.Index] = new House(new HouseReplica(g), nodes);
         }
+        node._bounds = new (NVec3, float)[node._houses.Length];
+        foreach (var g in grids)
+            node._bounds[g.Index] = (g.ToMap(new NVec3(g.Nx, g.Ny, g.Nz) * 0.5f), 0.5f * g.Cell * MathF.Sqrt((float)g.Nx * g.Nx + (float)g.Ny * g.Ny + (float)g.Nz * g.Nz));
         if (unplaced > 0) GD.PrintErr($"client: {unplaced} of {grids.Count} destructible houses have no house_<id>_visual node; their state is kept, not drawn");
         node.FindPanes(grids);
         return node;
@@ -210,7 +233,7 @@ public partial class HouseWorldNode : Node3D
         foreach (var p in _panes[g.Index])
         {
             p.Frame ??= HouseFrames.FrameCells(g, p.Rect);
-            var gone = p.Frame.Length > 0 && HouseFrames.Unframed(h.Replica.Cells, p.Frame);
+            var gone = p.Frame.Length > 0 && HouseFrames.Unframed(h.Replica.View, p.Frame);
             if (gone == p.Gone) continue;
             p.Gone = gone;
             ShowPane(p);
@@ -231,6 +254,12 @@ public partial class HouseWorldNode : Node3D
     public void OnCarve(HouseCarveMsg m)
     {
         if (Of(m.House) is not { } h) return;
+        if (h.Held.Count > 0) { Hold(h, m); return; } // after a held cut, in order
+        ApplyCarve(h, m);
+    }
+
+    void ApplyCarve(House h, HouseCarveMsg m)
+    {
         var (outcome, r) = h.Replica.OnCarve(m, _cfg);
         if (r != null)
         {
@@ -240,6 +269,137 @@ public partial class HouseWorldNode : Node3D
             if (_debris != null) _falls.Add((h, r, h.Replica.Grid.ToMap(new NVec3(m.Op.Cx, m.Op.Cy, m.Op.Cz) / 4f), (uint)m.House << 16 | m.OpSeq));
         }
         if (outcome == HouseReplica.CarveOutcome.Desync) Desync(h);
+    }
+
+    /// <summary>254: a plough's cells; another vehicle's wait until it is drawn there (<see cref="Due"/>).</summary>
+    public void OnCut(HouseCutMsg m)
+    {
+        if (Of(m.House) is not { } h) return;
+        if (h.Held.Count > 0 || Due?.Invoke(m) == false) { Hold(h, m); return; }
+        ApplyCut(h, m);
+    }
+
+    void Hold(House h, object m)
+    {
+        if (h.Held.Count == 0) _holding.Add(h);
+        h.Held.Enqueue((m, Time.GetTicksMsec() / 1000.0));
+    }
+
+    /// <summary>The held ops that are due now, each house's in order.</summary>
+    void ReleaseHeld()
+    {
+        var now = Time.GetTicksMsec() / 1000.0;
+        for (var k = _holding.Count - 1; k >= 0; k--)
+        {
+            var h = _holding[k];
+            while (h.Held.TryPeek(out var e))
+            {
+                if (e.Msg is HouseCutMsg cut && now - e.At < MaxHoldS && Due?.Invoke(cut) == false) break;
+                h.Held.Dequeue();
+                if (e.Msg is HouseCutMsg c) ApplyCut(h, c);
+                else ApplyCarve(h, (HouseCarveMsg)e.Msg);
+            }
+            if (h.Held.Count == 0) _holding.RemoveAt(k);
+        }
+    }
+
+    void ApplyCut(House h, HouseCutMsg m)
+    {
+        var g = h.Replica.Grid;
+        // the cells not already gone from the view (this client's own guess drew them): only those change what is drawn
+        var view = h.Replica.View;
+        _fresh.Clear();
+        foreach (var i in m.Cells) if ((uint)i < (uint)g.Count && view.Solid(i)) _fresh.Add(i);
+        if (m.Cells.Length > 0) h.LastCut = Centre(g, m.Cells);
+        var (outcome, r) = h.Replica.OnCut(m, _cfg);
+        if (r != null && (_fresh.Count > 0 || r.Crumbled.Length > 0 || r.Fallen.Count > 0))
+        {
+            MarkDirty(h);
+            h.Collider?.Mark(r);
+            if (_debris != null) _falls.Add((h, r with { Carved = _fresh.ToArray() }, h.LastCut, (uint)m.House << 16 | m.OpSeq));
+        }
+        if (outcome == HouseReplica.CarveOutcome.Desync) Desync(h);
+    }
+
+    /// <summary>The mean of the cells' centres, map local.</summary>
+    static NVec3 Centre(HouseGrid g, ReadOnlySpan<int> cells)
+    {
+        var sum = NVec3.Zero;
+        foreach (var i in cells) { var (x, y, z) = g.Coords(i); sum += new NVec3(x + 0.5f, y + 0.5f, z + 0.5f); }
+        return g.ToMap(sum / cells.Length);
+    }
+
+    // ---- the driver's own plough, guessed (IHousePlough through the prediction's DriveProbe) ----
+
+    /// <summary>
+    /// The predicted step of the vehicle this client drives: the cells it sweeps next are cut in the view at once (as the server will, <see cref="HousePlough"/>),
+    /// keyed by the input; the collider loses them now, so the next step drives on through; the speed they took is returned.
+    /// </summary>
+    public float Plough(in PloughQuery q)
+    {
+        var rc = _cfg.Ram;
+        if (!rc.Enabled || q.Speed < rc.KeepSpeed) return 0;
+        var centre = HousePlough.Box(q, rc.MarginM).Centre;
+        var reach = HousePlough.ReachRadius(q, rc);
+        _near.Clear();
+        for (var i = 0; i < _houses.Length; i++)
+        {
+            if (_houses[i] is not { } hh || hh.Replica.AwaitingResync) continue;
+            var (c, r) = _bounds[i];
+            if (NVec3.DistanceSquared(c, centre) <= (r + reach) * (r + reach)) _near.Add(i);
+        }
+        if (_near.Count == 0) return 0;
+        var seq = q.Seq;
+        var plan = HousePlough.Plan(q, _cfg, _near, i => _houses[i]!.Replica.Cells, (h, i) => _houses[h]!.Replica.PresentFor(i, seq), _cut);
+        if (plan.Count == 0) return 0;
+        for (var k = 0; k < _cut.Count;)
+        {
+            var h = _houses[_cut[k].House]!;
+            var view = h.Replica.View;
+            _fresh.Clear();
+            for (; k < _cut.Count && _cut[k].House == h.Index; k++)
+            {
+                var i = _cut[k].Cell;
+                if (view.Solid(i)) _fresh.Add(i);
+                h.Replica.Guess(i, seq);
+            }
+            _guessing.Add(h);
+            if (_fresh.Count == 0) continue; // a replay cutting again what it had cut
+            var cells = _fresh.ToArray();
+            h.LastCut = Centre(h.Replica.Grid, cells);
+            if (!h.Swapped) Swap(h);
+            h.Collider?.Mark(cells);
+            RebuildCollider(h);
+            MarkDirty(h);
+            _debris?.Fall(h.Replica.Grid, new CarveResult(cells, [], [], 0), h.LastCut, 0);
+        }
+        return plan.Loss;
+    }
+
+    public void PloughAcked(ushort ack)
+    {
+        foreach (var h in _guessing) { _back.Clear(); h.Replica.Acked(ack, _back); Restored(h); }
+        _guessing.RemoveWhere(h => !h.Replica.Guessing);
+    }
+
+    public void PloughReplay(ushort ack)
+    {
+        foreach (var h in _guessing) h.Replica.BeginReplay(ack);
+    }
+
+    public void PloughReplayDone()
+    {
+        foreach (var h in _guessing) { _back.Clear(); h.Replica.EndReplay(_back); Restored(h); }
+        _guessing.RemoveWhere(h => !h.Replica.Guessing);
+    }
+
+    /// <summary>Guessed cells the server did not cut (<see cref="_back"/>) are back in the view: the collider gets them now, the drawing next frame.</summary>
+    void Restored(House h)
+    {
+        if (_back.Count == 0) return;
+        h.Collider?.Mark(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_back));
+        RebuildCollider(h);
+        MarkDirty(h);
     }
 
     /// <summary>243: one message of a house's removed cells (join catch-up or resync); the house is redrawn when it equals the server's, a broken set asks again.</summary>
@@ -278,6 +438,7 @@ public partial class HouseWorldNode : Node3D
         {
             if (h == null) continue;
             h.Replica.Reset();
+            h.Held.Clear();
             Unswap(h);
             UpdatePanes(h);
             h.Dirty = h.ColliderDirty = false;
@@ -285,6 +446,8 @@ public partial class HouseWorldNode : Node3D
         }
         _dirty.Clear();
         _awaiting.Clear();
+        _holding.Clear();
+        _guessing.Clear();
         _falls.Clear();
         _debris?.ResetAll();
     }
@@ -311,6 +474,7 @@ public partial class HouseWorldNode : Node3D
     public override void _Process(double delta)
     {
         if (!_warmed) WarmUp();
+        if (_holding.Count > 0) ReleaseHeld();
         if (_awaiting.Count > 0)
         {
             var now = Time.GetTicksMsec() / 1000.0;
@@ -351,9 +515,9 @@ public partial class HouseWorldNode : Node3D
     void Rebuild(House h)
     {
         UpdatePanes(h);
-        if (!h.Replica.Cells.Damaged) { Unswap(h); return; }
+        if (!h.Replica.View.Damaged) { Unswap(h); return; }
         if (!h.Swapped) Swap(h);
-        (h.Look ??= new HouseDamageLook(h.Replica.Grid)).Update(h.Replica.Cells);
+        (h.Look ??= new HouseDamageLook(h.Replica.Grid)).Update(h.Replica.View);
         UpdateTexture(h);
         RebuildCut(h);
         if (h.ColliderDirty) RebuildCollider(h);
@@ -434,7 +598,7 @@ public partial class HouseWorldNode : Node3D
         h.Material = null; h.Texture = null; h.Layers = null; h.LayerBytes = []; h.FlatMaterial = null;
         if (h.Cut != null && GodotObject.IsInstanceValid(h.Cut)) h.Cut.QueueFree();
         h.Cut = null; h.CutMesh = null;
-        if (h.Collider?.Update(h.Replica.Cells, MapToWorld) == true) _map.HouseGeometryChanged(); // whole: the shell back
+        if (h.Collider?.Update(h.Replica.View, MapToWorld) == true) _map.HouseGeometryChanged(); // whole: the shell back
         h.Look = null;
     }
 
@@ -456,7 +620,7 @@ public partial class HouseWorldNode : Node3D
         if (h.CutMesh == null || h.Look == null) return;
         var g = h.Replica.Grid;
         _quads.Clear(); _pos.Clear(); _nrm.Clear();
-        HouseMesher.Damaged(h.Replica.Cells, h.Look, _quads);
+        HouseMesher.Damaged(h.Replica.View, h.Look, _quads);
         HouseFrame.Triangles(g, _quads, _pos, _nrm);
         h.CutMesh.ClearSurfaces();
         if (_pos.Count == 0) return;
@@ -481,7 +645,7 @@ public partial class HouseWorldNode : Node3D
     /// <summary>The house's changed collider columns are rebuilt from its live cells (<see cref="HouseVoxelCollider"/>, as the server builds them).</summary>
     void RebuildCollider(House h)
     {
-        if (h.Collider?.Update(h.Replica.Cells, MapToWorld) == true) _map.HouseGeometryChanged();
+        if (h.Collider?.Update(h.Replica.View, MapToWorld) == true) _map.HouseGeometryChanged();
     }
 
     /// <summary>Compiles the discard shaders (flat and textured) before the first carve: a speck with each material in front of the camera for half a second.</summary>

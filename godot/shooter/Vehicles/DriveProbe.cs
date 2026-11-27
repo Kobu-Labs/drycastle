@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Flight;
+using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Waters;
@@ -10,8 +11,8 @@ namespace Drycastle.Shooter.Vehicles;
 /// <summary>
 /// The physics space as <see cref="DriveModel"/> sees it (<see cref="IDriveWorld"/>), as <see cref="FlightProbe"/> is for the helicopter: a hidden
 /// kinematic body with the vehicle's hull box, moved through the solid world (layer 1: ground, buildings, tree trunks, placed solids) to find what
-/// stops it, and a ray for the ground under a wheel. The server has one per driven vehicle (the amphibious transport), the driver's client one for
-/// its prediction, and both ask the same questions of the same colliders (ADR 0010). It is on no layer itself, so nothing hits it: bullets meet the
+/// stops it, and a ray for the ground under a wheel. The server has one per driven vehicle, the driver's client one for its prediction, and both
+/// ask the same questions of the same colliders (ADR 0010); a hollow house in the way is cut first (<see cref="Houses"/>). It is on no layer itself, so nothing hits it: bullets meet the
 /// vehicle's own hit box. Shot-only cover (tree crowns, bushes) does not stop it, as it does not stop a car.
 /// </summary>
 public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld
@@ -33,6 +34,16 @@ public sealed partial class DriveProbe : CharacterBody3D, IDriveWorld
     Water _water = Water.Empty;
 
     public static DriveProbe Make(VehicleDef def, Water water) => new() { Name = "DriveProbe", _def = def, _water = water, TopLevel = true };
+
+    /// <summary>The hollow houses the vehicle cuts its way through (the server's, or the driver's client's guesses); null: none, it stops at their walls.</summary>
+    public IHousePlough? Houses { get; set; }
+    /// <summary>The vehicle this probe moves (what the server's cut op names).</summary>
+    public ushort CarId { get; set; }
+
+    public float Plough(in PloughQuery q) => Houses?.Plough(q with { Car = CarId }) ?? 0f;
+    public void PloughAcked(ushort ack) => Houses?.PloughAcked(ack);
+    public void PloughReplay(ushort ack) => Houses?.PloughReplay(ack);
+    public void PloughReplayDone() => Houses?.PloughReplayDone();
 
     public override void _Ready()
     {

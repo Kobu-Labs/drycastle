@@ -19,7 +19,7 @@ namespace Drycastle.Shooter.Net.Server.Houses;
 /// holes are real for movement, shots and a blast's line of sight. A joiner gets the settings and the removed cells of every house that was touched; a client that finds itself
 /// out of step asks for a house again (<see cref="EventKind.HouseResync"/>). A new round, or <c>/houses restore</c>, makes every house whole.
 /// </summary>
-internal sealed class HouseDestructionServer
+internal sealed class HouseDestructionServer : IHousePlough
 {
     /// <summary>How far ahead <c>/carve</c> looks for the surface under the crosshair, metres.</summary>
     const float CarveReachM = 500f;
@@ -51,6 +51,8 @@ internal sealed class HouseDestructionServer
         _dirty = new bool[_houses.Length];
         _colliders = new HouseVoxelCollider?[_houses.Length];
         _noCollider = new bool[_houses.Length];
+        _unsettledSince = new uint?[_houses.Length];
+        _cutTick = new uint[_houses.Length];
         if (_houses.Length > 0) GD.Print($"server: house destruction on, {_houses.Length} hollow houses");
     }
 
@@ -118,64 +120,118 @@ internal sealed class HouseDestructionServer
         var house = _houses[i];
         var result = house.Apply(op, _cfg);
         _ctx.Broadcast(EventKind.HouseCarve, HouseCodec.EncodeCarve(new HouseCarveMsg(house.Grid.Index, house.OpSeq, op, result.Hash))); // every op, even one that took nothing: the clients count them too
-        if (result.Carved.Length > 0 || result.Crumbled.Length > 0 || result.Fallen.Count > 0)
-        {
-            _dirty[i] = true;
-            ColliderOf(i)?.Mark(result);
-            Changed?.Invoke(house);
-        }
+        if (result.Carved.Length > 0) _unsettledSince[i] = null; // it ran the support pass
+        MarkChanged(i, result);
     }
 
     // ---- rams ----
 
-    readonly List<(int House, CarveOp? Hole, NVec3 At)> _rammed = new();
+    readonly List<PloughCell> _cut = new();
+    readonly List<int> _near = new();
+    readonly List<int> _group = new();
+    /// <summary>Per house: the tick of its first cut since its last support pass (null: settled), and the tick of its last cut.</summary>
+    readonly uint?[] _unsettledSince;
+    readonly uint[] _cutTick;
 
     /// <summary>
-    /// A vehicle that lost <see cref="ServerCar.LastImpact"/> m/s to something this tick, from <see cref="ServerCar.LastImpactVelocity"/> (HouseRam,
-    /// house_destruction.json <c>ram</c>). Below <c>ram.min_speed</c>, or no hollow house wall just ahead along that velocity: null, a crash like any.
-    /// Its momentum (mass times the speed lost) against what the holes it needs take: more, the holes are cut, the vehicle goes on slowed by them, and the
-    /// speed that cost is returned (its crash); less, each house it met gets a dent and it stops (null: the crash is the whole impact).
+    /// A driven vehicle's drive step (<see cref="HousePlough"/>, house_destruction.json <c>ram</c>): the cells it sweeps next are cut, one op (254) for each house,
+    /// before it moves, and the speed they took is returned. The colliders follow at the end of the tick (<see cref="Flush"/>), a step before it gets there.
+    /// </summary>
+    public float Plough(in PloughQuery q)
+    {
+        var rc = _cfg.Ram;
+        if (!On || !rc.Enabled || q.Speed < rc.KeepSpeed) return 0;
+        var plan = PlanNear(q);
+        if (plan.Count == 0) return 0;
+        ApplyCut(q.Car);
+        return plan.Loss;
+    }
+
+    PloughPlan PlanNear(in PloughQuery q)
+    {
+        var rc = _cfg.Ram;
+        var centre = HousePlough.Box(q, rc.MarginM).Centre;
+        var reach = HousePlough.ReachRadius(q, rc);
+        _near.Clear();
+        for (var i = 0; i < _houses.Length; i++)
+        {
+            var (c, r) = _bounds[i];
+            if (NVec3.DistanceSquared(c, centre) <= (r + reach) * (r + reach)) _near.Add(i);
+        }
+        if (_near.Count == 0) { _cut.Clear(); return default; }
+        return HousePlough.Plan(q, _cfg, _near, i => _houses[i], (h, i) => _houses[h].Solid(i), _cut);
+    }
+
+    /// <summary>The planned cells (<see cref="_cut"/>, by house then cell) cut and sent, one op a house; each one's support pass waits (<see cref="Flush"/>) unless it is due.</summary>
+    void ApplyCut(ushort car)
+    {
+        var tick = _ctx.Tick;
+        for (var k = 0; k < _cut.Count;)
+        {
+            var h = _cut[k].House;
+            _group.Clear();
+            for (; k < _cut.Count && _cut[k].House == h; k++) _group.Add(_cut[k].Cell);
+            var settle = _unsettledSince[h] is { } since && tick - since >= _cfg.Ram.SettleTicks;
+            SendCut(h, System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_group), settle, car);
+            _unsettledSince[h] = settle ? null : _unsettledSince[h] ?? tick;
+            _cutTick[h] = tick;
+        }
+    }
+
+    void SendCut(int i, ReadOnlySpan<int> cells, bool settle, ushort car)
+    {
+        var house = _houses[i];
+        var result = house.Cut(cells, settle, _cfg);
+        _ctx.Broadcast(EventKind.HouseCut, HouseCodec.EncodeCut(new HouseCutMsg(house.Grid.Index, house.OpSeq, result.Hash, settle, _ctx.Tick, car, result.Carved)));
+        MarkChanged(i, result);
+    }
+
+    void MarkChanged(int i, CarveResult result)
+    {
+        if (result.Carved.Length == 0 && result.Crumbled.Length == 0 && result.Fallen.Count == 0) return;
+        _dirty[i] = true;
+        ColliderOf(i)?.Mark(result);
+        Changed?.Invoke(_houses[i]);
+    }
+
+    /// <summary>
+    /// A vehicle that is not driven by the drive model (an aircraft) lost <see cref="ServerCar.LastImpact"/> m/s to something this tick, from
+    /// <see cref="ServerCar.LastImpactVelocity"/>: below <c>ram.min_speed</c>, or no hollow house cell within <c>ram.probe_m</c> of its box along that velocity,
+    /// null (a crash like any). Else the cells its box sweeps are cut as a driven vehicle's would be, with the momentum the wall took (mass times that speed):
+    /// all of them, it goes on slowed by them and the speed that cost is returned; short of it, what it could afford is cut and it stops (null).
+    /// A driven vehicle cuts in its drive step (<see cref="Plough"/>) and never stops at a house.
     /// </summary>
     public float? Ram(ServerCar car)
     {
         var rc = _cfg.Ram;
-        if (!On || !rc.Enabled || car.LastImpact < rc.MinSpeed) return null;
+        if (!On || !rc.Enabled || car.Drives || car.LastImpact < rc.MinSpeed) return null;
         var v = car.LastImpactVelocity;
         var speed = v.Length();
         if (speed < 1e-3f) return null;
         var s = car.ContactShape();
-        var box = RamBox.FromGodot(s.Feet, s.Yaw, s.HalfWidth, s.HalfLength, s.Height);
-        var dir = RamBox.ToMap(v) / speed;
-        var reachM = box.Extent(dir) + rc.ProbeM + box.Half.Length();
-        _rammed.Clear();
-        var cost = 0f;
-        for (var i = 0; i < _houses.Length; i++)
-        {
-            var (centre, radius) = _bounds[i];
-            if (NVec3.DistanceSquared(centre, box.Centre) > (radius + reachM) * (radius + reachM)) continue;
-            if (HouseRam.Contact(_houses[i], box, dir, rc.ProbeM) is not { } hit) continue;
-            var hole = HouseRam.Hole(_houses[i].Grid, box, dir, hit.Front, rc);
-            if (hole is { } h) cost += HouseRam.Cost(_houses[i], [h], _cfg);
-            _rammed.Add((i, hole, hit.At));
-        }
-        if (_rammed.Count == 0) return null;
         var mass = car.BumpBody().Mass;
-        var outcome = HouseRam.Decide(cost, mass, car.LastImpact, speed);
-        if (!outcome.Through)
-        {
-            foreach (var (i, _, at) in _rammed)
-                if (HouseRam.Dent(_houses[i].Grid, at, mass * car.LastImpact, cost, rc) is { } dent) ApplyOp(i, dent);
-            return null;
-        }
-        foreach (var (i, hole, _) in _rammed)
-            if (hole is { } op) ApplyOp(i, op);
-        car.Rammed(v * (outcome.SpeedKept / speed));
-        return outcome.SpeedLost;
+        var q = new PloughQuery(s.Feet, s.Yaw, v / speed * (rc.ProbeM / HousePlough.LookaheadSteps), car.LastImpact, mass, s.HalfWidth, s.HalfLength, s.Height, 0f, Car: car.Id);
+        var plan = PlanNear(q);
+        if (plan.Count == 0) return null;
+        ApplyCut(car.Id);
+        if (!plan.Through) return null;
+        var kept = MathF.Max(0, speed - plan.Loss);
+        car.Rammed(v * (kept / speed));
+        return plan.Loss;
     }
 
-    /// <summary>The houses that changed this tick get their new collider, each once (called once at the end of the tick).</summary>
+    /// <summary>
+    /// The end of the tick: a house a plough stopped cutting this tick gets its support pass (a settle-only op, 254 with no cells), then every house that
+    /// changed gets its new collider, each once.
+    /// </summary>
     public void Flush()
     {
+        for (var i = 0; i < _houses.Length; i++)
+        {
+            if (_unsettledSince[i] == null || _cutTick[i] == _ctx.Tick) continue;
+            _unsettledSince[i] = null;
+            SendCut(i, [], true, 0);
+        }
         for (var i = 0; i < _houses.Length; i++)
         {
             if (!_dirty[i]) continue;
@@ -230,6 +286,7 @@ internal sealed class HouseDestructionServer
         {
             if (_houses[i].Damaged) _dirty[i] = true; // back to the original shell at the flush
             _houses[i].Restore();
+            _unsettledSince[i] = null;
         }
         _ctx.Broadcast(EventKind.HouseSettings, HouseCodec.EncodeSettings(new HouseSettingsMsg(RubbleStays, Reset: true)));
         Restored?.Invoke();

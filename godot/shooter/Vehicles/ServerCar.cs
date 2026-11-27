@@ -90,7 +90,7 @@ public partial class ServerCar : CharacterBody3D
     public readonly VehiclePoseRing Poses = new();
     /// <summary>Speed lost to a wall in the last <see cref="Step"/> (m/s), for crash damage.</summary>
     public float LastImpact;
-    /// <summary>The velocity (Godot frame) it had going into the step of <see cref="LastImpact"/>: what a ram into a house reads (HouseRam).</summary>
+    /// <summary>The velocity (Godot frame) it had going into the step of <see cref="LastImpact"/>: what an aircraft's ram into a house reads (HouseDestructionServer.Ram).</summary>
     public System.Numerics.Vector3 LastImpactVelocity;
 
     /// <summary>
@@ -127,6 +127,8 @@ public partial class ServerCar : CharacterBody3D
     public DriveState Drive;
     /// <summary>Its view of the solid world; null for every other type.</summary>
     public DriveProbe? DriveWorld;
+    /// <summary>The server's hollow houses every driven vehicle cuts its way through (HouseDestructionServer; set by the server, null: none).</summary>
+    public static Drycastle.ShooterCore.Buildings.Destruction.IHousePlough? Houses;
     /// <summary>Server tick of the last step a driver's input made (the inputs step it one for one); the vehicle step fills in when they stop arriving.</summary>
     public uint DriveTick;
     /// <summary>The hardest impact of the drive steps since the vehicle step last read it, m/s.</summary>
@@ -344,7 +346,8 @@ public partial class ServerCar : CharacterBody3D
     public void StepDrive(in DriveInput input, float dt)
     {
         var before = Drive;
-        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld!, TowEffectNow());
+        DriveWorld!.Houses = Houses; DriveWorld.CarId = Id;
+        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld, TowEffectNow(), new PloughStep(Houses != null));
         if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
         if (Drive.Impact > DriveImpact) DriveImpactVelocity = before.Velocity;
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
@@ -352,7 +355,7 @@ public partial class ServerCar : CharacterBody3D
     }
 
     /// <summary>
-    /// It went through a house's wall (HouseRam): it goes on at <paramref name="v"/> (Godot frame), the velocity it hit the wall with less what the hole took.
+    /// It went through a house's wall (HouseDestructionServer.Ram): it goes on at <paramref name="v"/> (Godot frame), the velocity it hit the wall with less what the hole took.
     /// A ground vehicle keeps only what its model carries (along the heading; a driven one also sideways).
     /// </summary>
     public void Rammed(System.Numerics.Vector3 v)

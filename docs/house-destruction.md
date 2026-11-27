@@ -16,20 +16,24 @@ Status: designed 2026-11-26, nothing built. This doc is the contract for paralle
 | D7 | **Debris is client-side cosmetic.** A falling part is one Jolt rigid body. On its first hard impact it is split into Voronoi pieces. The server has no debris, and debris collides with nobody. |
 | D8 | **Rubble mode is a toggle:** "fade" (pieces sink away after a while) or "stay" (frozen as cosmetic piles for the round). Set in `house_destruction.json` and live via the admin command `/rubble fade\|stay`. |
 | D9 | **Round only.** Round reset restores every house. A joiner gets the removed cells (no debris). |
-| D10 | **Vehicles ram walls by momentum** (see "Ramming"). Any vehicle that loses 50 km/h or more to a hollow house's wall in one tick rams it. Its momentum against the hole its cross-section needs decides: through (slowed by the hole) or a dent (it stops). Sent as ordinary carve ops. |
+| D10 | **Vehicles cut their way through walls by momentum** (see "Ramming"). A driven vehicle at 50 km/h or more cuts the cells its box sweeps before each move, the shape of the vehicle at its angle, paying for each with its momentum; it never stops at the wall, and stops in it only when the momentum runs out. Sent as cut ops (254); the driver's client guesses its own. |
 
 **v2, not in scope:** debris and collapse hurting players (needs server-side debris); terrain craters; digging or placing blocks by hand; bots and nav re-bake; other building types.
 
 ## Ramming
 
-`HouseRam` (ShooterCore), `HouseDestructionServer.Ram`, called from `VehicleLoop.StepCar` before the crash rule. `house_destruction.json` `ram`.
+`HousePlough` (ShooterCore), `IDriveWorld.Plough` in `DriveModel`'s sweep, `HouseDestructionServer.Plough` (server) and `HouseWorldNode.Plough` (the driver's client). `house_destruction.json` `ram`.
 
-- **Trigger.** The speed a wall took in one tick (`ServerCar.LastImpact`, the number the crash rule reads) is at least `ram.min_speed` (13.9 m/s = 50 km/h). Every vehicle: driven, coasting, flown; not a thrown one (the Bigfoot's), not a towed trailer.
-- **Contact.** The vehicle's upright box (`ContactShape`), shifted up to `probe_m` along the velocity it hit with (`LastImpactVelocity`), meets live cells (not foundation or floor) ahead of its centre.
-- **Cost.** The hole: one sphere whose circle at the wall's face covers the box's cross-section square to the velocity, `margin_m` larger on every side, centred `depth_m` / 2 past the face. One op, so the support pass runs once (a 4-sphere hole cost 55 ms on the biggest house). Its cost is `momentum_per_cell` times the resist of every live cell it would remove. A car's hole in a typical outer wall is about 157 cells, so 130 kg m/s a cell is about 20 000.
-- **Through** (mass times speed lost above the cost, summed over every house it meets): the holes are cut, the vehicle goes on along its velocity, slowed by cost / mass, and the crash rule reads only that loss. A car (1200 kg) goes through from about 60 km/h; a truck, a bus or a Humvee at 50 km/h.
-- **Dent** (less): each house gets one sphere at the contact, `dent_max_m` times the share of the momentum. The vehicle stops as at any wall.
-- **Net.** Only carve ops (242), and the vehicle state the reconciliation already carries. The driver's client predicts the stop and is corrected a round trip later.
+- **A driven vehicle never stops at the wall: it cuts its way through.** Before each move (`DriveModel` sweep) the vehicle's upright box (its hull, `margin_m` wider on each side and higher than its roof, from half its wheels' step height over its feet up) is swept along the motion of two steps plus `lead_m`. Every live cell whose centre it meets (any material with a resist; foundation never) is cut, nearest first. The cells are the shape of the vehicle at the angle it came in: head-on a car takes its cross-section of the wall (about 50 cells of a one-cell wall), a corner takes a corner's notch. No sphere, no reach by resist.
+- **Momentum.** Each cell costs `momentum_per_cell` times its resist of the vehicle's momentum (mass times speed); the vehicle loses cost / mass m/s (the step's impact, read by the crash rule). Short of momentum it cuts what it can afford and stops in the wall. A car (1200 kg) through an outer wall at 60 km/h loses about 5 m/s; brick (resist 2.6) stops it unless it is faster.
+- **Speeds.** It starts cutting at `min_speed` (13.9 m/s = 50 km/h; slower is a crash, no hole). Once cutting (`DriveState.Ramming`, 0.6 s after its last cut) it goes on down to `keep_speed` (4 m/s): through the rooms behind the wall it broke.
+- **Why two steps ahead.** The colliders are rebuilt between ticks (the server's at `Flush`, Jolt commits shapes before the next physics step), so the cells of the next step must be gone a step before the vehicle gets there.
+- **Support pass.** A cut op does not run `Support.Settle` (it costs 1 to 7 ms on a big house; a cut alone 0.04 ms): the server sets the settle flag on a house's cut at most `settle_ticks` (6) ticks after its first unsettled one, and sends a settle-only op (254 with no cells) at the end of the tick in which the cutting stopped. A blast's op (242) settles anyway.
+- **Aircraft** (not stepped by `DriveModel`): on impact, as before the plough (`ServerCar.LastImpact` at least `min_speed`), the cells its box sweeps `probe_m` along the velocity it hit with are cut with the momentum the wall took; all of them, it goes on slowed (`ServerCar.Rammed`); short, what it could afford is cut and it stops.
+- **Net.** Event 254 `HouseCut` per house per cutting step (Contract 4). Lag:
+  - The driver's client guesses its own plough (`HouseReplica.Guess`): the same plan against its copy, the cells gone from `HouseReplica.View` (drawn and collided with) and from its collider at once, keyed by the input. A replay after a correction cuts again (and pays again) only what the replayed inputs cut; a guess the replay drops, or the server has not cut `GuessGraceTicks` (30) inputs after acknowledging it, shows again. So the driver sees the wall break as the car hits it and drives on, with no round trip.
+  - Another vehicle's cut is held until that vehicle is drawn there (`HouseWorldNode.Due`: its tick at most the render tick, 100 ms behind, at most 0.4 s), so the wall does not open before it arrives. Ops after a held one wait behind it, in order.
+- Measured on the village (58 houses, a car at 60 km/h): about 150 cells over its whole run through a house (outer and inner walls), against 269 for the old sphere at the entry alone.
 
 ## How it fits (existing code)
 
@@ -170,9 +174,10 @@ Reliable, ordered. Kinds **242, 243, 244** (free at protocol 86; check `Wire.cs`
 | 242 | `HouseCarve` | u16 house, u16 op_seq (after), i16 cx, cy, cz, u16 radius_q, u32 hash (after Settle) | each op; one blast can send several (one per house it reaches) |
 | 243 | `HouseCells` | u16 house, u16 op_seq, u32 hash, u32 first_run, runs (varint) | join catch-up and resync; split into messages of at most 200 bytes |
 | 244 | `HouseSettings` | u8 flags (bit 0 rubble stay), u8 reset (1 = every house whole) | round start, settings change, join |
+| 254 | `HouseCut` | u16 house, u16 op_seq (after), u32 hash (after), u8 flags (bit 0: support pass after it), u32 server tick, u16 vehicle, cells as varint pairs (gap from the end of the run before, run length) over ascending indices | each step a vehicle cuts a house (Ramming); with no cells: the settle-only op (protocol 92) |
 
 Client:
-- Applies 242 with `HouseCells.Apply`.
+- Applies 242 with `HouseCells.Apply` and 254 with `HouseCells.Cut`, in the order they came (a held 254 holds the ops after it).
 - When its `op_seq` or `hash` differs from the server's, it logs `house desync <id>` and asks for 243 (249), again every 5 s. Still unlike the server's after 20 s with no new op on that house (its map data differs, so a full 243 never matches; the join check's build hash covers `house_voxels.bin`, so this is a safety net), it warns once and stays frozen, its 242s ignored, until the round resets. The request is a client message on a free client kind (picked in WP-0).
 - Resync request: client to server event **249 `HouseResync`**, payload u16 house (protocol 87).
 - A joiner gets 244, then 243 for every damaged house.

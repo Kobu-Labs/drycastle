@@ -1,4 +1,6 @@
 using System.Numerics;
+using Drycastle.ShooterCore.Buildings.Destruction;
+using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 
@@ -38,6 +40,8 @@ public struct DriveState
     public bool EnteredWater, LeftWater;
     /// <summary>The brakes bit in the last step: the handbrake, or the key against the travel, while it moved. Coasting and driving do not set it. Drives the brake lamps (#409).</summary>
     public bool Braking;
+    /// <summary>It cut a hollow house a moment ago (<see cref="HousePlough.RammingHoldS"/>): it goes on cutting down to the lower keep speed. Not on the wire: the driver's client keeps its own.</summary>
+    public Countdown Ramming;
 
     /// <summary>The seat, gun or lamp at <paramref name="offset"/> (the vehicle's frame: x right, y up, z back) in the world, on the slope it stands on.</summary>
     public readonly Vector3 ToWorld(float[] offset) => Position + FlightMath.Rotate(new Vector3(offset[0], offset[1], offset[2]), Yaw, Pitch, Roll);
@@ -74,6 +78,9 @@ public struct DriveInput
     public static DriveInput Held => new() { Handbrake = true };
 }
 
+/// <summary>Whether a step cuts the hollow houses in its way (<see cref="IDriveWorld.Plough"/>), and the driver's input it is (the client's guesses are keyed by it). The default: it does not (a test, the drawn step between ticks).</summary>
+public readonly record struct PloughStep(bool On, ushort Seq = 0);
+
 /// <summary>Where a move ended, and the surface that stopped it (unit normal, pointing away from the surface).</summary>
 public readonly record struct DriveMove(Vector3 Position, bool Hit, Vector3 Normal);
 
@@ -89,6 +96,13 @@ public interface IDriveWorld
     float WaterY(float x, float z);
     /// <summary>Moves the hull (lifted clear of the ground it stands on, lying on the slope given) from <paramref name="from"/> by <paramref name="motion"/> until something solid stops it.</summary>
     DriveMove Move(Vector3 from, float yaw, float pitch, float roll, Vector3 motion);
+    /// <summary>Before the move: the hollow houses' cells the vehicle sweeps next are cut (<see cref="HousePlough"/>); returns the speed that took, m/s. A world without houses: 0.</summary>
+    float Plough(in PloughQuery q) => 0f;
+    /// <summary>The prediction's acknowledged input (<see cref="IHousePlough.PloughAcked"/>).</summary>
+    void PloughAcked(ushort ack) { }
+    /// <summary>The prediction replays the inputs after <paramref name="ack"/> (<see cref="IHousePlough.PloughReplay"/>).</summary>
+    void PloughReplay(ushort ack) { }
+    void PloughReplayDone() { }
 }
 
 /// <summary>
@@ -141,10 +155,12 @@ public static class DriveModel
     public static float OriginSlip(in DriveState s, VehicleDef def) => s.Slip - s.YawRate * PivotBehind(s, def);
 
     /// <param name="tow">What a trailer on the hook does to the step (<see cref="TowLoad"/>: the pull, the brake, the top speed and the grip it takes; <see cref="TowBlock"/>: no folding it further than its limit). The default is no trailer, and then the step is exactly what it is without the argument.</param>
-    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default)
+    /// <param name="plough">Whether the step cuts the hollow houses in its way (the server's and the prediction's steps), and the input it is.</param>
+    public static void Step(ref DriveState s, VehicleDef def, in DriveInput input, float dt, IDriveWorld world, in TowEffect tow = default, in PloughStep plough = default)
     {
         var d = def.Drive!;
         s.Impact = 0; s.EnteredWater = false; s.LeftWater = false; s.Braking = false;
+        if (plough.On) s.Ramming.Tick(dt);
         var key = Math.Clamp(input.Throttle, -1f, 1f);
         var wheel = Math.Clamp(input.Steer, -1f, 1f);
 
@@ -162,7 +178,7 @@ public static class DriveModel
 
         var pivot = PivotBehind(s, def);
         Turn(ref s, def, input.Handbrake, wantYaw, yawResponse, pivot, tow, ref u, ref w, dt);
-        var (pos, travel) = Sweep(ref s, def, world, pivot, ref u, ref w, dt);
+        var (pos, travel) = Sweep(ref s, def, world, pivot, ref u, ref w, dt, plough);
         Lie(ref s, def, world, water, travel, ref pos, ref u, ref w, dt);
         s.Position = pos; s.Speed = u; s.Slip = w;
     }
@@ -246,7 +262,7 @@ public static class DriveModel
     }
 
     /// <summary>The move: what a wall takes from the speed is the impact; then it slides along it once. Returns where it ended (height still the old one) and how far it went on the plane.</summary>
-    static (Vector3 Pos, float Travel) Sweep(ref DriveState s, VehicleDef def, IDriveWorld world, float pivot, ref float u, ref float w, float dt)
+    static (Vector3 Pos, float Travel) Sweep(ref DriveState s, VehicleDef def, IDriveWorld world, float pivot, ref float u, ref float w, float dt, in PloughStep plough)
     {
         var wet = def.Drive!.Water;
         var (sy, cy) = MathF.SinCos(s.Yaw);
@@ -257,6 +273,22 @@ public static class DriveModel
         var vel = fwd * u + right * (w + swing);
         // afloat the hull is swept at the surface: a shallow bed is under the boat, not in its way
         var from = s.Afloat ? s.Position + Vector3.UnitY * wet.Draft : s.Position;
+        // a hollow house in the way is cut before the move (the cells of the next step too), so the vehicle goes on through it, slowed by what the cells took
+        var ploughed = false;
+        if (plough.On && !s.Afloat && vel.LengthSquared() > 1f)
+        {
+            var speed = vel.Length();
+            var took = world.Plough(new PloughQuery(from, s.Yaw, vel * dt, speed, def.Mass > 0 ? def.Mass : 1200f, def.HalfWidth, def.HalfLength, def.Height,
+                def.Drive!.Land.StepHeight * 0.5f, s.Ramming.Running, plough.Seq));
+            if (took > 0)
+            {
+                took = MathF.Min(took, speed);
+                vel *= (speed - took) / speed;
+                s.Impact = MathF.Max(s.Impact, took);
+                s.Ramming.Start(HousePlough.RammingHoldS);
+                ploughed = true;
+            }
+        }
         var target = from + vel * dt;
         var move = world.Move(from, s.Yaw, s.Afloat ? 0f : s.Pitch, s.Afloat ? 0f : s.Roll, vel * dt);
         var struck = move.Hit;
@@ -272,7 +304,7 @@ public static class DriveModel
         }
         var travel = MathF.Sqrt((move.Position.X - s.Position.X) * (move.Position.X - s.Position.X) + (move.Position.Z - s.Position.Z) * (move.Position.Z - s.Position.Z));
         var pos = new Vector3(move.Position.X, s.Position.Y, move.Position.Z);
-        if (struck) { u = Vector3.Dot(vel, fwd); w = Vector3.Dot(vel, right) - swing; } // what the wall left of the speed
+        if (struck || ploughed) { u = Vector3.Dot(vel, fwd); w = Vector3.Dot(vel, right) - swing; } // what the wall (or the cells cut) left of the speed
         return (pos, travel);
     }
 
@@ -544,11 +576,11 @@ public sealed class DrivePrediction
     public void DetachTrailer() => _rig = null;
 
     /// <summary>One tick of the tractor and, with a trailer, of the trailer after it: a blocked trailer holds the tractor where it was.</summary>
-    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput input, float dt)
+    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput input, float dt, in PloughStep plough = default)
     {
-        if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
+        if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world, default, plough); return; }
         var before = s;
-        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)));
+        DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)), plough);
         if (rig.World == null) TowModel.Step(ref trailer, rig.Geometry, TractorMotion.From(s, _def), dt);
         else if (!TowModel.StepChecked(ref trailer, rig.Geometry, TractorMotion.From(s, _def), dt, rig.World)) TowModel.Hold(ref s, before);
     }
@@ -556,7 +588,7 @@ public sealed class DrivePrediction
     /// <summary>Steps the prediction with the input just sent under <paramref name="seq"/>.</summary>
     public void Step(ushort seq, in DriveInput input, float dt)
     {
-        StepBoth(ref State, ref TrailerBody, input, dt);
+        StepBoth(ref State, ref TrailerBody, input, dt, new PloughStep(true, seq));
         _pending.Add((seq, input, State, TrailerBody));
         if (_pending.Count > MaxPending) _pending.RemoveAt(0);
     }
@@ -583,6 +615,7 @@ public sealed class DrivePrediction
         var predicted = _pending[index].After;
         var predictedTrailer = _pending[index].TrailerAfter;
         _pending.RemoveRange(0, index + 1);
+        _world.PloughAcked(ack);
         var error = Vector3.Distance(predicted.Position, server.Position);
         MaxError = MathF.Max(MaxError, error);
         var trailerOff = _rig != null && MathF.Abs(FlightMath.Wrap(predictedTrailer.Phi - serverPhi)) > AngleEpsilon;
@@ -599,11 +632,13 @@ public sealed class DrivePrediction
         s.Sink = server.Emerging ? MathF.Max(predicted.Sink, server.Sink) : 0f;
         var trailer = predictedTrailer;
         if (_rig is { } rig) { trailer = TowModel.Pose(rig.Geometry, s.Position, s.Yaw, serverPhi); trailer.Slide = predictedTrailer.Slide; trailer.Speed = predictedTrailer.Speed; trailer.Position.Y = predictedTrailer.Position.Y; }
+        _world.PloughReplay(ack);
         for (var i = 0; i < _pending.Count; i++)
         {
-            StepBoth(ref s, ref trailer, _pending[i].Input, dt);
+            StepBoth(ref s, ref trailer, _pending[i].Input, dt, new PloughStep(true, _pending[i].Seq));
             _pending[i] = (_pending[i].Seq, _pending[i].Input, s, trailer);
         }
+        _world.PloughReplayDone();
         State = s; TrailerBody = trailer;
         return true;
     }

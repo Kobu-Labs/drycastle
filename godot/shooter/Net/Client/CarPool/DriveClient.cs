@@ -214,6 +214,8 @@ internal sealed class DriveClient
         {
             _latKeys = input; _latSeq = ni.Seq; _latAt = _ctx.Now; // the first input with new keys: its drawn change is timed below
         }
+        _drive.Probe.Houses = Drycastle.Shooter.Buildings.Destruction.HouseWorldNode.Current; // the houses it cuts its way through, guessed ahead of the server
+        _drive.Probe.CarId = _drive.CarId;
         _drive.Predict.Step(ni.Seq, input, dt);
     }
 

@@ -222,6 +222,7 @@ public partial class NetServer : Node
         _blasts = new WorldBlasts(_glass, _houseDestruction, _fences); // every blast's panes, houses and thin fences
         _houseDestruction.Changed = house => { _glass.HouseChanged(house); _houses.HouseChanged(house); }; // a pane whose frame a carve took shatters, a door is blown out
         _houseDestruction.Restored = _houses.RehangAll;
+        Drycastle.Shooter.Vehicles.ServerCar.Houses = _houseDestruction.On ? _houseDestruction : null; // every driven vehicle cuts its way through them (HousePlough)
         _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, Config.World, _diag.Perf.Ticks != null);
         _carDamage = new CarDamage(_ctx, _fleet, _glass, _smoke, Config.Vehicles);
         _rocketCarts = new RocketCarts(_fleet, () => _shot.Query, Config.Vehicles);
