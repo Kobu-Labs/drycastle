@@ -69,6 +69,7 @@ public sealed partial class CharacterView
         ApplySurfaces(spec, data, body);
         BuildTufts(spec, data, body);
         BuildFacePaint(spec);
+        KeepShadowOnly(this);
     }
 
     /// <summary>Draws the look again with what is worn now (<see cref="SetWorn"/>): a headgear Item hides the helmet and hair and takes the head's foliage and face paint away.</summary>

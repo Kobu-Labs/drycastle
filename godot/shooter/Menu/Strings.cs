@@ -107,7 +107,7 @@ public static class Strings
         ("disconnect.done", "You left the match."), ("disconnect.lost.loadout", "Unsaved loadout changes were lost."),
         ("net.not_sent", "Not connected, so the change was not sent. Rejoin a server and try again."), ("connect.err.help.lost", "Choose Play to reconnect."),
         ("loading.title", "Loading"), ("loading.target", "Joining {0}"), ("loading.pct", "{0}%"),
-        ("loading.data", "Reading game data"), ("loading.map", "Loading the map"), ("loading.world", "Building the world"),
+        ("loading.map", "Loading the map"), ("loading.world", "Building the world"),
         ("loading.connect", "Joining the match"), ("loading.ready", "Ready"),
         ("tab.graphics", "Graphics"), ("tab.audio", "Audio"), ("tab.controls", "Controls"), ("tab.gameplay", "Gameplay"), ("tab.access", "Accessibility"),
         ("settings.apply", "Apply"), ("settings.revert", "Revert"), ("settings.saved", "Settings saved."), ("settings.reverted", "Reverted to the saved settings."),

@@ -3,6 +3,8 @@ using Godot;
 using Drycastle.MapLoader.Trees;
 using Drycastle.MapLoader.Vegetation;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 /// <summary>
@@ -54,15 +56,20 @@ public sealed partial class MapLoader
         var path = Path.Combine(mapDir, cropsFile);
         if (!File.Exists(path)) { CropWarn("file", $"crops: {cropsFile} is listed in the manifest but missing"); yield break; }
 
+        var tcp = LoadTimers.Start();
+        var ahead = Ahead?.Crops;
+        if (ahead != null) foreach (var w in WaitFor(ahead, 0f)) yield return w;
         CropDoc doc;
-        try { doc = CropDoc.Parse(File.ReadAllText(path)); }
+        try { doc = ahead != null ? ahead.GetAwaiter().GetResult() : CropDoc.Parse(File.ReadAllText(path)); }
         catch (Exception ex) when (ex is FormatException or JsonException)
         {
             CropWarn("parse", $"crops: {ex.Message}; no crops drawn");
             yield break;
         }
+        _cropDocForBales = doc;
         if (doc.Groups.Count == 0) yield break;
 
+        LoadTimers.Lap("crops.parse", tcp);
         var meshes = new Dictionary<string, List<Mesh>>();
         var sheets = new List<(Node3D Parent, CropGroup Group)>();
         var done = 0;
@@ -76,7 +83,8 @@ public sealed partial class MapLoader
             for (var v = 0; v < variants.Count; v++)
             {
                 var mine = variants.Count == 1 ? g.Instances : g.Instances.Where(i => CropSettings.Variant(i, variants.Count) == v).ToList();
-                foreach (var cell in ClutterSettings.Cells(mine))
+                var cells = ClutterSettings.Cells(mine).ToList();
+                foreach (var cell in cells)
                     _cropNodes.Add(AddCropCell(parent, g.Kind, variants.Count > 1 ? v : -1, variants[v], cell, range, spec.IsPlant));
             }
             if (spec.IsPlant) sheets.Add((parent, g));
@@ -241,18 +249,8 @@ public sealed partial class MapLoader
 
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, Mesh = mesh, InstanceCount = cell.Count };
         var reach = Mathf.Max(mesh.GetAabb().Size.Length(), 0.1f);
-        Vector3 min = new(float.MaxValue, float.MaxValue, float.MaxValue), max = new(float.MinValue, float.MinValue, float.MinValue);
-        for (var k = 0; k < cell.Count; k++)
-        {
-            var i = cell[k];
-            var local = ToGodot(i.X, i.Y, i.Z) - origin;
-            var basis = Basis.Identity.Rotated(Vector3.Up, i.Rot).Scaled(new Vector3(i.Scale, i.Scale, i.Scale));
-            mm.SetInstanceTransform(k, new Transform3D(basis, local));
-            var r = reach * Mathf.Max(i.Scale, 0.01f);
-            min = new Vector3(Mathf.Min(min.X, local.X - r), Mathf.Min(min.Y, local.Y - r), Mathf.Min(min.Z, local.Z - r));
-            max = new Vector3(Mathf.Max(max.X, local.X + r), Mathf.Max(max.Y, local.Y + r), Mathf.Max(max.Z, local.Z + r));
-        }
-        mm.CustomAabb = new Aabb(min, max - min);
+        mm.Buffer = ClutterBuffer.Build(cell, (origin.X, origin.Y, origin.Z), false, reach, out var lo, out var hi);
+        mm.CustomAabb = new Aabb(new Vector3(lo.X, lo.Y, lo.Z), new Vector3(hi.X - lo.X, hi.Y - lo.Y, hi.Z - lo.Z));
         var node = new MultiMeshInstance3D
         {
             Name = variant < 0 ? $"crop_{kind}" : $"crop_{kind}_{variant}",

@@ -6,7 +6,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests.Cartel;
 
-/// <summary>The Cartel's profile side (#494, ADR 0045): cartel.json, the rank curve, membership, who earns, who may start a Job, and the wire.</summary>
+/// <summary>The Cartel's profile side (#494, ADR 0046): cartel.json, the rank curve, membership, who earns, who may start a Job, and the wire.</summary>
 public class CartelTests
 {
     static readonly CartelFile Shipped = GameData.Load(Path.Combine(AppContext.BaseDirectory, "data")).Cartel;

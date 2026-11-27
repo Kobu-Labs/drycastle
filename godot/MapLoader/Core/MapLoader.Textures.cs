@@ -16,6 +16,8 @@ public sealed partial class MapLoader
 
     // Textured siblings of parcel_<ID>_props, by parcel ID: hidden and shown together with it.
     readonly Dictionary<string, List<MeshInstance3D>> _propsTexVisuals = new();
+    // Every textured props node (parcel_<ID>_props_tex_<id> and the chunk-level props_tex_<id>) with its texture id, for fence destruction's material swap.
+    readonly List<(MeshInstance3D Node, string Texture)> _propsTexNodes = new();
     Dictionary<string, string>? _textureFiles;  // texture id -> file, relative to the assets directory
     readonly HashSet<string> _missingTextures = new();
 
@@ -24,6 +26,21 @@ public sealed partial class MapLoader
 
     /// <summary>Textured props visuals by parcel ID (the siblings of <see cref="PropsVisuals"/>).</summary>
     public IReadOnlyDictionary<string, List<MeshInstance3D>> PropsTexturedVisuals => _propsTexVisuals;
+
+    /// <summary>
+    /// Every textured props node of the loaded chunks, parcel-level (parcel_&lt;ID&gt;_props_tex_&lt;id&gt;) and chunk-level (props_tex_&lt;id&gt;), with its texture id. Empty on a
+    /// headless load. A node may have been freed since (check validity).
+    /// </summary>
+    public IReadOnlyList<(MeshInstance3D Node, string Texture)> PropsTexturedNodes => _propsTexNodes;
+
+    /// <summary>Notes a textured node for <see cref="PropsTexturedNodes"/> when it is a props node (a parcel's or a chunk's).</summary>
+    void RegisterPropsTex(string baseName, string texture, MeshInstance3D mi)
+    {
+        if (baseName == "props" || PropsParcelId(baseName) != null) _propsTexNodes.Add((mi, texture));
+    }
+
+    /// <summary>The (shared) material a library texture is drawn with; null when the id or its file is unknown. Fence debris and the fence shader read the texture from it.</summary>
+    public StandardMaterial3D? LibraryMaterial(string id) => TextureMaterial(id);
 
     /// <summary>Splits "&lt;node&gt;_tex_&lt;id&gt;" into the node it belongs to and the texture id (null: an ordinary node).</summary>
     public static (string Base, string? Texture) SplitTexNode(string name)

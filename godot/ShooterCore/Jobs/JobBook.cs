@@ -7,7 +7,7 @@ public sealed record JobEnded(Job Job, IReadOnlyList<ushort> Members)
 }
 
 /// <summary>
-/// Every running Job (ADR 0045, docs/cartel.md "Who runs a job", "Failure"): one per owner (a solo player or a Squad), as many owners as like at once, beside any Event. It steps
+/// Every running Job (ADR 0046, docs/cartel.md "Who runs a job", "Failure"): one per owner (a solo player or a Squad), as many owners as like at once, beside any Event. It steps
 /// each Job's objective and timer, ends Jobs on a death, a quit, a round reset or when nobody is left, and holds the named things of the world Jobs have claimed (a drop point
 /// id, a house), so two Jobs never share one. Who is in a party is <see cref="IJobParties"/>'s, read into each Job's <see cref="Job.Party"/> at its start and each tick; what a Job pays is
 /// its giver's. Pure; the server owns one.

@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests.Cartel;
 
-/// <summary>The Trap house dressing (#496, ADR 0046): trap_house.json, the planner's rules (ways clear, props in their rooms and apart, safe, posts, Duffel spots), the wire and the house choice.</summary>
+/// <summary>The Trap house dressing (#496, ADR 0047): trap_house.json, the planner's rules (ways clear, props in their rooms and apart, safe, posts, Duffel spots), the wire and the house choice.</summary>
 public class TrapHouseTests
 {
     static readonly TrapHouseFile Data = TrapHouseFile.Load(Path.Combine(AppContext.BaseDirectory, "data", TrapHouseFile.FileName));

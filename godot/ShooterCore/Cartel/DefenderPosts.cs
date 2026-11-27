@@ -6,7 +6,7 @@ namespace Drycastle.ShooterCore.Cartel;
 public readonly record struct PropFootprint(Vector2 Centre, float Radius, Vector2[] Foot);
 
 /// <summary>
-/// The posted defenders' spots of a dressed Trap house (ADR 0046 §3; trap_house.json <c>posts</c>), pure: up to <c>per_room</c> in every room big enough that a way reaches, off its walls,
+/// The posted defenders' spots of a dressed Trap house (ADR 0047 §3; trap_house.json <c>posts</c>), pure: up to <c>per_room</c> in every room big enough that a way reaches, off its walls,
 /// its doorways and the props, apart from each other, the farthest from the room's way in first and each facing it. Listed round-robin over the rooms, so the first N spread over the house.
 /// </summary>
 public static class DefenderPosts

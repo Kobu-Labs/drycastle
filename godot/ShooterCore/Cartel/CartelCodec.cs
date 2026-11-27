@@ -64,7 +64,7 @@ public readonly record struct CartelJobMsg(int JobId, JobState State, JobFailRea
 }
 
 /// <summary>
-/// The Cartel's wire (protocol history: v88, v89). Kinds 33-38: <see cref="Net.EventKind.CartelRequest"/> (client to server), <see cref="Net.EventKind.CartelRefused"/> (server to a player),
+/// The Cartel's wire (protocol history: v89, v90). Kinds 33-38: <see cref="Net.EventKind.CartelRequest"/> (client to server), <see cref="Net.EventKind.CartelRefused"/> (server to a player),
 /// <see cref="Net.EventKind.CartelStatus"/>, <see cref="Net.EventKind.CartelJob"/> (server to a player), <see cref="Net.EventKind.CartelRankUp"/> (server to everyone), <see cref="Net.EventKind.CartelObjective"/> (server to a Job's party).
 /// Little endian throughout. A decode of a short or bad payload is false.
 /// </summary>

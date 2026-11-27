@@ -150,7 +150,7 @@ internal sealed class RozhlasSetServer
             if (!set.IsHeld) { _ctx.ChatTo(c, ChatLineKind.Error, "Nobody holds the set."); return true; }
             var was = set.Holder;
             set.Clear();
-            _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} took the set from {_ctx.NameOf(was)}.");
+            _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} took the set from {_ctx.NameOf(was)}.");
             return true;
         }
         switch (Take(c.Id))

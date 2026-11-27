@@ -126,7 +126,7 @@ internal sealed class RozhlasServer : IDisposable
         if (Ensure() is not { } r) { _ctx.ChatTo(c, ChatLineKind.Error, "The rozhlas has no data (rozhlas.json could not be read)."); return; }
         if (r.DetourOpen) { _ctx.ChatTo(c, ChatLineKind.Error, $"The rozhlas is already on ({r.Phase}). Wait for it to end."); return; }
         if (!r.StartNow(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0, Random.Shared.Next(int.MaxValue))) { _ctx.ChatTo(c, ChatLineKind.Error, "rozhlas.json lists no broadcast."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} started the rozhlas.");
         GD.Print($"server: rozhlas started by {c.Name} #{c.Id}");
     }
 
@@ -143,6 +143,6 @@ internal sealed class RozhlasServer : IDisposable
             return;
         }
         if (!r.AnnouncerKilled()) { _ctx.ChatTo(c, ChatLineKind.Error, r.Hijacked ? "The mic is already hijacked (one hijack per broadcast)." : "No detour broadcast is on air. /event rozhlas starts one."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} killed the rozhlas announcer.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} killed the rozhlas announcer.");
     }
 }

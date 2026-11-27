@@ -11,8 +11,8 @@ namespace Drycastle.Shooter.Net.Client.HudFeeds;
 
 /// <summary>
 /// The Cartel on the client (docs/cartel.md "Contact", "Who runs a job"; #494): the player's standing (<see cref="EventKind.CartelStatus"/>), their Job and its objective
-/// (<see cref="EventKind.CartelJob"/>, <see cref="EventKind.CartelObjective"/>) into the HUD tracker, and everyone's rank-ups (<see cref="EventKind.CartelRankUp"/>: a toast; the chat line
-/// comes from the server). In reach of the map's Contact (cartel.json <c>contact_reach_m</c>, on foot and alive) the interact key is his when nothing before him in the prompt chain
+/// (<see cref="EventKind.CartelJob"/>, <see cref="EventKind.CartelObjective"/>) into the HUD tracker, and everyone's rank-ups (<see cref="EventKind.CartelRankUp"/>: a toast).
+/// In reach of the map's Contact (cartel.json <c>contact_reach_m</c>, on foot and alive) the interact key is his when nothing before him in the prompt chain
 /// wants it: the prompt shows and a press opens his panel (the server, for its part, keeps the plantation's hold off the key there: <see cref="KeyCompetitor.Contact"/>). Walking out of
 /// reach closes the panel. The panel's requests go out as <see cref="EventKind.CartelRequest"/>; the server checks each again and answers a refusal (<see cref="EventKind.CartelRefused"/>),
 /// which the panel shows. During a Delivery, carrying a Duffel within <c>jobs.delivery.radius_m</c> of the drop point, the prompt says to hold the key and the hold ring fills over

@@ -42,7 +42,7 @@ public readonly record struct JobOwner(JobOwnerKind Kind, ushort Id)
 }
 
 /// <summary>
-/// One Job (GLOSSARY "Job", ADR 0045): a task a giver hands out, of a kind, at a tier, run by an owner (a solo player or a Squad, started by its leader) against a timer, with an
+/// One Job (GLOSSARY "Job", ADR 0046): a task a giver hands out, of a kind, at a tier, run by an owner (a solo player or a Squad, started by its leader) against a timer, with an
 /// objective of its kind (<see cref="IJobObjective"/>). Many run at once, beside any Event; a <see cref="JobBook"/> holds them. Not an Event.
 /// </summary>
 public sealed class Job

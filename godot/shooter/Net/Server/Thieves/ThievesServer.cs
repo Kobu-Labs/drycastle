@@ -49,7 +49,7 @@ internal sealed class ThievesServer
         _raids.Admin = admin.Id;
         _event.Begin(_data.Raids, _rng); // the first van of the convoy is due on the next tick
         _intel.Announce(ThievesEvent.Intel(_ctx.Now));
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Thieves event. Thieves are coming to the village.");
+        _ctx.ChatTo(admin, ChatLineKind.Info, $"{admin.Name} started the Thieves event. Thieves are coming to the village.");
         GD.Print($"server: Thieves event started by {admin.Name} #{admin.Id}");
     }
 
@@ -74,30 +74,28 @@ internal sealed class ThievesServer
     public void End(ServerClient c)
     {
         if (!_event.Running) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        Finish(true, c.Name);
+        Finish(true, c);
     }
 
     /// <summary>"/event current cancel" while the Thieves event runs: over, no reward.</summary>
     public void Cancel(ServerClient c)
     {
         if (!_event.Running) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        Finish(false, c.Name);
+        Finish(false, c);
     }
 
     /// <summary>
     /// The run is over: off the intel board, the phase is Over and the book records the outcome. <paramref name="by"/> is the admin who ended it, null when it ended by
     /// itself. When it ended by itself every van is gone already (the crews that fled run on to the edge); an admin's end or cancel removes what is left.
     /// </summary>
-    void Finish(bool won, string? by)
+    void Finish(bool won, ServerClient? by)
     {
         _event.Finish();
         if (by != null || !won) ClearCrews(); // an admin's end or cancel removes every van and crew; a win by itself leaves what is still fleeing to run off
         if (!won) _loot.Reset(); // a cancelled event never happened: everything taken goes back (a win keeps what was stolen, and lying Loot stays returnable)
         _intel.Withdraw(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, won ? EventPhase.Won : EventPhase.Despawned, _ctx.Now);
-        _ctx.ChatToAll(ChatLineKind.System, "", won
-            ? (by == null ? "Event won: the Thieves are gone from the village." : $"{by} ended the Thieves event as a win.")
-            : $"{by} cancelled the Thieves event.");
+        if (by != null) _ctx.ChatTo(by, ChatLineKind.Info, won ? "You ended the Thieves event as a win." : "You cancelled the Thieves event.");
         _payout.Settle(won);
         GD.Print($"server: Thieves event {(won ? "won" : "cancelled")}{(by == null ? "" : $" by {by}")}");
     }
@@ -116,7 +114,6 @@ internal sealed class ThievesServer
         if (!wasRunning) return;
         _intel.Withdraw(ThievesEvent.IntelId);
         _events.End(EventBook.Thieves, EventPhase.Despawned, _ctx.Now);
-        _ctx.ChatToAll(ChatLineKind.System, "", "The Thieves event is over.");
     }
 
     /// <summary>Every Raid goes, vans and members, the dead too (a Job's Rival crew stays: its Job clears it).</summary>

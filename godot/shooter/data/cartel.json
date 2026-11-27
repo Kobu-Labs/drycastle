@@ -1,8 +1,8 @@
 {
   "version": 1,
-  // The drug Cartel (docs/cartel.md, ADR 0045; GLOSSARY "Cartel", "Cartel rank", "Respect", "Job"). Read by ShooterCore/Cartel/CartelFile.cs; nothing here was played: first guesses.
+  // The drug Cartel (docs/cartel.md, ADR 0046; GLOSSARY "Cartel", "Cartel rank", "Respect", "Job"). Read by ShooterCore/Cartel/CartelFile.cs; nothing here was played: first guesses.
   // ranks: the personal ladder, lowest first. respect: the total Respect a member needs to hold the rank (the first is 0, each next more). Respect only grows; a member who
-  // quits keeps it frozen until they rejoin. The name is what players see (the rank-up toast and chat line); the id is the key tiers name.
+  // quits keeps it frozen until they rejoin. The name is what players see (the rank-up toast); the id is the key tiers name.
   "ranks": [
     { "id": "runner",  "name": "Runner",  "respect": 0 },
     { "id": "dealer",  "name": "Dealer",  "respect": 1000 },
@@ -103,7 +103,7 @@
       "fill_hold_seconds": 3,
       "area_margin_m": 25
     },
-    // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0046). A random hollow
+    // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0047). A random hollow
     // house with road access (trap_house.json choice) is dressed for the job and stripped after; the Rival crew holds it, product and cash duffels lie on its tables, its safe takes the
     // Drill (trap_house.json drill: run time, jams, cash duffels by tier). Every per-tier array has one number per tier, tier 1 first; "extra member" as harvest's.
     "trap_house": {

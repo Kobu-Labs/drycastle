@@ -7,9 +7,9 @@ using Drycastle.ShooterServer.Persistence;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// Who works for the Cartel (docs/cartel.md "Membership and rank"; ADR 0045): joining and quitting, the Respect a member is granted, and each player's standing
+/// Who works for the Cartel (docs/cartel.md "Membership and rank"; ADR 0046): joining and quitting, the Respect a member is granted, and each player's standing
 /// (<see cref="EventKind.CartelStatus"/>). Membership and Respect live on the Profile and are written through the store's write queue; a guest cannot join, a bot never does,
-/// a sandbox player earns nothing. A rank-up goes to everyone (<see cref="EventKind.CartelRankUp"/> and a chat line). The Contact's reach and the Jobs are <see cref="CartelServer"/>'s.
+/// a sandbox player earns nothing. A rank-up goes to everyone (<see cref="EventKind.CartelRankUp"/>, a toast). The Contact's reach and the Jobs are <see cref="CartelServer"/>'s.
 /// </summary>
 internal sealed class CartelMembers
 {
@@ -48,7 +48,7 @@ internal sealed class CartelMembers
         return CartelJoinRefusal.None;
     }
 
-    /// <summary>Adds Respect to a member, writes it through the store's queue, tells them and, on a rank-up, everyone. What was added.</summary>
+    /// <summary>Adds Respect to a member, writes it through the store's queue, tells them and, on a rank-up, everyone (the CartelRankUp toast; no chat line, #499). What was added.</summary>
     public int Grant(ServerClient c, int amount)
     {
         var p = c.Profile!;
@@ -58,7 +58,6 @@ internal sealed class CartelMembers
         if (change.RankedUp)
         {
             _ctx.Broadcast(EventKind.CartelRankUp, CartelCodec.EncodeRankUp(c.Id, (byte)change.After));
-            _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} is now a {_data.Ranks[change.After].Name} of the Cartel.");
             GD.Print($"server: {c.Name} #{c.Id} rose to {_data.Ranks[change.After].Id}");
         }
         return change.Added;

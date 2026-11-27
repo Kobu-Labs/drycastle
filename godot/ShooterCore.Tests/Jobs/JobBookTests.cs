@@ -8,7 +8,7 @@ using Xunit;
 
 namespace Drycastle.ShooterCore.Tests.Jobs;
 
-/// <summary>The generic Job core (#494, ADR 0045): one Job per owner, many at once, reservations, the timer, the failures, the party at the moment it ends.</summary>
+/// <summary>The generic Job core (#494, ADR 0046): one Job per owner, many at once, reservations, the timer, the failures, the party at the moment it ends.</summary>
 public class JobBookTests
 {
     public JobBookTests() => StateMachineDiagnostics.Strict = true;

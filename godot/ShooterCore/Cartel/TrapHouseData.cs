@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Cartel;
 public enum TrapPlace : byte { Centre, Wall, WallHigh }
 
 /// <summary>
-/// trap_house.json: what a Trap house is dressed with (#496, ADR 0046, docs/cartel.md "Trap house"): the prop kinds (Synty models, size, solid or not, Duffel spots on top), what each
+/// trap_house.json: what a Trap house is dressed with (#496, ADR 0047, docs/cartel.md "Trap house"): the prop kinds (Synty models, size, solid or not, Duffel spots on top), what each
 /// room type gets, the clearances that keep the ways free, the posted defenders' spots, the safe, and which houses a Job may take. Read by the server and every client.
 /// </summary>
 public sealed class TrapHouseFile : IVersioned

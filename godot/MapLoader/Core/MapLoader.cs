@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading.Tasks;
 using Godot;
 using Drycastle.MapLoader.Core;
 using Drycastle.MapLoader.Ground;
@@ -26,6 +27,8 @@ public sealed partial class MapLoader
     // Kept for the later runtime swap of one parcel's props; ReplaceParcel leaves them alone.
     readonly Dictionary<string, MeshInstance3D> _propsVisuals = new();
     readonly Dictionary<string, List<CollisionShape3D>> _propsShapes = new();
+    // Chunk-level props_collision shapes (fences and trees of no parcel) by chunk (ix, iy).
+    readonly Dictionary<(int X, int Y), List<CollisionShape3D>> _chunkPropsShapes = new();
     readonly Dictionary<string, Node3D> _replacements = new();
     readonly List<(Vector3[] faces, Aabb box)> _terrain = new();
     readonly List<MeshInstance3D> _terrainVisuals = new();
@@ -68,6 +71,8 @@ public sealed partial class MapLoader
     /// <summary>The building visual of a parcel (parcel_&lt;ID&gt;_visual); null when it has none.</summary>
     public Node3D? ParcelVisual(string parcelId) => _visuals.GetValueOrDefault(parcelId);
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
+    /// <summary>The chunk-level props_collision shapes (props of no parcel) by chunk (ix, iy of chunk_&lt;ix&gt;_&lt;iy&gt;).</summary>
+    public IReadOnlyDictionary<(int X, int Y), List<CollisionShape3D>> ChunkPropsShapes => _chunkPropsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;
     /// <summary>Point lookup over the parcel polygons (valid after Load).</summary>
@@ -96,14 +101,89 @@ public sealed partial class MapLoader
     public IEnumerable<float> LoadSteps(string mapDir)
     {
         var t0 = Time.GetTicksMsec();
+        mapDir = Path.GetFullPath(mapDir);
         _mapDir = mapDir;
+        Waiting = false;
         if (!Directory.Exists(mapDir)) throw new DirectoryNotFoundException(mapDir);
 
+        var tPre0 = LoadTimers.Start();
         var manifestBytes = File.ReadAllBytes(Path.Combine(mapDir, "manifest.json"));
         BuildHash = Drycastle.ShooterCore.Net.Wire.Fnv1a64(manifestBytes);
         using var manifest = JsonDocument.Parse(manifestBytes);
         MapVersion = manifest.RootElement.GetProperty("map_version").GetString() ?? "";
         if (manifest.RootElement.TryGetProperty("edit_defaults", out var ed)) EditDefaults = EditDefaults.Read(ed);
+        var tAhead = LoadTimers.Start();
+        if (Ahead?.Files is { } files0)
+        {
+            foreach (var w in WaitFor(files0, 0f)) yield return w;
+            files0.GetAwaiter().GetResult(); // a worker's exception is thrown here
+        }
+        else ReadMapFiles(mapDir, manifest.RootElement);
+        tAhead = LoadTimers.Lap("pre.files", tAhead);
+        if (Ahead is not { PackPlanned: true }) PlanPackTrees(); // before the chunks: decides whether their props meshes get the tree-cut material
+        tAhead = LoadTimers.Lap("pre.plan_pack_trees", tAhead);
+        if (Ahead != null && !CollisionOnly) // the models of the placed objects and of the pack trees are parsed on a worker while the chunks load
+            PrefetchObjectModels(manifest.RootElement.TryGetProperty("files", out var pf) && pf.TryGetProperty("objects", out var po) && po.GetString() is { } pof ? Path.Combine(mapDir, pof) : "", PackModelPaths());
+        LoadTimers.Lap("pre.prefetch_models", tAhead);
+        LoadTimers.Lap("pre.read_json", tPre0);
+        yield return 0.03f;
+
+        var tPhase = Time.GetTicksMsec();
+        var chunks = manifest.RootElement.GetProperty("chunks");
+        var total = Math.Max(1, chunks.GetArrayLength());
+        var done = 0;
+        foreach (var c in chunks.EnumerateArray())
+        {
+            var file = Path.Combine(mapDir, c.GetProperty("file").GetString()!);
+            var ix = c.GetProperty("index")[0].GetInt32();
+            var iy = c.GetProperty("index")[1].GetInt32();
+            var at = 0.03f + 0.82f * done / total;
+            PreparedChunk prepared;
+            if (Ahead?.Chunks.TryGetValue(file, out var tcs) == true)
+            {
+                var ready = tcs.Task;
+                foreach (var w in WaitFor(ready, at)) yield return w;
+                prepared = ready.GetAwaiter().GetResult(); // a worker's exception is thrown here
+            }
+            else prepared = PrepareChunk(file, CollisionOnly);
+            AddChunk(prepared, new Vector2I(ix, iy), VisualTriangles(c));
+            yield return 0.03f + 0.82f * ++done / total;
+        }
+        var tChunks = Time.GetTicksMsec();
+        var rim = _rimJob = StartRim(); // on a worker, while the rest loads
+        // after the chunks, so each tree's bodies go under its chunk
+        foreach (var f in BuildTreeColliderSteps()) yield return 0.85f + 0.07f * f;
+        foreach (var f in BuildGroundObjectColliderSteps(mapDir, manifest.RootElement)) yield return 0.92f + 0.005f * f; // map 0.13.0+
+        var tTrees = Time.GetTicksMsec();
+        if (manifest.RootElement.TryGetProperty("files", out var files)
+            && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
+            foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
+        var tObjects = Time.GetTicksMsec();
+        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.01f * f;
+        foreach (var f in BuildCropSteps(mapDir, manifest.RootElement)) yield return 0.98f + 0.01f * f;
+        foreach (var f in LoadPackModelSteps()) yield return 0.98f + 0.01f * f;
+        var tPack = LoadTimers.Start(); InitPackTrees(); LoadTimers.Lap("packtrees.init", tPack);
+        var tClutter = Time.GetTicksMsec();
+        yield return 0.99f;
+        foreach (var w in AttachCropSheets()) yield return 0.99f;
+        if (rim != null)
+        {
+            foreach (var w in WaitFor(rim, 0.99f)) yield return w;
+            var tB = LoadTimers.Start(); ApplyRim(rim.GetAwaiter().GetResult()); LoadTimers.Lap("boundary.apply", tB);
+        }
+        foreach (var w in CropBalesSteps(mapDir, manifest.RootElement)) yield return 0.99f; // the field's hay bales, for the server's bale fire (#331)
+        _prefetch = null;
+        Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
+        GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, clutter {(tClutter - tObjects) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tClutter) / 1000.0:F1}s");
+        yield return 1f;
+    }
+
+    /// <summary>
+    /// The map's small files (parcels, spawns, lamps, roads, patches, water, trees, windows, bunkers, zones) into the loader's fields; touches
+    /// no node, so a prefetch runs it on a worker thread while the main thread does other things.
+    /// </summary>
+    void ReadMapFiles(string mapDir, JsonElement manifest)
+    {
         ReadParcels(Path.Combine(mapDir, "parcels.json"));
         ParcelIndex = new ParcelIndex(_parcels.Values);
         ReadSpawns(Path.Combine(mapDir, "spawns.json"));
@@ -118,45 +198,11 @@ public sealed partial class MapLoader
         WaterJson = File.Exists(water) ? File.ReadAllText(water) : "";
         var trees = Path.Combine(mapDir, "trees.json");
         TreesJson = File.Exists(trees) ? File.ReadAllText(trees) : ""; // map 0.6.0+
-        PlanPackTrees(); // before the chunks: decides whether their props meshes get the tree-cut material
         var windows = Path.Combine(mapDir, "windows.json");
         WindowsJson = File.Exists(windows) ? File.ReadAllText(windows) : ""; // only maps with hand-described building detail have it
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
-        ReadZonePoints(mapDir, manifest.RootElement); // only maps with a zone that has usable ground have the file
-        ReadCropBales(mapDir, manifest.RootElement); // the field's hay bales, for the server's bale fire (#331)
-        yield return 0.03f;
-
-        var tPhase = Time.GetTicksMsec();
-        var chunks = manifest.RootElement.GetProperty("chunks");
-        var total = Math.Max(1, chunks.GetArrayLength());
-        var done = 0;
-        foreach (var c in chunks.EnumerateArray())
-        {
-            var file = Path.Combine(mapDir, c.GetProperty("file").GetString()!);
-            var ix = c.GetProperty("index")[0].GetInt32();
-            var iy = c.GetProperty("index")[1].GetInt32();
-            LoadChunk(file, new Vector2I(ix, iy));
-            yield return 0.03f + 0.82f * ++done / total;
-        }
-        var tChunks = Time.GetTicksMsec();
-        // after the chunks, so each tree's bodies go under its chunk
-        foreach (var f in BuildTreeColliderSteps()) yield return 0.85f + 0.07f * f;
-        foreach (var f in BuildGroundObjectColliderSteps(mapDir, manifest.RootElement)) yield return 0.92f + 0.005f * f; // map 0.13.0+
-        var tTrees = Time.GetTicksMsec();
-        if (manifest.RootElement.TryGetProperty("files", out var files)
-            && files.TryGetProperty("objects", out var objFile) && objFile.GetString() is { } of)
-            foreach (var f in LoadObjectSteps(Path.Combine(mapDir, of))) yield return 0.92f + 0.05f * f;
-        var tObjects = Time.GetTicksMsec();
-        foreach (var f in BuildClutterSteps(mapDir, manifest.RootElement)) yield return 0.97f + 0.01f * f;
-        foreach (var f in BuildCropSteps(mapDir, manifest.RootElement)) yield return 0.98f + 0.01f * f;
-        InitPackTrees();
-        var tClutter = Time.GetTicksMsec();
-        yield return 0.99f;
-        if (BuildBoundary) BuildTerrainBoundary();
-        Stats.LoadSeconds = (Time.GetTicksMsec() - t0) / 1000.0;
-        GD.Print($"map load phases: chunks {(tChunks - tPhase) / 1000.0:F1}s, trees {(tTrees - tChunks) / 1000.0:F1}s, objects {(tObjects - tTrees) / 1000.0:F1}s, clutter {(tClutter - tObjects) / 1000.0:F1}s, boundary {(Time.GetTicksMsec() - tClutter) / 1000.0:F1}s");
-        yield return 1f;
+        ReadZonePoints(mapDir, manifest); // only maps with a zone that has usable ground have the file
     }
 
     /// <summary>Invisible walls along the rim of the terrain (on by default). The exported terrain is a bounded, ragged patch while spawns, parcels and roads reach past it, so without a rim players walk off the edge and fall into the void.</summary>
@@ -177,20 +223,33 @@ public sealed partial class MapLoader
         }
     }
 
-    void BuildTerrainBoundary()
+    /// <summary>The running rim plan (kept so <see cref="StopPrefetch"/> can wait for it).</summary>
+    Task<RimPlan>? _rimJob;
+
+    /// <summary>The rim walls as boxes (size, centre) and the indices of the spawn points within a capsule's reach of the rim.</summary>
+    sealed record RimPlan(List<(Vector3 Size, Vector3 Centre)> Boxes, List<int> DropSpawns);
+
+    /// <summary>Plans the rim on a worker thread (the terrain grid is built here, on the main thread, first); null without a rim to build.</summary>
+    Task<RimPlan>? StartRim()
     {
-        if (TerrainBox is not { } box) return;
+        if (!BuildBoundary || TerrainBox is not { } box) return null;
+        var ground = GroundHeightSnapshot();
+        var spawns = _spawns.Select(s => s.Position).ToArray();
+        return Task.Run(() => { var t = LoadTimers.Start(); var plan = PlanRim(box, ground, spawns); LoadTimers.Lap("worker.rim_plan", t); return plan; });
+    }
+
+    /// <summary>Pure: the rim of the terrain that <paramref name="groundHeight"/> covers (NaN = not covered), on a 1 m grid over <paramref name="box"/>.</summary>
+    static RimPlan PlanRim(Aabb box, Func<float, float, float> groundHeight, Vector3[] spawns)
+    {
         int x0 = (int)Mathf.Floor(box.Position.X / RimCell) - 1, x1 = (int)Mathf.Ceil(box.End.X / RimCell) + 1;
         int z0 = (int)Mathf.Floor(box.Position.Z / RimCell) - 1, z1 = (int)Mathf.Ceil(box.End.Z / RimCell) + 1;
         int w = x1 - x0 + 1, h = z1 - z0 + 1;
         var ground = new float[w * h];
         for (var i = 0; i < w; i++)
             for (var j = 0; j < h; j++)
-                ground[i * h + j] = GroundHeight((x0 + i + 0.5f) * RimCell, (z0 + j + 0.5f) * RimCell);
+                ground[i * h + j] = groundHeight((x0 + i + 0.5f) * RimCell, (z0 + j + 0.5f) * RimCell);
         bool Covered(int i, int j) => i >= 0 && j >= 0 && i < w && j < h && !float.IsNaN(ground[i * h + j]);
 
-        var body = new StaticBody3D { Name = "TerrainRim" };
-        var n = 0;
         // an empty cell touching a covered one becomes a wall cell; runs of them along an axis merge into one box
         var wall = new bool[w * h];
         var wallY = new float[w * h];
@@ -205,6 +264,7 @@ public sealed partial class MapLoader
                 if (float.IsNaN(gy)) continue;
                 wall[i * h + j] = true; wallY[i * h + j] = gy;
             }
+        var boxes = new List<(Vector3, Vector3)>();
         for (var j = 0; j < h; j++)
             for (var i = 0; i < w; i++)
             {
@@ -214,26 +274,28 @@ public sealed partial class MapLoader
                 var yMin = float.MaxValue;
                 for (var k = i; k <= e; k++) { yMin = Mathf.Min(yMin, wallY[k * h + j]); wall[k * h + j] = false; }
                 var len = (e - i + 1) * RimCell;
-                body.AddChild(new CollisionShape3D
-                {
-                    Shape = new BoxShape3D { Size = new Vector3(len, RimHeight + 20f, RimCell) },
-                    Position = new Vector3((x0 + i) * RimCell + len / 2, yMin - 20f + (RimHeight + 20f) / 2, (z0 + j + 0.5f) * RimCell),
-                });
-                n++;
+                boxes.Add((new Vector3(len, RimHeight + 20f, RimCell), new Vector3((x0 + i) * RimCell + len / 2, yMin - 20f + (RimHeight + 20f) / 2, (z0 + j + 0.5f) * RimCell)));
             }
-        Root.AddChild(body);
-        BoundaryWalls = n;
         // a spawn within the capsule's reach of the rim would start inside a wall: drop those
-        var dropped = _spawns.RemoveAll(sp =>
-        {
+        var drop = new List<int>();
+        for (var s = 0; s < spawns.Length; s++)
             for (var k = 0; k < 8; k++)
             {
                 var a = k * Mathf.Tau / 8;
-                if (float.IsNaN(GroundHeight(sp.Position.X + Mathf.Cos(a) * 2f, sp.Position.Z + Mathf.Sin(a) * 2f))) return true;
+                if (float.IsNaN(groundHeight(spawns[s].X + Mathf.Cos(a) * 2f, spawns[s].Z + Mathf.Sin(a) * 2f))) { drop.Add(s); break; }
             }
-            return false;
-        });
-        if (dropped > 0) GD.Print($"map: dropped {dropped} spawn points within 2 m of the terrain rim");
+        return new RimPlan(boxes, drop);
+    }
+
+    void ApplyRim(RimPlan plan)
+    {
+        var body = new StaticBody3D { Name = "TerrainRim" };
+        foreach (var (size, centre) in plan.Boxes)
+            body.AddChild(new CollisionShape3D { Shape = new BoxShape3D { Size = size }, Position = centre });
+        Root.AddChild(body);
+        BoundaryWalls = plan.Boxes.Count;
+        for (var k = plan.DropSpawns.Count - 1; k >= 0; k--) _spawns.RemoveAt(plan.DropSpawns[k]);
+        if (plan.DropSpawns.Count > 0) GD.Print($"map: dropped {plan.DropSpawns.Count} spawn points within 2 m of the terrain rim");
     }
 
     /// <summary>Ground patch paint (patches.json) for the minimap, in ID order (the higher ID paints last): ring in ground (x, z) metres and colour.</summary>
@@ -386,65 +448,68 @@ public sealed partial class MapLoader
         }
     }
 
-    void LoadChunk(string glbPath, Vector2I index)
+    /// <summary>
+    /// Puts a read chunk into the map (main thread): its node tree under chunk_X_Y, the bodies of its collision nodes, and the materials and
+    /// registries of its visuals. <paramref name="triangles"/> is the chunk's visual triangle count from the manifest (a statistic).
+    /// </summary>
+    void AddChunk(PreparedChunk p, Vector2I index, int triangles)
     {
-        var doc = new GltfDocument();
-        var state = new GltfState();
-        var err = doc.AppendFromFile(glbPath, state);
-        if (err != Error.Ok) throw new InvalidDataException($"glTF load failed ({err}): {glbPath}");
-        var scene = doc.GenerateScene(state) as Node3D
-            ?? throw new InvalidDataException($"glTF has no Node3D root: {glbPath}");
-
         var key = $"chunk_{index.X}_{index.Y}";
         var chunk = new Node3D { Name = key };
-        chunk.AddChild(scene);
+        chunk.AddChild(p.Scene);
         Root.AddChild(chunk);
         _chunkRoots[key] = chunk;
         Stats.ChunksLoaded++;
-
-        foreach (var mi in Descendants(scene).OfType<MeshInstance3D>().ToList())
+        foreach (var (node, faces) in p.Colliders) AttachCollider(node, node.Name.ToString(), faces);
+        if (CollisionOnly) return;
+        Stats.Triangles += triangles;
+        foreach (var mi in Descendants(p.Scene).OfType<MeshInstance3D>().ToList())
         {
-            var name = mi.Name.ToString();
             if (mi.Mesh == null) continue;
-            if (name.EndsWith("_collision"))
-            {
-                BuildCollider(mi, name);
-                continue;
-            }
-            if (CollisionOnly)
-            {
-                // A visual freed before its children are visited (an earlier, freed ancestor) is not valid any more.
-                // A visual with a collision mesh under it is kept: freeing it would take the collider with it.
-                if (GodotObject.IsInstanceValid(mi) && !HasCollisionDescendant(mi)) mi.Free();
-                continue;
-            }
+            var name = mi.Name.ToString();
             ApplyMaterial(mi, name);
-            Stats.Triangles += TriangleCount(mi.Mesh);
-            var (baseName, texture) = SplitTexNode(name);
-            if (PropsParcelId(baseName) is { } propsId)
+            RegisterVisual(mi, name);
+        }
+    }
+
+    /// <summary>The visual triangles of a manifest chunk entry (its `triangles` without the collision meshes); 0 when the entry has none.</summary>
+    static int VisualTriangles(JsonElement chunk)
+    {
+        var n = 0;
+        if (chunk.TryGetProperty("triangles", out var tris) && tris.ValueKind == JsonValueKind.Object)
+            foreach (var kv in tris.EnumerateObject())
+                if (!kv.Name.EndsWith("collision") && kv.Value.TryGetInt32(out var c)) n += c;
+        return n;
+    }
+
+    /// <summary>Remembers a chunk's visual node by its name: props, terrain, patch, house or parcel building.</summary>
+    void RegisterVisual(MeshInstance3D mi, string name)
+    {
+        var (baseName, texture) = SplitTexNode(name);
+        if (texture != null) RegisterPropsTex(baseName, texture, mi); // MapLoader.Textures.cs
+        if (PropsParcelId(baseName) is { } propsId)
+        {
+            if (texture == null) _propsVisuals[propsId] = mi;
+            else
             {
-                if (texture == null) _propsVisuals[propsId] = mi;
-                else
-                {
-                    if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
-                    tex.Add(mi);
-                }
+                if (!_propsTexVisuals.TryGetValue(propsId, out var tex)) _propsTexVisuals[propsId] = tex = new();
+                tex.Add(mi);
             }
-            else if (name == "terrain")
-            {
-                _terrainVisuals.Add(mi);
-            }
-            else if (PatchId(name) is { } patchId)
-            {
-                RegisterBakedPatch(patchId, mi);
-            }
-            else if (RegisterHouseVisual(mi, name)) { } // house_<bid>_visual (MapLoader.Houses.cs)
-            else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
-            {
-                var id = name["parcel_".Length..^"_visual".Length];
-                _visuals[id] = mi;
-                if (_parcels.TryGetValue(id, out var info)) info.HasModel = true;
-            }
+        }
+        else if (name == "terrain")
+        {
+            _terrainVisuals.Add(mi);
+        }
+        else if (PatchId(name) is { } patchId)
+        {
+            RegisterBakedPatch(patchId, mi);
+        }
+        else if (RegisterHouseVisual(mi, name)) { } // house_<bid>_visual (MapLoader.Houses.cs)
+        else if (name.StartsWith("parcel_") && name.EndsWith("_visual"))
+        {
+            var id = name["parcel_".Length..^"_visual".Length];
+            _visuals[id] = mi;
+            if (_parcels.TryGetValue(id, out var info)) info.HasModel = true;
         }
     }
 
@@ -458,7 +523,7 @@ public sealed partial class MapLoader
     }
 
     static bool HasCollisionDescendant(Node n)
-        => Descendants(n).Any(d => d is MeshInstance3D m && m.Name.ToString().EndsWith("_collision"));
+        => Descendants(n).Any(d => d.Name.ToString().EndsWith("_collision"));
 
     static int TriangleCount(Mesh m)
     {
@@ -493,26 +558,44 @@ public sealed partial class MapLoader
         MetallicSpecular = 0f,
     };
 
-    /// <summary>Static trimesh collider under the (hidden) collision mesh. Dynamic ones (parcel swaps) are not registered.</summary>
+    /// <summary>Static trimesh collider under the (hidden) collision mesh, its triangles read back from the mesh (a parcel-run fragment, a reloaded chunk). Dynamic ones (parcel swaps) are not registered.</summary>
     CollisionShape3D? BuildCollider(MeshInstance3D mi, string name, bool dynamic = false)
     {
         mi.Visible = false;
-        var shape = mi.Mesh.CreateTrimeshShape() as ConcavePolygonShape3D;
-        if (shape == null) return null;
+        if (mi.Mesh.CreateTrimeshShape() is not ConcavePolygonShape3D shape) return null;
         shape.BackfaceCollision = true;
+        return AttachCollider(mi, name, shape, null, dynamic);
+    }
+
+    /// <summary>Static trimesh collider of a chunk's collision node, from the triangles read with the glTF (the node has no mesh).</summary>
+    CollisionShape3D? AttachCollider(Node3D owner, string name, Vector3[] faces)
+    {
+        if (faces.Length < 3) return null;
+        var shape = new ConcavePolygonShape3D { BackfaceCollision = true };
+        shape.SetFaces(faces);
+        return AttachCollider(owner, name, shape, faces, false);
+    }
+
+    CollisionShape3D AttachCollider(Node3D owner, string name, ConcavePolygonShape3D shape, Vector3[]? faces, bool dynamic)
+    {
         var body = new StaticBody3D { Name = "Body" };
         var cs = new CollisionShape3D { Name = "Shape", Shape = shape };
         body.AddChild(cs);
-        mi.AddChild(body);
+        owner.AddChild(body);
         Stats.CollidersBuilt++;
         if (dynamic) return cs;
 
         if (RegisterHouseCollision(cs, name)) { } // house_<bid>_collision (MapLoader.Houses.cs): an ordinary collider, also kept by bid
         else if (name == "terrain_collision")
         {
-            var faces = shape.GetFaces();
+            faces ??= shape.GetFaces();
             _terrain.Add((faces, FacesAabb(faces)));
             _terrainGrid = null;
+        }
+        else if (name == "props_collision" && ChunkOf(owner) is { } chunk)
+        {
+            if (!_chunkPropsShapes.TryGetValue(chunk, out var l)) _chunkPropsShapes[chunk] = l = new();
+            l.Add(cs);
         }
         else if (name.StartsWith("parcel_") && name.EndsWith("_props_collision"))
         {
@@ -527,6 +610,19 @@ public sealed partial class MapLoader
             l.Add(cs);
         }
         return cs;
+    }
+
+    /// <summary>The (ix, iy) of the chunk_&lt;ix&gt;_&lt;iy&gt; node above <paramref name="n"/>; null when there is none.</summary>
+    static (int X, int Y)? ChunkOf(Node n)
+    {
+        for (var p = n.GetParent(); p != null; p = p.GetParent())
+        {
+            var s = p.Name.ToString();
+            if (!s.StartsWith("chunk_")) continue;
+            var parts = s.Split('_');
+            if (parts.Length == 3 && int.TryParse(parts[1], out var x) && int.TryParse(parts[2], out var y)) return (x, y);
+        }
+        return null;
     }
 
     // Chunk nodes have identity transforms in the exported files; faces are used as-is.
@@ -561,6 +657,7 @@ public sealed partial class MapLoader
     // Triangles bucketed by 8 m cells so a height lookup tests a handful of triangles, not the whole mesh.
     void BuildTerrainGrid()
     {
+        var tg = LoadTimers.Start();
         var grid = new Dictionary<long, List<(int, int)>>(CellKeys.Instance);
         for (var m = 0; m < _terrain.Count; m++)
         {
@@ -581,6 +678,7 @@ public sealed partial class MapLoader
                     }
             }
         }
+        LoadTimers.Lap("terrain.grid_build", tg);
         _terrainGrid = grid;
     }
 

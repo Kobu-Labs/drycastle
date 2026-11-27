@@ -60,7 +60,7 @@ internal sealed class ChurchServer
         if (!Exists) { _ctx.ChatTo(c, ChatLineKind.Error, "This map has no church doors (no church.json with a doorway yet)."); return; }
         if (args.Count == 0) { _ctx.ChatTo(c, ChatLineKind.Info, $"The church doors are {(IsOpen ? "open" : "closed")}; {PlayersInside().Count} inside."); return; }
         if (_policy.SetByAdmin(args[0] == "open")) Apply(); // the admin's word is one-off: a pending close-when-empty still fires
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} {(IsOpen ? "opened" : "closed")} the church doors.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} {(IsOpen ? "opened" : "closed")} the church doors.");
     }
 
     /// <summary>A decider (the Mass, the demon) names why the doors move; the policy decides, the world follows.</summary>

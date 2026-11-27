@@ -50,9 +50,7 @@ public sealed class MassClient
                 {
                     chant?.RingBells();
                     var text = Strings.T("mass.bells");
-                    UiShell.Instance?.Toast(text, ToastKind.Warn, null, 6.0);
-                    _ctx.Hud?.AddChatLine(new ChatLine(ChatLineKind.System, "", text));
-                }
+                    UiShell.Instance?.Toast(text, ToastKind.Warn, null, 6.0);                }
                 break;
             case EventKind.MassSeat when MassCodec.DecodeSeat(payload) is { } s:
                 _seat = s.State;

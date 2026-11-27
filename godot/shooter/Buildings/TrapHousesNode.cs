@@ -7,7 +7,7 @@ using Drycastle.ShooterCore.Data;
 namespace Drycastle.Shooter.Buildings;
 
 /// <summary>
-/// The Trap houses' props (#496, ADR 0046) in the world, on the server and every client: the hollow houses' floor plans (interiors.json of the map) and trap_house.json, and per dressed
+/// The Trap houses' props (#496, ADR 0047) in the world, on the server and every client: the hollow houses' floor plans (interiors.json of the map) and trap_house.json, and per dressed
 /// house a node of its props. A solid prop is a box on the World layer (players and bullets stop on it) on the server too; where something is drawn, the Synty model (the private Gang
 /// Warfare and Military packs, <see cref="SyntyLib"/>), or the box itself without the pack, and graffiti as text on the wall. The server's keeper (<c>TrapHouseServer</c>) says what is
 /// dressed; a client follows its events. One per map: <see cref="Current"/>.

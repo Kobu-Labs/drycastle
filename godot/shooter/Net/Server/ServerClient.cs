@@ -161,7 +161,7 @@ internal sealed class PlayerProfile
     public CamoSpec Camo => Camos[Math.Clamp(Active, 0, Loadout.MaxSlot)];
     /// <summary>The Companion chosen on the Equipment screen (an id of companions.json, #488); empty: none chosen, the first one owned is out.</summary>
     public string Companion = "";
-    /// <summary>Where the player stands with the Cartel (ADR 0045): membership and Respect, stored with the Profile; a guest's is never stored (a guest cannot join).</summary>
+    /// <summary>Where the player stands with the Cartel (ADR 0046): membership and Respect, stored with the Profile; a guest's is never stored (a guest cannot join).</summary>
     public CartelStanding Cartel = new();
 }
 

@@ -87,7 +87,7 @@ internal sealed class SandboxServer
         var on = args.Count > 1 ? args[1] == "on" : !target.Sandbox;
         if (target.Sandbox == on) { _ctx.ChatTo(c, ChatLineKind.Info, $"{target.Name} is already {(on ? "in" : "out of")} sandbox mode."); return; }
         SetSandbox(target, on);
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} turned sandbox mode {(on ? "on" : "off")} for {target.Name}.");
     }
 
     void SendHeld(ServerClient c) => _ctx.SendEvent(c, EventKind.SandboxHeld, SandboxEvents.EncodeText(_streaks().Rules.SandboxHeldOf(c.Id) ?? ""));

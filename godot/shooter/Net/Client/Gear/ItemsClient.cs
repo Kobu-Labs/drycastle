@@ -28,10 +28,10 @@ public sealed class ItemsClient
 {
     readonly ClientContext _ctx;
     readonly ItemsFile _data;
-    readonly Func<CharacterView?> _selfView;
+    readonly Func<IEnumerable<CharacterView>> _selfViews;
 
-    /// <param name="selfView">The own figure seated in a vehicle, or null: it is dressed with what the local player wears.</param>
-    public ItemsClient(ClientContext ctx, ItemsFile data, Func<CharacterView?> selfView) { _ctx = ctx; _data = data; _selfView = selfView; }
+    /// <param name="selfViews">The own figures (on foot, seated in a vehicle): they are dressed with what the local player wears.</param>
+    public ItemsClient(ClientContext ctx, ItemsFile data, Func<IEnumerable<CharacterView>> selfViews) { _ctx = ctx; _data = data; _selfViews = selfViews; }
 
     /// <summary>Cells in the bag.</summary>
     public const int BagCells = Bag.Cells;
@@ -155,7 +155,7 @@ public sealed class ItemsClient
     {
         _wornBy[player] = slots;
         if (_ctx.Remotes.TryGetValue(player, out var r) && r.View != null) Dress(r.View, slots);
-        if (player == _ctx.MyId && _selfView() is { } self) Dress(self, slots);
+        if (player == _ctx.MyId) foreach (var self in _selfViews()) Dress(self, slots);
     }
 
     /// <summary>Forgets a player who left.</summary>

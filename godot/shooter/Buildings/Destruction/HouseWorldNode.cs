@@ -20,6 +20,11 @@ namespace Drycastle.Shooter.Buildings.Destruction;
 public partial class HouseWorldNode : Node3D
 {
     public const string ShaderPath = "res://shaders/house_destruction.gdshader";
+    /// <summary>The same cut for a house's textured faces (fence walls): the library texture times the vertex colour.</summary>
+    public const string TexShaderPath = "res://shaders/house_destruction_tex.gdshader";
+    /// <summary>A fence wall's grid (fence_&lt;index&gt;, docs/fence-destruction.md): one cell thick, its faces, caps and piers up to this many cells outside it read the nearest cell.</summary>
+    const string FenceGridPrefix = "fence_";
+    const float FenceEdgeCells = 2f;
     public static HouseWorldNode? Current { get; private set; }
     const double ResyncRetrySeconds = 5;
     /// <summary>A house still unlike the server's after this long of asking with the server's house unchanged (its map data differs: a full 243 never matches) is frozen as it is until the round resets.</summary>
@@ -44,7 +49,10 @@ public partial class HouseWorldNode : Node3D
     readonly List<House> _dirty = new();
     readonly List<House> _awaiting = new();
     bool _rubbleStay, _warmed;
-    static Shader? _shader;
+    static Shader? _shader, _texShader;
+
+    /// <summary>The rubble mode the server last set (244): stay or fade. The fences' falling pieces follow it.</summary>
+    public bool RubbleStay => _rubbleStay;
 
     /// <summary>
     /// A window pane of a hollow house (windows.json): its map node, its frame cells (<see cref="HouseFrames"/>, found at the house's first carve), whether the frame is gone
@@ -88,10 +96,15 @@ public partial class HouseWorldNode : Node3D
             Replica = replica;
             Visual = nodes?.Visual;
             Shape = nodes?.Collision;
+            Textured = nodes?.Textured ?? [];
         }
 
         public readonly HouseReplica Replica;
         public readonly MeshInstance3D? Visual;
+        /// <summary>Its textured faces (house_&lt;id&gt;_visual_tex_&lt;texture&gt;), drawn with the cut-out texture shader while the house is damaged.</summary>
+        public readonly IReadOnlyList<MeshInstance3D> Textured;
+        /// <summary>The textured faces that wear the shader now, with the material they had.</summary>
+        public readonly List<(MeshInstance3D Node, Material? Original)> TexSwaps = new();
         /// <summary>The map's collider of the house (its exact shell until the first carve).</summary>
         public readonly CollisionShape3D? Shape;
         /// <summary>The voxel columns that stand in for the shell while the house is damaged (made at the first carve).</summary>
@@ -135,6 +148,7 @@ public partial class HouseWorldNode : Node3D
         }
         if (grids.Count == 0) return null;
         _shader ??= GD.Load<Shader>(ShaderPath);
+        _texShader ??= GD.Load<Shader>(TexShaderPath);
         var node = new HouseWorldNode { Name = "HouseDestruction", _map = map, _cfg = cfg, _houses = new House?[grids.Max(g => g.Index) + 1] };
         var unplaced = 0;
         foreach (var g in grids)
@@ -357,12 +371,13 @@ public partial class HouseWorldNode : Node3D
 
     static Vector3 V(NVec3 v) => new(v.X, v.Y, v.Z);
 
-    /// <summary>The first carve: the shader material with its texture on the visual, the cut-face node, the shell collider set aside.</summary>
+    /// <summary>The first carve: the shader material with its texture on the visual (and on its textured faces), the cut-face node, the shell collider set aside.</summary>
     void Swap(House h)
     {
         h.Swapped = true;
         var g = h.Replica.Grid;
-        if (h.Visual != null && GodotObject.IsInstanceValid(h.Visual) && _shader != null)
+        var visual = h.Visual != null && GodotObject.IsInstanceValid(h.Visual);
+        if (_shader != null && (visual || h.Textured.Count > 0))
         {
             int nx = g.Nx, ny = g.Ny, nz = g.Nz;
             h.LayerBytes = new byte[nz][];
@@ -374,12 +389,31 @@ public partial class HouseWorldNode : Node3D
             }
             h.Texture = new ImageTexture3D();
             h.Texture.Create(Image.Format.R8, nx, ny, nz, false, h.Layers);
-            h.Material = new ShaderMaterial { Shader = _shader };
-            h.Material.SetShaderParameter("removed", h.Texture);
-            h.Material.SetShaderParameter("grid_size", new Vector3(nx, ny, nz));
-            h.Material.SetShaderParameter("world_to_grid", new Projection((MapToWorld * GridToMap(g)).AffineInverse()));
-            h.FlatMaterial = h.Visual.MaterialOverride;
-            h.Visual.MaterialOverride = h.Material;
+            var toGrid = new Projection((MapToWorld * GridToMap(g)).AffineInverse());
+            var edge = g.Id.StartsWith(FenceGridPrefix, StringComparison.Ordinal) ? FenceEdgeCells : 0f;
+            if (visual)
+            {
+                h.Material = new ShaderMaterial { Shader = _shader };
+                h.Material.SetShaderParameter("removed", h.Texture);
+                h.Material.SetShaderParameter("grid_size", new Vector3(nx, ny, nz));
+                h.Material.SetShaderParameter("world_to_grid", toGrid);
+                h.Material.SetShaderParameter("edge_cells", edge);
+                h.FlatMaterial = h.Visual!.MaterialOverride;
+                h.Visual.MaterialOverride = h.Material;
+            }
+            if (_texShader != null)
+                foreach (var node in h.Textured)
+                {
+                    if (!GodotObject.IsInstanceValid(node) || node.MaterialOverride is not StandardMaterial3D { AlbedoTexture: { } albedo } flat) continue;
+                    var mat = new ShaderMaterial { Shader = _texShader };
+                    mat.SetShaderParameter("removed", h.Texture);
+                    mat.SetShaderParameter("grid_size", new Vector3(nx, ny, nz));
+                    mat.SetShaderParameter("world_to_grid", toGrid);
+                    mat.SetShaderParameter("albedo_tex", albedo);
+                    mat.SetShaderParameter("edge_cells", edge);
+                    h.TexSwaps.Add((node, flat));
+                    node.MaterialOverride = mat;
+                }
             h.CutMesh = new ArrayMesh();
             h.Cut = new MeshInstance3D { Name = $"house_{g.Id}_cut", Mesh = h.CutMesh, MaterialOverride = MapLoaderT.SharedFlatMaterial };
             _map.Root.AddChild(h.Cut);
@@ -394,6 +428,9 @@ public partial class HouseWorldNode : Node3D
         if (!h.Swapped) return;
         h.Swapped = false;
         if (h.Visual != null && GodotObject.IsInstanceValid(h.Visual)) h.Visual.MaterialOverride = h.FlatMaterial;
+        foreach (var (node, original) in h.TexSwaps)
+            if (GodotObject.IsInstanceValid(node)) node.MaterialOverride = original;
+        h.TexSwaps.Clear();
         h.Material = null; h.Texture = null; h.Layers = null; h.LayerBytes = []; h.FlatMaterial = null;
         if (h.Cut != null && GodotObject.IsInstanceValid(h.Cut)) h.Cut.QueueFree();
         h.Cut = null; h.CutMesh = null;
@@ -447,7 +484,7 @@ public partial class HouseWorldNode : Node3D
         if (h.Collider?.Update(h.Replica.Cells, MapToWorld) == true) _map.HouseGeometryChanged();
     }
 
-    /// <summary>Compiles the discard shader before the first carve: a speck with its material in front of the camera for half a second.</summary>
+    /// <summary>Compiles the discard shaders (flat and textured) before the first carve: a speck with each material in front of the camera for half a second.</summary>
     void WarmUp()
     {
         if (_shader == null) { _warmed = true; return; }
@@ -459,8 +496,22 @@ public partial class HouseWorldNode : Node3D
         var mat = new ShaderMaterial { Shader = _shader };
         mat.SetShaderParameter("removed", tex);
         mat.SetShaderParameter("world_to_grid", new Projection(Transform3D.Identity));
+        var specks = new List<MeshInstance3D> { Speck(cam, mat) };
+        if (_texShader != null)
+        {
+            var texMat = new ShaderMaterial { Shader = _texShader };
+            texMat.SetShaderParameter("removed", tex);
+            texMat.SetShaderParameter("world_to_grid", new Projection(Transform3D.Identity));
+            texMat.SetShaderParameter("albedo_tex", ImageTexture.CreateFromImage(Image.CreateFromData(1, 1, false, Image.Format.Rgba8, [255, 255, 255, 255])));
+            specks.Add(Speck(cam, texMat));
+        }
+        GetTree().CreateTimer(0.5).Timeout += () => { foreach (var s in specks) if (GodotObject.IsInstanceValid(s)) s.QueueFree(); };
+    }
+
+    static MeshInstance3D Speck(Camera3D cam, Material mat)
+    {
         var speck = new MeshInstance3D { Name = "HouseWarm", Mesh = new QuadMesh { Size = new Vector2(0.002f, 0.002f) }, MaterialOverride = mat, Position = new Vector3(0, 0, -0.3f), CastShadow = GeometryInstance3D.ShadowCastingSetting.Off };
         cam.AddChild(speck);
-        GetTree().CreateTimer(0.5).Timeout += () => { if (GodotObject.IsInstanceValid(speck)) speck.QueueFree(); };
+        return speck;
     }
 }

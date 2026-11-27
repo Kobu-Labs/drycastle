@@ -1,4 +1,4 @@
-"""glTF building blocks of the map files: flat-shaded trimeshes, chunk scenes, GLB export with the tree-base attribute."""
+"""glTF building blocks of the map files: flat-shaded trimeshes, chunk scenes, GLB export with the TEXCOORD_1 attribute (tree bases, fence pieces)."""
 
 import json
 import struct
@@ -60,7 +60,7 @@ def to_trimesh(mesh: Mesh, normals: bool = True) -> trimesh.Trimesh:
 
 
 def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
-    """Flat-shaded trimesh with UVs (TEXCOORD_0) and the tint as vertex colour (COLOR_0).
+    """Flat-shaded trimesh with UVs (TEXCOORD_0), the tint as vertex colour (COLOR_0) and, when the mesh has them, TEXCOORD_1.
 
     The material only carries the name ``tex:<id>``; no image is embedded (see ``core/textures.py``).
     """
@@ -73,10 +73,13 @@ def to_trimesh_textured(mesh: TexturedMesh, tid: str) -> trimesh.Trimesh:
         ),
     )
     visual.vertex_attributes["color"] = np.repeat(rgba, 3, axis=0)
-    return trimesh.Trimesh(
+    tm = trimesh.Trimesh(
         vertices=verts, faces=np.arange(len(verts)).reshape(-1, 3), visual=visual,
         vertex_normals=flat_normals(verts) if len(verts) else None, process=False,
     )
+    if mesh.uv2 is not None:  # the fence pieces' (section, piece) coordinate, TEXCOORD_1 (export_glb renames it)
+        tm.vertex_attributes[BASE_UV2_ATTRIBUTE] = mesh.uv2.reshape(-1, 2).astype(np.float32)
+    return tm
 
 
 def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
@@ -86,9 +89,9 @@ def node_trimesh(name: str, mesh: Mesh | TexturedMesh) -> trimesh.Trimesh:
 
 
 def export_glb(scene: trimesh.Scene) -> bytes:
-    """``scene`` as GLB bytes, with the base attribute (``_UV2``, see ``to_trimesh``) renamed to ``TEXCOORD_1``.
+    """``scene`` as GLB bytes, with the second UV attribute (``_UV2``: tree bases, see ``to_trimesh``; fence pieces, see ``to_trimesh_textured``) renamed to ``TEXCOORD_1``.
 
-    trimesh can only write TEXCOORD_0 itself. Every GLB that may carry tree meshes goes through here.
+    trimesh can only write TEXCOORD_0 itself. Every GLB that may carry tree or fence meshes goes through here.
     """
     data = scene.export(file_type="glb")
     jlen, jtype = struct.unpack_from("<II", data, 12)

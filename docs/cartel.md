@@ -24,7 +24,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - Opt-in at the Contact. Quitting is allowed; rank and Respect stay frozen until a rejoin.
 - Rank and Respect persist on the Profile (ADR 0003 store, a migration in both SQLite and Postgres).
 - Bots never join. A guest (no stored Profile) cannot join. A sandbox player can run jobs and earns nothing.
-- Rank-up: a toast plus a chat line to everyone.
+- Rank-up: a toast to everyone (no chat line: only players' messages are broadcast, #499).
 - Rank unlocks: postponed (see v2).
 
 ## Who runs a job
@@ -60,7 +60,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - E opens a non-pausing panel (as the Hunter's Log): join / quit, rank and Respect bar, the job list by tier (locked tiers show the rank they need), Start (leader only; others see "Your leader starts jobs"). UI follows `docs/standards/ui-ux.md` and the `ui-work` skill.
 - During a job: a HUD tracker (objective line, timer) and a marker on the minimap and in the world.
 - Built (#494, round 2): the server sends a Job's party its objective line and marker (`IJobObjective.Objective` / `Marker`) as event 37 `CartelObjective` when either changes (the marker when it moved `marker_resend_m`) and again to all after a party change. The Contact's key is `KeyCompetitor.Contact` (his reach keeps the plantation's hold off it); the client gives him the key after every other prompt (`CartelClient`), and his panel is `Cartel/ContactPanel.cs` over `ContactPanelModel` (ShooterCore). The tracker is `CartelTracker` (machine `Cartel.Tracker`), drawn by `HeadsUp/Prompts/JobTracker.cs`; the marker is `MapMarkers.Job` (a star, `MapGlyphs.Job`, `Maps/JobMarker.cs`). A rank-up (event 36) is a toast for everyone. Not screenshot-checked yet.
-- Built (review fixes, protocol 89): who is told what each tick is `ShooterCore/Jobs/JobFeed` (unit-tested), membership and Respect `CartelMembers`, the Contact's requests `CartelServer`. A refused join, quit or start answers the panel with event 38 `CartelRefused` (the refusal's code and words), shown in Start's (or Join's) reason line until the next build. Every reason (a failure, a refused start, join or quit, why no Respect) has one key and one text in `CartelWords` (ShooterCore), which the server writes and the client registers. The test kind starts only for an admin. Server text that names the interact key writes `{interact}` (`JobText`); the tracker shows the bound key.
+- Built (review fixes, protocol 90): who is told what each tick is `ShooterCore/Jobs/JobFeed` (unit-tested), membership and Respect `CartelMembers`, the Contact's requests `CartelServer`. A refused join, quit or start answers the panel with event 38 `CartelRefused` (the refusal's code and words), shown in Start's (or Join's) reason line until the next build. Every reason (a failure, a refused start, join or quit, why no Respect) has one key and one text in `CartelWords` (ShooterCore), which the server writes and the client registers. The test kind starts only for an admin. Server text that names the interact key writes `{interact}` (`JobText`); the tracker shows the bound key.
 
 ## Simple jobs (v1)
 
@@ -127,7 +127,7 @@ Admin chat commands (`/cartel`, `CartelServer.Chat`; the words in `ShooterCore/C
 
 ## Docs, ADRs, state machines
 
-- ADRs: 0045 (cartel rank and Respect persist on the Profile, and a Job is not an Event), 0046 (trap house dressing). Possibly later: NPC gunfire at players (server time, no rewind, against ADR 0013's player-shot rewind).
+- ADRs: 0046 (cartel rank and Respect persist on the Profile, and a Job is not an Event), 0047 (trap house dressing). Possibly later: NPC gunfire at players (server time, no rewind, against ADR 0013's player-shot rewind).
 - Glossary: the terms above are in; still to change when built: Squad gains a leader (still tdm-only); Plantation's hold during a Harvest; Gang member gains Gunman and Rival dealer and ranged fighting; Event's _Avoid_ names Job and Heist.
 - State machines (`StateMachineSpec<T>`, `docs/state-machines.md`): Job.Run, Cartel.Membership, Heist.Phase, Duffel (carried, flying, lying, loaded), Drill (placed, running, jammed, done), the Gunman and posted defender states, the Assault clock. No bool flags.
 - Data: `cartel.json` (ranks and curve, tiers, timers, counts, Respect, weights and throw ranges, Assault sizes and timing, drill times and jams).

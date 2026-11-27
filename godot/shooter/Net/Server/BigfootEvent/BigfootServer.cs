@@ -181,7 +181,7 @@ internal sealed class BigfootServer
         _lifeStart = _ctx.Tick;
         _events.Start(EventBook.Bigfoot, _ctx.Now);
         Fx(BigfootFxKind.Appear, bf.Position);
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Bigfoot event. Something huge is moving through the village.");
+        _ctx.ChatTo(admin, ChatLineKind.Info, $"{admin.Name} started the Bigfoot event. Something huge is moving through the village.");
         if (fallback) _ctx.ChatTo(admin, ChatLineKind.Info, $"The map has no bigfoot zone, so this is the dev fallback: it appeared {Flat(bf.Position, nearPos):0} m from {nearName}.");
         GD.Print($"server: Bigfoot started by {admin.Name} #{admin.Id} at ({bf.Position.X:F1},{bf.Position.Y:F1},{bf.Position.Z:F1}), {(fallback ? $"FALLBACK spawn near {nearName} (the map has no bigfoot zone)" : "a baked bigfoot zone point")}, hits needed {bf.HitsNeeded}, {participants} participants");
     }
@@ -204,7 +204,7 @@ internal sealed class BigfootServer
     public void End(ServerClient c)
     {
         if (_bigfoot is not { } bf) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Bigfoot event as a win.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} ended the Bigfoot event as a win.");
         bf.Kill();
     }
 
@@ -212,7 +212,7 @@ internal sealed class BigfootServer
     public void Cancel(ServerClient c)
     {
         if (_bigfoot is not { } bf) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the Bigfoot event.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} cancelled the Bigfoot event.");
         bf.Remove(WorldDespawnReason.Removed); // the manager despawns it on this tick; OnWorldDespawn ends the run
     }
 
@@ -225,7 +225,6 @@ internal sealed class BigfootServer
         Fx(BigfootFxKind.Death, bf.Position);
         var credited = bf.Credited.Where(id => _ctx.Players.ContainsKey(id)).ToList();
         var names = credited.Count == 0 ? "" : " " + string.Join(", ", credited.Select(id => _ctx.Players[id].Name).Take(8)) + (credited.Count > 8 ? " and others" : "") + " took part.";
-        _ctx.ChatToAll(ChatLineKind.System, "", $"Event won: the Bigfoot is down!{names} Loot its body for what it left behind.");
         _hunts.RecordMystery(credited, Mysteries.Bigfoot, bf.Position); // the log: everyone credited has caught it
         _awardXp(credited.Where(_scores).Select(id => new XpGrant(id, _winXp, XpReason.EventWin)).ToList());
         GD.Print($"server: Bigfoot died (last hit by #{bf.Killer}), credited {string.Join(",", credited)}");
@@ -244,7 +243,6 @@ internal sealed class BigfootServer
         }
         if (_events.End(EventBook.Bigfoot, EventPhase.Despawned, _ctx.Now) != null)
         {
-            _ctx.ChatToAll(ChatLineKind.System, "", w.Reason == WorldDespawnReason.Expired ? "The Bigfoot went back into the woods. Nobody came for it." : "The Bigfoot event is over.");
             GD.Print($"server: Bigfoot despawned ({w.Reason}), no reward");
         }
     }

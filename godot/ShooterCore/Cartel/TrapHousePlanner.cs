@@ -10,7 +10,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// </summary>
 public readonly record struct TrapProp(byte Kind, byte Variant, Vector3 Pos, float Yaw);
 
-/// <summary>A posted defender's spot (ADR 0046 §3): where they stand (feet), the yaw they face at first (the room's way in), and the room.</summary>
+/// <summary>A posted defender's spot (ADR 0047 §3): where they stand (feet), the yaw they face at first (the room's way in), and the room.</summary>
 public sealed record DefenderPost(Vector3 Pos, float Yaw, string Room);
 
 /// <summary>The safe: the prop's middle on the floor, the yaw its door faces, where a player stands to work it, and the room.</summary>
@@ -23,7 +23,7 @@ public sealed record DuffelSpot(Vector3 Pos, float Yaw, string Kind);
 public sealed record TrapHouseDressing(string House, IReadOnlyList<TrapProp> Props, IReadOnlyList<DefenderPost> Posts, SafeSpot? Safe, IReadOnlyList<DuffelSpot> Duffels);
 
 /// <summary>
-/// Dresses a hollow house as a Trap house (#496, ADR 0046), pure: from its floor plan (rooms, room types, doors, links) and a seed, the props of trap_house.json by room type, the safe,
+/// Dresses a hollow house as a Trap house (#496, ADR 0047), pure: from its floor plan (rooms, room types, doors, links) and a seed, the props of trap_house.json by room type, the safe,
 /// the posted defenders' spots (<see cref="DefenderPosts"/>) and the Duffel spots on the tables. The same house, data and seed give the same dressing. Nothing stands within <c>door_clear_m</c> of a doorway, a
 /// door or garage door, or a link between rooms, so every way through the house stays open; props stay inside their room and apart. A prop with no room for it is left out.
 /// </summary>

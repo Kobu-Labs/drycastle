@@ -117,7 +117,7 @@ internal sealed class ScudEventServer
         _run.Begin(area, (float)(_scud.Event.DespawnMinutes * 60.0));
         _events.Start(EventBook.Scud, _ctx.Now);
         _intel.Announce(ScudEventRun.Intel(_ctx.Now, area));
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{admin.Name} started the Scud event. A top secret weapon has been located: read the intel board at the base.");
+        _ctx.ChatTo(admin, ChatLineKind.Info, $"{admin.Name} started the Scud event. A top secret weapon has been located: read the intel board at the base.");
 
         _slots.Clear();
         _slots.AddRange(_places.Bunkers());
@@ -133,7 +133,7 @@ internal sealed class ScudEventServer
     public void End(ServerClient c)
     {
         if (!_run.Searching) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} ended the Scud event as a win.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} ended the Scud event as a win.");
         if (_run.Win(c.Id)) OnFound(c.Id, c.Name);
     }
 
@@ -141,7 +141,7 @@ internal sealed class ScudEventServer
     public void Cancel(ServerClient c)
     {
         if (!_run.Searching) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} cancelled the Scud event.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} cancelled the Scud event.");
         _run.Despawn();
         Finish($"cancelled by {c.Name}", retireTruck: true);
     }
@@ -157,12 +157,9 @@ internal sealed class ScudEventServer
         {
             case ScudEventOutcome.Found: OnFound(boarder, _ctx.Players.TryGetValue(boarder, out var f) ? f.Name : "Somebody"); break;
             case ScudEventOutcome.TimedOut:
-                _ctx.ChatToAll(ChatLineKind.System, "", "The top secret weapon was moved out of the area. Nobody found it.");
                 Finish("nobody boarded it in time", retireTruck: true);
                 break;
             case ScudEventOutcome.TruckLost:
-                if (_events.Current?.Kind == EventBook.Scud) _ctx.ChatToAll(ChatLineKind.System, "", "The top secret weapon was destroyed before anyone found it.");
-                else _ctx.ChatToAll(ChatLineKind.System, "", "The Scud truck is destroyed. The rocket carts at the bunkers are gone.");
                 Finish("the truck was destroyed", retireTruck: false);
                 break;
         }
@@ -183,7 +180,6 @@ internal sealed class ScudEventServer
         _intel.Withdraw(ScudEventRun.IntelId);
         var xp = (int)_scud.Event.XpReward;
         if (finder != 0 && _ctx.Players.ContainsKey(finder) && _scores(finder) && xp > 0) _awardXp(new List<XpGrant> { new(finder, xp, XpReason.EventWin) });
-        _ctx.ChatToAll(ChatLineKind.System, "", $"Event won: {name} found the Scud truck! It stays out until it is destroyed, and so do the rocket carts at the bunkers.");
         if (_ctx.Players.TryGetValue(finder, out var c)) _ctx.SendEvent(c, EventKind.ScudNotice, ScudCodec.Encode(ScudNoticeCode.EventFound));
         GD.Print($"server: Scud event won by #{finder} {name}: +{xp} XP");
     }

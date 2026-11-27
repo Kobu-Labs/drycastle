@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Cartel;
 public sealed record TrapHouseCandidate(HouseFloorPlan House, RoadPlace Road, Vector2 RoadGround, float RoadDistanceM);
 
 /// <summary>
-/// Which hollow house a Trap house Job takes (docs/cartel.md "Trap house", ADR 0046 §1), pure: one with a floor plan and a front door, the door within <c>choice.road_max_m</c> of a
+/// Which hollow house a Trap house Job takes (docs/cartel.md "Trap house", ADR 0047 §1), pure: one with a floor plan and a front door, the door within <c>choice.road_max_m</c> of a
 /// road wide enough for the van (a <see cref="RoadGraph"/> parsed with <c>choice.min_road_width_m</c>), that no other Job uses and that has no player inside.
 /// </summary>
 public static class TrapHouseChoice

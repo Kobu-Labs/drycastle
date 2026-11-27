@@ -34,7 +34,7 @@ public sealed record SquadLeaderChanged(byte Squad, ushort From, ushort To) : Ma
 /// Squads (#379, GLOSSARY "Squad"): an opt-in tag inside a team, kept on <see cref="MatchPlayer.Squad"/>. Up to <see cref="Squads.MaxMembers"/> humans, one squad per player
 /// (joining or creating leaves the old one), a squad with no member is gone. Team deathmatch only; a player sees and joins the own team's squads. Friend logic (<see cref="AreFriends"/>),
 /// scoring and colours do not look at squads. A team change, a mode change and leaving the match clear a membership.
-/// The leader (#494, ADR 0045 §5) is the longest-standing member (<see cref="MatchPlayer.SquadSince"/>): the creator, then whoever joined first after them.
+/// The leader (#494, ADR 0046 §5) is the longest-standing member (<see cref="MatchPlayer.SquadSince"/>): the creator, then whoever joined first after them.
 /// It is derived, never stored, so every way out of a squad hands it on; <see cref="SquadLeaderChanged"/> says when it moved.
 /// </summary>
 public sealed partial class MatchSim

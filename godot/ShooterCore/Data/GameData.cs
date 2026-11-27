@@ -4,6 +4,7 @@ using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Demon;
 using Drycastle.ShooterCore.Events;
+using Drycastle.ShooterCore.Fences;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.Glass;
 using Drycastle.ShooterCore.Items;
@@ -38,6 +39,8 @@ public class GameData
     public GlassConfig Glass { get; init; } = new();
     /// <summary>house_destruction.json (voxel destruction of the hollow houses, docs/house-destruction.md). Defaults when the file is absent.</summary>
     public DestructionConfig HouseDestruction { get; init; } = DestructionConfig.Default;
+    /// <summary>fence_destruction.json (the thin fences' pieces, docs/fence-destruction.md). Defaults when the file is absent.</summary>
+    public FenceDestructionConfig FenceDestruction { get; init; } = FenceDestructionConfig.Default;
     /// <summary>animals.json (the species of wildlife and livestock and their rules). Empty when the file is absent.</summary>
     public AnimalsFile Animals { get; init; } = new();
     /// <summary>animal_shapes.json (the hit shapes of the wild species, baked from their models), with the private packs' species merged in by the host. Empty when absent: every animal is its body box.</summary>
@@ -84,7 +87,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "", string rivalCrewJson = "", string duffelsJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "", string rivalCrewJson = "", string duffelsJson = "", string fenceDestructionJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -116,6 +119,7 @@ public class GameData
             HouseDestruction = houseDestructionJson == "" ? DestructionConfig.Default : DestructionConfig.Parse(houseDestructionJson),
             Cartel = cartelJson == "" ? CartelFile.Default : CartelFile.Parse(cartelJson),
             Duffels = duffelsJson == "" ? DuffelsFile.Default : DuffelsFile.Parse(duffelsJson),
+            FenceDestruction = fenceDestructionJson == "" ? FenceDestructionConfig.Default : FenceDestructionConfig.Parse(fenceDestructionJson),
         };
     }
 
@@ -153,6 +157,7 @@ public class GameData
             HouseDestruction = File.Exists(Path.Combine(dir, "house_destruction.json")) ? DestructionConfig.Load(Path.Combine(dir, "house_destruction.json")) : DestructionConfig.Default,
             Cartel = File.Exists(Path.Combine(dir, "cartel.json")) ? CartelFile.Load(Path.Combine(dir, "cartel.json")) : CartelFile.Default,
             Duffels = File.Exists(Path.Combine(dir, "duffels.json")) ? DuffelsFile.Load(Path.Combine(dir, "duffels.json")) : DuffelsFile.Default,
+            FenceDestruction = File.Exists(Path.Combine(dir, "fence_destruction.json")) ? FenceDestructionConfig.Load(Path.Combine(dir, "fence_destruction.json")) : FenceDestructionConfig.Default,
         };
     }
 }

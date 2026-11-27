@@ -1,3 +1,4 @@
+using Drycastle.Shooter.Net.Server.Fences;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Scenery;
@@ -23,6 +24,9 @@ internal sealed class SceneryServer
     BreakableLamps? _lamps;
     BreakableSigns? _signs;
 
+    /// <summary>The thin fences: every round that stopped goes to them too (set once the server is built).</summary>
+    public FenceDestructionServer? Fences { get; set; }
+
     public SceneryServer(ServerContext ctx, Drycastle.MapLoader.MapLoader? map, LampLook lampLook, SignPlateLook signLook)
     {
         _ctx = ctx; _map = map; _lampLook = lampLook; _signLook = signLook;
@@ -35,6 +39,7 @@ internal sealed class SceneryServer
     /// <summary>A round that flew <paramref name="length"/> m from <paramref name="from"/> along <paramref name="dir"/> (to where it stopped) passed the lamps and sign plates on its way.</summary>
     public void Shot(NVec3 from, NVec3 dir, float length)
     {
+        Fences?.Shot(from, dir, length);
         if (_map == null || !(length > 0)) return;
         Lamps.ShootAlong(from, dir, length);
         Signs.ShootAlong(from, dir, length);

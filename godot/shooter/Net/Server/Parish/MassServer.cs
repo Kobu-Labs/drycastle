@@ -94,7 +94,7 @@ internal sealed class MassServer
         if (sent == 0) GD.PrintErr("server: holy mass: no citizen could leave (no house in range or no route); the pastor and monks stand alone");
         _dirty = false;
         SendState(bells: true);
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} started the Holy Mass.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} started the Holy Mass.");
         _ctx.ChatTo(c, ChatLineKind.Info, $"Holy Mass: {sent} citizens walk to the church, the Mass begins {_holyMass.Mass.StartDelaySeconds:0} s after the last one has sat down (at the latest in {_holyMass.Mass.BellsLeadSeconds + _holyMass.Mass.GatherSeconds:0} s) and lasts {_holyMass.Mass.MassSeconds:0} s. /event current end concludes it.");
     }
 
@@ -104,7 +104,7 @@ internal sealed class MassServer
         if (Event is not { Running: true } mass) { _ctx.ChatTo(c, ChatLineKind.Info, "No event is running."); return; }
         var was = mass.Phase;
         mass.Conclude();
-        _ctx.ChatToAll(ChatLineKind.System, "", was is MassPhase.Gather or MassPhase.Mass ? $"{c.Name} concluded the Holy Mass." : $"{c.Name} ended the Holy Mass.");
+        _ctx.ChatTo(c, ChatLineKind.Info, was is MassPhase.Gather or MassPhase.Mass ? $"{c.Name} concluded the Holy Mass." : $"{c.Name} ended the Holy Mass.");
     }
 
     MassStateMsg StateNow(bool bells)

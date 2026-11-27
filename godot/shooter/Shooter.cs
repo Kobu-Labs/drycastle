@@ -111,6 +111,8 @@ public partial class Shooter : Node3D
 
     public override void _Notification(int what)
     {
+        if (what == NotificationApplicationFocusOut) _focused = false;
+        else if (what == NotificationApplicationFocusIn) _focused = true;
         if (!_capFps) return;
         if (what == NotificationApplicationFocusOut) Engine.MaxFps = UnfocusedFps;
         else if (what == NotificationApplicationFocusIn) Engine.MaxFps = FocusedFps;
@@ -180,6 +182,7 @@ public partial class Shooter : Node3D
     /// <summary>Server shutdown: closes the progression store, which writes out the queued saves before it returns.</summary>
     public override void _ExitTree()
     {
+        _map.StopPrefetch(3000); // quitting from the menu while the map still loads: the map's worker threads end before the engine shuts down
         _progression?.Dispose();
         _progression = null;
     }
@@ -227,6 +230,13 @@ public partial class Shooter : Node3D
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
+        _ = MapLoad(); // the map loads behind the menu
+        if (global::Drycastle.MapLoader.Core.LoadTimers.Enabled) // the join-time report: what the frames of the load cost the renderer
+        {
+            long drawStart = 0;
+            RenderingServer.FramePreDraw += () => drawStart = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+            RenderingServer.FramePostDraw += () => { if (drawStart != 0 && (_phase.Is(AppPhase.Loading) || !_mapLoaded)) global::Drycastle.MapLoader.Core.LoadTimers.Lap("frames.draw", drawStart); };
+        }
         var target = cfg.Str("connect");
         if (target == "") { ShowMain(); return; }
         var (host, p) = ConnectForm.Split(target);
@@ -249,25 +259,117 @@ public partial class Shooter : Node3D
     ulong _lastStepFrameMs;
 
     /// <summary>
-    /// Sets the bar, and lets two frames draw only when the work since the last drawn frame has used up a frame's budget.
-    /// Waiting two frames after every step made the load frame-bound (718 steps x 2 frames x 16.7 ms = 24 s of a 26 s join at 60 Hz)
-    /// while the work itself is about 5 s.
+    /// Sets the bar, and lets one frame draw when the work since the last drawn frame has used up the slice (<see cref="SliceMs"/>).
+    /// Two frames after every 12 ms of work made the frames half of a join (614 waits, 67 s of 131 s on a loaded machine).
     /// </summary>
     async Task Step(LoadingScreen ld, string key, float f)
     {
         ld.Set(key, f);
-        if (Time.GetTicksMsec() - _lastStepFrameMs < StepBudgetMs) return;
-        for (var i = 0; i < 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        if (Time.GetTicksMsec() - _lastStepFrameMs < SliceMs) return;
+        var tw = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+        await NextFrame();
+        global::Drycastle.MapLoader.Core.LoadTimers.Lap($"frames.wait {key}", tw);
         _lastStepFrameMs = Time.GetTicksMsec();
     }
 
-    const ulong StepBudgetMs = 12;
+    async Task NextFrame() => await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+
+    /// <summary>
+    /// The map load, started when the menu opens: the map is the same whichever server the player picks (the hello carries its build hash),
+    /// so most of it is in before they join. The chunk files and the large JSON files are read on worker threads (MapLoader.Prefetch); this
+    /// puts the results together on the main thread in slices, a frame drawn between them, so the menu keeps its frame rate. BeginGame waits for it.
+    /// </summary>
+    Task? _mapLoad;
+    float _mapFraction;
+    /// <summary>The loading screen that shows the map load's progress while a join waits for it; null in the menu.</summary>
+    LoadingScreen? _mapScreen;
+    bool _focused = true;
+    ulong _maxStepMs;
+    float _maxStepAt;
+
+    /// <summary>Main-thread time the map load takes per frame: little under the menu (it must stay smooth), more under the loading screen, much more when the window is in the background.</summary>
+    ulong SliceMs => !_focused ? UnfocusedSliceMs : _mapScreen != null || _phase.Is(AppPhase.Loading) ? LoadingSliceMs : MenuSliceMs;
+    const ulong MenuSliceMs = 10, LoadingSliceMs = 50, UnfocusedSliceMs = 100;
+
+    Task MapLoad() => _mapLoad ??= LoadMapInSlices();
+
+    /// <summary>The join-time report (DRYCASTLE_LOAD_TIMES=1): every load timer, the longest main-thread step of the map load, the garbage collector's share.</summary>
+    void PrintLoadTimes()
+    {
+        var proc = System.Diagnostics.Process.GetCurrentProcess();
+        GD.Print(global::Drycastle.MapLoader.Core.LoadTimers.Report());
+        GD.Print($"loadtime max_step_ms={_maxStepMs} at={_maxStepAt:F3}");
+        GD.Print($"loadtime gc gen0={GC.CollectionCount(0)} gen1={GC.CollectionCount(1)} gen2={GC.CollectionCount(2)} pause_ms={GC.GetTotalPauseDuration().TotalMilliseconds:F0} heap_mb={GC.GetTotalMemory(false) / 1e6:F0} cpu_s={proc.TotalProcessorTime.TotalSeconds:F1} wall_s={(DateTime.Now - proc.StartTime).TotalSeconds:F1}");
+    }
+
+
+    /// <summary>The data files being parsed on a worker for the map load (null on the direct path, which loads them first).</summary>
+    Task<GameData>? _dataAhead;
+    bool _waitingForData;
+
+    /// <summary>Starts parsing the models <see cref="WarmSteps"/> wants on a worker thread, so they are parsed by the time it runs.</summary>
+    void PrefetchWarmModels()
+    {
+        var files = new List<string>();
+        foreach (var f in WeaponFx.ModelFiles) if (ModelLib.Find(f) is { } p) files.Add(p);
+        if (ModelLib.Find(CharacterView.DefaultModel) is { } body) files.Add(body);
+        foreach (var item in _data!.Items.Items) if (item.Model != "" && ModelLib.Find(item.Model) is { } p) files.Add(p);
+        var packs = new List<string>();
+        foreach (var v in _data.Vehicles.Vehicles)
+            foreach (var m in v.Skins.Prepend(v.Model))
+            {
+                if (m == "") continue;
+                if (m.StartsWith("pack:", StringComparison.Ordinal)) packs.Add(m);
+                else files.Add(Path.GetFullPath(Path.Combine(GamePaths.Assets(), m)));
+            }
+        Drycastle.MapLoader.MapLoader.PrefetchGltf(files);
+        _map.PrefetchAssetModels(packs); // the vehicles of the private packs, through the map's asset manifest
+    }
+
+    async Task LoadMapInSlices()
+    {
+        try
+        {
+            var t0 = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+            _dataAhead ??= Task.Run(LoadData); // the data files are parsed on a worker while the map loads; the map's last part waits for them
+            _map.YieldWhileWaiting = true;
+            var slice = Time.GetTicksMsec();
+            var stepStart = slice;
+            foreach (var f in LoadMapSteps(_cfg))
+            {
+                if (_data == null && _dataAhead.IsCompletedSuccessfully) { _data = _dataAhead.Result; PrefetchWarmModels(); }
+                var now = Time.GetTicksMsec();
+                if (now - stepStart > _maxStepMs) { _maxStepMs = now - stepStart; _maxStepAt = f; }
+                _mapFraction = f;
+                _mapScreen?.Set("loading.map", 0.15f + 0.60f * f);
+                var waiting = _map.Waiting || _waitingForData;
+                if (waiting || now - slice >= SliceMs)
+                {
+                    var tw = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+                    await NextFrame();
+                    global::Drycastle.MapLoader.Core.LoadTimers.Lap(waiting ? "frames.map_waiting" : "frames.map_slice", tw);
+                    slice = Time.GetTicksMsec();
+                }
+                stepStart = Time.GetTicksMsec();
+            }
+            _mapLoaded = true;
+            t0 = global::Drycastle.MapLoader.Core.LoadTimers.Lap("map.total_wall", t0);
+            await WarmInSlices(); // the models and shaders a match loads on first use (T2-18), still behind the menu
+            global::Drycastle.MapLoader.Core.LoadTimers.Lap("warm.total_wall", t0);
+            GD.Print($"SHOOTER_MAP_READY ms={Time.GetTicksMsec()}"); // the menu time after which a join waits only for the connection
+        }
+        catch (Exception e)
+        {
+            GD.PrintErr($"map load failed: {e}");
+            throw;
+        }
+    }
 
     /// <summary>
     /// Parses the held-weapon, character and vehicle models and loads the shaders a match would otherwise load on first use
     /// (T2-18). One step each, so the loading screen keeps drawing between them.
     /// </summary>
-    async Task WarmAssets(LoadingScreen ld)
+    List<Action> WarmSteps()
     {
         var steps = new List<Action>();
         foreach (var f in WeaponFx.ModelFiles) { var file = f; steps.Add(() => ModelLib.Warm(file)); }
@@ -285,15 +387,28 @@ public partial class Shooter : Node3D
             steps.Add(() => CarFx.Warm(def)); // the model and every skin
         }
         steps.Add(GlassFx.Load);
-        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath, Buildings.Destruction.HouseWorldNode.ShaderPath })
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath, Buildings.Destruction.HouseWorldNode.ShaderPath, Buildings.Destruction.HouseWorldNode.TexShaderPath, Drycastle.Shooter.Fences.FenceWorldNode.ShaderPath })
         {
             var path = sh;
             steps.Add(() => GD.Load<Shader>(path));
         }
-        foreach (var warm in steps)
+        return steps;
+    }
+
+    /// <summary>The warm-up steps of <see cref="WarmSteps"/> in slices, as the map load does (it runs them after the map, still under the menu).</summary>
+    async Task WarmInSlices()
+    {
+        var steps = WarmSteps();
+        var slice = Time.GetTicksMsec();
+        for (var i = 0; i < steps.Count; i++)
         {
-            warm();
-            await Step(ld, "loading.world", 0.75f);
+            steps[i]();
+            _mapScreen?.Set("loading.world", 0.75f + 0.1f * (i + 1) / steps.Count);
+            if (Time.GetTicksMsec() - slice < SliceMs) continue;
+            var tw = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+            await NextFrame();
+            global::Drycastle.MapLoader.Core.LoadTimers.Lap("frames.warm", tw);
+            slice = Time.GetTicksMsec();
         }
     }
 
@@ -306,19 +421,16 @@ public partial class Shooter : Node3D
         JoinResult result;
         try
         {
-            await Step(ld, "loading.data", 0.05f);
-            _data ??= LoadData();
-            await Step(ld, "loading.map", 0.15f);
-            if (!_mapLoaded)
-            {
-                // One step per chunk, a frame drawn between steps: the spinner and the bar keep moving through the load.
-                foreach (var f in LoadMapSteps(_cfg)) await Step(ld, "loading.map", 0.15f + 0.60f * f);
-                _mapLoaded = true;
-            }
-            await WarmAssets(ld);
-            await Step(ld, "loading.world", 0.75f);
+            // the map has been loading since the menu opened (MapLoad); the bar shows how far it is
+            ld.Set("loading.map", 0.15f + 0.60f * _mapFraction);
+            _mapScreen = ld;
+            // a frame under the loading screen only moves the spinner: without vsync it does not wait for the display (half the join was frames)
+            DisplayServer.WindowSetVsyncMode(DisplayServer.VSyncMode.Disabled);
+            try { await MapLoad(); }
+            finally { _mapScreen = null; }
             if (!_worldLit) { AddLightAndSky(); _worldLit = true; }
             await Step(ld, "loading.connect", 0.85f);
+            var tConn = global::Drycastle.MapLoader.Core.LoadTimers.Start();
             var done = new TaskCompletionSource<JoinResult>();
             ld.AllowCancel(() => done.TrySetResult(JoinResult.Cancelled));
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
@@ -342,12 +454,16 @@ public partial class Shooter : Node3D
             client.Loadouts.OpenEditor = () => _shell.Push(NewLoadouts()); // made in the client's _Ready
             client.Loadouts.LevelUpReceived += lu => _shell.Toast(Strings.F("progress.levelup", lu.Level));
             result = await done.Task;
+            global::Drycastle.MapLoader.Core.LoadTimers.Lap("connect.to_welcome", tConn);
+            if (global::Drycastle.MapLoader.Core.LoadTimers.Enabled) PrintLoadTimes();
         }
         catch (Exception e)
         {
             result = JoinResult.Failed(e.Message);
             GD.PrintErr($"start failed: {e}");
         }
+        
+        DisplayServer.WindowSetVsyncMode(GameSettings.Current.VSync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled); // the player's setting again
         if (!_phase.Is(AppPhase.Loading)) return; // the connection dropped while we waited: LeaveMatch already put the menu back
         if (result.Outcome != JoinOutcome.Welcomed)
         {
@@ -391,7 +507,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("cartel.json"), Read("rival_crew.json"), Read("duffels.json"));
+        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("cartel.json"), Read("rival_crew.json"), Read("duffels.json"), Read("fence_destruction.json"));
         // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
         if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
         var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
@@ -400,6 +516,9 @@ public partial class Shooter : Node3D
     }
 
     void LoadMap(Config cfg) { foreach (var _ in LoadMapSteps(cfg)) { } }
+
+    /// <summary>Worker threads that read the map ahead (half the cores, 2 to 8): the rest keep the menu and the main thread going.</summary>
+    static int PrefetchThreads => Math.Clamp(System.Environment.ProcessorCount / 2, 2, 8);
 
     /// <summary>Loads the map, yielding the fraction done after each chunk so the loading screen can draw a frame between steps.</summary>
     IEnumerable<float> LoadMapSteps(Config cfg)
@@ -413,10 +532,25 @@ public partial class Shooter : Node3D
             _map.TreeFilter = (x, y) => MechanicGarageSite.Covers(x, -y, 0.5f);
             _map.SpawnFilter = (x, z) => MechanicGarageSite.Covers(x, z, 1.5f);
         }
+        _map.Prefetch(Path.GetFullPath(dir), PrefetchThreads); // the chunk files and the large JSON files are read on worker threads
+        var waterFile = Path.Combine(dir, "water.json");
+        var water = File.Exists(waterFile) ? Task.Run(() => Drycastle.ShooterCore.Waters.Water.Parse(File.ReadAllText(waterFile))) : null;
+        var drawn = !_map.CollisionOnly && DisplayServer.GetName() != "headless";
+        var waterParts = water != null && drawn ? water.ContinueWith(t => WaterSurfaces.Prepare(t.Result), TaskContinuationOptions.OnlyOnRanToCompletion) : null; // meshes and depth textures on a worker
         foreach (var f in _map.LoadSteps(Path.GetFullPath(dir))) yield return f * 0.95f;
-        _water = string.IsNullOrEmpty(_map.WaterJson) ? Drycastle.ShooterCore.Waters.Water.Empty : Drycastle.ShooterCore.Waters.Water.Parse(_map.WaterJson);
+        if (_dataAhead != null) // the async load: the rest needs the data files
+        {
+            while (!_dataAhead.IsCompleted) { _waitingForData = true; yield return 0.95f; }
+            _waitingForData = false;
+            if (_data == null) { _data = _dataAhead.GetAwaiter().GetResult(); PrefetchWarmModels(); }
+        }
+        var tPost = global::Drycastle.MapLoader.Core.LoadTimers.Start();
+        if (water != null && !water.IsCompleted) ((IAsyncResult)water).AsyncWaitHandle.WaitOne();
+        _water = water?.GetAwaiter().GetResult() ?? Drycastle.ShooterCore.Waters.Water.Empty;
         WaterSurfaces.ReduceMotion = () => GameSettings.Current.ReduceMotion;
-        WaterSurfaces.Attach(this, _water); // client-side meshes; null on a dry map or headless
+        if (waterParts != null && !waterParts.IsCompleted) ((IAsyncResult)waterParts).AsyncWaitHandle.WaitOne();
+        WaterSurfaces.Attach(this, _water, waterParts is { IsCompletedSuccessfully: true } ? waterParts.Result : null); // client-side meshes; null on a dry map or headless
+        tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.water", tPost);
         IntelScreen.OpenEntrance(_map); // the hangar's small door, so the intel room can be entered (client and server alike)
         if (ChurchProps.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } churchProps) AddChild(churchProps); // pews, altar: Synty models, boxes on the server too
         if (!_map.CollisionOnly && ChurchDecor.Create(Path.GetFullPath(dir)) is { } churchDecor) AddChild(churchDecor); // the cross and the interior lights (client only)
@@ -428,7 +562,10 @@ public partial class Shooter : Node3D
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
         if (HouseDoorsNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } houseDoors) AddChild(houseDoors); // the hollow houses' doors (interiors.json): shut until a player opens them, solid on the server too
         if (TrapHousesNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } trapHouses) AddChild(trapHouses); // the Trap houses' props (#496): none until the server dresses a house; boxes on the server too
+        tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.props_doors", tPost);
         if (!_map.CollisionOnly && Buildings.Destruction.HouseWorldNode.Create(_map, _data?.HouseDestruction ?? Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default) is { } houseWorld) AddChild(houseWorld); // destructible hollow houses (house_voxels.bin), client side
+        tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.house_world", tPost);
+        if (!_map.CollisionOnly && Drycastle.Shooter.Fences.FenceWorldNode.Create(_map, _data?.FenceDestruction ?? Drycastle.ShooterCore.Fences.FenceDestructionConfig.Default) is { } fenceWorld) AddChild(fenceWorld); // destructible thin fences (fences.json), client side: colliders always, pieces and falling bodies when drawn
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
@@ -436,6 +573,7 @@ public partial class Shooter : Node3D
             if (bunkers.Rooms.Count > 0) AddChild(new BunkerLights { Shelters = bunkers });
             if (IntelScreen.Create(bunkers, _map) is { } intel) AddChild(intel); // the base's wall screen, on the hangar floor (or in the command post of the fallback bunker)
         }
+        tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.garage_bunkers_intel", tPost);
         var s = _map.Stats;
         // Lamps are solid, so the server gets the same pole colliders as the client (map 0.5.0+; none on older maps).
         // The lamps of placed utility poles shine like the street lamps; their pole is the placed object, already solid (client only).
@@ -455,6 +593,7 @@ public partial class Shooter : Node3D
         if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
         if (!_map.CollisionOnly) Drycastle.Shooter.Cartel.ContactView.AddTo(this, _map); // the cartel's Contact on his marker (none on a map without one)
         if (!_map.CollisionOnly) AddChild(new RozhlasFeedPlayer { Speakers = _map.MegaphoneSpeakers() }); // the live feed (a hijacker's voice) from the same poles
+        global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.lamps_signs_rozhlas", tPost);
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
     }
 
@@ -494,7 +633,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var config = new ServerConfig
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, FenceDestruction = _data.FenceDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation, Cartel = _data.Cartel,

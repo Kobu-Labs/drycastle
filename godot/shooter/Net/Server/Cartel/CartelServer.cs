@@ -10,7 +10,7 @@ using Drycastle.ShooterServer.Persistence;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// The Cartel on the server (docs/cartel.md, ADR 0045, #494): the Contact's requests, the Jobs and what they pay. A player asks at the Contact (<see cref="EventKind.CartelRequest"/>:
+/// The Cartel on the server (docs/cartel.md, ADR 0046, #494): the Contact's requests, the Jobs and what they pay. A player asks at the Contact (<see cref="EventKind.CartelRequest"/>:
 /// join, quit, start a Job); the rules are ShooterCore's (<see cref="CartelRules"/>, <see cref="JobBook"/>); a refusal is a chat line and, for a request from the panel, the
 /// refusal event (<see cref="EventKind.CartelRefused"/>) the panel shows. Membership, Respect and the standing are <see cref="CartelMembers"/>'; who is told what about the running
 /// Jobs is <see cref="JobFeed"/>'s (<see cref="EventKind.CartelJob"/>, <see cref="EventKind.CartelObjective"/>), sent here. Who runs a Job is <see cref="IJobParties"/>'s (ffa: solo;

@@ -10,7 +10,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// The Trap house heist (#496; GLOSSARY "Heist", "Trap house"; docs/cartel.md "Trap house", ADR 0046), the second Heist on the template (<see cref="HeistServer"/>): a random hollow house with road
+/// The Trap house heist (#496; GLOSSARY "Heist", "Trap house"; docs/cartel.md "Trap house", ADR 0047), the second Heist on the template (<see cref="HeistServer"/>): a random hollow house with road
 /// access (<see cref="TrapHouseServer.Pick"/>, held in the book as <see cref="TrapHouseHeistRules.Key"/>) is dressed once the run began, a Rival crew holds it from the dressing's posts, product and cash Duffels
 /// lie on its tables and its safe is armed for the party (<see cref="DrillServer.Arm"/>; the open safe's cash Duffels load like the rest). The objective's area is the house and the road spot where the
 /// van parks; the Assaults come to it. Its end strips the house, disarms the safe and removes the defenders (the template removes the van, the Duffels and the Assaults). Numbers in cartel.json

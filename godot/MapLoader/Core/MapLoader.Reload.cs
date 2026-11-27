@@ -34,14 +34,15 @@ public sealed partial class MapLoader
             ?? throw new InvalidDataException($"glTF has no Node3D root: {glbPath}");
 
         // out with the old: the loaded building nodes of this chunk and what the loader remembers of them
-        foreach (var old in Descendants(chunk).OfType<MeshInstance3D>().Where(m => IsBuildingNode(m.Name.ToString())).ToList())
+        // a chunk's collision nodes are plain Node3D (their triangles were read with the glTF), the visuals and panes MeshInstance3D
+        foreach (var old in Descendants(chunk).OfType<Node3D>().Where(m => IsBuildingNode(m.Name.ToString())).ToList())
         {
             if (!GodotObject.IsInstanceValid(old)) continue;
             var name = old.Name.ToString();
             if (name.EndsWith("_visual"))
             {
                 var id = name["parcel_".Length..^"_visual".Length];
-                if (old.Mesh != null) Stats.Triangles -= TriangleCount(old.Mesh);
+                if (old is MeshInstance3D { Mesh: { } oldMesh }) Stats.Triangles -= TriangleCount(oldMesh);
                 _visuals.Remove(id);
                 if (_parcels.TryGetValue(id, out var info)) info.HasModel = false;
             }

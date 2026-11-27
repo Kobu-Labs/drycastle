@@ -11,7 +11,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server.Houses;
 
 /// <summary>
-/// The one keeper of the Trap houses (#496, ADR 0046, docs/cartel.md "Trap house") on the server: which hollow houses stand dressed, with what. <see cref="Dress"/> plans a house's props
+/// The one keeper of the Trap houses (#496, ADR 0047, docs/cartel.md "Trap house") on the server: which hollow houses stand dressed, with what. <see cref="Dress"/> plans a house's props
 /// (<see cref="TrapHousePlanner"/>, trap_house.json), puts them in the world (<see cref="TrapHousesNode"/>: the solid ones are boxes on the World layer) and tells everyone
 /// (<see cref="EventKind.TrapHouseDressed"/>); <see cref="Strip"/> takes them away (<see cref="EventKind.TrapHouseStripped"/>). A joiner is told every dressed house. A new round
 /// strips them all (the Jobs that held them failed with it). The Trap house Job asks <see cref="Pick"/> for its house, dresses it (<see cref="Apply"/>) once its run began and strips it

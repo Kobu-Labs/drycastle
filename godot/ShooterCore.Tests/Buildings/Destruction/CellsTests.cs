@@ -97,7 +97,7 @@ public class CellsTests(ITestOutputHelper output)
 
     static DestructionConfig WithWallResist(string resist) => DestructionConfig.Parse(
         """{"version":1,"materials":{"foundation":{"resist":0},"floor":{"resist":1.2},"wall":{"resist":""" + resist +
-        """},"partition":{"resist":0.6},"ceiling":{"resist":0.9},"roof":{"resist":0.5}}}""");
+        """},"partition":{"resist":0.6},"ceiling":{"resist":0.9},"roof":{"resist":0.5},"brick":{"resist":2.6},"stone":{"resist":3.2},"concrete":{"resist":2.0}}}""");
 
     [Fact]
     public void Removed_runs_round_trip_and_hash_follows_the_state()

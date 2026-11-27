@@ -72,6 +72,7 @@ public sealed partial class CharacterView
         carrier.AddChild(holder);
         _skeleton.AddChild(carrier);
         _wornNodes[i] = carrier;
+        KeepShadowOnly(carrier);
     }
 
     /// <summary>A new body (<see cref="Build"/>) has none of the old body's nodes: draws every worn Item on it.</summary>

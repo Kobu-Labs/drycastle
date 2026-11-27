@@ -11,7 +11,10 @@
     "wall":       { "resist": 1.0, "weight": 4, "strength": 1500 },
     "partition":  { "resist": 0.6, "weight": 2, "strength": 800 },
     "ceiling":    { "resist": 0.9, "weight": 2, "strength": 2500 },
-    "roof":       { "resist": 0.5, "weight": 1, "strength": 400 }
+    "roof":       { "resist": 0.5, "weight": 1, "strength": 400 },
+    "brick":      { "resist": 2.6, "weight": 4, "strength": 1500 },
+    "stone":      { "resist": 3.2, "weight": 5, "strength": 2000 },
+    "concrete":   { "resist": 2.0, "weight": 4, "strength": 1500 }
   },
   "support": { "max_passes": 4, "span_cells": 0 },
   "fracture": { "cells_per_piece": 24, "impact_bias": 0.6, "dust_below_cells": 4 },

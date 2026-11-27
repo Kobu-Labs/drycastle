@@ -4,7 +4,7 @@ using Drycastle.ShooterCore.Data;
 namespace Drycastle.ShooterCore.Cartel;
 
 /// <summary>
-/// cartel.json (docs/cartel.md, ADR 0045): the Cartel ranks and the Respect each needs, the job tiers (the rank that unlocks each and the Respect it pays), and one section per
+/// cartel.json (docs/cartel.md, ADR 0046): the Cartel ranks and the Respect each needs, the job tiers (the rank that unlocks each and the Respect it pays), and one section per
 /// kind of Job under <c>jobs</c>, read by that kind (<see cref="DataFile.Section{T}"/>). The defaults here are the shipped values, so a data directory without the file still plays.
 /// Parsed and checked once; a bad field throws with the file and the field named. Nothing in it was played: first guesses.
 /// </summary>

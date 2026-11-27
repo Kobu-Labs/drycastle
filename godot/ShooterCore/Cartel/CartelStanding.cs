@@ -2,7 +2,7 @@ using Drycastle.ShooterCore.Fsm;
 
 namespace Drycastle.ShooterCore.Cartel;
 
-/// <summary>Where a player stands with the Cartel (machine <c>Cartel.Membership</c>). Stored on the Profile as its byte (ADR 0045): do not renumber.</summary>
+/// <summary>Where a player stands with the Cartel (machine <c>Cartel.Membership</c>). Stored on the Profile as its byte (ADR 0046): do not renumber.</summary>
 public enum CartelMembership : byte
 {
     Outsider = 0,

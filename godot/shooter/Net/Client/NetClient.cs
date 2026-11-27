@@ -153,6 +153,7 @@ public partial class NetClient : Node
     readonly MoabClient _moab;
     readonly DoorsClient _doors;
     readonly HousesClient _houses;
+    readonly FencesClient _fences;
     readonly UavClient _uav;
     readonly IntelClient _intel;
     BlipsClient _blips = null!;
@@ -214,6 +215,7 @@ public partial class NetClient : Node
     readonly EnemyChestPoints _markers;
     readonly WaterClient _water;
     RiderCamera _rider = null!;
+    OwnFigure _ownFigure = null!;
     CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
@@ -271,6 +273,7 @@ public partial class NetClient : Node
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _houses = new HousesClient(Ctx);
+        _fences = new FencesClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
         _poop = new PoopClient(Ctx);
@@ -285,7 +288,7 @@ public partial class NetClient : Node
     {
         if (Token.Length == 0) Token = Guid.NewGuid().ToString();
         if (KeepEventLogs) Ctx.Logs = _logs;
-        Items = new ItemsClient(Ctx, ItemData, () => _rider.SelfView);
+        Items = new ItemsClient(Ctx, ItemData, OwnFigures);
         _blips = new BlipsClient(Ctx, BlipConfig);
         _mass = new MassClient(Ctx, HolyMassData, _prediction.Drop);
         Ctx.View.MassSeated = () => _mass.Seated;
@@ -317,7 +320,12 @@ public partial class NetClient : Node
         _seats = new SeatsClient(Ctx);
         _rider = new RiderCamera(Ctx, _flight, DressSelf);
         _guns = new VehicleGunsClient(Ctx, _hulls, _rider, _water);
-        Camo = new CamoClient(Ctx, CamoData, (owner, look) => _corpses.DressCamo(owner, look));
+        Camo = new CamoClient(Ctx, CamoData, (owner, look) =>
+        {
+            _corpses.DressCamo(owner, look);
+            if (owner == Ctx.MyId) foreach (var self in OwnFigures()) self.SetCamo(look, CamoData);
+        });
+        _ownFigure = new OwnFigure(Ctx, DressSelf);
         Ctx.Remotes.Dressing += Camo.Dress;
         Ctx.Remotes.Dressing += Items.DressPlayer;
         _hunts = new HuntsClient(Ctx, Sandbox, ItemData, CompanionData, AnimalData, AnimalShapes);
@@ -401,6 +409,7 @@ public partial class NetClient : Node
         Ctx.Cars.Clear(); _flight.Clear(); _driveClient.Clear(); // the probes are under Owned and go with them
         _glass.Teardown();
         _houses.Teardown();
+        _fences.Teardown();
         if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.QueueFree();
         Ctx.Me = null;
         FreeOwned();
@@ -419,6 +428,13 @@ public partial class NetClient : Node
 
     /// <summary>Dresses the own figure seated in a vehicle: the camouflage, and the headgear (#266).</summary>
     void DressSelf(CharacterView view) { Camo.Dress(view, Ctx.MyId); Items.DressPlayer(view, Ctx.MyId); }
+
+    /// <summary>The own figures that exist: on foot (shadow only) and seated in a vehicle.</summary>
+    IEnumerable<CharacterView> OwnFigures()
+    {
+        if (_ownFigure?.View is { } foot && IsInstanceValid(foot)) yield return foot;
+        if (_rider?.SelfView is { } seated) yield return seated;
+    }
 
     /// <summary>
     /// The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it). A Duffel in
@@ -571,6 +587,8 @@ public partial class NetClient : Node
     {
         _water.Render();
         _held.ShowViewmodel();
+        // the own body's shadow on foot (#319); seated, the rider's own figure is the body
+        _ownFigure.Update(Ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && !Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle && _rider.SelfView == null, _held.ShownId);
         _thrower.UpdateArc();
         _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
@@ -671,6 +689,7 @@ public partial class NetClient : Node
         _thieves.OnEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         _houses.OnEvent(kind, payload); // house destruction: carve ops, catch-up cells, rubble and reset
+        _fences.OnEvent(kind, payload); // fence destruction: the pieces that broke, a joiner's catch-up, the round reset
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         _demon.OnEvent(kind, payload); // the demon: fireballs, the curse

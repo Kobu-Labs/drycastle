@@ -1,6 +1,6 @@
 {
   "version": 1,
-  // Trap house dressing (#496, ADR 0046, docs/cartel.md "Trap house"): the Rival crew's props a hollow house gets for a Trap house Job, placed by room type from its floor plan
+  // Trap house dressing (#496, ADR 0047, docs/cartel.md "Trap house"): the Rival crew's props a hollow house gets for a Trap house Job, placed by room type from its floor plan
   // (interiors.json) and a seed, and taken away when the Job ends (TrapHousePlanner, TrapHouseServer). Axes: metres; a prop's size is [across its front, up, front to back].
 
   // Which hollow houses a Job may dress (TrapHouseChoice): one whose front door is within road_max_m of a road at least min_road_width_m wide (the Cartel van parks there).
@@ -12,7 +12,7 @@
   // between two tags on a wall, and clear of a prop that reaches up to it.
   "clearance": { "door_clear_m": 1.2, "wall_gap_m": 0.08, "prop_gap_m": 0.45, "centre_wall_gap_m": 0.9, "step_m": 0.25, "tag_door_gap_m": 0.3, "tag_apart_m": 1.0 },
 
-  // Posted defenders' spots (they stand, turn and shoot, never walk; ADR 0046 §3): up to per_room in every room of min_room_m2 or more (not the skip_types), wall_gap_m off the walls,
+  // Posted defenders' spots (they stand, turn and shoot, never walk; ADR 0047 §3): up to per_room in every room of min_room_m2 or more (not the skip_types), wall_gap_m off the walls,
   // prop_gap_m off the props, apart_m from each other, and out of the doorways (door_clear_m). The spot farthest from the room's way in comes first; each faces the way in.
   // Listed round-robin over the rooms (the first of every room, then the second ...): the first N spread over the house.
   "posts": { "per_room": 2, "min_room_m2": 5, "wall_gap_m": 0.5, "prop_gap_m": 0.5, "apart_m": 1.6, "skip_types": ["bathroom"] },

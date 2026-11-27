@@ -64,7 +64,8 @@ internal sealed class ServerContext
     public void ChatTo(ServerClient c, ChatLineKind kind, string text) => SendEvent(c, EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, "", text)));
 
     /// <summary>A chat line to everyone.</summary>
-    public void ChatToAll(ChatLineKind kind, string sender, string text) => Broadcast(EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(kind, sender, text)));
+    /// <summary>A player's chat line to everyone. Only players' messages are broadcast: a command's result goes to the one who ran it (<see cref="ChatTo"/>), never to all.</summary>
+    public void ChatToAll(string sender, string text) => Broadcast(EventKind.ChatLine, ChatEvents.EncodeLine(new ChatLine(ChatLineKind.Player, sender, text)));
 
     /// <summary>The name of a joined player, or "?".</summary>
     public string NameOf(ushort id) => Players.TryGetValue(id, out var c) ? c.Name : "?";

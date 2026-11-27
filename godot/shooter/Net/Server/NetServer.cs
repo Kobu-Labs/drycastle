@@ -12,6 +12,7 @@ using Drycastle.Shooter.Net.Server.Combat;
 using Drycastle.Shooter.Net.Server.Crates;
 using Drycastle.Shooter.Net.Server.Diagnostics;
 using Drycastle.Shooter.Net.Server.Fauna;
+using Drycastle.Shooter.Net.Server.Fences;
 using Drycastle.Shooter.Net.Server.Gear;
 using Drycastle.Shooter.Net.Server.Highs;
 using Drycastle.Shooter.Net.Server.Harvest;
@@ -108,7 +109,7 @@ public partial class NetServer : Node
     DuffelServer _duffels = null!;
     DrillServer _drills = null!;
     // the village and its animals
-    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
+    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; FenceDestructionServer _fences = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
@@ -216,7 +217,9 @@ public partial class NetServer : Node
         _rewind = new PoseRewind(_ctx, _fleet, _targets, _sitters, _pounce, Config.NoLagComp);
         _glass = new GlassServer(_ctx, _fleet, _rewind, Config.Map, Config.GlassData);
         _houseDestruction = new HouseDestructionServer(_ctx, Config.HouseDestruction, Config.ArenaMode, Config.MapDir, Config.Map, () => _shot.Query);
-        _blasts = new WorldBlasts(_glass, _houseDestruction); // every blast's panes and houses
+        _fences = new FenceDestructionServer(_ctx, Config.FenceDestruction, Config.ArenaMode, Config.MapDir, Config.Map);
+        _scenery.Fences = _fences; // every round's path
+        _blasts = new WorldBlasts(_glass, _houseDestruction, _fences); // every blast's panes, houses and thin fences
         _houseDestruction.Changed = house => { _glass.HouseChanged(house); _houses.HouseChanged(house); }; // a pane whose frame a carve took shatters, a door is blown out
         _houseDestruction.Restored = _houses.RehangAll;
         _shot = new ShotWorld(_ctx, _fleet, _rewind, _sitters, _pounce, _targets, _glass, Config.World, _diag.Perf.Ticks != null);
@@ -322,6 +325,7 @@ public partial class NetServer : Node
             _drills.RoundStart, // and no Drill on a safe
             _trapHouses.RoundStart, // no Job outlives the round: every Trap house stripped
             _rivals.RoundReset, // the test Gunmen went with the world's entities
+            _fences.RoundStart, // every thin fence whole again
             rounds.Started);
         var life = new LifeEvents(_ctx, _smoke, _progress, _bots, Config.Items, _gear, _status, _rozhlas, _streaks, _deathPush, _remains, _seats, Config.WeaponsSmoke, Config.RpgSmoke, _harvester.OnKill, _diag.Loss.Kill, _diag.Loss.Death);
         _matchEvents = new MatchEventsServer(_ctx, _smoke, _scoreboard, roundReset, life, rounds.Ended, _diag.Loss.RoundStart, _dummies.OnKilled);
@@ -344,7 +348,7 @@ public partial class NetServer : Node
     void BuildVehicles()
     {
         _tow = new TowServer(_ctx, _fleet, _carBlast, _runOver, _bigfoot.StepThrownVehicle, Config.KillY);
-        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Config.Vehicles, Config.Water, Config.KillY, Config.BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver, _houseDestruction.Ram);
+        _loop = new VehicleLoop(_ctx, _fleet, _seats, _carDamage, _carBlast, _tow, _runOver, _glass, _smoke, Config.Vehicles, Config.Water, Config.KillY, Config.BlastSmoke, () => _thieves.ShoveCarsByVans(), _bigfoot.StepThrownVehicle, _harvester.IsDriver, car => _houseDestruction.Ram(car) ?? _fences.Drive(car)); // houses first (a wall it hit), then the thin fences it drives into
         _guns = new VehicleGuns(_ctx, _rewind, _shot, _glass, _scenery, _flak, _targets, _impacts, _damage.Deal, _carDamage, Config.Vehicles, _rng);
         _dealer = new CarDealer(_fleet, Config.Vehicles, Config.World, Config.Map, Config.Water, Config.Spawns, _rng, _garage, Config.BlastSmoke, Config.CarSmoke, Config.SmokeKind);
         _jobVehicles = new JobVehicles(_fleet, () => Config.Vehicles, Config.World, _seats.Leave); // a Job's own vehicles (the Cartel van, #495)
@@ -426,6 +430,7 @@ public partial class NetServer : Node
             _houses.SendOnJoin, // and the houses' open doors
             _houseDestruction.SendOnJoin, // the house destruction settings and every carved house's removed cells
             _trapHouses.SendOnJoin, // every dressed Trap house's props
+            _fences.SendOnJoin, // the broken pieces of the thin fences
             _harvester.SendOnJoin, // the harvester's job and the bales that burn
             _scud.SendOnJoin, // the Scud trucks' racks and proposals
             _demon.SendOnJoin, // and the demon's pounce, when one is on
@@ -609,6 +614,7 @@ public partial class NetServer : Node
         _gunships.FlushFx(); // the gunship rounds of this tick, coalesced (#159)
         _glass.Flush();     // the glass panes that changed this tick (ADR 0007)
         _houseDestruction.Flush(); // the server colliders of the houses carved this tick, each once
+        _fences.Flush(); // the thin fence pieces that broke this tick go out, and the server colliders follow, each once
         _scenery.Tick(dt); // the pole lamps and road sign plates: clocks of the broken ones and the changes of this tick (ADR 0037, 0039)
         _status.Flush(); // statuses and burning that changed this tick
         _scoreboard.Flush(); // once a tick at most, and about once a second (the ping), however many kills the tick had (A-04)
@@ -683,6 +689,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses, _rivals, _duffels, _drills);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _fences, _cartel, _trapHouses, _rivals, _duffels, _drills);
     }
 }

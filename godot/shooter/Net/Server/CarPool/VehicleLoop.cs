@@ -48,7 +48,7 @@ internal sealed class VehicleLoop
     /// <param name="shoveByVans">The Raid vans push through: a vehicle in a van's box is shoved out (once per tick, before the pairs bump).</param>
     /// <param name="stepThrown">A vehicle thrown by the Bigfoot flies its arc: the server places it, and its riders with it.</param>
     /// <param name="steersItself">The harvester's own driver sends no inputs: the server steers it, one step a tick.</param>
-    /// <param name="ram">A vehicle that hit something this tick, into a hollow house (HouseDestructionServer.Ram): the speed it lost to the house when it went through, else null.</param>
+    /// <param name="ram">Every ground vehicle each tick: into a hollow house's wall it hit (HouseDestructionServer.Ram), into the thin fences it drives into (FenceDestructionServer.Drive); the speed it lost to what it went through, else null.</param>
     public VehicleLoop(ServerContext ctx, Fleet fleet, CarSeats seats, CarDamage damage, CarBlast blast, TowServer tow, RunOverServer runOver, GlassServer glass, SmokeStats smoke, VehiclesFile vehicles,
         Water water, float killY, bool blastSmoke, Action shoveByVans, Action<ServerCar, float> stepThrown, Func<ServerClient, bool> steersItself, Func<ServerCar, float?> ram)
     {
@@ -90,8 +90,8 @@ internal sealed class VehicleLoop
         var here = car.GlobalPosition; // read once: a native read each time, every car every tick
         car.TickEndPos = here;
         if (here.Y < _killY) { foreach (var o in _fleet.Occupants(car)) _seats.Leave(o, false); car.Reset(false); return; }
-        // a hollow house's wall it hit hard enough breaks: through it, the crash is only what the hole took (driven or not, any vehicle)
-        if (car.LastImpact > 0 && _ram(car) is { } lost) car.LastImpact = lost;
+        // a hollow house's wall it hit hard enough breaks (any vehicle), a thin fence it drives into breaks (ground vehicles, moving or stopped by it): through, the crash is only what it took
+        if ((car.LastImpact > 0 || !car.Flies) && _ram(car) is { } lost) car.LastImpact = lost;
         // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
         if (driver != null || car.Flies) _damage.Crash(car, car.LastImpact, 0);
         if (car.Life.DetonationDue(_ctx.Now)) { _blast.Detonate(car); return; }

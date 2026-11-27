@@ -4415,6 +4415,25 @@
       "pack": "drycastle-generated-textures"
     },
     {
+      "id": "plain",
+      "name": "Plain",
+      "file": "drycastle-generated-textures/plain.png",
+      "size_px": [
+        4,
+        4
+      ],
+      "tile_m": [
+        1.0,
+        0.0
+      ],
+      "alpha": false,
+      "tintable": true,
+      "mean_colour": "#ffffff",
+      "licence": "CC0",
+      "source": "scripts/art/make_textures.py",
+      "pack": "drycastle-generated-textures"
+    },
+    {
       "id": "dirt",
       "name": "Dirt",
       "file": "drycastle-generated-textures/dirt.png",

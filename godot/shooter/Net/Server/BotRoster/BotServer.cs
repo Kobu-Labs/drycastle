@@ -243,7 +243,7 @@ internal sealed class BotServer : IBotWorld
             _nav.BuildAfterNotice();
             _ctx.ChatTo(c, ChatLineKind.Info, _nav.Mesh is { } mesh ? $"Bot navigation ready in {mesh.BuildSeconds:F1} s." : "Bot navigation failed: the bots will stand where they spawn. See the server log.");
         }
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} set the bots to {n}.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} set the bots to {n}.");
         GD.Print($"server: bots set to {n} by {c.Name} #{c.Id}");
     }
 }

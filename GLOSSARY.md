@@ -100,6 +100,22 @@ _Avoid_: light (alone), bulb
 A Slovak road sign (dopravná značka) placed by hand as an object (category `sign`): Stop, Daj prednosť v jazde (give way), Hlavná cesta (main road); a galvanised pole with a metal plate. Decoration only: no traffic or AI effect. The pole is solid (a thin box, like a utility pole's column); the plate is not solid but shootable: a round that passes within `hit_radius_m` (environment.json `sign_plate`) of its centre (the asset's `plates` point) bends it for every player, it hangs tilted for `respawn_seconds` (120) and is whole again, and a new round straightens them all. The server owns the state (`BreakableSigns`, machine `Sign.Plate`). Visual only. ADR 0039.
 _Avoid_: traffic sign, sign (alone: the welcome sign and the church paintings are not Road signs)
 
+**Fence section**:
+One straight stretch of a fence between two points, an entry of `fences.json` (a parcel's or property group's boundary cut into stretches of at most 4 m). Its index in that file is its id everywhere: the wire, the broken mask, the pieces' texture coordinate, and the grid id of a Fence wall (`fence_00042`). It is a Thin fence or a Fence wall by its type. docs/fence-destruction.md.
+_Avoid_: fence panel, fence segment
+
+**Thin fence**:
+A Fence section of type picket or wire, or with no type (a plain board fence). It breaks by Pieces: a round takes every piece it flies through, a blast every piece near it, a vehicle driven into it the pieces in its way. A broken piece falls over on every client (it lies, then fades or stays as the house rubble mode says); the posts never break. In the village thin fences are not solid (players, rounds and vehicles pass them); where the map makes them solid, a broken piece stops blocking. A new round makes it whole. The server owns the hit points (`FenceState`).
+_Avoid_: light fence, soft fence
+
+**Piece**:
+One strip of a Thin fence along its length, with its own hit points (fence_destruction.json `kinds`): a picket is one board (0.125 m), wire 0.5 m, a plain fence 0.25 m; at most 64 a Fence section.
+_Avoid_: board (except for a picket), segment, chunk
+
+**Fence wall**:
+A Fence section of brick, stone or concrete. It is a voxel grid of house destruction (house_voxels.bin, materials brick, stone, concrete): blasts and rams carve it like a Hollow house's walls, parts with nothing under them fall as debris, and rounds do nothing to it. A new round makes it whole.
+_Avoid_: masonry fence, wall (alone: a house's wall)
+
 **Respawn**:
 The player's own action (pause menu, or "Apply now" in the Loadouts screen, both with a confirm): the player dies at once and comes back after the normal respawn delay with the active loadout, or the one named. It is a suicide like a fall: a death, the killfeed names only the victim ("Respawn"), a Corpse, the Streak counter resets. No cooldown and no combat lockout (a victim can deny the kill; accepted). Refused while dead, outside a running round, or held by the demon or the Bigfoot.
 _Avoid_: redeploy (the wire name only), suicide
@@ -592,7 +608,7 @@ One of the two sides (A and B) of a team deathmatch round. A joining player goes
 _Avoid_: clan, faction
 
 **Squad**:
-A small opt-in group inside one Team in team deathmatch (#379, #288): up to 4 human players, with a name and a leader. Nobody is put in one: from the Pause menu's Squads screen (or `/squad create [name]`, `join <name|number>`, `leave`, `list`) a player creates a squad with a typed name (trimmed, up to 16 characters; empty: "<player>'s squad") or joins one of their own team's squads (a full one refuses). A player is in one squad at a time: creating or joining leaves the old one, and a squad with no member disappears. Bots are never in a squad. A squad is only a tag: friend logic (`AreFriends`), scoring and team colours do not look at it. A team change (an admin's move, the round-start balance), a mode change and leaving the match take a player out of their squad. The creator leads the squad; when the leader leaves it (any of these ways out), the member who has been in it longest takes over and the squad is told (#494, ADR 0045 §5). Only the leader starts a Job. The leader is named on the Squads screen ("(leader)"), on the scoreboard ("[squad, leader]") and in `/squad list`. Squad mates are blue discs with their names on the minimap and tactical map (the other teammates stay green), their through-wall name tags gain the squad's name, and the scoreboard groups a team's rows by squad.
+A small opt-in group inside one Team in team deathmatch (#379, #288): up to 4 human players, with a name and a leader. Nobody is put in one: from the Pause menu's Squads screen (or `/squad create [name]`, `join <name|number>`, `leave`, `list`) a player creates a squad with a typed name (trimmed, up to 16 characters; empty: "<player>'s squad") or joins one of their own team's squads (a full one refuses). A player is in one squad at a time: creating or joining leaves the old one, and a squad with no member disappears. Bots are never in a squad. A squad is only a tag: friend logic (`AreFriends`), scoring and team colours do not look at it. A team change (an admin's move, the round-start balance), a mode change and leaving the match take a player out of their squad. The creator leads the squad; when the leader leaves it (any of these ways out), the member who has been in it longest takes over and the squad is told (#494, ADR 0046 §5). Only the leader starts a Job. The leader is named on the Squads screen ("(leader)"), on the scoreboard ("[squad, leader]") and in `/squad list`. Squad mates are blue discs with their names on the minimap and tactical map (the other teammates stay green), their through-wall name tags gain the squad's name, and the scoreboard groups a team's rows by squad.
 _Avoid_: party, group, clan, fireteam
 
 **Friend / enemy colours**:

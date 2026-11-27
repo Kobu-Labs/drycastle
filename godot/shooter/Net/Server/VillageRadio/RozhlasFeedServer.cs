@@ -168,7 +168,7 @@ internal sealed class RozhlasFeedServer : IDisposable
         if (owns) feed.Start();
         if (feed.State != RozhlasFeedState.Live) { _ctx.ChatTo(c, ChatLineKind.Error, "The live feed is not running (ffmpeg missing? see the server log)."); if (owns) feed.Stop(); return; }
         _feedTest = new FeedTest { Who = c.Name, OwnsFeed = owns };
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas feed test.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} started the rozhlas feed test.");
     }
 
     void FeedTestTick()
@@ -195,7 +195,7 @@ internal sealed class RozhlasFeedServer : IDisposable
         var ready = CombatTest.Cues.Count(q => _combatBank.Get(RozhlasCombat.SoundId(q.Kind, q.Weapon)) != null);
         if (ready < CombatTest.Cues.Length) _ctx.ChatTo(c, ChatLineKind.Info, $"Only {ready} of {CombatTest.Cues.Length} test sounds are decoded yet ({_combatBank.Loaded} ready, {_combatBank.Failed} failed, {_combatBank.Pending} loading; see the server log).");
         _combatTest = new CombatTest { OwnsFeed = owns };
-        _ctx.ChatToAll(ChatLineKind.System, "", $"{c.Name} started the rozhlas combat sound test.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"{c.Name} started the rozhlas combat sound test.");
     }
 
     /// <summary>Every tick: a running combat test is fed.</summary>
