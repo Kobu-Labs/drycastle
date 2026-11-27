@@ -1,0 +1,147 @@
+{
+  "_comment": "Facts + choices for scripts/vehicles/standardize_vehicle.py: POLYGON Gang Warfare SM_Veh_Van_01 -> vehicles.json `cartel_van` (the Cartel van of a Heist, docs/cartel.md, #495). Positions in the SOURCE frame (faces +Z; measured, docs/research/vehicle-models-facts.md). A panel van: a cab with one bench across (cushion top y 0.94, z 0.555..1.064, backrest to z 0.25), a bulkhead behind it at z 0.271, the cargo bay from there to the rear doors (floor y 0.73, roof lining 1.87). Seats: driver behind the wheel (x 0.431, the pack's left: left-hand drive), passenger mirrored; feet = cushion top 0.94 - 0.23 like the car, at the middle of the seat (z 0.66), eye 1.0 above the feet (1.71, 0.16 under the roof lining 1.87, in the side-window band 1.33..1.80). Glass: the body glass mesh (windscreen + two front side windows) and the two rear door windows (meshes of their own under the doors). The rear doors and the roof rack join the hull. Lamps from the emission texture (Vehicle_01_Emission.png) under the body's UVs: headlights x +-0.673..1.012, y 0.740..0.997 on the front at z 2.531; tail lamps x +-0.839..1.010, y 0.732..1.014 at z -2.305. One atlas (Vehicle_01, a white van); its emission is dropped (the lens plates are the lamps).",
+  "id": "cartel_van",
+  "vehicle": "cartel_van",
+  "source": "synty/glb/gang-warfare/SM_Veh_Van_01.glb",
+  "out_dir": "synty/glb/vehicles-std",
+  "pack": "synty-vehicles",
+  "name": "Cartel van (standardized SM_Veh_Van_01)",
+  "facing": "+z",
+  "origin": {
+    "centre": "bounds"
+  },
+  "body": "SM_Veh_Van_01",
+  "parts": [
+    "SM_Veh_Van_Door_l",
+    "SM_Veh_Van_Door_r",
+    "SM_Veh_Van_RoofRack"
+  ],
+  "two_sided_shell": false,
+  "glass": {
+    "node": [
+      "SM_Veh_Van_Glass",
+      "SM_Veh_Van_Door_l_Glass",
+      "SM_Veh_Van_Door_r_Glass"
+    ],
+    "inside": [
+      0,
+      1.5,
+      0.8
+    ]
+  },
+  "steering": {
+    "node": "SM_Veh_Van_SteeringW",
+    "axis": "z",
+    "rim_from_radius": 0.17
+  },
+  "wheels": [
+    {
+      "name": "fl",
+      "node": "SM_Veh_Van_Wheel_fl",
+      "steer": true
+    },
+    {
+      "name": "fr",
+      "node": "SM_Veh_Van_Wheel_fr",
+      "steer": true
+    },
+    {
+      "name": "rl",
+      "node": "SM_Veh_Van_Wheel_rl",
+      "steer": false
+    },
+    {
+      "name": "rr",
+      "node": "SM_Veh_Van_Wheel_rr",
+      "steer": false
+    }
+  ],
+  "seats": [
+    {
+      "name": "seat_driver",
+      "role": "driver",
+      "feet": [
+        0.431,
+        0.71,
+        0.66
+      ],
+      "eye_height": 1
+    },
+    {
+      "name": "seat_passenger_1",
+      "role": "passenger",
+      "feet": [
+        -0.431,
+        0.71,
+        0.66
+      ],
+      "eye_height": 1
+    }
+  ],
+  "lamps": [
+    {
+      "name": "light_head_l",
+      "kind": "head",
+      "pos": [
+        0.843,
+        0.869,
+        2.531
+      ],
+      "lens": [
+        0.3,
+        0.22
+      ],
+      "face": "+z"
+    },
+    {
+      "name": "light_head_r",
+      "kind": "head",
+      "pos": [
+        -0.843,
+        0.869,
+        2.531
+      ],
+      "lens": [
+        0.3,
+        0.22
+      ],
+      "face": "+z"
+    },
+    {
+      "name": "light_tail_l",
+      "kind": "tail",
+      "pos": [
+        0.925,
+        0.873,
+        -2.305
+      ],
+      "lens": [
+        0.15,
+        0.26
+      ],
+      "face": "-z"
+    },
+    {
+      "name": "light_tail_r",
+      "kind": "tail",
+      "pos": [
+        -0.925,
+        0.873,
+        -2.305
+      ],
+      "lens": [
+        0.15,
+        0.26
+      ],
+      "face": "-z"
+    }
+  ],
+  "atlas_material": "Vehicle_01_mat",
+  "atlas_dir": "synty/glb/gang-warfare/tex",
+  "skins": [
+    {
+      "id": "white",
+      "atlas": "Vehicle_01"
+    }
+  ]
+}

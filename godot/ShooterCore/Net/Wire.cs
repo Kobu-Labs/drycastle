@@ -438,6 +438,7 @@ public static class Wire
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
     //   vNEXT (Cartel profile + Job core): events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec)
     //   vNEXT (Squad leader): the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494)
+    //   vNEXT (Cartel van vehicle): vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine)
     public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

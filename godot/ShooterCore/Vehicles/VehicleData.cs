@@ -60,6 +60,7 @@ public class VehiclesFile : IVersioned
             ValidateSize(f, v);
             ValidateDoorGun(v);
             ValidateMotion(v);
+            if (v.CargoVolume?.Problem(v) is { } cargo) throw new DataFileException($"vehicles.json: {v.Id}: cargo_volume: {cargo}");
         }
         if (f.DamageStages.Count != 3 || f.DamageStages.Any(x => x <= 0 || x >= 1) || f.DamageStages[0] <= f.DamageStages[1] || f.DamageStages[1] <= f.DamageStages[2])
             throw new DataFileException("vehicles.json: damage_stages are three descending fractions between 0 and 1");
@@ -509,6 +510,8 @@ public class VehicleDef
     /// <see cref="DriveModel"/> and never by <see cref="CarModel"/>. Null for every other type. A land type's block has no water numbers in use (see <see cref="VehicleDriveDef.Validate"/>).
     /// </summary>
     public VehicleDriveDef? Drive { get; set; }
+    /// <summary>The bay that takes loads (vehicles.json "cargo_volume", the Cartel van's: <see cref="Vehicles.CargoVolume.Contains"/>). Null: none.</summary>
+    public VehicleCargoVolumeDef? CargoVolume { get; set; }
     /// <summary>True (default): a destroyed vehicle of this type comes back after <see cref="VehiclesFile.DestroyedReturnTime"/>. False (the Scud truck): it is gone for the match, and a new round retires it instead of resetting it.</summary>
     public bool Returns { get; set; } = true;
     /// <summary>A missile launcher (vehicles.json "launcher", the Scud truck): which seat is the operator's and where the rocket leaves. Null: none. See <see cref="ScudLauncher"/>.</summary>

@@ -54,6 +54,7 @@ internal sealed class CarBlast
         _smoke.VehicleBlasts++;
         if (loadedCart) CartDetonated(car, car.GlobalPosition.ToNumerics(), attacker); // it does not blow up like a vehicle: the Scud's blast is the hook's
         else Explode(car, at, attacker, weapon, carVelocity);
+        car.RaiseExploded(attacker); // after the blast: a Job that listens (a Heist's Cartel van) sees the riders already hurt and out
     }
 
     /// <summary>
