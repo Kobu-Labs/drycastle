@@ -155,7 +155,7 @@ public partial class Player : CharacterBody3D
     /// <summary>The hands hold something that is not the weapon (raised binoculars): fire and aim are not read.</summary>
     public bool HandsBusy { get; set; }
 
-    /// <summary>A load that changes how the body moves (a carried Duffel: no sprint, slower), applied to every input of the shared step: set by the server from what the player carries, by the client from what it is told.</summary>
+    /// <summary>A load that changes how the body moves (a carried Duffel: no sprint, slower), applied to every input of the shared step: set by the server from what the player carries, by the client from what it predicts it carries (each replayed input with the burden it was predicted with).</summary>
     public MoveBurden Burden { get; set; } = MoveBurden.None;
 
     /// <summary>Iron-sight aim-in (#237): the camera eases to <see cref="IronSightFovScale"/> of the normal FOV. Scopes (<see cref="ZoomFov"/>) take precedence.</summary>
