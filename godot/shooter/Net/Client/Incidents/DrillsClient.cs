@@ -4,9 +4,11 @@ using Drycastle.Shooter.Audio;
 using Drycastle.Shooter.Buildings;
 using Drycastle.Shooter.HeadsUp.Prompts;
 using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client.Gear;
 using Drycastle.Shooter.Weapons;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Hud;
+using Drycastle.ShooterCore.Menu;
 using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.Shooter.Net.Client.Incidents;
@@ -15,8 +17,10 @@ namespace Drycastle.Shooter.Net.Client.Incidents;
 /// The Drills on the Trap houses' safes on the client (#496, GLOSSARY "Drill"; trap_house.json <c>drill</c>). The server tells a player near a safe its Drill
 /// (<see cref="EventKind.DrillState"/>, <see cref="EventKind.DrillCleared"/>); this draws the drill on the safe prop (<see cref="TrapHousesNode.SafeOf"/>: the Synty model, or a box
 /// without the pack) while it runs or is jammed, plays its running loop, sparks and clunks when it jams, and swings the safe's door open when it is through. A party player near it gets
-/// the Drill panel on the HUD (the progress, extrapolated between the server's messages). Only the server knows the party and what else wins the key, so the prompt and the hold ring
-/// follow its <see cref="EventKind.DrillReach"/>; the hold is counted here as the server counts it, for the ring only.
+/// the Drill panel on the HUD (the progress, extrapolated between the server's messages; the open safe's for <see cref="DonePanelSeconds"/>, then the cash is the line's). Only the server
+/// knows the party and what else wins the key, so the prompt and the hold ring follow its <see cref="EventKind.DrillReach"/>; the hold is counted here as the server counts it, for the
+/// ring only. While it says the drill is in reach (and until a completed hold's key is let go), a corpse and a ground item give up the key (<see cref="InteractTargets.DrillInReach"/>),
+/// as they do on the server.
 /// </summary>
 public sealed class DrillsClient
 {
@@ -30,12 +34,29 @@ public sealed class DrillsClient
         public double NextSpark;
     }
 
+    /// <summary>How long the panel of an open safe stays up: it says the cash is out, then the tracker line and the Duffels' prompts carry on.</summary>
+    const double DonePanelSeconds = 4;
+
     readonly ClientContext _ctx;
     readonly Dictionary<string, View> _views = new();
     (DrillHold Hold, string House) _reach = (DrillHold.None, "");
     InteractHold _hold;
+    /// <summary>The interact key's name, worked out again only when its binding changes (not every frame).</summary>
+    Binding? _keyBinding;
+    string _keyName = "";
 
-    public DrillsClient(ClientContext ctx) => _ctx = ctx;
+    internal DrillsClient(ClientContext ctx, InteractTargets targets)
+    {
+        _ctx = ctx;
+        targets.DrillInReach = () => InReach || _hold.Sent; // a set drill keeps the key until it is let go: the body under the player does not take it mid-hold
+    }
+
+    string KeyName()
+    {
+        var b = GameSettings.Current.Keys.Get("interact");
+        if (b != _keyBinding) { _keyBinding = b; _keyName = InputBindings.Name(b); }
+        return _keyName;
+    }
 
     static TrapDrillData? Data => TrapHousesNode.Current?.Data.Drill;
 
@@ -96,12 +117,12 @@ public sealed class DrillsClient
             {
                 Attach(house, v, data);
                 Show(v, data, (float)dt);
-                if (!v.Msg.Party || _ctx.Dead || _ctx.Me is not { } me || v.Safe is not { } safe) continue;
+                if (!v.Msg.Party || _ctx.Dead || _ctx.Me is not { } me || v.Safe is not { } safe || (v.Msg.State == DrillState.Done && Now - v.At > DonePanelSeconds)) continue;
                 var dist = me.GlobalPosition.DistanceTo(safe.GlobalPosition);
                 if (dist > data.NearM || dist >= best) continue;
                 best = dist;
                 var progress = Progress(v);
-                panel = new DrillHudInfo(v.Msg.State, Math.Clamp(progress / v.Msg.RunSeconds, 0, 1), MathF.Max(0, v.Msg.RunSeconds - progress), InputBindings.Name("interact"));
+                panel = new DrillHudInfo(v.Msg.State, Math.Clamp(progress / v.Msg.RunSeconds, 0, 1), MathF.Max(0, v.Msg.RunSeconds - progress), KeyName());
             }
         _ctx.Hud?.SetDrill(panel);
     }
@@ -158,7 +179,7 @@ public sealed class DrillsClient
 
     /// <summary>The set or fix prompt while the key is not held; the ring carries the hold.</summary>
     public string? Prompt() => InReach && _hold.Held <= 0
-        ? Strings.F(_reach.Hold == DrillHold.Fix ? "hud.drill.fix" : "hud.drill.set", InputBindings.Name("interact")) : null;
+        ? Strings.F(_reach.Hold == DrillHold.Fix ? "hud.drill.fix" : "hud.drill.set", KeyName()) : null;
 
     /// <summary>The input tick: follows the hold of the interact key at the safe. Nothing is sent: the server sees the same key in the inputs.</summary>
     public void TickHold(bool use, double dt)

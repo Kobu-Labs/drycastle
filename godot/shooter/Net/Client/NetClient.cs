@@ -331,7 +331,7 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
         _duffels = new DuffelsClient(Ctx, Duffels, _interact);
-        _drills = new DrillsClient(Ctx); // the Drills on the Trap houses' safes (#496)
+        _drills = new DrillsClient(Ctx, _interact); // the Drills on the Trap houses' safes (#496)
         _cartel = new CartelClient(Ctx, Cartel, () => Chat.Context.IsAdmin, () => _screens.OpenContactPanel());
         _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction, () => _drills.HoldFraction);
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
