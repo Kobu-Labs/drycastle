@@ -11,7 +11,7 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
 /// The Trap house heist (#496; GLOSSARY "Heist", "Trap house"; docs/cartel.md "Trap house", ADR 0046), the second Heist on the template (<see cref="HeistServer"/>): a random hollow house with road
-/// access (<see cref="TrapHouseServer.PickAndDress"/>, held in the book as <see cref="TrapHouseHeistRules.Key"/>) is dressed, a Rival crew holds it from the dressing's posts, product and cash Duffels
+/// access (<see cref="TrapHouseServer.Pick"/>, held in the book as <see cref="TrapHouseHeistRules.Key"/>) is dressed once the run began, a Rival crew holds it from the dressing's posts, product and cash Duffels
 /// lie on its tables and its safe is armed for the party (<see cref="DrillServer.Arm"/>; the open safe's cash Duffels load like the rest). The objective's area is the house and the road spot where the
 /// van parks; the Assaults come to it. Its end strips the house, disarms the safe and removes the defenders (the template removes the van, the Duffels and the Assaults). Numbers in cartel.json
 /// <c>jobs.trap_house</c>; <c>/cartel job trap_house [tier]</c> to test.
@@ -44,13 +44,14 @@ internal sealed class TrapHouseJobKind : IJobKind
         if (_s.Map().Contact is not { } contact) { refusal = "This map has no Cartel."; return null; }
         if (_houses.Data is not { } houseData) { refusal = "This map has no hollow house to take."; return null; }
         var min = HeistRules.MinDuffels(_data, job.Tier, _s.Parties.MembersOf(job.Owner).Count); // before the van's capacity: never fewer than the Heist's
-        var inUse = _houses.Dressed.Keys.Where(h => book.IsReserved(TrapHouseHeistRules.Key(h))).ToList();
-        if (_houses.PickAndDress(inUse, min) is not { } picked) { refusal = $"No trap house is free now (road access, nobody inside, {min} duffel spots or more)."; return null; }
+        // planned only: the props go up once the run began, so a start the drop point or the van refuses shows nobody anything
+        if (_houses.Pick(min) is not { } picked) { refusal = $"No trap house is free now (road access, nobody inside, {min} duffel spots or more)."; return null; }
         var (candidate, dressing) = picked;
-        if (!book.Reserve(job, TrapHouseHeistRules.Key(dressing.House))) { _houses.Strip(dressing.House); refusal = "That house is another job's."; return null; }
+        if (!book.Reserve(job, TrapHouseHeistRules.Key(dressing.House))) { refusal = "That house is another job's."; return null; }
         var c = TrapHouseHeistRules.Centre(candidate.House);
         var goal = new Goal(this, dressing, c, candidate.RoadGround, new NVec3(c.X, _s.Ground(c.X, c.Y), c.Y));
-        if (_s.Begin(job, book, _data, goal, contact, out refusal) is not { } run) { _houses.Strip(dressing.House); return null; }
+        if (_s.Begin(job, book, _data, goal, contact, out refusal) is not { } run) return null;
+        _houses.Apply(dressing);
         goal.Hold(run, houseData);
         return run;
     }
@@ -84,7 +85,6 @@ internal sealed class TrapHouseJobKind : IJobKind
             var placed = 0;
             foreach (var spot in dressing.Duffels.Take(tables))
                 if (DuffelRules.Parse(spot.Kind) is { } k && kind._s.Duffels.Book.Place(k, party, spot.Pos, spot.Yaw) != null) placed++;
-            run.Filled = placed;
             var (gunmen, enforcers) = TrapHouseHeistRules.Defenders(kind._data, tier, party.Count, dressing.Posts.Count);
             _crew = kind._rivals.NewCrew(centre, p => party.Contains(p));
             var posted = 0;
@@ -99,7 +99,6 @@ internal sealed class TrapHouseJobKind : IJobKind
         void OnSafeOpen(Drill drill, IReadOnlyList<Duffel> paid)
         {
             if (drill != _drill || _run == null) return;
-            _run.Filled += paid.Count;
             _run.Tell($"The safe is open: {paid.Count} cash duffel{(paid.Count == 1 ? "" : "s")} by it. Throw them in the van too.");
         }
 
