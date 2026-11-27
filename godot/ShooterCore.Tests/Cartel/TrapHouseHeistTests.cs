@@ -75,13 +75,13 @@ public class TrapHouseHeistTests
         Assert.False(TrapHouseHeistRules.MarkSafe(heist, DrillState.Running));
         heist.Step(new HeistFacts(false, true, false, 0), Dt);
         Assert.Equal(HeistPhase.AtObjective, heist.Phase);
-        Assert.Contains("set the drill", TrapHouseHeistRules.Line(heist, "x", DrillState.Armed));
+        Assert.Contains("hold {interact} to set the drill", TrapHouseHeistRules.Line(heist, "x", DrillState.Armed)); // the client names the bound key
         Assert.Contains("fix it", TrapHouseHeistRules.Line(heist, "x", DrillState.Jammed));
         Assert.Equal("x", TrapHouseHeistRules.Line(heist, "x", DrillState.Done));
         Assert.Equal("x", TrapHouseHeistRules.Line(heist, "x", null));
         Assert.True(TrapHouseHeistRules.MarkSafe(heist, DrillState.Running));
         Assert.True(TrapHouseHeistRules.MarkSafe(heist, DrillState.Jammed));
-        Assert.False(TrapHouseHeistRules.MarkSafe(heist, DrillState.Armed));
+        Assert.True(TrapHouseHeistRules.MarkSafe(heist, DrillState.Armed)); // to be set: the way to the safe, not the van
         Assert.False(TrapHouseHeistRules.MarkSafe(heist, DrillState.Done));
     }
 

@@ -1,6 +1,5 @@
 using System.Buffers.Binary;
 using System.Numerics;
-using System.Text;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Plantation;
 
@@ -133,11 +132,17 @@ public static class DrillRules
         MathF.Abs(feet.Y - stand.Y) <= d.ReachUpM && Vector2.Distance(new Vector2(feet.X, feet.Z), new Vector2(stand.X, stand.Z)) <= d.ReachM;
 
     /// <summary>
-    /// What a player's hold at a drill does: only a party player, alive and on foot, in reach of the stand spot, with nothing else in reach of the key (a crate, a Duffel, a door,
-    /// a vehicle, ... win the key: <see cref="KeyCompetitor"/>), and only while it waits to be set or fixed.
+    /// What gives up the key to the drill: a corpse and a ground item. A mate shot while fixing a jam falls on the stand spot; if his body won the key, the safe would stay jammed
+    /// until the body went (the client gives the drill the key before them too, <see cref="Hud.InteractArbiter"/>).
+    /// </summary>
+    public const KeyCompetitor YieldToDrill = KeyCompetitor.Corpse | KeyCompetitor.GroundItem;
+
+    /// <summary>
+    /// What a player's hold at a drill does: only a party player, alive and on foot, in reach of the stand spot, with nothing else in reach of the key that wins it (a crate, a Duffel,
+    /// a door, a vehicle, ...: <see cref="KeyCompetitor"/>; not the <see cref="YieldToDrill"/> ones), and only while it waits to be set or fixed.
     /// </summary>
     public static DrillHold HoldOf(Drill drill, ushort player, bool aliveOnFoot, bool inReach, KeyCompetitor others) =>
-        aliveOnFoot && inReach && others == KeyCompetitor.None && drill.Party.Contains(player) ? drill.Hold : DrillHold.None;
+        aliveOnFoot && inReach && (others & ~YieldToDrill) == KeyCompetitor.None && drill.Party.Contains(player) ? drill.Hold : DrillHold.None;
 
     /// <summary>Where the opened safe's cash Duffels lie: in a row across its front, between its face and the stand spot, <c>duffel_spread_m</c> apart (Godot axes, the floor).</summary>
     public static Vector3[] CashSpots(TrapDrillData d, SafeSpot safe, float safeDepth, int count)
@@ -155,35 +160,18 @@ public static class DrillRules
 public readonly record struct DrillMsg(string House, DrillState State, bool Party, float Progress, float RunSeconds);
 
 /// <summary>
-/// The Drill events (all little endian; a house id is u8 length + UTF-8): <see cref="Net.EventKind.DrillState"/> (house, u8 state, u8 flags (1: the receiver is of the party), f32 progress
+/// The Drill events (all little endian; a house id is <see cref="HouseIdWire"/>: u8 length + UTF-8): <see cref="Net.EventKind.DrillState"/> (house, u8 state, u8 flags (1: the receiver is of the party), f32 progress
 /// seconds, f32 run seconds), <see cref="Net.EventKind.DrillCleared"/> (house) and <see cref="Net.EventKind.DrillReach"/> (u8 <see cref="DrillHold"/>, house; an empty house with None).
 /// </summary>
 public static class DrillCodec
 {
     const byte PartyFlag = 1;
 
-    static byte[] Id(string house)
-    {
-        var id = Encoding.UTF8.GetBytes(house);
-        if (id.Length > 255) throw new ArgumentException($"house id '{house}' is longer than 255 bytes");
-        return id;
-    }
-
-    static int WriteId(byte[] o, int at, byte[] id) { o[at] = (byte)id.Length; id.CopyTo(o, at + 1); return at + 1 + id.Length; }
-
-    static string? ReadId(byte[] p, int at, out int end)
-    {
-        end = at;
-        if (p.Length < at + 1 || p.Length < at + 1 + p[at]) return null;
-        end = at + 1 + p[at];
-        return Encoding.UTF8.GetString(p, at + 1, p[at]);
-    }
-
     public static byte[] EncodeState(DrillMsg m)
     {
-        var id = Id(m.House);
+        var id = HouseIdWire.Bytes(m.House);
         var o = new byte[1 + id.Length + 10];
-        var at = WriteId(o, 0, id);
+        var at = HouseIdWire.Write(o, 0, id);
         o[at] = (byte)m.State; o[at + 1] = m.Party ? PartyFlag : (byte)0;
         BinaryPrimitives.WriteSingleLittleEndian(o.AsSpan(at + 2), m.Progress);
         BinaryPrimitives.WriteSingleLittleEndian(o.AsSpan(at + 6), m.RunSeconds);
@@ -192,32 +180,26 @@ public static class DrillCodec
 
     public static DrillMsg? DecodeState(byte[] p)
     {
-        if (ReadId(p, 0, out var at) is not { } house || p.Length != at + 10 || p[at] > (byte)DrillState.Done) return null;
+        if (HouseIdWire.Read(p, 0, out var at) is not { } house || p.Length != at + 10 || p[at] > (byte)DrillState.Done) return null;
         return new DrillMsg(house, (DrillState)p[at], (p[at + 1] & PartyFlag) != 0, BinaryPrimitives.ReadSingleLittleEndian(p.AsSpan(at + 2)), BinaryPrimitives.ReadSingleLittleEndian(p.AsSpan(at + 6)));
     }
 
-    public static byte[] EncodeCleared(string house)
-    {
-        var id = Id(house);
-        var o = new byte[1 + id.Length];
-        WriteId(o, 0, id);
-        return o;
-    }
+    public static byte[] EncodeCleared(string house) => HouseIdWire.Encode(house);
 
-    public static string? DecodeCleared(byte[] p) => ReadId(p, 0, out var end) is { } house && end == p.Length ? house : null;
+    public static string? DecodeCleared(byte[] p) => HouseIdWire.Decode(p);
 
     public static byte[] EncodeReach(DrillHold hold, string house)
     {
-        var id = Id(hold == DrillHold.None ? "" : house);
+        var id = HouseIdWire.Bytes(hold == DrillHold.None ? "" : house);
         var o = new byte[2 + id.Length];
         o[0] = (byte)hold;
-        WriteId(o, 1, id);
+        HouseIdWire.Write(o, 1, id);
         return o;
     }
 
     public static (DrillHold Hold, string House)? DecodeReach(byte[] p)
     {
-        if (p.Length < 1 || p[0] > (byte)DrillHold.Fix || ReadId(p, 1, out var end) is not { } house || end != p.Length) return null;
+        if (p.Length < 1 || p[0] > (byte)DrillHold.Fix || HouseIdWire.Read(p, 1, out var end) is not { } house || end != p.Length) return null;
         return ((DrillHold)p[0], house);
     }
 }

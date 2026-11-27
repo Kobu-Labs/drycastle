@@ -77,19 +77,19 @@ public static class TrapHouseHeistRules
         return Vector2.DistanceSquared(p, centre) <= a2 || Vector2.DistanceSquared(p, road) <= a2;
     }
 
-    /// <summary>The marker points at the safe instead of the van: loading at the house while the Drill runs or is jammed.</summary>
+    /// <summary>The marker points at the safe instead of the van: loading at the house while the Drill waits to be set, runs or is jammed (the line names the safe then; the house has many rooms).</summary>
     public static bool MarkSafe(Heist heist, DrillState? drill) =>
-        heist.Phase == HeistPhase.AtObjective && heist.VanInArea && drill is DrillState.Running or DrillState.Jammed;
+        heist.Phase == HeistPhase.AtObjective && heist.VanInArea && drill is DrillState.Armed or DrillState.Running or DrillState.Jammed;
 
-    /// <summary>The tracker line: the template's, with the safe's Drill after it while the party is at the house and the safe is not open yet.</summary>
+    /// <summary>The tracker line: the template's, with the safe's Drill after it while the party is at the house and the safe is not open yet. {interact} is the key's name (the client puts it in).</summary>
     public static string Line(Heist heist, string line, DrillState? drill)
     {
         if (heist.Phase != HeistPhase.AtObjective || !heist.VanInArea) return line;
         return drill switch
         {
-            DrillState.Armed => line + "; the safe: hold E to set the drill",
+            DrillState.Armed => line + "; the safe: hold {interact} to set the drill",
             DrillState.Running => line + "; the drill is on the safe",
-            DrillState.Jammed => line + "; the drill jammed: hold E at the safe to fix it",
+            DrillState.Jammed => line + "; the drill jammed: hold {interact} at the safe to fix it",
             _ => line,
         };
     }
