@@ -20,10 +20,17 @@ public sealed partial class WeaponViewmodel : Node3D
         {
             n = Factory(weaponId);
             if (n == null) return;
+            NoShadow(n); // the own figure's weapon casts the gun's shadow, at the body (#319)
             _models[weaponId] = n;
             AddChild(n);
         }
         n.Visible = true;
+    }
+
+    static void NoShadow(Node n)
+    {
+        if (n is GeometryInstance3D g) g.CastShadow = GeometryInstance3D.ShadowCastingSetting.Off;
+        foreach (var c in n.GetChildren()) NoShadow(c);
     }
 
     public Node3D? Current => _models.GetValueOrDefault(_current);

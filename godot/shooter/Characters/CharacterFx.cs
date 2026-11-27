@@ -48,6 +48,21 @@ public sealed partial class CharacterView : Node3D
     bool _lastFiring, _lastDead;
     float _lastSpeed;
     public bool HasModel { get; private set; }
+
+    bool _shadowOnly;
+    /// <summary>
+    /// The camera does not draw this figure, it only casts its shadow (the local player's own body, on foot or in the cockpit view). Kept for whatever is put on it
+    /// later (another body, worn Items, the camouflage's tufts, the weapon in the hand). One way: a figure that is to be seen again is made anew.
+    /// </summary>
+    public bool ShadowOnly { get => _shadowOnly; set { _shadowOnly = value; KeepShadowOnly(this); } }
+
+    /// <summary>Under <see cref="ShadowOnly"/>, every mesh under <paramref name="n"/> that casts a shadow keeps only that.</summary>
+    void KeepShadowOnly(Node? n)
+    {
+        if (!_shadowOnly || n == null) return;
+        if (n is GeometryInstance3D g && g.CastShadow != GeometryInstance3D.ShadowCastingSetting.Off) g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
+        foreach (var c in n.GetChildren()) KeepShadowOnly(c);
+    }
     public string CurrentAnim => _playing;
 
     public static CharacterView Make()
@@ -101,6 +116,7 @@ public sealed partial class CharacterView : Node3D
         _playing = "";
         ApplyPose();
         Apply(_lastSpeed, _lastFiring, _lastDead, _lastWeapon);
+        KeepShadowOnly(this);
         return true;
     }
 
@@ -336,5 +352,6 @@ public sealed partial class CharacterView : Node3D
         // the weapon is built in metres and the rig is scaled by Scale
         _held.Scale = Vector3.One / Scale;
         WeaponParent()!.AddChild(_held);
+        KeepShadowOnly(_held);
     }
 }

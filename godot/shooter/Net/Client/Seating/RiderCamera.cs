@@ -191,16 +191,9 @@ internal sealed class RiderCamera
             SelfView.SetStance(Stance.Crouch); // seated: there is no sitting animation, the crouch squash is the closest pose
             anchor.AddChild(SelfView);
             _selfViewerHides = viewerHides;
-            if (viewerHides) ShadowsOnly(SelfView);
+            SelfView.ShadowOnly = viewerHides;
         }
         SelfView.Position = new Vector3(o[0], o[1], o[2]);
-    }
-
-    /// <summary>Every mesh under <paramref name="n"/> that casts a shadow keeps only that: the camera does not draw it.</summary>
-    static void ShadowsOnly(Node n)
-    {
-        if (n is GeometryInstance3D g && g.CastShadow != GeometryInstance3D.ShadowCastingSetting.Off) g.CastShadow = GeometryInstance3D.ShadowCastingSetting.ShadowsOnly;
-        foreach (var c in n.GetChildren()) ShadowsOnly(c);
     }
 
     public void HideSelf()
