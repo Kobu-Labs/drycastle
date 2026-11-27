@@ -82,6 +82,20 @@ public static class Ui
         return s;
     }
 
+    /// <summary>Up and Down in the number field's text step it (Shift: five steps), PageUp and PageDown ten; the value changes as if the arrows of the box were pressed.</summary>
+    public static SpinBox Nudging(SpinBox s)
+    {
+        s.GetLineEdit().GuiInput += e =>
+        {
+            if (e is not InputEventKey { Pressed: true } k) return;
+            var dir = k.Keycode switch { Key.Up => 1, Key.Down => -1, Key.Pageup => 10, Key.Pagedown => -10, _ => 0 };
+            if (dir == 0) return;
+            s.Value = Math.Round(s.Value + dir * s.Step * (k.ShiftPressed ? 5 : 1), 4);
+            s.GetLineEdit().AcceptEvent();
+        };
+        return s;
+    }
+
     /// <summary>A small square of one colour with the theme's border, for lists.</summary>
     public static ImageTexture Swatch(string hex) => Swatch(Color.FromHtml(hex));
 

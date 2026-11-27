@@ -27,7 +27,8 @@ public partial class EditorMode : Node, IEditorHost
     // the parts of the editor that own their state; Update and ActiveChanged run in this order
     internal OrthoLayer Ortho { get; }
     internal FloorPlanLayer FloorPlan { get; }
-    internal SketchTool Sketches { get; }
+    public SketchTool Sketches { get; }
+    public PhotoTool Photo { get; }
     internal YouDot You { get; }
     public ObjectsTool Objects { get; }
     public PolesTool Poles { get; }
@@ -42,6 +43,7 @@ public partial class EditorMode : Node, IEditorHost
         Ortho = new OrthoLayer(this);
         FloorPlan = new FloorPlanLayer(this);
         Sketches = new SketchTool(this);
+        Photo = new PhotoTool(this);
         You = new YouDot(this);
         Objects = new ObjectsTool(this);
         Poles = new PolesTool(this);
@@ -57,7 +59,7 @@ public partial class EditorMode : Node, IEditorHost
         Chrome = new EditorChrome(this);
         Edits = new EditStore(this, () => { Ground.Rows(); Zones.SyncCatalog(); }, doc => Sketches.Replay(doc));
         Commands = new CommandPalette(PaletteAll);
-        _parts = new() { Fence, Ortho, FloorPlan, Sketches, You, Objects, Poles, Shapes, Ground, Zones };
+        _parts = new() { Fence, Ortho, FloorPlan, Sketches, Photo, You, Objects, Poles, Shapes, Ground, Zones };
     }
 
     public Drycastle.MapLoader.MapLoader Map { get; init; } = null!;
@@ -91,6 +93,7 @@ public partial class EditorMode : Node, IEditorHost
         SelectTool(Tool, save: false);
         Shapes.BuildWorld();
         Sketches.BuildWorld();
+        Photo.BuildWorld();
         Sketches.Restore();
         GetTree().AutoAcceptQuit = false; // window close asks first when fence or tree edits are unapplied (_Notification)
         if (Watcher != null)
@@ -103,6 +106,9 @@ public partial class EditorMode : Node, IEditorHost
             Watcher.MapReloading += n => Say($"map re-exported: loading the buildings of {n} chunk{(n == 1 ? "" : "s")}...");
             Watcher.MapReloaded += (n, _, ms) => Say($"map reloaded: buildings of {n} chunk{(n == 1 ? "" : "s")} in {ms:F0} ms");
             Watcher.MapReloadFailed += m => Say("map not reloaded: " + m, true);
+            Watcher.BuildingLaunched += files => Say("rebuilding " + string.Join(", ", files.Take(3)) + "...");
+            Watcher.BuildingApplied += (parcels, ms) => Say(parcels.Count == 0 ? $"building files changed nothing on the map ({ms:F0} ms)" : $"building applied: {string.Join(", ", parcels.Take(3))} in {ms:F0} ms");
+            Watcher.BuildingFailed += m => Say("buildings: " + m, true);
         }
         Edits.Remember();
         Groups.Reload();
@@ -196,6 +202,8 @@ public partial class EditorMode : Node, IEditorHost
     /// <summary>Refresh the panel and the outlines now (normally done on the next frame).</summary>
     public void RefreshNow() { RefreshPanel(); Outlines.Rebuild(); }
 
+    public override void _ExitTree() => Photo.Shutdown();
+
     public override void _Notification(int what)
     {
         if (what != NotificationWMCloseRequest) return;
@@ -241,6 +249,9 @@ public partial class EditorMode : Node, IEditorHost
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Tool == EditorTool.Sketch:
                 Sketches.LeftPress(mb.Position, mb.CtrlPressed);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && !Modal && Tool == EditorTool.Photo && !Chrome.OverUi(mb.Position) && Photo.PickOpening(mb.Position):
+                GetViewport().GuiReleaseFocus();
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } when !_looking && Modal:
                 break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Fence.Gates.Armed:
@@ -264,6 +275,7 @@ public partial class EditorMode : Node, IEditorHost
                 if (Ground.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Zones.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Sketches.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
+                if (Photo.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (Poles.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (HandleUndoKey(k) || Objects.HandleKey(k)) { GetViewport().SetInputAsHandled(); break; }
                 if (!k.CtrlPressed && !k.AltPressed && HandleToolKey(k.Keycode)) { GetViewport().SetInputAsHandled(); break; }
@@ -282,6 +294,7 @@ public partial class EditorMode : Node, IEditorHost
                         break;
                     case Key.Escape:
                         if (Chrome.CheatSheetShown) Chrome.CheatSheetShown = false;
+                        else if (Tool == EditorTool.Photo && Photo.Escape()) { }
                         else if (Objects.PlacementAsset != null) Objects.DisarmPlacement();
                         else if (Poles.Plan.Planning) Poles.Plan.Stop();
                         else if (Poles.Connecting) Poles.StopConnecting();
@@ -360,6 +373,7 @@ public partial class EditorMode : Node, IEditorHost
         Ground.RefreshPanel();
         Zones.RefreshPanel();
         Sketches.RefreshPanel();
+        Photo.RefreshPanel();
     }
 
     // ---- hover ----

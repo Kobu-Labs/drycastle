@@ -5,7 +5,7 @@ using System.Linq;
 
 namespace Drycastle.Viewer.Editor;
 
-public enum EditorTool { None, Select, Group, Fence, Ground, Objects, Zones, Poles, View, Sketch }
+public enum EditorTool { None, Select, Group, Fence, Ground, Objects, Zones, Poles, View, Sketch, Photo }
 
 /// <summary>
 /// The editor's chrome, Blender/Photoshop style: a left rail of icon buttons (one per tool), and a sidebar that shows
@@ -29,6 +29,7 @@ public sealed class EditorChrome
         (EditorTool.Poles, "poles", "Poles", Key.Key7),
         (EditorTool.View, "view", "View", Key.Key8),
         (EditorTool.Sketch, "sketch", "Sketch", Key.Key9),
+        (EditorTool.Photo, "photo", "Photo to building", Key.Key0),
     };
 
     readonly EditorMode _ed;
@@ -39,6 +40,10 @@ public sealed class EditorChrome
     VBoxContainer _editHead = null!, _editFoot = null!;
     Button _btnUndo = null!, _btnRedo = null!; // the rail buttons
     Label _undoInfo = null!;                   // top of the Objects page
+    readonly List<Button> _railAll = new();    // every rail button, to shrink them on a window too low for the rail
+    bool _railCompact;
+    /// <summary>The height of a rail button when the window is too low for all of them at the full size (1280x720 with the ten tools).</summary>
+    const int RailButtonCompact = EditorTheme.Space * 5;
     readonly Dictionary<EditorTool, VBoxContainer> _pages = new();
     readonly Dictionary<EditorTool, Button> _railButtons = new();
     double _statusUntil;
@@ -66,6 +71,7 @@ public sealed class EditorChrome
         BuildCheatSheet(root);
         _ed.Confirm.Build(root);
         _ed.Commands.Build(root);
+        _ed.Photo.BuildViewer(root);
     }
 
     // ---- rail ----
@@ -95,6 +101,17 @@ public sealed class EditorChrome
         col.AddChild(_btnRedo);
         col.AddChild(Ui.IconBtn("walk", "Drop to the ground here and walk  (F3)", _ed.WalkFromHere));
         col.AddChild(Ui.IconBtn("help", "Controls  (F1)", ToggleCheatSheet));
+        _railAll.AddRange(col.GetChildren().OfType<Button>());
+    }
+
+    /// <summary>Per frame: the rail's buttons keep their full size while the window is high enough for all of them, else they are 40 px high so none is cut off at 1280x720.</summary>
+    void FitRail()
+    {
+        var need = _railAll.Count * (EditorTheme.RailButton + EditorTheme.Space) + EditorTheme.Space * 4;
+        var compact = _rail.GetViewportRect().Size.Y < need;
+        if (compact == _railCompact) return;
+        _railCompact = compact;
+        foreach (var b in _railAll) b.CustomMinimumSize = new Vector2(EditorTheme.RailButton, compact ? RailButtonCompact : EditorTheme.RailButton);
     }
 
     // ---- HUD ----
@@ -177,6 +194,7 @@ public sealed class EditorChrome
         _ed.Poles.BuildPage(Page(EditorTool.Poles));
         BuildViewPage(Page(EditorTool.View));
         _ed.Sketches.BuildPage(Page(EditorTool.Sketch));
+        _ed.Photo.BuildPage(Page(EditorTool.Photo));
     }
 
     void BuildViewPage(VBoxContainer page)
@@ -220,7 +238,7 @@ public sealed class EditorChrome
     public bool OverUi(Vector2 mouse)
         => _ui.Visible && ((_panel.Visible && _panel.GetGlobalRect().HasPoint(mouse)) || _rail.GetGlobalRect().HasPoint(mouse)
             || _statusBar.GetGlobalRect().HasPoint(mouse) || (_cheat.Visible && _cheat.GetGlobalRect().HasPoint(mouse))
-            || _ed.Confirm.Contains(mouse) || _ed.Commands.Contains(mouse));
+            || _ed.Confirm.Contains(mouse) || _ed.Commands.Contains(mouse) || _ed.Photo.ViewerOpen);
 
     // ---- status bar and hint ----
 
@@ -268,7 +286,7 @@ public sealed class EditorChrome
         _undoInfo.Text = (h.UndoDepth == 0 ? "nothing to undo" : $"undo: {h.NextUndoDescription} ({h.UndoDepth})") + (h.RedoDepth == 0 ? "" : $"; redo: {h.NextRedoDescription} ({h.RedoDepth})");
         var tool = _ed.Tool;
         var placing = _ed.Objects.PlacementAsset != null;
-        _hintLabel.Text = tool == EditorTool.Ground ? _ed.Ground.HintText() : tool == EditorTool.Zones ? _ed.Zones.HintText() : tool == EditorTool.Sketch ? _ed.Sketches.HintText() : tool == EditorTool.Poles && !placing ? _ed.Poles.HintText() : tool == EditorTool.Group && !placing
+        _hintLabel.Text = tool == EditorTool.Ground ? _ed.Ground.HintText() : tool == EditorTool.Zones ? _ed.Zones.HintText() : tool == EditorTool.Sketch ? _ed.Sketches.HintText() : tool == EditorTool.Photo ? _ed.Photo.HintText() : tool == EditorTool.Poles && !placing ? _ed.Poles.HintText() : tool == EditorTool.Group && !placing
             ? "marking parcels: click a parcel to mark or unmark it, Enter groups the marked ones, Esc clears the marks"
             : placing
             ? "placing: LMB place, R / Shift+R rotate, Ctrl free position, Esc or RMB stop, Ctrl+Z undo"
@@ -283,6 +301,7 @@ public sealed class EditorChrome
         var fence = _ed.Fence;
         var shapes = _ed.Shapes;
         var tool = _ed.Tool;
+        FitRail();
         _unsavedLabel.Text = fence.PendingCount == 0 ? "" : $"* {fence.PendingCount} unsaved (Enter applies)";
         var c = _ed.FlyCam.GlobalPosition;
         _hudLabel.Text = $"EDITOR  |  {(tool == EditorTool.None ? "no tool" : tool.ToString())}  |  {_ed.Selection.Count} selected  |  {_ed.Camera.Speed:F0} m/s  |  x {c.X:F0}  y {-c.Z:F0}  z {c.Y:F0}" + (shapes.SelectedShapeId != null && shapes.ShapeTool ? $"  |  {(tool == EditorTool.Zones ? "zone" : "patch")} {shapes.SelectedShape(shapes.CurrentKind)?.Label}{(shapes.SelectedShape(shapes.CurrentKind) is PatchInfo sp ? "  " + sp.Type : "")}" : "") + (tool == EditorTool.Zones && _ed.Zones.Marks.Count > 0 ? $"  |  {_ed.Zones.Marks.Count} marked for deletion" : "") + (fence.PendingCount > 0 || shapes.ShapeDraftPending ? $"  |  * {(fence.PendingCount > 0 ? $"{fence.PendingCount} UNSAVED" : "UNSAVED")}" : "");
@@ -296,7 +315,7 @@ public sealed class EditorChrome
         "Fly\tWASD, Space up, Shift down, Alt x3, hold RMB to look, wheel changes speed\n" +
         "Select\tLMB select, Shift+LMB add or remove, Esc clear\n" +
         "Walk\tF2 walk from where you were, F3 drop to the ground below the camera and walk\n" +
-        "Tools\t1 Select, 2 Group, 3 Fence, 4 Ground, 5 Objects, 6 Zones, 7 Poles, 8 View, 9 Sketch (press again to hide)\n" +
+        "Tools\t1 Select, 2 Group, 3 Fence, 4 Ground, 5 Objects, 6 Zones, 7 Poles, 8 View, 9 Sketch, 0 Photo to building (press again to hide)\n" +
         "Group\tG group the selection (marked groups merge)\n" +
         "Edit\tEnter apply, Ctrl+Z undo, Ctrl+Y or Ctrl+Shift+Z redo\n" +
         "Objects\tLMB place, R / Shift+R rotate, Ctrl free position, Ctrl+D duplicate, Del delete, arrows nudge\n" +
@@ -311,6 +330,8 @@ public sealed class EditorChrome
         "Sketch\tP points, L lines: LMB or C marks, Enter finishes a line, Shift+Enter or the first corner closes it\n" +
         "Sketch edit\tLMB on a mark or [ ] selects it, Del deletes it, Backspace last corner, Ctrl+Z undo; marks are temporary and named in prompts\n" +
         "Sketches\tpick, New, Rename, Delete in the Sketch panel: marks go into the active sketch, prompts can name a whole sketch (\"sketch ROAD\")\n" +
+        "Photo to building\tselect a parcel, 0 opens the tool: tick the photos (captures, or Add photo... with where it was taken), Build (the model reads the photos, Esc or Cancel stops it); then adjust live: roof, heights, overhang, colours, trim, openings; Esc closes an enlarged picture\n" +
+        "Photo openings\tLMB on an opening in 3D (or a row) selects it; arrows nudge it (Left/Right along the wall, Up/Down the sill, Shift x5), [ ] pick another, Ctrl+D duplicate, Del delete, Ctrl+Z undo (every change and every build)\n" +
         "Commands\tCtrl+P: tools, actions, ground types, patch, zone and parcel IDs\n" +
         "View\tT top-down, O aerial photo (reference), B floor plan of the selected parcel (building hidden, wall lines and a 1 m grid to sketch on), F1 this sheet, F2 walk mode\n" +
         "Esc\tgoes one level back: drawing, water level, patch, zone or sketch selection, placement, planning, connecting, gate, cable, object, selection, sidebar";

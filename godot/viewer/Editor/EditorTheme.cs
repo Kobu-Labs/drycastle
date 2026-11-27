@@ -179,6 +179,8 @@ public static class EditorTheme
         t.SetStylebox("panel", "BannerPanel", Box(new Color(Warn, 0.15f), Space, Warn));
         t.SetTypeVariation("ReadOnlyBox", "PanelContainer");
         t.SetStylebox("panel", "ReadOnlyBox", Box(Raised, Space, Border));
+        t.SetStylebox("background", "ProgressBar", Box(Raised, 0, Border));
+        t.SetStylebox("fill", "ProgressBar", Box(Accent, 0));
         t.SetStylebox("normal", "LineEdit", Box(Raised, 8, Border));
         t.SetStylebox("focus", "LineEdit", Focus());
         t.SetStylebox("read_only", "LineEdit", Box(new Color(Raised, 0.45f), 8));

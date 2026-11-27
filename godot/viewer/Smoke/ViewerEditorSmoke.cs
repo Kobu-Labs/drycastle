@@ -350,6 +350,8 @@ public partial class Viewer
         foreach (var title in (_opts.GetValueOrDefault("shot-collapse") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries))
             ed.SetSectionOpen(title, false);
         if (_opts.GetValueOrDefault("shot-tool") is { } stool) ed.SetTool(stool);
+        // the Photo to building page: --shot-opening w3 selects that opening of the building (give --frames 240 so the worker has answered)
+        if (_opts.GetValueOrDefault("shot-opening") is { } sopen) ed.Photo.SelectOpening(sopen);
         if (_opts.GetValueOrDefault("shot-gate") is { } sg && int.TryParse(sg, out var gi)) ed.Fence.Gates.Select(gi);
         foreach (var cat in (_opts.GetValueOrDefault("shot-open") ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)) ed.Objects.Panel.SetPaletteGroupOpen(cat, true);
         if (_opts.GetValueOrDefault("shot-filter") is { } sf) ed.Objects.Panel.SetPaletteFilter(sf);

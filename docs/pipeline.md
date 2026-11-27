@@ -23,7 +23,7 @@ empty on purpose: some modules import each other lazily inside functions, and an
 | `kits/` | generated structures built from parts: utility poles, connectors, flood wall, graves, `prim:*` primitives |
 | `export/` | scene assembly per chunk and the export stage |
 | `preview/` | pictures of the map, poles, flood wall, graves, fences and ground detail |
-| `edits/` | `edits.json` schema and lock, zones, sketch file, `parcel-run`/`patch-run`, dishes, house connections; `edits/mcp/` the MCP server (see [mcp.md](mcp.md)) |
+| `edits/` | `edits.json` schema and lock, zones, sketch file, `parcel-run`/`patch-run`/`building-run`/`building-serve`, dishes, house connections; `edits/mcp/` the MCP server (see [mcp.md](mcp.md)) |
 
 ## Configuring the map and fetching data
 
@@ -321,6 +321,38 @@ and the small random choices are drawn from a generator seeded with sha256 of
 `<parcel id>:<building id>`, so reruns give identical output. The override file format (by parcel
 ID or OSM id, any building field) is documented at the top of `overrides.yaml`.
 
+`python -m drycastle_pipeline building-run --parcel P-0004 [--building w123] --glb b.glb --out b.json` (`edits/building_run.py`) rebuilds only the
+buildings of those parcels (a building id means its parcel) from the current `overrides.yaml` and `config/buildings/<id>.yaml`, without touching
+`work/buildings.json`: `derive.derive_parcel` (the rules stage's own loop body), then the export's `scene._add_parcels`, `build_chunk_scene` and
+`export_glb`, so node names, colours and axes are those of a full export (the tests check the node names and triangle counts against `build_scene`; on the
+village the counts equal the manifest's for 64 parcels). The GLB has `parcel_<ID>_visual/_collision`, `house_<bid>_visual/_collision` and
+`window_<bid>_*` (chunk-file frame, add it at the map root). The fragment has `parcels`, `buildings` (parcel to its building ids, for the window
+panes), `replaces` (node names to hide: every name a full export could have for those parcels), `nodes` (name to chunk), `triangles`, `warnings` (z-fighting
+faces of a hollow house, bad keys) and `timing_s`. Footprints and the terrain carved under them stay as baked; the documents the game reads
+(`interiors.json`, `windows.json`, `house_voxels.bin`, landmark rooms) are not written (`documents=False` of `_add_parcels`). The viewer's live
+loop is in docs/viewer-and-editor.md.
+
+`building-serve` is the same as a long-lived worker for that loop: one JSON line per request on stdin, one per answer on stdout (the first line is
+`{"ready": true}`; everything else printed goes to stderr). Request `{"id": 1, "glb": PATH, "parcels": [..], "buildings": [..], "files": ["w123.yaml"],
+"overrides": PATH, "overrides_base": PATH}`; answer `{"id": 1, "ok": true, "fragment": {..}}` or `{"id": 1, "ok": false, "error": ".."}` (a bad file
+fails that answer, the worker stays). Targets are the given parcels and buildings, the parcels of the changed detail `files`, and the parcels whose
+overrides entry (by parcel ID or building id) or `keep_traced_footprint` membership differs between `overrides_base` and `overrides` (default the
+live file). The parcels, OSM buildings, terrain heights and rules are read once; overrides and detail files are read again when their stat changed;
+floor plans and roof fits are cached by content. Measured on the village (i7-11850H): ready after 0.7 s (loads and warms up), then per request, edit
+of an override of a house with a detail 0.15 to 0.4 s, a changed detail file 0.07 s (small house) to 0.5 s (the largest, 5 700 triangles, whose openings
+changed so the Rust floor plan is worked out again), three houses at once 0.3 s; a one-shot `building-run` is 0.9 s with `uv` start-up. What took the
+time and is gone: the interiors' voxel grids (not needed live), the z-fight check (vectorised in `core/zfight.py`, 7 times faster, same findings on all 175
+houses; the full export gains too) and the pure-Python YAML loader for the detail files (`openings.load_detail` uses the C loader like `rules.yaml`).
+
+The worker also answers the edit ops of the viewer's Photo to building tool (`edits/building_edit.py`; a request with `"op"` gets `{"id": N, "ok": true, "result": {..}}`):
+`state` (a building's override entry, detail form and openings, the footprint's edges with outward normals, `base_z`, the colour palettes), `edit` (`change`: any of
+`form` {roof, wall_top_m, top_m}, `override` {field: value|null}, `detail` {overhang_m, plinth_m, ridge_caps, roof_tiles, gutter, corners, bands, interior, frame_colour,
+surround_colour, trim_colour}, `opening` {id, set} | {add} | {delete} | {duplicate}; answer `state`, `before`/`after` snapshots, `selected`), `restore` (a snapshot `{override, detail}`: the
+entry block's text and the detail file's text, written back exactly; undo and redo), `snapshot`, `reset` (to `data/village/photos/<id>/measured.json`, written by every
+`facade_pipeline auto`). The files are edited with minimal diffs and atomically (a temp file in the same folder, then rename, under the same flock as `landmark_photo`):
+`overrides.yaml` line by line inside the building's block (comments and every other entry stay byte for byte), the detail file by top-level chunks (only the chunks a change
+touches are written again). A change is validated first (`openings.parse_detail`, `derive.load_overrides`); an invalid one writes nothing and answers `ok: false`. The
+rebuild is the usual loop: the viewer's poll sees the new mtime.
 ## Terrain, roads, props, spawns
 
 Settings for all of this are in the `terrain`, `roads`, `props` and `spawns` sections of
@@ -739,7 +771,7 @@ few points, the forest-edge distance comes from one precomputed mask (`props.Edg
 * **Build**: `make detail-rust-build` (maturin into the pipeline venv; needs `cargo` and the GEOS development files, e.g. `sudo dnf install geos-devel`
   on Fedora or `libgeos-dev` on Debian, because the `geos` crate links the system GEOS, the library shapely wraps; the build is a
   plain Rust build of about 15 s. Use a GEOS of the same version as shapely's (`python -c "import shapely; print(shapely.geos_version)"`)
-  so the geometry matches the Python stage; the module needs the system `libgeos` at run time too). `make setup` (`uv sync`) removes the module again: build it again after.
+  so the geometry matches the Python stage; the module needs the system `libgeos` at run time too). `make setup` syncs (with the `reader` extra, the API client of photo to building) and then builds the module again; a bare `uv sync` removes it.
   `cd pipeline/rust/detail && cargo test --release` runs the Rust tests.
 * **Running it**: `make detail` and `make map` build the engine first (`detail-rust-build`), then run it; a stage run without the
   module fails with the build hint. There is no engine switch. `DRYCASTLE_DETAIL_THREADS=N` caps the

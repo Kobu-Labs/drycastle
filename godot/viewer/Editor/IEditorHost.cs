@@ -23,6 +23,8 @@ public interface IEditorHost
     ShapeEditor Shapes { get; }
     GroundTool Ground { get; }
     ZonesTool Zones { get; }
+    SketchTool Sketches { get; }
+    PhotoTool Photo { get; }
     EditorChrome Chrome { get; }
     OutlineLayer Outlines { get; }
     ParcelGroups Groups { get; }

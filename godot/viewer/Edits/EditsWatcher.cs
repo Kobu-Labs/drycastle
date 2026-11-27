@@ -23,7 +23,8 @@ namespace Drycastle.Viewer.Edits;
 /// A file that cannot be parsed (half-written) is ignored until it changes again; a failed run only
 /// prints the error. Also writes editor-state.json (camera, selection) at most once a second.
 /// The state at start is assumed to be what the map was built with, so nothing runs at startup.
-/// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs.
+/// A re-exported map (its buildings) is reloaded too, see EditsWatcher.Map.cs. Edits of buildings (overrides.yaml, config/buildings) are
+/// followed without an export, see EditsWatcher.Buildings.cs.
 /// </summary>
 public partial class EditsWatcher : Node
 {
@@ -113,10 +114,12 @@ public partial class EditsWatcher : Node
         else GD.PushWarning($"edits watcher: initial {EditsPath} unreadable ({err}); starting from empty edits");
         GD.Print($"watching {EditsPath}");
         StartMapWatch();
+        StartBuildingWatch();
     }
 
     public override void _ExitTree()
     {
+        StopBuildingWorker();
         try { _run?.Process?.Kill(true); } catch { /* already gone */ }
         try { Directory.Delete(_tmpDir, true); } catch { /* best effort */ }
     }
@@ -147,6 +150,8 @@ public partial class EditsWatcher : Node
             PollMap();
         }
         StepMapReload();
+        PollBuildings(delta);
+        StepBuildings(delta);
         if (_run != null && _run.Task.IsCompleted) Finish(_run);
         if (_run == null && _dirty) StartIfChanged();
         _stateT += delta;

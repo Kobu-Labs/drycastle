@@ -11,6 +11,7 @@ try:  # the C loader when libyaml is present: same documents, much faster than t
     _YamlLoader = yaml.CSafeLoader
 except AttributeError:
     _YamlLoader = yaml.SafeLoader
+YAML_LOADER = _YamlLoader  # for the other loaders of config files
 
 from drycastle_pipeline.core.config import PIPELINE_DIR
 

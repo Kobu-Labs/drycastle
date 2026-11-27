@@ -30,6 +30,12 @@ import numpy as np
 from drycastle_pipeline.photos import facade_rectify as fr
 from drycastle_pipeline.photos.facade_rectify import PX_PER_M
 from drycastle_pipeline.photos.landmark_photo import project
+from drycastle_pipeline.photos.palettes import (  # (the lists live in palettes.py, which the building worker loads without numpy)
+    FRAME_COLOURS,
+    ROOF_COLOURS,
+    SURROUND_COLOURS,
+    WALL_COLOURS,
+)
 
 MAX_CAPTURES = 3
 MIN_WALL_M = 2.0
@@ -41,16 +47,7 @@ LINE_MERGE_PX = 10
 # A photo's colours are the light of that hour, not the paint: a cream wall in shade is grey-brown in pixels. What a
 # model can say reliably is the kind of colour; the photo then only gives the hue. Lightness is OpenCV's L (0..255).
 WALL_TONES = {"light": 205.0, "mid": 150.0, "dark": 95.0}
-# what the walls are painted or built with, as it looks in plain daylight. A wall in shade photographs grey whatever
-# its paint, so the colour is named, not sampled.
-# (the village's palette: every named colour is one chosen paint, warm and a little richer than a photo shows it)
-WALL_COLOURS = {"white": "#f1ecdf", "cream": "#ecdcb2", "yellow": "#e9ca76", "peach": "#e8b88a", "orange": "#dc9654", "pink": "#e2ab9d",
-                "green": "#b3c896", "blue": "#a4bbd3", "grey": "#b4b1a8", "beige": "#d3ba92", "brown": "#906746", "brick": "#a6543a", "timber": "#73502e",
-                "stone": "#a49c8a"}  # fmt: skip
-SURROUND_COLOURS = {"white": "#f2f0ea", "cream": "#e9dcc0", "grey": "#a9a8a4", "green": "#5e9a5a", "brown": "#6b4a3a", "dark": "#3a3a3c"}  # the band round a window
 RENDER_GLASS = (58, 70, 84)  # panes in the pictures: a window by day is dark, not the pale blue the generator tags it with
-ROOF_COLOURS = {"anthracite": "#41424a", "grey": "#7e8088", "brown": "#704533", "red": "#a5442e", "orange": "#bf6a38", "green": "#4c6c50"}
-FRAME_COLOURS = {"white": "#f2f0ea", "brown": "#5a4030", "dark": "#3a3a3c", "wood": "#a87f55", "grey": "#9a9a9a"}
 FRAME_M = 0.06
 DOOR_MAX_W_M = 1.25  # an entrance door is not wider: a wider rectangle took in what stands beside the leaf
 
@@ -159,7 +156,8 @@ def move_camera(cam: dict, picks: list[tuple[tuple[float, float], float]]) -> di
 # ---------------------------------------------------------------- stage 1: ends
 
 
-def stage_ends(building: str, out: Path, use_marks: bool = True) -> None:
+def stage_ends(building: str, out: Path, use_marks: bool = True, captures: list[int] | None = None) -> None:
+    """captures: the capture numbers to use (default: the newest MAX_CAPTURES)."""
     import cv2
 
     from drycastle_pipeline.photos.landmark_tools import WORK
@@ -173,7 +171,17 @@ def stage_ends(building: str, out: Path, use_marks: bool = True) -> None:
         raise SystemExit(f"{building} is a hand-modelled landmark ({b['model']}): not for this tool")
     ring = b["footprint"]["exterior"]
     others = [o for o in all_b if o["id"] != building]
-    sides = sorted((PHOTOS_DIR / building).glob("*.json"), key=lambda p: int(p.stem))[-MAX_CAPTURES:]
+    sides = sorted((PHOTOS_DIR / building).glob("*.json"), key=lambda p: int(p.stem))
+    if captures is None:
+        sides = sides[-MAX_CAPTURES:]
+    else:
+        have = {int(p.stem): p for p in sides}
+        missing = sorted(set(captures) - set(have))
+        if missing:
+            raise SystemExit(f"{building} has no capture {', '.join(map(str, missing))} (it has: {', '.join(map(str, sorted(have))) or 'none'})")
+        if len(set(captures)) > MAX_CAPTURES:
+            raise SystemExit(f"at most {MAX_CAPTURES} captures at once, got {len(set(captures))}")
+        sides = [have[n] for n in sorted(set(captures))]
     if not sides:
         raise SystemExit(f"{building} has no captures in {PHOTOS_DIR / building}: take them with streetview_follow --capture")
     out.mkdir(parents=True, exist_ok=True)
@@ -1863,7 +1871,9 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             return f'"{v}"' if isinstance(v, str) and v.startswith("#") else str(v)
 
         rows = "".join("  - {" + ", ".join(f"{k}: {flow(v)}" for k, v in o.items()) + "}\n" for o in openings)
-        (DETAILS_DIR / f"{bid}.yaml").write_text("\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))
+        from drycastle_pipeline.edits.building_edit import atomic_write
+
+        atomic_write(DETAILS_DIR / f"{bid}.yaml", "\n".join(head) + "\n" + body + ("openings:\n" + rows if openings else "openings: []\n"))  # (the viewer watches the file: never half of it)
         _upsert_override(PIPELINE_DIR / "config" / "overrides.yaml", bid, f"{b['parcel']}: {what}, from Street View captures; openings in config/buildings/.", ov, replace)
     print(f"{bid}  parcel {b['parcel']}")
     print(f"{bid}: {roof} roof, wall top {eave:.2f} m, roof top {top:.2f} m, overhang {detail.get('overhang_m', 0)} m, "
@@ -1910,10 +1920,18 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("read", help="answer the open question of each run folder by one API call (needs ANTHROPIC_API_KEY)")
     r.add_argument("outs", type=_run_dir, nargs="+", help="run folders or building ids")
     r.add_argument("--again", action="store_true", help="ask the last question again though it is answered")
+    au = sub.add_parser("auto", help="the whole thing in one command, for a UI: ends, read, walls, read, apply (or a photo of your own); see auto_build.py")
+    from drycastle_pipeline.photos import auto_build
+
+    auto_build.add_arguments(au)
     n = sub.add_parser("answers", help="put an agent's reply ({folder or id: answer}) into the run folders")
     n.add_argument("reply", type=Path)
     n.add_argument("--again", action="store_true", help="overwrite the answer of the last question")
     args = ap.parse_args(argv)
+    if args.cmd == "auto":
+        import sys
+
+        return auto_build.run(args, sys.modules[__name__])
     if args.cmd in ("read", "answers"):
         from drycastle_pipeline.photos import facade_reader
 

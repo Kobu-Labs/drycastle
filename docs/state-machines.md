@@ -673,6 +673,60 @@ stateDiagram-v2
 - **Idle**: Key up, or held since before the player could throw (a held key must be let go first).
 - **Charging**: Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.
 
+## Editor.BuildingWorker
+
+The viewer's building worker: started once, one rebuild request at a time, edits that arrive meanwhile join the next request, a dead worker is started again when there is work.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Stopped
+    Stopped --> Starting
+    Starting --> Idle
+    Starting --> Down
+    Idle --> Running
+    Idle --> Down
+    Running --> Idle
+    Running --> Queued
+    Running --> Down
+    Queued --> Running
+    Queued --> Down
+    Down --> Starting
+```
+
+From any state: Stopped
+
+- **Stopped**: No process: before the first start, or the viewer is closing.
+- **Starting**: The process is loading the map's work files (and warming up); no request goes before its ready line. Times out.
+- **Idle**: Ready and nothing on the wire; changed files go out at once.
+- **Running**: One request is on the wire (times out); its files are no longer pending.
+- **Queued**: A request is on the wire and more files changed meanwhile: they go together in the next one after the answer.
+- **Down**: The process died, did not start or timed out: killed, and started again after a short wait when files are pending.
+
+## Editor.PhotoBuild
+
+The Photo to building tool of the map editor: idle, a build process running, stopping it, the result under review, a failed build.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Building
+    Idle --> Review
+    Building --> Review
+    Building --> Failed
+    Building --> Cancelling
+    Cancelling --> Idle
+    Review --> Building
+    Review --> Idle
+    Failed --> Building
+    Failed --> Idle
+```
+
+- **Idle**: Nothing running: pick the photos and press Build, or adjust the building as it is.
+- **Building**: The build process runs (stage lines, model calls, then the two files); the panel shows the stage. Cancel or Esc asks, then stops it; the files are written only at its end.
+- **Cancelling**: The process was told to stop; the panel waits for it to be gone, then goes back to Idle.
+- **Review**: A build finished (or an earlier run of the building was found on disk): its overlay and comparison pictures, the problems and the made-up list; re-ask a model question or adjust live.
+- **Failed**: The build stopped with an error (a missing API key, a bad answer, no usable wall): the message says what to do; Try again or go back.
+
 ## Editor.Shape
 
 The shape tools of the map editor (ground patches, zones): draw a polygon, ask for the water level, select a shape, drag one of its corners.

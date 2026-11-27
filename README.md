@@ -25,7 +25,7 @@ A GTA-like open-world game set in the real village of Drycastle (Slovakia), in a
 Requires `uv`, `make`, the .NET 8 SDK and Godot 4.7.2 mono on your `PATH` as `godot`.
 
 ```sh
-make setup    # uv sync in pipeline/
+make setup    # uv sync --extra reader in pipeline/, then the Rust detail module
 make test     # pytest
 make lint     # ruff check
 ```

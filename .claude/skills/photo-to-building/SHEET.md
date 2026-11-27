@@ -1,6 +1,8 @@
 # Photo to building: a photo of your own (the sheet way)
 
 For a photo that is NOT a capture (no known camera). Captures go the way of `SKILL.md`.
+Without Claude Code: `facade_pipeline auto <id> --photo PHOTO --side SE|--point A` (or the viewer's Add photo...) has the model write the sheet from section 2 below by one API call
+(`photos/sheet_reader.py` reads this file) and runs `apply`. While the viewer watches, the result shows in it a second after `apply`: no `make`.
 
 Measure a house from photos and write its building detail: `pipeline/config/buildings/<id>.yaml` plus its entry in
 `pipeline/config/overrides.yaml`. No code. Two tool calls and two pictures to read; keep it that small.

@@ -3,7 +3,29 @@
 Turn photos of a real building into its model in the map, measured on the building's real footprint. Exterior only.
 Issue #329.
 
-## How to trigger it
+## In the viewer (no Claude Code needed)
+
+The map editor (`--editor`, docs/viewer-and-editor.md, "Photo to building tool") does the whole flow: select the parcel, press **0**, tick the building's captures (or **Add photo...**
+and say where it was taken), **Build**. A subprocess (`facade_pipeline auto`) finds the geometry, asks the model the two questions by API (needs `ANTHROPIC_API_KEY` in the
+repo-root `.env` and `uv sync --extra reader`) and writes the two files; the house is in the 3D view about a second later. The panel then shows the overlay and comparison pictures, the
+`PROBLEM:` lines and the list of what the rules made up, with **Re-ask wall ends** / **Re-ask walls** for a wrong answer, and a live form: roof form, heights, overhang, plinth,
+colours, trim and every opening (click it in 3D, nudge it with the arrow keys). Each change writes the files at once (the rebuild is the live loop of "Hot reload"), Ctrl+Z undoes
+changes and builds, **Reset to measured** goes back to what the build wrote. Captures first (Street View, below), your own photo only when there are none.
+
+The same one-command build from a terminal (what the panel runs; one line per fact, `STAGE:`, `PROBLEM:`, `MADE UP BY RULE`, `ERROR:`, `RESULT: {json}`):
+
+    cd pipeline
+    uv run python -m drycastle_pipeline.photos.facade_pipeline auto <building> [--captures 0,2] [--replace]
+    uv run python -m drycastle_pipeline.photos.facade_pipeline auto <building> --redo ends|walls    # ask that question again (implies --replace)
+    uv run python -m drycastle_pipeline.photos.facade_pipeline auto <building> --photo P.png --side NE [--photo Q.png --point A]   # your own photos
+    uv run python -m drycastle_pipeline.photos.facade_pipeline auto --check                          # is the API key there
+
+`auto` refuses an existing entry without `--replace` before any model call, and writes `data/village/photos/<id>/measured.json` after a successful apply (what "Reset to measured" restores).
+Your own photos (up to 3, each with `--side`, `--point` or `--view`) are measured the sheet way (`photos/sheet_reader.py`: one model call reads the grid pictures into the sheet
+that `SHEET.md` describes, then `landmark_photo apply`); their run folder is `photos/<id>/own_run`. The edit side of the panel is the worker's `state` / `edit` / `restore` ops
+(docs/pipeline.md, `edits/building_edit.py`).
+
+## In Claude Code (the alternative)
 
 - **Explicitly:** `/photo-to-building` in Claude Code, then the property and the photos. It is a project skill
   (`.claude/skills/photo-to-building/SKILL.md`), so every session in this repo has it.
@@ -56,7 +78,10 @@ in `pipeline/config/overrides.yaml` (roof form, heights, colours). No code; the 
 `apply` also writes `interior: true` (not for a building with `roof_part`): the house is hollow, with a generated floor
 plan and doors that open (docs/interiors.md).
 
-`apply --dry` measures and draws without writing. After a batch: `make rules && make export` once. Nothing is
+`apply --dry` measures and draws without writing. **While the viewer runs with `--watch` (or `--editor`) the new
+`config/buildings/<id>.yaml` shows in it about a second after `apply` writes it: no `make rules`, no `make export`** (docs/viewer-and-editor.md,
+"Hot reload"; `building-run --building <id>` is the same without a viewer). The footprint and the ground under it are not redone live. To keep the
+result in the map files, and for the game's own documents (interiors, voxels): after a batch `make rules && make export` once. Nothing is
 committed unless you ask.
 
 **Capture guide** (`photos/capture_guide.py`, on with `streetview_follow --capture`; `--no-guide` for the bare key). In the

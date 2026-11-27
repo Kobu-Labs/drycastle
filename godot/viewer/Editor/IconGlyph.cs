@@ -100,6 +100,12 @@ public partial class IconGlyph : Control
                 DrawCircle(P(12, 5), 2.5f * _u, _col);
                 Line(12, 8, 12, 15); Line(12, 15, 8, 22); Line(12, 15, 16, 22); Line(7, 11, 17, 11);
                 break;
+            case "photo":
+                // a camera: body, the bump over the lens, the lens
+                Rect(3, 8, 18, 12);
+                Poly(false, (8, 8), (9.5f, 4.5f), (14.5f, 4.5f), (16, 8));
+                Arc(12, 14, 3.6f, 0f, Mathf.Tau, false);
+                break;
             case "close":
                 Line(6, 6, 18, 18); Line(18, 6, 6, 18);
                 break;

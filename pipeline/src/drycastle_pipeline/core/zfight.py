@@ -5,7 +5,7 @@ camera moves. (The same colour in the same place shows no flicker; a pair facing
 from collections import defaultdict
 
 import numpy as np
-from shapely.geometry import Polygon
+import shapely
 from shapely.strtree import STRtree
 
 PLANE_TOL_M = 0.001  # nearer than this is one plane
@@ -36,23 +36,25 @@ def fights(tris: np.ndarray, colours: np.ndarray, plane_tol: float = PLANE_TOL_M
     for members in groups.values():
         if len(members) < 2:
             continue
+        members = np.array(members)
         n0 = unit[members[0]]
         u = np.cross(n0, (0.0, 0.0, 1.0) if abs(n0[2]) < 0.9 else (1.0, 0.0, 0.0))
         u /= np.linalg.norm(u)
         v = np.cross(n0, u)
-        flat = [Polygon(np.stack([tris[i] @ u, tris[i] @ v], 1)).buffer(0) for i in members]
-        tree = STRtree(flat)
-        for x, poly in enumerate(flat):
-            for y in tree.query(poly):
-                if y <= x:
-                    continue
-                i, j = members[x], members[int(y)]
-                if (colours[i] == colours[j]).all() or unit[i] @ unit[j] < 0.9999:
-                    continue
-                big, small = (i, j) if double_area[i] >= double_area[j] else (j, i)
-                if np.abs((tris[small] - tris[big][0]) @ unit[big]).max() > plane_tol:
-                    continue
-                area = poly.intersection(flat[int(y)]).area
-                if area > area_tol:
-                    out.append((int(i), int(j), float(area)))
+        # every triangle of the group as a polygon in the plane's own 2D frame (rings close themselves)
+        flat = shapely.buffer(shapely.polygons(shapely.linearrings(np.stack([tris[members] @ u, tris[members] @ v], axis=-1))), 0)
+        xs, ys = STRtree(flat).query(flat)  # the pairs whose boxes overlap
+        sel = ys > xs
+        xs, ys = xs[sel], ys[sel]
+        i, j = members[xs], members[ys]
+        sel = ~(colours[i] == colours[j]).all(axis=1) & (np.einsum("ij,ij->i", unit[i], unit[j]) >= 0.9999)
+        xs, ys, i, j = xs[sel], ys[sel], i[sel], j[sel]
+        a_first = double_area[i] >= double_area[j]
+        big, small = np.where(a_first, i, j), np.where(a_first, j, i)
+        off = np.abs(np.einsum("kvi,ki->kv", tris[small] - tris[big][:, 0:1], unit[big])).max(axis=1)
+        sel = off <= plane_tol
+        xs, ys, i, j = xs[sel], ys[sel], i[sel], j[sel]
+        area = shapely.area(shapely.intersection(flat[xs], flat[ys]))
+        for k in np.flatnonzero(area > area_tol):
+            out.append((int(i[k]), int(j[k]), float(area[k])))
     return out

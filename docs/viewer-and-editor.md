@@ -72,12 +72,26 @@ viewing and headless servers are unaffected):
   (temp file, then rename). When only placed `objects` changed (see Objects and undo) there is no subprocess:
   the objects are re-instanced in process.
 - Buildings are not in the edits file: they come from the pipeline (`overrides.yaml`, `config/buildings/`, the
-  model code) and reach the viewer only through the chunk files. So the map folder's `manifest.json` is polled
-  too (`EditsWatcher.Map.cs`). The export writes it last, with a `sha256` per chunk file; when it changes, every
-  chunk whose hash differs from what is loaded gets its building nodes (`parcel_<ID>_visual`,
-  `parcel_<ID>_collision`, `window_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
-  viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. So after
-  changing a building: `make rules export`, no restart. Not reloaded: everything else baked into a chunk
+  model code). **Live** (`EditsWatcher.Buildings.cs`): `pipeline/config/overrides.yaml` and
+  `pipeline/config/buildings/*.yaml` are polled four times a second (mtime). A change goes to one long-lived
+  `building-serve` worker (started with the viewer, `uv run python -m drycastle_pipeline building-serve`, JSON lines on stdin
+  and stdout, work files loaded once, warm 0.1 to 0.5 s per house, docs/pipeline.md), which diffs the overrides against
+  `overrides-base.yaml` (the copy of the file as last applied; an entry by building id or parcel ID) and rebuilds the buildings of
+  the parcels concerned; the GLB and fragment are swapped in with `MapLoader.ApplyBuildingFragment`. The viewer prints
+  `building applied: <parcels> in <ms> ms` (edit to applied), the editor shows it in the status line (events
+  `BuildingLaunched/Applied/Failed`). Edits during a run are coalesced into the next one; a bad detail file is an error line (the
+  worker stays; the next save sends it again); a dead worker is started again by the next change. The loader hides the baked
+  `parcel_<ID>_visual/_collision`, the parcel's `house_<bid>_*` and `window_<bid>_*` nodes and adds the fragment's under
+  `dyn_buildings_<ID>` with colliders and materials; `_visuals`, `_shapes`, `HouseNodes` (so house destruction sees the live house),
+  `HasModel` and `Stats.Triangles` follow; a parcel a mod replaced stays replaced; `RevertBuildings(id)` brings the baked nodes
+  back. Not rebuilt live: footprints and the ground carved under them (a changed outline needs `make rules export`), landmarks'
+  rooms, and the documents the game reads (`interiors.json`, `windows.json`, `house_voxels.bin`): the live house looks right, it
+  does not change what the game does with the house. Rules (`rules.yaml`) changes are not followed. The state at start is
+  assumed to be what the map was exported with.
+- A **re-export** still wins. The map folder's `manifest.json` is polled too (`EditsWatcher.Map.cs`). The export writes it last, with a `sha256` per chunk file; when it changes, every
+  chunk whose hash differs from what is loaded first drops the live buildings of its parcels, then gets its building nodes (`parcel_<ID>_visual`,
+  `parcel_<ID>_collision`, `window_*`, `house_<bid>_*`) swapped with `MapLoader.ReloadChunkBuildings`, one chunk per frame. The
+  viewer prints `map reloaded: buildings of N chunk(s) ...`, the editor shows it in the status line. Not reloaded: everything else baked into a chunk
   (terrain, roads; fences, trees and ground patches keep following the edits file). A re-export with different parcels
   or a new chunk is not swapped in; the viewer says to restart.
 - `editor-state.json` (written at most once a second while watching, an ignored build output):
@@ -223,6 +237,7 @@ plus the usual `--map`, `--seed`, `--assets`.
 | T | snap to a top-down view above the cursor; again restores the previous camera |
 | B | floor plan of the selected parcel: its buildings hidden, wall lines and a 1 m grid shown; again restores them |
 | (Street View) | `photos/streetview_follow.py` moves the character to where a Chrome Street View tab is; in the top-down view (T) a red point marks the spot below it, see `docs/streetview.md` |
+| 0 | Photo to building tool (see below) |
 | Esc | stop placing / deselect the object / clear the parcel selection (in that order) |
 | Ctrl+Z, Ctrl+Y (Ctrl+Shift+Z) | undo / redo the saves made in this session (see Objects and undo) |
 
@@ -435,6 +450,34 @@ unique across all sketches. Every mark shows its name as a tag in the 3D view, i
   Ctrl+Z / Ctrl+Y. Esc steps back one level: the line being drawn, the selection, the tool.
 - Checked by the build and by the MCP server's sketch tests on the file format only; there is no headless smoke for the
   tool yet (the picker, the naming row and the reload from `sketch.json` are not covered).
+
+### Photo to building tool
+
+Rail icon 0 (a camera): model the selected parcel's house from photos, then adjust it with every change live in 3D. Needs `--editor` (it implies `--watch`, so the
+building worker of "Hot reload" runs). Background and the pipeline side: docs/photo-to-building.md. Code: `godot/viewer/Editor/Tools/Photo*.cs`; pure parts and tests in
+`godot/ShooterCore/Editor/PhotoBuild.cs`; the panel's phases are `Editor.PhotoBuild` (docs/state-machines.md).
+
+- **Building**: the buildings of the selected parcels (a list when there are several; the one with captures is chosen first). A running build locks the choice.
+- **Photos**: the building's Street View captures (`data/village/photos/<id>/<n>.png`) as thumbnails with a checkbox each, the newest three ticked; click a thumbnail to enlarge
+  it (Esc, a click or Enter closes; Left and Right step). No captures: the panel says how to take them (`streetview_follow --launch --capture`, with a copy button).
+  **Add photo...** copies a photo of your own under `photos/<id>/own/` and asks where it was taken (a side of the house, or a point of the Sketch tool); such a photo goes the
+  "sheet" way (`landmark_photo`) with one model call (`photos/sheet_reader.py`). Captures and own photos are not mixed (ticking one kind unticks the other).
+- **Build**: runs `facade_pipeline auto <id> ...` as a subprocess (`uv`, `DRYCASTLE_UV` as for the other workers; the UI thread never waits): the wall ends, the model's two
+  answers, the walls, the files. The panel shows the stage (`STAGE: name i/n` lines), the time and Cancel (Esc asks "Stop the build?"). A building that already has an entry asks
+  before it is replaced. `ANTHROPIC_API_KEY` is read from the environment or the repo-root `.env`; without it the panel says so (banner, Check again) and Build is off.
+- **Result** (also shown for the last run of a building found on disk): the overlay and comparison pictures of the run (click to enlarge), the `PROBLEM:` lines, the list "made up
+  by rule", and **Re-ask wall ends** / **Re-ask walls** (the model's question again, then the following stages and the files). The files are written at the end of the build; the
+  watcher swaps the rebuilt house in within a second.
+- **Adjust, live**: roof form, wall top and ridge height, overhang, plinth, wall / roof / frame / surround colours from the pipeline's lists, trim (ridge caps, roof tiles,
+  gutters, corner strips, cornice band, hollow), and the openings: a list, and for the selected one kind, wall, along, width, height, sill. Every change is a request to the
+  building worker, which writes `overrides.yaml` / `config/buildings/<id>.yaml` (minimal diffs, atomic) and the usual loop rebuilds the house. Changes of one field that follow
+  each other (a held arrow key) merge into one request and one undo step. Add window / door / garage door, Duplicate (Ctrl+D), Delete (Del). **Reset to measured** goes back to what
+  the last build wrote. Footprints and `edits.json` are never touched.
+- **Openings in 3D**: the selected opening is outlined on its wall; a left click on an opening in the 3D view selects it (a ray against the wall planes, `BuildingGeom.Pick`),
+  a click anywhere else selects the parcel as usual. `[` and `]` step through the openings; with one selected the arrow keys nudge it (Left and Right along the wall, Up and Down the
+  sill, Shift five steps); in a number field Up and Down step the value, PageUp and PageDown ten steps.
+- **Undo**: Ctrl+Z / Ctrl+Shift+Z undo every change and every build (the two files' text before and after is the step; `restore`). Undo says so and waits when the last change is still
+  being written. Esc goes one level up: the enlarged picture, a build (asks), the selected opening, then the usual (parcel selection, tool).
 
 ### Ground tool
 
