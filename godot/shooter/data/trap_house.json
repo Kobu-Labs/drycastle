@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  // Trap house dressing (#496, ADR 0046, docs/cartel.md "Trap house"): the Rival crew's props a hollow house gets for a Trap house Job, placed by room type from its floor plan
+  // (interiors.json) and a seed, and taken away when the Job ends (TrapHousePlanner, TrapHouseServer). Axes: metres; a prop's size is [across its front, up, front to back].
+
+  // Which hollow houses a Job may dress (TrapHouseChoice): one whose front door is within road_max_m of a road at least min_road_width_m wide (the Cartel van parks there).
+  "choice": { "road_max_m": 30, "min_road_width_m": 3 },
+
+  // What keeps the ways clear. Nothing stands within door_clear_m of a doorway, a door or garage door, or a link's gap (both sides: it covers a leaf's swing).
+  // wall_gap_m: a wall prop's back off the room's outline (partitions are 0.1 m, the outline is their middle). prop_gap_m: between two props. centre_wall_gap_m: a centre prop
+  // keeps this much from every wall (a way round it). step_m: the step of the candidate spots along walls and over the floor. Graffiti: tag_door_gap_m off any opening, tag_apart_m
+  // between two tags on a wall, and clear of a prop that reaches up to it.
+  "clearance": { "door_clear_m": 1.2, "wall_gap_m": 0.08, "prop_gap_m": 0.45, "centre_wall_gap_m": 0.9, "step_m": 0.25, "tag_door_gap_m": 0.3, "tag_apart_m": 1.0 },
+
+  // Posted defenders' spots (they stand, turn and shoot, never walk; ADR 0046 §3): up to per_room in every room of min_room_m2 or more (not the skip_types), wall_gap_m off the walls,
+  // prop_gap_m off the props, apart_m from each other, and out of the doorways (door_clear_m). The spot farthest from the room's way in comes first; each faces the way in.
+  // Listed round-robin over the rooms (the first of every room, then the second ...): the first N spread over the house.
+  "posts": { "per_room": 2, "min_room_m2": 5, "wall_gap_m": 0.5, "prop_gap_m": 0.5, "apart_m": 1.6, "skip_types": ["bathroom"] },
+
+  // The safe (the Drill's target): the prop below, against a wall of the first room type listed that has room for it, the deepest such room (most links from the front door) first.
+  // stand_m: how far in front of its face a player stands to work it.
+  "safe": { "prop": "safe", "stand_m": 0.7, "rooms": ["bedroom", "storage", "study", "garage", "living", "dining", "kitchen", "living_kitchen", "hall"] },
+
+  // A house whose rooms gave fewer than min tables with Duffel spots gets more of these, largest room first (not in skip_types): a heist needs product and cash to bag.
+  "tables": { "min": 1, "props": ["table_product", "table_cash"], "skip_types": ["hall", "bathroom"] },
+
+  // The prop kinds; their order is the wire's kind byte (append, never reorder). models: variants (the wire's variant byte), Synty GLBs under assets-private/synty/glb with the atlas
+  // (a path under synty/); without the private pack the box (size) is drawn. solid: a box collider of size on the World layer (stops players and bullets: cover). duffel: what a Duffel
+  // on its top holds ("product" or "cash"), duffel_spots [across, front] on its top (size[1] up). extras: models drawn on it (looks only), [x across, y up, z front] and a yaw in degrees.
+  // tags (place wall_high): graffiti, drawn as text on the wall at height_m, size[0] wide; the variant picks the tag.
+  "props": [
+    { "id": "table_product", "solid": true, "size": [2.25, 0.92, 0.88], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_Table_Metal_Preset_01", "gang-warfare/SM_Prop_Table_Metal_Preset_02", "gang-warfare/SM_Prop_Table_Metal_Preset_04", "gang-warfare/SM_Prop_Table_Metal_Preset_05", "gang-warfare/SM_Prop_Table_Metal_Preset_06"],
+      "duffel": "product", "duffel_spots": [[-0.6, 0], [0.6, 0]] },
+    { "id": "table_cash", "solid": true, "size": [2.25, 0.92, 0.88], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_Table_Metal_01"],
+      "extras": [ { "model": "gang-warfare/SM_Prop_Money_Stack_04", "at": [-0.75, 0.922, 0.05], "yaw_deg": 8 },
+                  { "model": "gang-warfare/SM_Prop_Money_Stack_01", "at": [0.0, 0.922, -0.1], "yaw_deg": 80 },
+                  { "model": "gang-warfare/SM_Prop_Scales_01", "at": [0.55, 0.922, 0.15], "yaw_deg": -15 },
+                  { "model": "gang-warfare/SM_Prop_Money_Strapped_01", "at": [0.85, 0.922, -0.2], "yaw_deg": 30 } ],
+      "duffel": "cash", "duffel_spots": [[-0.6, 0], [0.6, 0]] },
+    { "id": "crates", "solid": true, "size": [1.53, 1.15, 1.55], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_CardboardBox_Stack_01"] },
+    { "id": "crate", "solid": true, "size": [0.83, 0.82, 0.83], "atlas": "glb/atlas/military_01_A.png",
+      "models": ["military/SM_Prop_Crate_Cube_01"] },
+    { "id": "product_pile", "solid": true, "size": [1.7, 0.83, 1.19], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_Packet_Stack_Large_01"] },
+    { "id": "barrels", "solid": true, "size": [0.78, 1.05, 0.79], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_Barrel_Plastic_01", "gang-warfare/SM_Prop_Barrel_Plastic_02"] },
+    { "id": "mattress", "solid": false, "size": [0.98, 0.2, 1.9], "atlas": "glb/atlas/military_01_A.png",
+      "models": ["military/SM_Prop_Bed_Mattress_01", "military/SM_Prop_Bed_Mattress_02"] },
+    { "id": "safe", "solid": true, "size": [0.51, 0.61, 0.6], "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "models": ["gang-warfare/SM_Prop_Safe_01"] },
+    { "id": "graffiti", "solid": false, "size": [1.4, 0.7, 0], "height_m": 1.5,
+      "tags": [ { "text": "RVL", "colour": "#d6312b" }, { "text": "LOS RIVALES", "colour": "#2b8fd6" }, { "text": "13", "colour": "#e8c21c" },
+                { "text": "NO SNITCH", "colour": "#e8e8e8" }, { "text": "RVL CREW", "colour": "#3cc24a" } ] }
+  ],
+
+  // What a room of each room type gets: [prop, min, max, place]. place: centre (in the open, centre_wall_gap_m from the walls), wall (back to a wall) or wall_high (graffiti).
+  // Placed per room in this order; a prop that finds no spot is left out. A type not listed gets nothing.
+  "rooms": {
+    "hall":           [ ["graffiti", 1, 2, "wall_high"] ],
+    "living":         [ ["table_product", 1, 1, "centre"], ["crates", 1, 2, "wall"], ["mattress", 0, 1, "wall"], ["graffiti", 1, 2, "wall_high"] ],
+    "living_kitchen": [ ["table_cash", 1, 1, "centre"], ["table_product", 0, 1, "wall"], ["crates", 1, 1, "wall"], ["mattress", 0, 1, "wall"], ["graffiti", 1, 2, "wall_high"] ],
+    "kitchen":        [ ["table_product", 1, 1, "wall"], ["barrels", 0, 2, "wall"], ["crate", 0, 1, "wall"], ["graffiti", 0, 1, "wall_high"] ],
+    "dining":         [ ["table_cash", 1, 1, "centre"], ["crate", 0, 2, "wall"], ["graffiti", 1, 1, "wall_high"] ],
+    "bedroom":        [ ["mattress", 1, 2, "wall"], ["crate", 0, 1, "wall"], ["graffiti", 0, 1, "wall_high"] ],
+    "study":          [ ["table_cash", 1, 1, "wall"], ["crate", 0, 1, "wall"], ["graffiti", 0, 1, "wall_high"] ],
+    "storage":        [ ["crates", 1, 2, "wall"], ["product_pile", 0, 1, "wall"], ["crate", 0, 2, "wall"] ],
+    "garage":         [ ["product_pile", 1, 1, "wall"], ["crates", 1, 2, "wall"], ["table_product", 0, 1, "wall"], ["graffiti", 1, 2, "wall_high"] ],
+    "bathroom":       [ ["graffiti", 0, 1, "wall_high"] ]
+  }
+}

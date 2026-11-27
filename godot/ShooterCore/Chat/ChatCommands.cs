@@ -122,6 +122,7 @@ public static class ChatCommands
         new("houses", "TEST: make every hollow house whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("cartel", "TEST: the Cartel, for yourself: join or quit anywhere, add Respect (respect <n>), start a Job of a kind at any tier anywhere (job <kind> [tier], e.g. job test 2), or show your standing (status)",
             new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("value", ChatArgKind.Text, false) }),
+        new("traphouse", "TEST: dress a hollow house as a Trap house now, for everyone: the nearest to you (no argument, or nearest) or one by building id (w...); off strips every one", new[] { new ChatArg("house", ChatArgKind.Text, false) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
 
@@ -166,6 +167,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
             ChatArgKind.Choice when cmd.Name == "cartel" => new[] { ("join", "join the Cartel (no Contact needed)"), ("quit", "quit the Cartel: rank and Respect are kept"), ("respect", "add that much Respect (a rank-up is announced)"), ("job", "start a Job: the kind, then the tier (1 by default; any tier)"), ("status", "your membership, Respect, rank and Job") },
             ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
+            ChatArgKind.Text when cmd.Name == "traphouse" => new[] { ("nearest", "the hollow house nearest to you"), ("off", "strip every Trap house") },
             ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },

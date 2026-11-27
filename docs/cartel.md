@@ -104,6 +104,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 
 - The server picks a random hollow house (ADR 0040) with road access for the van, not used by another job, no player inside.
 - Dressed for the job and stripped after: Gang Warfare props by room type (tables with product and cash, mattresses, crates, graffiti). Tables and crates are solid (box colliders, cover). The first furniture in hollow houses: its own small ADR.
+- Built (#496): `TrapHousePlanner` (ShooterCore/Cartel; props, posts, safe and Duffel spots from the floor plan and a seed), numbers and props in `godot/shooter/data/trap_house.json`, `TrapHouseChoice` (which house), `TrapHouseServer` (dress / strip, events 66-67, joiner catch-up, round reset strips), `TrapHousesNode` (boxes on server and client, models on the client), admin `/traphouse [nearest|<house id>|off]`. No mattress or graffiti in Gang Warfare: mattresses are the Military pack's, graffiti is text on the wall.
 - **Posted defenders**: each holds a spot in a room (picked from the floor plan), turns and shoots, never walks (no NPC goes inside a house today: the navigation mesh stops at the 0.95 m doorways).
 - Duffels: product and cash on the tables, plus the safe.
 - **Safe and drill**: hold E to place a drill; it runs a tier time (about 90 s) and jams at random one to three times; a job player holds E to fix it. Open, the safe gives bonus cash duffels.

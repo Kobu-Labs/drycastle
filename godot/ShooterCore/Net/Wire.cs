@@ -115,6 +115,10 @@ public enum EventKind : byte
     GunshipStatus = 60,
     /// <summary>Server broadcast: an impact on a surface from a gunship round or shell (<see cref="ImpactCodec"/>).</summary>
     ImpactFx = 61,
+    /// <summary>Server broadcast, and to a joiner for every dressed house: a hollow house is dressed as a Trap house (<see cref="Drycastle.ShooterCore.Cartel.TrapHouseCodec"/>: the house id and its props). Kinds 66-69 belong to the Trap house (#496); 68-69 are free.</summary>
+    TrapHouseDressed = 66,
+    /// <summary>Server broadcast: a Trap house is stripped, its props gone (<see cref="Drycastle.ShooterCore.Cartel.TrapHouseCodec"/>: the house id).</summary>
+    TrapHouseStripped = 67,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
     // 120 was Ac130Blast (one message per shell, protocol 11); protocol 12 coalesces the gunship FX into 121-123, so 120 is not reused.
@@ -439,6 +443,7 @@ public static class Wire
     //   vNEXT (Cartel profile + Job core): events 33 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec)
     //   vNEXT (Squad leader): the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494)
     //   vNEXT (Cartel van vehicle): vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine)
+    //   vNEXT (Trap house dressing): events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0046)
     public const byte ProtocolVersion = 87;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
