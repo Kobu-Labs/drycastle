@@ -16,6 +16,7 @@
   <ItemGroup>
     <!-- Pure (no Godot types) clutter parsing of the map loader, compiled in so it can be tested -->
     <Compile Include="../MapLoader/Vegetation/ClutterData.cs" Link="MapLoader/ClutterData.cs" />
+    <Compile Include="../MapLoader/Vegetation/ClutterBuffer.cs" Link="MapLoader/ClutterBuffer.cs" />
     <Compile Include="../MapLoader/Vegetation/CropData.cs" Link="MapLoader/CropData.cs" />
     <Compile Include="../MapLoader/Vegetation/MeadowData.cs" Link="MapLoader/MeadowData.cs" />
     <Compile Include="../MapLoader/Trees/PackTreeData.cs" Link="MapLoader/PackTreeData.cs" />

@@ -29,6 +29,28 @@ public sealed partial class MapLoader
     /// <summary>Height a cut plant keeps (a fraction of its own): the stubble.</summary>
     public const float StubbleScale = 0.12f;
 
+    /// <summary>The crops.json the crop build read (kept for the bales, which come after it), or null.</summary>
+    CropDoc? _cropDocForBales;
+
+    /// <summary>The field's hay bales: from the crops document the crop build or the prefetch read, else from crops.json itself (a load without either).</summary>
+    IEnumerable<float> CropBalesSteps(string mapDir, JsonElement manifest)
+    {
+        var doc = _cropDocForBales;
+        _cropDocForBales = null;
+        var ahead = doc == null ? Ahead?.Crops : null;
+        if (ahead != null) foreach (var w in WaitFor(ahead, 1f)) yield return w;
+        if (ahead != null)
+        {
+            try { doc = ahead.GetAwaiter().GetResult(); }
+            catch (Exception ex) when (ex is JsonException or IOException or FormatException) { _cropBales.Clear(); Warn($"crops: bales not read: {ex.Message}"); yield break; }
+        }
+        if (doc == null) { ReadCropBales(mapDir, manifest); yield break; }
+        _cropBales.Clear();
+        foreach (var g in doc.Groups)
+            if (g.Kind.StartsWith("art_hay_bale", StringComparison.Ordinal))
+                foreach (var i in g.Instances) _cropBales.Add(ToGodot(i.X, i.Y, i.Z));
+    }
+
     void ReadCropBales(string mapDir, JsonElement manifest)
     {
         _cropBales.Clear();

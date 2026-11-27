@@ -2,6 +2,8 @@ using System.Text.Json;
 using Godot;
 using Drycastle.MapLoader.Vegetation;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 /// <summary>
@@ -64,14 +66,18 @@ public sealed partial class MapLoader
         var path = Path.Combine(mapDir, clutterFile);
         if (!File.Exists(path)) { ClutterWarn("file", $"clutter: {clutterFile} is listed in the manifest but missing"); yield break; }
 
+        var tcp = LoadTimers.Start();
+        var ahead = Ahead?.Clutter;
+        if (ahead != null) foreach (var w in WaitFor(ahead, 0f)) yield return w;
         ClutterDoc doc;
-        try { doc = ClutterDoc.Parse(File.ReadAllText(path)); }
+        try { doc = ahead != null ? ahead.GetAwaiter().GetResult() : ClutterDoc.Parse(File.ReadAllText(path)); }
         catch (Exception e) when (e is FormatException or JsonException)
         {
             ClutterWarn("parse", $"clutter: {e.Message}; no clutter drawn");
             yield break;
         }
         if (doc.Groups.Count == 0) yield break;
+        LoadTimers.Lap("clutter.parse", tcp);
 
         // a kind with many instances in a cell is one MultiMesh; the small groups of a cell (and chunk) are merged into one mesh, so a rare
         // species does not cost a node of its own (ClutterSettings.MultiMeshMin)
@@ -118,19 +124,8 @@ public sealed partial class MapLoader
         var mm = new MultiMesh { TransformFormat = MultiMesh.TransformFormatEnum.Transform3D, UseColors = true, Mesh = mesh, InstanceCount = cell.Count };
         var meshBox = mesh.GetAabb();
         var reach = Mathf.Max(meshBox.Size.Length(), 0.1f);
-        Vector3 min = new(float.MaxValue, float.MaxValue, float.MaxValue), max = new(float.MinValue, float.MinValue, float.MinValue);
-        for (var k = 0; k < cell.Count; k++)
-        {
-            var i = cell[k];
-            var local = ToGodot(i.X, i.Y, i.Z) - origin;
-            var basis = Basis.Identity.Rotated(Vector3.Up, i.Rot).Scaled(new Vector3(i.Scale, i.Scale, i.Scale));
-            mm.SetInstanceTransform(k, new Transform3D(basis, local));
-            mm.SetInstanceColor(k, TintColor(i.Tint));
-            var r = reach * Mathf.Max(i.Scale, 0.01f);
-            min = new Vector3(Mathf.Min(min.X, local.X - r), Mathf.Min(min.Y, local.Y - r), Mathf.Min(min.Z, local.Z - r));
-            max = new Vector3(Mathf.Max(max.X, local.X + r), Mathf.Max(max.Y, local.Y + r), Mathf.Max(max.Z, local.Z + r));
-        }
-        mm.CustomAabb = new Aabb(min, max - min);
+        mm.Buffer = ClutterBuffer.Build(cell, (origin.X, origin.Y, origin.Z), true, reach, out var lo, out var hi);
+        mm.CustomAabb = new Aabb(new Vector3(lo.X, lo.Y, lo.Z), new Vector3(hi.X - lo.X, hi.Y - lo.Y, hi.Z - lo.Z));
         var node = new MultiMeshInstance3D
         {
             Name = $"clutter_{kind}",

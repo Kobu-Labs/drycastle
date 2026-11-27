@@ -1,6 +1,8 @@
 using Godot;
 using Drycastle.ShooterCore.Colliders;
 
+using Drycastle.MapLoader.Core;
+
 namespace Drycastle.MapLoader;
 
 /// <summary>
@@ -21,7 +23,9 @@ public sealed partial class MapLoader
         if (!manifest.TryGetProperty("files", out var files) || !files.TryGetProperty("ground_objects", out var name) || name.GetString() is not { } file) yield break;
         var path = Path.Combine(mapDir, file);
         if (!File.Exists(path)) yield break;
+        var tp = LoadTimers.Start();
         var objects = GroundObjectColliders.Parse(File.ReadAllText(path), out var model);
+        LoadTimers.Lap("groundobj.parse", tp);
         var bodies = new Dictionary<(int, int, string), StaticBody3D>();
         var n = 0;
         foreach (var o in objects)
@@ -31,7 +35,7 @@ public sealed partial class MapLoader
             {
                 var key = (o.ChunkX, o.ChunkY, GroundObjectColliders.Surface(o.Kind));
                 if (!bodies.TryGetValue(key, out var body)) bodies[key] = body = NewSolidBody("GroundObjects", part.Layer, key.Item3);
-                body.AddChild(SolidShape(part));
+                AddSolid(body, part);
                 GroundObjectSolids++;
             }
         }

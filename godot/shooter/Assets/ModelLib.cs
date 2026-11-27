@@ -67,6 +67,7 @@ public static class ModelLib
             else GD.PrintErr($"model not found: {AssetPath(relPath)} (nor in the private packs); using a primitive");
             return null;
         }
+        if (Drycastle.MapLoader.MapLoader.TryTakeGltf(path, out var ahead)) return ahead; // parsed on a worker while the map loaded
         var doc = new GltfDocument();
         var state = new GltfState();
         if (doc.AppendFromFile(path, state) != Error.Ok) { GD.PrintErr($"model failed to load: {path}"); return null; }
