@@ -3,10 +3,8 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Net.Server.BotRoster;
 using Drycastle.Shooter.Net.Server.BigfootEvent;
 using Drycastle.Shooter.Net.Server.BusGarage;
-using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.Houses;
 using Drycastle.Shooter.Net.Server.CarPool;
-using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.Careers;
 using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Net.Server.ChatRoom;
@@ -298,7 +296,7 @@ public partial class NetServer : Node
         _cartel.Register(new DeliveryJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));
         _cartel.Register(new HitJobKind(Config.Cartel, parties, () => _areas.Cartel, _rng, jobWorld));
         _match.Event += e => { if (e is PlayerDied d) _cartel.OnDied(d.Victim); }; // the solo player's or the leader's death fails their Job
-        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, new MatchJobParties(_match), _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
+        _heists = new HeistServer(_ctx, Config.Cartel, _cartel, parties, _duffels, () => _jobVehicles, _raidVans, _rivals, () => _areas.Cartel, () => _areas.ZonePolygons,
             (x, z) => Config.Map?.GroundHeightOrMean(x, z) ?? 0f, _rng); // the Heists (#495): the Harvest registers its kind
         _plantation.Fill = _heists.Harvest; // during a Harvest the plantation's hold fills a weed Duffel
         _cartel.Register(new TrapHouseJobKind(_heists, Config.Cartel, _trapHouses, _drills, _rivals)); // the Trap house heist (#496): a dressed house, its defenders, its safe
@@ -685,8 +683,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses, _rivals);
-        _chat.Register("duffel", _duffels.ChatCommand); // TEST: a Duffel in the admin's hands (#494)
-        _chat.Register("drill", _drills.Chat); // TEST: arm the nearest dressed safe for the admin (#496)
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _cartel, _trapHouses, _rivals, _duffels, _drills);
     }
 }
