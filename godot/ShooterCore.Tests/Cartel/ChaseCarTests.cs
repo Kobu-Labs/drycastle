@@ -32,7 +32,7 @@ public class ChaseCarTests
             Assert.Equal((d.VehicleType, d.Skin, d.FirstAfterSeconds, d.IntervalSeconds, d.MaxAlive), (section.VehicleType, section.Skin, section.FirstAfterSeconds, section.IntervalSeconds, section.MaxAlive));
             Assert.Equal(d.Gunmen, section.Gunmen);
             Assert.Equal((d.SpawnPlayerMinM, d.ShootRangeM, d.MovingAimErrorDeg, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds), (section.SpawnPlayerMinM, section.ShootRangeM, section.MovingAimErrorDeg, section.StopSpeedMps, section.StopWithinM, section.GiveUpM, section.GiveUpSeconds));
-            Assert.Equal((d.FollowM, d.MaxSpeedMps, d.OffRoadM, d.WreckSeconds, d.SeatDropM), (section.FollowM, section.MaxSpeedMps, section.OffRoadM, section.WreckSeconds, section.SeatDropM));
+            Assert.Equal((d.FollowM, d.MaxSpeedMps, d.RemountM, d.UnstickAfterSeconds, d.WreckSeconds, d.SeatDropM), (section.FollowM, section.MaxSpeedMps, section.RemountM, section.UnstickAfterSeconds, section.WreckSeconds, section.SeatDropM));
         }
         Assert.Equal((150f, 40f, 5f, 30f, 250f, 20f, 2, 20f, 45f), (d.SpawnPlayerMinM, d.ShootRangeM, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds, d.MaxAlive, d.FirstAfterSeconds, d.IntervalSeconds)); // the user's numbers
     }
@@ -64,13 +64,31 @@ public class ChaseCarTests
     }
 
     [Fact]
+    public void AShippedChaseCarCarriesFourAnEnforcerAtTheWheelAndThreeGunmenWhateverTheTierOrSquad()
+    {
+        var d = new ChaseData();
+        foreach (var kind in new[] { "harvest", "trap_house" })
+        {
+            var section = DataFile.Section<HeistData>(Shipped.JobSection(kind), $"jobs.{kind}").Chase;
+            for (var tier = 1; tier <= 5; tier++)
+                foreach (var size in new[] { 1, 2, 4 })
+                {
+                    Assert.Equal(3, ChaseRules.Gunmen(section, tier, size)); // the car's three other seats, full: more cannot be added
+                    Assert.Equal(4, ChaseRules.Crew(section, tier, size));   // 1 melee (the Enforcer at the wheel) and 3 Gunmen
+                }
+        }
+        Assert.True(Game.Vehicles.Vehicles.Single(v => v.Id == d.VehicleType).Seats.Count >= ChaseRules.Crew(d, 1, 1));
+    }
+
+    [Fact]
     public void TheGunmenGrowWithTheTierAndTheSquadWithinOneToThree()
     {
         var d = new ChaseData();
-        Assert.Equal(1, ChaseRules.Gunmen(d, 1, 1));
-        Assert.Equal(3, ChaseRules.Gunmen(d, 5, 1));
-        Assert.Equal(2, ChaseRules.Gunmen(d, 1, 2)); // plus one per extra member
-        Assert.Equal(3, ChaseRules.Gunmen(d, 5, 4)); // never more than three
+        var few = new ChaseData { Gunmen = new[] { 1, 1, 2, 2, 3 } }; // the numbers a lighter car could carry
+        Assert.Equal(1, ChaseRules.Gunmen(few, 1, 1));
+        Assert.Equal(3, ChaseRules.Gunmen(few, 5, 1));
+        Assert.Equal(2, ChaseRules.Gunmen(few, 1, 2)); // plus one per extra member
+        Assert.Equal(3, ChaseRules.Gunmen(few, 5, 4)); // never more than three
         Assert.Equal(1, ChaseRules.Gunmen(new ChaseData { Gunmen = new[] { 0, 0, 0, 0, 0 } }, 1, 1)); // never fewer than one
     }
 
@@ -83,8 +101,6 @@ public class ChaseCarTests
         Assert.Equal(d.MaxSpeedMps, ChaseRules.FollowSpeed(d, 400f, 20f));
         Assert.True(ChaseRules.FollowSpeed(d, 5f, 20f) < 20f); // too close: slower than the van
         Assert.Equal(0f, ChaseRules.FollowSpeed(d, 1f, 5f));
-        Assert.True(ChaseRules.ApproachSpeed(d, 200f) > ChaseRules.ApproachSpeed(d, 20f)); // brakes for the road point
-        Assert.Equal(3f, ChaseRules.ApproachSpeed(d, d.ArriveM));
     }
 
     [Fact]
@@ -299,8 +315,9 @@ public class ChaseCarTests
 
     // ---- the machine ----
 
-    static ChaseFacts F(float gap = 100f, float vanSpeed = 20f, bool onRoad = true, float roadPoint = float.PositiveInfinity, float carSpeed = 20f, bool driver = true, bool destroyed = false, bool route = true) =>
-        new(gap, vanSpeed, onRoad, roadPoint, carSpeed, driver, destroyed, route);
+    static ChaseFacts F(float gap = 100f, float vanSpeed = 20f, float carSpeed = 20f, bool driver = true, bool destroyed = false, bool route = true,
+        float crewGap = float.PositiveInfinity, int crew = 0, bool free = false, bool aboard = false) =>
+        new(gap, vanSpeed, carSpeed, driver, destroyed, route, crewGap, crew, free, aboard);
 
     static ChaseCar Chasing(ChaseData? d = null)
     {
@@ -360,20 +377,6 @@ public class ChaseCarTests
     }
 
     [Fact]
-    public void AVanOffTheRoadSendsTheCarToTheRoadPointNearestItThenTheCrewGetsOut()
-    {
-        var car = Chasing();
-        car.Step(F(gap: 120f, onRoad: false, roadPoint: 100f), Dt); // off the road: on its way to the road point
-        Assert.Equal(ChaseState.Chasing, car.State);
-        car.Step(F(gap: 60f, onRoad: false, roadPoint: 9f), Dt);
-        Assert.Equal(ChaseState.Chasing, car.State);
-        car.Step(F(gap: 52f, onRoad: false, roadPoint: 7.9f), Dt); // at the road point (50 m from the van: no matter)
-        Assert.Equal(ChaseState.Stopping, car.State);
-        Assert.False(car.Shoots); // more than 40 m from the van: it does not shoot
-        Assert.True(car.Step(F(gap: 52f, onRoad: false, roadPoint: 7f, carSpeed: 0f), Dt).GetOut);
-    }
-
-    [Fact]
     public void ADeadDriverMakesTheCarRollToAStopAndTheGunmenGetOut()
     {
         var car = Chasing();
@@ -387,9 +390,10 @@ public class ChaseCarTests
     }
 
     [Fact]
-    public void ACarThatIsStuckStopsAndTheCrewGetsOut()
+    public void ACarThatIsStuckForGoodStopsAndTheCrewGetsOut()
     {
-        var car = Chasing();
+        var noTries = new ChaseData { MaxUnsticks = 0 }; // it has tried to get free already (see the wedge tests)
+        var car = Chasing(noTries);
         for (var t = 0f; t < 5.8f; t += Dt) car.Step(F(gap: 90f, carSpeed: 0.2f), Dt); // against a wall for under six seconds
         Assert.Equal(ChaseState.Chasing, car.State);
         car.Step(F(gap: 90f, carSpeed: 20f), Dt); // it moved: the clock is off
@@ -398,10 +402,10 @@ public class ChaseCarTests
         var more = 0f;
         for (; more < 1f && car.State == ChaseState.Chasing; more += Dt) car.Step(F(gap: 90f, carSpeed: 0.2f), Dt);
         Assert.NotEqual(ChaseState.Chasing, car.State); // six seconds: it stops, the crew gets out
-        var lost = Chasing();
+        var lost = Chasing(noTries);
         for (var t = 0f; t < 6.5f && lost.State == ChaseState.Chasing; t += Dt) lost.Step(F(gap: 90f, route: false), Dt); // no way over the roads
         Assert.NotEqual(ChaseState.Chasing, lost.State);
-        var near = Chasing();
+        var near = Chasing(noTries);
         for (var t = 0f; t < 20f; t += Dt) near.Step(F(gap: 10f, vanSpeed: 25f, carSpeed: 0.2f), Dt); // right behind the van: it is not stuck, it holds its gap
         Assert.Equal(ChaseState.Chasing, near.State);
     }

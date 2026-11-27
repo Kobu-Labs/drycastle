@@ -354,16 +354,25 @@ stateDiagram-v2
 
 ## Chase.Car
 
-One Rival chase car of a Heist: it follows the Cartel van on the roads with its crew in the windows, stops and lets the crew out when the van is slow and near (or off the road, or its driver died), or gives up when it stays far behind.
+One Rival chase car of a Heist: it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Spawned
     Spawned --> Chasing
     Chasing --> Stopping
+    Chasing --> Reversing
     Chasing --> GivingUp
+    Reversing --> Chasing
+    Reversing --> Stopping
+    Reversing --> GivingUp
     Stopping --> Out
     Stopping --> GivingUp
+    Out --> Remounting
+    Out --> GivingUp
+    Remounting --> Chasing
+    Remounting --> Out
+    Remounting --> GivingUp
     Out --> Gone
     GivingUp --> Gone
     Gone --> [*]
@@ -371,12 +380,14 @@ stateDiagram-v2
 
 From any state: Gone
 
-- **Spawned**: Just put down on a road behind the van with its crew seated: nothing driven yet. The next step is Chasing.
-- **Chasing**: Drives after the van on the roads, keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, the car is stuck (stalled_seconds), or the van is off the road and the car reached the road point nearest it. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
+- **Spawned**: Just put down on open ground behind the van with its crew seated: nothing driven yet. The next step is Chasing.
+- **Chasing**: Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
 - **Stopping**: Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.
-- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. Gone once the crew is gone.
+- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away (confirmed for remount_confirm_seconds) and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.
 - **GivingUp**: Stayed more than give_up_m from the van for give_up_seconds: the server removes the car and its crew at once, then it is Gone.
 - **Gone**: Removed from the world (given up, spent, destroyed and its wreck gone, or its Heist ended). Never left.
+- **Reversing**: Backs out of where it is wedged (clock: reverse_seconds), steering to turn its nose to its way, then Chasing again; the tries are counted (max_unsticks). A dead driver stops it; gives up as Chasing does; a destroyed car is Gone.
+- **Remounting**: The crew walks back to the car's doors over the navigation mesh and sits down in its seats (clock: remount_seconds). Every living member aboard: Chasing. The car wrecked or taken, the driver dead, nobody left, or the clock out: Out (the crew on foot; it tries again after remount_retry_seconds). Gives up as Out does.
 
 ## Church.Door
 
@@ -921,6 +932,17 @@ stateDiagram-v2
     Posted --> Flee
     Posted --> Board
     Posted --> Guard
+    Idle --> Remount
+    Guard --> Remount
+    Chase --> Remount
+    Windup --> Remount
+    Swing --> Remount
+    Aim --> Remount
+    Fire --> Remount
+    Remount --> Guard
+    Remount --> Idle
+    Remount --> Posted
+    Remount --> Flee
     Windup --> Posted
     Swing --> Posted
     Flee --> [*]
@@ -954,7 +976,8 @@ From any state: Dead
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
 - **Aim**: A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.
 - **Fire**: The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.
-- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car); getting out it is Guard.
+- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car, bit 7 of the state byte says it sits); getting out it is Guard.
+- **Remount**: A Rival chase crew on foot called back to its car (the car's machine, Chase.Car Remounting): runs to the car's door on a route of the navigation mesh and never fights on the way; at the door it stands (Guard) and the car seats it. A dead member is Dead, as anywhere.
 
 ## Garage.Door
 

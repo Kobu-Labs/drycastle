@@ -75,12 +75,12 @@ public class HeistTests
     }
 
     [Fact]
-    public void AnAssaultsCrewHasGunmenPerExtraMemberWithinTheMostAVanTakes()
+    public void AnAssaultsCrewHasGunmenPerExtraMemberWithinTheMostAVanTakesTheEnforcersKeptFirst()
     {
         var d = new HarvestData { AssaultGunmen = new[] { 1, 2, 2, 3, 3 }, AssaultEnforcers = new[] { 2, 2, 3, 3, 4 }, GunmenPerExtraMember = 1, MaxCrew = 8 };
         Assert.Equal((1, 2), HeistRules.AssaultCrew(d, 1, 1));
         Assert.Equal((5, 3), HeistRules.AssaultCrew(d, 4, 3));
-        Assert.Equal((6, 2), HeistRules.AssaultCrew(d, 5, 4)); // 6 Gunmen, room for 2 of the 4 Enforcers
+        Assert.Equal((4, 4), HeistRules.AssaultCrew(d, 5, 4)); // the Enforcers (the melee) are kept first: the 6 Gunmen make room for them
         var order = CrewRules.Order(2, 3);
         Assert.Equal(new[] { GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Enforcer }, order);
     }

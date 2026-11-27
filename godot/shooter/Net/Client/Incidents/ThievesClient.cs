@@ -121,7 +121,9 @@ public sealed class ThievesClient
                 if (g.Placed && delta > 0) g.Speed = Mathf.Lerp(g.Speed, (p - g.Last).Length() / (float)delta, 0.2f);
                 g.Last = p; g.Placed = true;
             }
-            g.View.Show(GangRules.StateOf(e.State.State), g.Speed > 0.35f);
+            var seated = GangRules.SeatedOf(e.State.State);
+            g.View.Ride(seated); // a rider of a Rival chase car sits, and does not walk while the car moves
+            g.View.Show(GangRules.StateOf(e.State.State), !seated && g.Speed > 0.35f);
             g.View.SetCarried(e.State.Hp); // the Loot in its hands
             UpdateSpeaker(id, g, e.State.Hp); // the speaker on it and its song (ticket 09)
         }

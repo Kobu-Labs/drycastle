@@ -52,11 +52,11 @@ internal sealed class HeistServer
     /// <param name="vehicles">The Job vehicles (built after the Cartel; asked at a Job's start).</param>
     /// <param name="ground">The terrain height under (x, z) (the map's, or its mean height off it).</param>
     public HeistServer(ServerContext ctx, CartelFile data, CartelServer cartel, IJobParties parties, DuffelServer duffels, CargoServer cargo, ReceiverServer receivers, Func<JobVehicles> vehicles, RaidServer raids, RivalCrewServer rivals,
-        Func<CartelMap> map, Func<ZonePolygons> polygons, Func<float, float, float> ground, Random rng)
+        Func<CartelMap> map, Func<ZonePolygons> polygons, Func<float, float, float> ground, OpenGround open, Random rng)
     {
         Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; Cargo = cargo; Receivers = receivers; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
         receivers.RunOf = RunOf;
-        Chases = new ChaseServer(ctx, vehicles, rivals, () => raids.Roads, ground, rng);
+        Chases = new ChaseServer(ctx, vehicles, rivals, () => raids.Roads, ground, open, rng);
         Harvest = new HarvestJobKind(this, data);
         cartel.Register(Harvest);
     }

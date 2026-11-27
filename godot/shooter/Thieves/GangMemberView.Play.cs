@@ -84,7 +84,7 @@ public sealed partial class GangMemberView
                 if (_blow == null) return new Want("idle", ClipOf(c.Idle));
                 if (state == GangMemberState.Windup && _blowDelay > 0) return new Want("blow-wait", ClipOf(c.Idle)); // the clip's wind-in is shorter than the windup: stand until it is time
                 return new Want("blow" + _blowSerial, _blow.Clip, 1f, _plan.FromS);
-            case GangMemberState.Chase or GangMemberState.Board: return new Want("run", ClipOf(c.Run));
+            case GangMemberState.Chase or GangMemberState.Board or GangMemberState.Remount: return new Want("run", ClipOf(c.Run));
             case GangMemberState.Flee: return new Want("sprint", ClipOf(c.Sprint));
             case GangMemberState.Haul: return new Want("walk", ClipOf(c.Walk), Math.Clamp(_data.Loot.HaulSpeedMps / _cfg.Of(_kind).WalkSpeed, 0.6f, 1.6f)); // a loaded Thief strolls back: no sprint
             case GangMemberState.Steal:

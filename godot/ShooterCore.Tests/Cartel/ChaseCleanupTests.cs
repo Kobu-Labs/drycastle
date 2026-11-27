@@ -19,8 +19,8 @@ public class ChaseCleanupTests
         var d = new ChaseData();
         var machine = new ChaseCar(d);
         var cleanup = new ChaseCleanup(d);
-        machine.Step(new ChaseFacts(50, 10, true, float.PositiveInfinity, 10, true, false, true), Dt); // Spawned -> Chasing
-        machine.Step(new ChaseFacts(50, 10, true, float.PositiveInfinity, 10, true, true, true), Dt);            // the car blew up: Gone
+        machine.Step(new ChaseFacts(50, 10, 10, true, false, true), Dt); // Spawned -> Chasing
+        machine.Step(new ChaseFacts(50, 10, 10, true, true, true), Dt);            // the car blew up: Gone
         cleanup.Exploded();
         Assert.Equal(ChaseState.Gone, machine.State);
         var lain = 0f;

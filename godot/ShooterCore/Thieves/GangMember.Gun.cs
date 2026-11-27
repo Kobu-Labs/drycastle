@@ -33,15 +33,18 @@ public sealed partial class GangMember
     /// <summary>The spot it holds (<see cref="Post"/>), or null when it moves about.</summary>
     public GangPost? PostedAt => _post;
 
+    /// <summary>It sits in a car: posted on a seat (<see cref="GangPost.Seat"/>). Bit 7 of the state byte, so the client draws it seated whatever it does (Posted, Aim, Fire, Windup).</summary>
+    public bool Seated => _post is { Seat: true };
+
     /// <summary>
     /// Posts it: it stands at <paramref name="at"/> (a floor point, no navigation mesh needed) facing <paramref name="facing"/> (Godot yaw, 0 faces -Z) from now on, and fights from there. Given right after it is
-    /// added (it guards then). Not for the dead.
+    /// added (it guards then), or at the car's door when it was called back (<see cref="Remount"/>). <paramref name="seat"/>: the spot is a seat of a car (it sits). Not for the dead.
     /// </summary>
-    public void Post(Vector3 at, float facing)
+    public void Post(Vector3 at, float facing, bool seat = false)
     {
         if (!Alive || Ended != null) return;
         ReleaseJob();
-        _post = new GangPost(at, facing);
+        _post = new GangPost(at, facing, seat);
         Position = Home = at;
         Yaw = facing;
         ClearRoute();
@@ -54,8 +57,8 @@ public sealed partial class GangMember
     /// </summary>
     public void MovePost(Vector3 at, float facing)
     {
-        if (_post == null || !Alive || Ended != null) return;
-        _post = new GangPost(at, facing);
+        if (_post is not { } post || !Alive || Ended != null) return;
+        _post = post with { At = at, Facing = facing };
         Position = Home = at;
     }
 

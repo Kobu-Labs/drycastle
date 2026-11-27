@@ -44,6 +44,9 @@ public sealed class CartelFile : IVersioned
     /// <summary>The Heists' drops (<c>receivers</c>): which Receiver a Heist hands its Duffels to, and how each looks, holds bags and leaves (docs/cartel.md "Receivers").</summary>
     public ReceiversData Receivers { get; set; } = new();
 
+    /// <summary>How the Rival crew's vehicles (Assault vans, chase cars) cross open ground when the roads do not bring them closer (<c>off_road</c>; docs/cartel.md "Assaults").</summary>
+    public OffRoadData OffRoad { get; set; } = new();
+
     /// <summary>One section per kind of Job, by the kind's id (<c>test</c>, later <c>delivery</c>, the heists): only that kind reads it.</summary>
     public Dictionary<string, JsonElement> Jobs { get; set; } = new();
 
@@ -102,6 +105,7 @@ public sealed class CartelFile : IVersioned
         }
         Pallet.Validate();
         Receivers.Validate();
+        OffRoad.Validate("cartel.json: off_road");
         if (Tiers.Count == 0) throw Bad("tiers must list at least one tier");
         if (Tiers.Count > byte.MaxValue) throw Bad("at most 255 tiers");
         for (var i = 0; i < Tiers.Count; i++)

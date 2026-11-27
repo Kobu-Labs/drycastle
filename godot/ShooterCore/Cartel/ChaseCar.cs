@@ -3,50 +3,69 @@ using Drycastle.ShooterCore.Fsm;
 namespace Drycastle.ShooterCore.Cartel;
 
 /// <summary>Where one Rival chase car is (machine <c>Chase.Car</c>, GLOSSARY "Chase car").</summary>
-public enum ChaseState : byte { Spawned, Chasing, Stopping, Out, GivingUp, Gone }
+public enum ChaseState : byte { Spawned, Chasing, Stopping, Out, GivingUp, Gone, Reversing, Remounting }
 
 /// <summary>What the server reads of one chase car each tick.</summary>
 /// <param name="GapM">Ground distance from the car to the Cartel van.</param>
 /// <param name="VanSpeed">The van's speed, metres a second.</param>
-/// <param name="VanOnRoad">A road lies within off_road_m of the van (else the car drives to the road point nearest it).</param>
-/// <param name="RoadPointM">While the van is off the road: the distance from the car to the road point nearest the van; infinite otherwise.</param>
 /// <param name="CarSpeed">The car's speed, metres a second.</param>
 /// <param name="DriverAlive">The driver of the car lives.</param>
 /// <param name="CarDestroyed">The car is destroyed.</param>
-/// <param name="HasRoute">The car has a way over the roads to where it is going.</param>
-public readonly record struct ChaseFacts(float GapM, float VanSpeed, bool VanOnRoad, float RoadPointM, float CarSpeed, bool DriverAlive, bool CarDestroyed, bool HasRoute);
+/// <param name="HasRoute">The car has a way (over the roads and open ground) to where it is going.</param>
+/// <param name="CrewGapM">Ground distance from the nearest living member of the crew to the van (infinite when none lives).</param>
+/// <param name="CrewAlive">Members of the crew that live.</param>
+/// <param name="CarFree">The car stands in the world and no player sits in it: the crew may get back in.</param>
+/// <param name="Aboard">Every living member of the crew sits in the car again (a Remounting crew).</param>
+public readonly record struct ChaseFacts(float GapM, float VanSpeed, float CarSpeed, bool DriverAlive, bool CarDestroyed, bool HasRoute,
+    float CrewGapM = float.PositiveInfinity, int CrewAlive = 0, bool CarFree = false, bool Aboard = false);
 
-/// <summary>What one step of a chase car asks the server to do: the crew gets out now (once), or the car and its crew are removed now (once).</summary>
-public readonly record struct ChaseStep(bool GetOut, bool Remove);
+/// <summary>What one step of a chase car asks the server to do: the crew gets out now (once), the crew walks back to the car (once), the crew is back in and drives on (once), the walk back is over without it (once), or the car and its crew are removed now (once).</summary>
+public readonly record struct ChaseStep(bool GetOut, bool Remove, bool Remount = false, bool Mounted = false, bool AbortRemount = false);
 
 /// <summary>
 /// One Rival chase car (GLOSSARY "Chase car"; docs/cartel.md "Chase cars"), pure: it follows the Cartel van, stops and lets the crew out, or gives up. The server drives the real vehicle from it
-/// (<see cref="ChasePilot"/>) and seats the crew. It follows the van while it is Chasing, stops when the van is slow and near, its driver dies, it is stuck or the van is off the road and it reached the
-/// road point nearest it (Stopping), lets the crew out once it stands (Out: they fight on foot as a Rival crew), gives up when it stays too far from the van (GivingUp) and is Gone when it, or its crew, is over.
+/// (<see cref="ChasePilot"/>) and seats the crew. It follows the van while it is Chasing (backing out for a moment when it is wedged: Reversing), stops when the van is slow and near, its driver dies or it is stuck
+/// for good (Stopping), lets the crew out once it stands (Out: they fight on foot as a Rival crew), calls them back when the van is more than remount_m away and pulling away (Remounting: they walk to the car and
+/// get in, and the chase goes on), gives up when it, or its crew, stays too far from the van (GivingUp) and is Gone when it, or its crew, is over.
 /// </summary>
 public sealed class ChaseCar
 {
     public static readonly StateMachineSpec<ChaseState> Spec = StateMachineSpec<ChaseState>
-        .Define("Chase.Car", "One Rival chase car of a Heist: it follows the Cartel van on the roads with its crew in the windows, stops and lets the crew out when the van is slow and near (or off the road, or its driver died), or gives up when it stays far behind.", ChaseState.Spawned)
+        .Define("Chase.Car", "One Rival chase car of a Heist: it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.", ChaseState.Spawned)
         .Allow(ChaseState.Spawned, ChaseState.Chasing)
-        .Allow(ChaseState.Chasing, ChaseState.Stopping, ChaseState.GivingUp)
+        .Allow(ChaseState.Chasing, ChaseState.Stopping, ChaseState.Reversing, ChaseState.GivingUp)
+        .Allow(ChaseState.Reversing, ChaseState.Chasing, ChaseState.Stopping, ChaseState.GivingUp)
         .Allow(ChaseState.Stopping, ChaseState.Out, ChaseState.GivingUp)
+        .Allow(ChaseState.Out, ChaseState.Remounting, ChaseState.GivingUp)
+        .Allow(ChaseState.Remounting, ChaseState.Chasing, ChaseState.Out, ChaseState.GivingUp)
         .Allow(ChaseState.Out, ChaseState.Gone)
         .Allow(ChaseState.GivingUp, ChaseState.Gone)
         .FromAnywhere(ChaseState.Gone)
-        .Note(ChaseState.Spawned, "Just put down on a road behind the van with its crew seated: nothing driven yet. The next step is Chasing.")
-        .Note(ChaseState.Chasing, "Drives after the van on the roads, keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, the car is stuck (stalled_seconds), or the van is off the road and the car reached the road point nearest it. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.")
+        .Note(ChaseState.Spawned, "Just put down on open ground behind the van with its crew seated: nothing driven yet. The next step is Chasing.")
+        .Note(ChaseState.Chasing, "Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.")
+        .Note(ChaseState.Reversing, "Backs out of where it is wedged (clock: reverse_seconds), steering to turn its nose to its way, then Chasing again; the tries are counted (max_unsticks). A dead driver stops it; gives up as Chasing does; a destroyed car is Gone.")
         .Note(ChaseState.Stopping, "Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.")
-        .Note(ChaseState.Out, "The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. Gone once the crew is gone.")
+        .Note(ChaseState.Out, "The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away (confirmed for remount_confirm_seconds) and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.")
+        .Note(ChaseState.Remounting, "The crew walks back to the car's doors over the navigation mesh and sits down in its seats (clock: remount_seconds). Every living member aboard: Chasing. The car wrecked or taken, the driver dead, nobody left, or the clock out: Out (the crew on foot; it tries again after remount_retry_seconds). Gives up as Out does.")
         .Note(ChaseState.GivingUp, "Stayed more than give_up_m from the van for give_up_seconds: the server removes the car and its crew at once, then it is Gone.")
         .Note(ChaseState.Gone, "Removed from the world (given up, spent, destroyed and its wreck gone, or its Heist ended). Never left.")
         .Build();
 
+    /// <summary>The gap rate is smoothed over about this long (seconds).</summary>
+    const float PullSmoothS = 0.5f;
+
     readonly StateMachine<ChaseState> _fsm = new(Spec);
     readonly ChaseData _d;
-    Countdown _far;     // the car has stayed more than give_up_m from the van
+    Countdown _far;     // the car (or its crew on foot) has stayed more than give_up_m from the van
     Countdown _blocked; // the car is stuck: no way, or no 1 m/s while it wants to get on
+    Countdown _wedged;  // under 1 m/s with the van beyond follow_m: time to back out
+    Countdown _moving;  // driving on at 3 m/s: the tries to get free are forgotten
+    Countdown _confirm; // the van pulls away from the crew on foot
+    Countdown _retry;   // a walk back to the car that failed: not again at once
+    int _unsticks;
     float _gap = float.PositiveInfinity;
+    float _lastCrewGap = float.NaN;
+    float _pull;        // how fast the van gets away from the crew on foot, metres a second, smoothed
 
     public ChaseCar(ChaseData d) { _d = d; }
 
@@ -59,14 +78,17 @@ public sealed class ChaseCar
         remove => _fsm.Changed -= value;
     }
 
-    /// <summary>The Gunmen may shoot now: the car is within shoot_range_m of the van (Chasing, Stopping) or the crew is out.</summary>
-    public bool Shoots => _fsm.Is(ChaseState.Out) || (_fsm.IsAny(ChaseState.Chasing, ChaseState.Stopping) && _gap <= _d.ShootRangeM);
+    /// <summary>The Gunmen may shoot now: the car is within shoot_range_m of the van (driving) or the crew is out.</summary>
+    public bool Shoots => _fsm.Is(ChaseState.Out) || (_fsm.IsAny(ChaseState.Chasing, ChaseState.Reversing, ChaseState.Stopping) && _gap <= _d.ShootRangeM);
 
-    /// <summary>The car still counts towards max_alive: its crew sits in it (not yet out, not given up), or a member of the crew lives.</summary>
-    public bool InFight(int crewAlive) => _fsm.IsAny(ChaseState.Spawned, ChaseState.Chasing, ChaseState.Stopping) || (_fsm.Is(ChaseState.Out) && crewAlive > 0);
+    /// <summary>The car still counts towards max_alive: its crew sits in it or walks back to it (not out, not given up), or a member of the crew lives.</summary>
+    public bool InFight(int crewAlive) => _fsm.IsAny(ChaseState.Spawned, ChaseState.Chasing, ChaseState.Reversing, ChaseState.Stopping, ChaseState.Remounting) || (_fsm.Is(ChaseState.Out) && crewAlive > 0);
 
-    /// <summary>The crew sits in the car (not yet out).</summary>
-    public bool CrewInside => _fsm.IsAny(ChaseState.Spawned, ChaseState.Chasing, ChaseState.Stopping);
+    /// <summary>The crew sits in the car (not out).</summary>
+    public bool CrewInside => _fsm.IsAny(ChaseState.Spawned, ChaseState.Chasing, ChaseState.Reversing, ChaseState.Stopping);
+
+    /// <summary>The crew walks back to the car, those that arrived sit in their seats already.</summary>
+    public bool Remounting => _fsm.Is(ChaseState.Remounting);
 
     /// <summary>The car, its crew or its Heist is over: from any state it is Gone.</summary>
     public void End() => _fsm.Enter(ChaseState.Gone);
@@ -81,40 +103,99 @@ public sealed class ChaseCar
                 else _fsm.Enter(ChaseState.Chasing);
                 return default;
             case ChaseState.Chasing:
+            case ChaseState.Reversing:
             case ChaseState.Stopping:
                 if (f.CarDestroyed) { _fsm.Enter(ChaseState.Gone); return default; } // its crew died with it (the server kills it)
-                if (GivesUp(f, dt)) { _fsm.Enter(ChaseState.GivingUp); return new ChaseStep(false, true); }
+                if (GivesUp(f.GapM, dt)) { _fsm.Enter(ChaseState.GivingUp); return new ChaseStep(false, true); }
                 if (_fsm.Is(ChaseState.Chasing))
                 {
+                    Moving(f, dt);
                     if (StopsNow(f, dt)) _fsm.Enter(ChaseState.Stopping, _d.StopSeconds);
+                    else if (Wedged(f, dt)) { _fsm.Enter(ChaseState.Reversing, _d.ReverseSeconds); _blocked.Cancel(); } // backing out is progress: the stuck clock starts over
+                    return default;
+                }
+                if (_fsm.Is(ChaseState.Reversing))
+                {
+                    if (!f.DriverAlive) _fsm.Enter(ChaseState.Stopping, _d.StopSeconds);
+                    else if (_fsm.Tick(dt)) _fsm.Enter(ChaseState.Chasing);
                     return default;
                 }
                 _fsm.Tick(dt);
-                if (f.CarSpeed < 0.5f || _fsm.Expired) { _fsm.Enter(ChaseState.Out); return new ChaseStep(true, false); }
+                if (f.CarSpeed < 0.5f || _fsm.Expired) { _fsm.Enter(ChaseState.Out); ForgetPull(); return new ChaseStep(true, false); }
+                return default;
+            case ChaseState.Out:
+                _retry.Tick(dt);
+                if (GivesUp(f.CrewGapM, dt)) { _fsm.Enter(ChaseState.GivingUp); return new ChaseStep(false, true); }
+                if (WantsBack(f, dt)) { _fsm.Enter(ChaseState.Remounting, _d.RemountSeconds); _far.Cancel(); return new ChaseStep(false, false, Remount: true); }
+                return default;
+            case ChaseState.Remounting:
+                if (GivesUp(f.CrewGapM, dt)) { _fsm.Enter(ChaseState.GivingUp); return new ChaseStep(false, true); }
+                if (f.CarDestroyed || !f.CarFree || !f.DriverAlive || f.CrewAlive == 0) return Fail();
+                if (f.Aboard) { _fsm.Enter(ChaseState.Chasing); _unsticks = 0; _blocked.Cancel(); _wedged.Cancel(); return new ChaseStep(false, false, Mounted: true); }
+                if (_fsm.Tick(dt)) return Fail();
                 return default;
             default:
                 return default;
         }
     }
 
-    /// <summary>More than give_up_m from the van for give_up_seconds.</summary>
-    bool GivesUp(in ChaseFacts f, float dt)
+    /// <summary>The walk back is over without the crew in the car: they stand on foot again and may try again after remount_retry_seconds.</summary>
+    ChaseStep Fail()
     {
-        if (f.GapM <= _d.GiveUpM) { _far.Cancel(); return false; }
+        _fsm.Enter(ChaseState.Out);
+        ForgetPull();
+        _retry.Start(_d.RemountRetrySeconds);
+        return new ChaseStep(false, false, AbortRemount: true);
+    }
+
+    void ForgetPull() { _lastCrewGap = float.NaN; _pull = 0; _confirm.Cancel(); }
+
+    /// <summary>More than give_up_m from the van for give_up_seconds.</summary>
+    bool GivesUp(float gapM, float dt)
+    {
+        if (gapM <= _d.GiveUpM) { _far.Cancel(); return false; }
         _far.StartIfReady(_d.GiveUpSeconds);
         return _far.Tick(dt);
     }
 
-    /// <summary>The van is slow and near, the driver is dead, the car is stuck, or the van is off the road and the car is at the road point nearest it.</summary>
+    /// <summary>The van is slow and near, the driver is dead, or the car is stuck.</summary>
     bool StopsNow(in ChaseFacts f, float dt)
     {
         if (!f.DriverAlive) return true;
         if (f.VanSpeed < _d.StopSpeedMps && f.GapM <= _d.StopWithinM) return true;
-        if (!f.VanOnRoad && f.RoadPointM <= _d.ArriveM) return true;
         var stuck = !f.HasRoute || (f.CarSpeed < 1f && f.GapM > _d.FollowM);
         if (!stuck) { _blocked.Cancel(); return false; }
         _blocked.StartIfReady(_d.StalledSeconds);
         return _blocked.Tick(dt);
+    }
+
+    /// <summary>Under 1 m/s with the van beyond follow_m (and a way to it) for unstick_after_seconds, and still tries left: back out.</summary>
+    bool Wedged(in ChaseFacts f, float dt)
+    {
+        if (!(f.HasRoute && f.CarSpeed < 1f && f.GapM > _d.FollowM)) { _wedged.Cancel(); return false; }
+        _wedged.StartIfReady(_d.UnstickAfterSeconds);
+        if (!_wedged.Tick(dt) || _unsticks >= _d.MaxUnsticks) return false;
+        _unsticks++;
+        return true;
+    }
+
+    /// <summary>Driving on at 3 m/s for 3 s: the tries to get free are forgotten.</summary>
+    void Moving(in ChaseFacts f, float dt)
+    {
+        if (f.CarSpeed < 3f) { _moving.Cancel(); return; }
+        _moving.StartIfReady(3f);
+        if (_moving.Tick(dt)) _unsticks = 0;
+    }
+
+    /// <summary>The crew on foot should go back to the car: the van is more than remount_m from it and pulling away (confirmed), the car is whole and free, its driver lives and a member is left.</summary>
+    bool WantsBack(in ChaseFacts f, float dt)
+    {
+        if (!float.IsNaN(_lastCrewGap) && dt > 0 && float.IsFinite(f.CrewGapM)) _pull += ((f.CrewGapM - _lastCrewGap) / dt - _pull) * Math.Min(1f, dt / PullSmoothS);
+        _lastCrewGap = f.CrewGapM;
+        var possible = f.CrewAlive > 0 && f.CarFree && !f.CarDestroyed && f.DriverAlive && _retry.Ready;
+        if (!(possible && f.CrewGapM > _d.RemountM && _pull > _d.PullMps)) { _confirm.Cancel(); return false; }
+        _confirm.StartIfReady(_d.RemountConfirmSeconds);
+        return _confirm.Tick(dt);
     }
 }
 

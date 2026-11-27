@@ -39,6 +39,16 @@
     "colour": "#8a6a45"
   },
 
+  // off_road (OffRoadData, ShooterCore/Cartel/OffRoad.cs; docs/cartel.md "Assaults", "Chase cars"): how the Rival crew's vehicles (Assault vans, chase cars) leave the roads. They use the roads while the roads bring them closer
+  // and cross open ground (fields, meadows) when that is shorter, never over a building, a tree trunk, a fence, water or a slope steeper than max_grade. A plan is the cheapest of: straight (cost open_cost per metre; a metre of road
+  // costs 1, so roads win unless the field is clearly shorter), or join the nearest road within enter_m (the line to it open) and leave it at the road point within leave_m of the goal (one every step_m, at most max_checks tried) whose
+  // line to the goal is open. close_m: within this of its end a line is not looked at. An Assault van drives the open way only when it is at least min_tail_m long and parks park_short_m short of its target. The open check (the server's
+  // OpenGround) looks at a line every sample_m in three lanes the vehicle's width wide (its half width plus margin_m) with rays ray_up_m over the ground; car_half_width_m is the car's, for a spot to stand on.
+  "off_road": {
+    "enter_m": 80, "leave_m": 300, "step_m": 15, "open_cost": 1.3, "close_m": 6, "max_checks": 10, "min_tail_m": 12, "park_short_m": 14,
+    "sample_m": 4, "ray_up_m": 0.9, "max_grade": 0.45, "margin_m": 0.3, "car_half_width_m": 1.1
+  },
+
   // receivers (ReceiversData, ShooterCore/Cartel/Receiver.cs; docs/cartel.md "Receivers"; GLOSSARY "Receiver"): the drop of a Heist (Harvest and Trap house; a Delivery keeps its cartel_drop points). A Heist's drop is one of three
   // kinds, drawn at random among the kinds the map has (weights below: a kind with weight 0 is never drawn; a kind with no free place now, or none far enough, falls through to the next): a stash house (a hollow house with
   // road access that no player is in and no Job holds, at least the heist's drop_min_m from its objective: a Cartel pallet and a buyer at it), a helicopter (the utility helicopter on a landing spot, zone kind cartel_heli, rotors
@@ -179,14 +189,15 @@
       // Respect for each duffel loaded above the minimum at the drop, times the tier, on top of the tier's respect (each earning member).
       "bonus_respect_per_duffel": 15,
       // Assaults (Rival crew vans): the first comes grace_seconds after the Cartel van reaches the plantation's area, the next every assault_interval_seconds while the heist is there. A van
-      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: assault_gunmen and assault_enforcers per tier, plus
-      // gunmen_per_extra_member Gunmen per extra member, at most max_crew (at most 15). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
+      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: 5, 1 melee (an Enforcer: assault_enforcers) and 4 Gunmen (assault_gunmen: more at the
+      // top tier) per tier, plus gunmen_per_extra_member Gunmen per extra member in what is left of max_crew (at most 15), the Enforcers kept first: a bigger squad adds Gunmen, never a second melee member. The van
+      // drives the roads in and on across open ground to park off_road.park_short_m short of its target (see off_road). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
       "grace_seconds": [60, 55, 50, 45, 40],
       "assault_interval_seconds": [100, 90, 80, 70, 60],
-      "assault_gunmen": [1, 2, 2, 3, 3],
-      "assault_enforcers": [2, 2, 3, 3, 4],
+      "assault_gunmen": [4, 4, 4, 4, 5],
+      "assault_enforcers": [1, 1, 1, 1, 1],
       "gunmen_per_extra_member": 1,
-      "max_crew": 8,
+      "max_crew": 6,
       "max_assaults_alive": 3,
       // The Cartel van: van_type (vehicles.json) on the road spot nearest the Contact at least van_spawn_min_m from him, reserved for the party. Its bay takes a duffel up to
       // van_load_margin_m outside its volume too (the closed rear doors).
@@ -209,16 +220,20 @@
       "area_margin_m": 25,
       // chase (ChaseData, ShooterCore/Cartel/ChaseData.cs; docs/cartel.md "Chase cars"; GLOSSARY "Chase car"): Rival cars after the van from the moment it leaves the objective with the minimum loaded (a Trap house: leaving the house) until it reaches the drop
       // (the ones out then fight on). A chase car is vehicle_type of vehicles.json in its skin number "skin" (an index of that type's skins: the car's are yellow, blue, green, red, grey; 3, the red one, is the darkest by the mean luminance of the
-      // catalogue renders: 60 against blue 85, green 86, yellow 131, grey 137; an atlas swap, no new skin), driven on the roads by an NPC through the drive model, a Rival Enforcer at the wheel and 1 to 3 Gunmen in the other seats
+      // catalogue renders: 60 against blue 85, green 86, yellow 131, grey 137; an atlas swap, no new skin), driven by an NPC through the drive model, a Rival Enforcer at the wheel (the one melee member) and 3 Gunmen in the other seats: 4 in all
       // (gunmen per tier, plus gunmen_per_extra_member per party member beyond the first, at most max_gunmen). first_after_seconds: the first car comes this long after the van left; then one every interval_seconds while fewer than max_alive are
-      // in the fight (a car in the fight: its crew inside, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: a point of the van's trail (its way since the objective, the objective first) that lies
-      // spawn_back_min_m to spawn_back_max_m behind it, the nearest road within spawn_road_m of it, at least spawn_player_min_m from every player, out of the party's sight (a line of sight check, as a Gunman's), spawn_apart_m from the other
-      // chase cars and clear of vehicles. FIGHT: the Gunmen shoot from the windows only while the car is within shoot_range_m of the van; while it moves faster than moving_mps their rounds are turned off their line by up to moving_aim_error_deg
-      // (rival_crew.json's gun.aim_error_deg is the standing one). The car stops (brakes, the handbrake once it nearly stands) and the crew gets out and fights on foot as a Rival crew when the van is slower than stop_speed_mps within stop_within_m, when
-      // its driver is dead (it rolls; stop_seconds at most), when it made no 1 m/s for stalled_seconds while it wants on, or, with the van off the road (no road within off_road_m of it), when it reached the road point nearest the van (arrive_m): roads only.
-      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps: the car's top speed is 44.4); the way is planned again every repath_seconds. A car more
+      // in the fight (a car in the fight: its crew inside or walking back to it, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: a point of the van's trail (its way since the objective, the objective first)
+      // that lies spawn_back_min_m to spawn_back_max_m behind it: the nearest road within spawn_road_m of it, or open drivable ground (see off_road: nothing solid, no water) at the point itself or spawn_spread_m (and half of it) to either side of it, at least
+      // spawn_player_min_m from every player, out of the party's sight (a line of sight check, as a Gunman's), spawn_apart_m from the other chase cars, clear of vehicles and with a way from it to the van. FIGHT: the Gunmen shoot from the windows only while the car is within
+      // shoot_range_m of the van; while it moves faster than moving_mps their rounds are turned off their line by up to moving_aim_error_deg (rival_crew.json's gun.aim_error_deg is the standing one). The car stops (brakes, the handbrake once it nearly
+      // stands) and the crew gets out and fights on foot as a Rival crew when the van is slower than stop_speed_mps within stop_within_m, when its driver is dead (it rolls; stop_seconds at most), or when it made no 1 m/s for stalled_seconds while it wants on.
+      // Before that, a car wedged (under 1 m/s with the van beyond follow_m) for unstick_after_seconds backs out for reverse_seconds and drives on, at most max_unsticks times in a row (the count is forgotten after 3 s at 3 m/s).
+      // REMOUNT: a crew on foot whose van is more than remount_m from its nearest living member and pulling away (the gap grows faster than pull_mps, smoothed, for remount_confirm_seconds) walks back to its car over the navigation mesh and gets in (the
+      // seats as when it spawned) when the car is not wrecked, no player sits in it and its driver lives; remount_seconds to do it, then it stays on foot and tries again after remount_retry_seconds. A wrecked or taken car: they stay on foot.
+      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps = 23.33, 84 km/h: 1.4 times the loaded Cartel van's 60 km/h; an NPC's input only,
+      // the car type's own top speed is 44.4 and a player's car is not limited by it); the way (roads where they bring it closer, open ground where that is shorter) is planned again every repath_seconds. A car or crew more
       // than give_up_m from the van for give_up_seconds gives up and is removed with its crew. A destroyed car's crew inside dies with it; its wreck lies wreck_seconds (keep it under vehicles.json destroyed_return_time) then goes. seat_drop_m: the crew
-      // sits as standing figures this far below the seat's point (the torso at the window, the legs in the body: no sitting clip in the pack); exit_side_m: they step out this far beyond the door side. Killing them pays nothing (Rival crew rules).
+      // sits (the seated pose, thieves.json van.view seat_pelvis_m = 0.42 above the feet): the feet this far below the seat's point so the hips are on it; exit_side_m: they step out this far beyond the door side. Killing them pays nothing (Rival crew rules).
       "chase": {
         "vehicle_type": "car",
         "skin": 3,
@@ -226,7 +241,7 @@
         "interval_seconds": 45,
         "max_alive": 2,
         "spawn_retry_seconds": 3,
-        "gunmen": [1, 1, 2, 2, 3],
+        "gunmen": [3, 3, 3, 3, 3],
         "gunmen_per_extra_member": 1,
         "max_gunmen": 3,
         "spawn_player_min_m": 150,
@@ -234,6 +249,7 @@
         "spawn_back_max_m": 500,
         "spawn_road_m": 30,
         "spawn_apart_m": 25,
+        "spawn_spread_m": 40,
         "shoot_range_m": 40,
         "moving_aim_error_deg": 9,
         "moving_mps": 2,
@@ -241,16 +257,22 @@
         "stop_within_m": 30,
         "stop_seconds": 12,
         "stalled_seconds": 6,
-        "arrive_m": 8,
-        "off_road_m": 15,
+        "unstick_after_seconds": 2.5,
+        "reverse_seconds": 1.5,
+        "max_unsticks": 3,
+        "remount_m": 60,
+        "pull_mps": 1.5,
+        "remount_confirm_seconds": 1,
+        "remount_seconds": 30,
+        "remount_retry_seconds": 10,
         "follow_m": 14,
         "catch_up_gain": 1,
-        "max_speed_mps": 38,
-        "repath_seconds": 1,
+        "max_speed_mps": 23.33,
+        "repath_seconds": 1.5,
         "give_up_m": 250,
         "give_up_seconds": 20,
         "wreck_seconds": 20,
-        "seat_drop_m": 0.5,
+        "seat_drop_m": 0.42,
         "exit_side_m": 0.7
       }
     },
@@ -279,10 +301,10 @@
       // Assaults, the Cartel van and the drop (a Receiver, from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded; they come again at the drop (harvest's drop_grace_seconds).
       "grace_seconds": [60, 55, 50, 45, 40],
       "assault_interval_seconds": [100, 90, 80, 70, 60],
-      "assault_gunmen": [1, 2, 2, 3, 3],
-      "assault_enforcers": [2, 2, 3, 3, 4],
+      "assault_gunmen": [4, 4, 4, 4, 5],
+      "assault_enforcers": [1, 1, 1, 1, 1],
       "gunmen_per_extra_member": 1,
-      "max_crew": 8,
+      "max_crew": 6,
       "max_assaults_alive": 3,
       "van_type": "cartel_van",
       "van_spawn_min_m": 8,
@@ -298,7 +320,7 @@
         "interval_seconds": 45,
         "max_alive": 2,
         "spawn_retry_seconds": 3,
-        "gunmen": [1, 1, 2, 2, 3],
+        "gunmen": [3, 3, 3, 3, 3],
         "gunmen_per_extra_member": 1,
         "max_gunmen": 3,
         "spawn_player_min_m": 150,
@@ -306,6 +328,7 @@
         "spawn_back_max_m": 500,
         "spawn_road_m": 30,
         "spawn_apart_m": 25,
+        "spawn_spread_m": 40,
         "shoot_range_m": 40,
         "moving_aim_error_deg": 9,
         "moving_mps": 2,
@@ -313,16 +336,22 @@
         "stop_within_m": 30,
         "stop_seconds": 12,
         "stalled_seconds": 6,
-        "arrive_m": 8,
-        "off_road_m": 15,
+        "unstick_after_seconds": 2.5,
+        "reverse_seconds": 1.5,
+        "max_unsticks": 3,
+        "remount_m": 60,
+        "pull_mps": 1.5,
+        "remount_confirm_seconds": 1,
+        "remount_seconds": 30,
+        "remount_retry_seconds": 10,
         "follow_m": 14,
         "catch_up_gain": 1,
-        "max_speed_mps": 38,
-        "repath_seconds": 1,
+        "max_speed_mps": 23.33,
+        "repath_seconds": 1.5,
         "give_up_m": 250,
         "give_up_seconds": 20,
         "wreck_seconds": 20,
-        "seat_drop_m": 0.5,
+        "seat_drop_m": 0.42,
         "exit_side_m": 0.7
       }
     }

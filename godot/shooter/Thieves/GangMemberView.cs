@@ -151,6 +151,28 @@ public sealed partial class GangMemberView : Node3D
         Show(GangMemberState.Idle, false);
     }
 
+    /// <summary>
+    /// Seated or standing as the entity says (the state byte's bit 7, <see cref="GangRules.SeatedOf"/>: a Rival chase car's rider): the same pose as the van's crew (<see cref="SitPose"/>, the pelvis at
+    /// thieves.json van.view seat_pelvis_m), whatever the member does (it aims and fires seated), and no walk clip while it rides (the caller passes it as not moving). Standing again takes the pose off.
+    /// </summary>
+    public void Ride(bool seated)
+    {
+        if (!_seated.Update(seated, out var before)) return;
+        if (seated)
+        {
+            if (_skeleton != null) { _rideSit = new SitPose { Name = "Ride", PelvisM = _data.Van.View.SeatPelvisM }; _skeleton.AddChild(_rideSit); }
+            else _pivot.Scale = new Vector3(_pivot.Scale.X, _pivot.Scale.Y * 0.65f, _pivot.Scale.Z);
+        }
+        else if (before)
+        {
+            if (_rideSit != null) { _rideSit.QueueFree(); _rideSit = null; }
+            else _pivot.Scale = new Vector3(_pivot.Scale.X, _pivot.Scale.Y / 0.65f, _pivot.Scale.Z);
+        }
+    }
+
+    Change<bool> _seated;
+    SitPose? _rideSit;
+
     /// <summary>Shows what the member is doing. <paramref name="moving"/> says whether it is going somewhere (stands, guards and walks share two clips). A body first seen dead lies at once.</summary>
     public void Show(GangMemberState state, bool moving)
     {
