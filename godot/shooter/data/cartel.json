@@ -12,7 +12,7 @@
   ],
   // tiers: the Contact lists jobs by tier, 1 first, numbered without a gap. rank: the lowest rank of the leader that opens it (never lower than the tier before's);
   // respect: what a finished job of the tier pays EVERY earning member of the party at the moment of success (a member of the Cartel with a stored Profile, not in sandbox mode).
-  // A failed job pays nothing. Reward depends on the tier only (a heist adds its own bonus later).
+  // A failed job pays nothing. Reward depends on the tier only; a heist adds its own bonus (jobs.<heist>.bonus_respect_per_duffel).
   "tiers": [
     { "tier": 1, "rank": "runner",  "respect": 100 },
     { "tier": 2, "rank": "dealer",  "respect": 200 },
@@ -60,6 +60,46 @@
       "max_guards": 10,
       "ring_m": 4,
       "reveal_m": 35
+    },
+    // harvest: the Harvest heist (HarvestJobKind on the Heist template: ShooterCore/Cartel/Heist.cs HeistData, HarvestData; docs/cartel.md "Heists", "Harvest"). Every per-tier array has one
+    // number per tier, tier 1 first. "Extra member": each party member beyond the first (the squad's size when the leader starts it).
+    "harvest": {
+      "name": "Harvest",
+      // seconds: the job's timer per tier, a safety: it fails when they run out.
+      "seconds": [900, 870, 840, 810, 780],
+      // The fewest duffels loaded that the drop takes (min) and the most the party can fill (max), per tier, plus per extra member; never more than the van's bay takes (vehicles.json
+      // cartel_van cargo_volume.capacity).
+      "min_duffels": [2, 3, 3, 4, 4],
+      "min_per_extra_member": 1,
+      "max_duffels": [5, 6, 7, 8, 9],
+      "max_per_extra_member": 1,
+      // Respect for each duffel loaded above the minimum at the drop, times the tier, on top of the tier's respect (each earning member).
+      "bonus_respect_per_duffel": 15,
+      // Assaults (Rival crew vans): the first comes grace_seconds after the Cartel van reaches the plantation's area, the next every assault_interval_seconds while the heist is there. A van
+      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: assault_gunmen and assault_enforcers per tier, plus
+      // gunmen_per_extra_member Gunmen per extra member, at most max_crew (at most 15). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
+      "grace_seconds": [60, 55, 50, 45, 40],
+      "assault_interval_seconds": [100, 90, 80, 70, 60],
+      "assault_gunmen": [1, 2, 2, 3, 3],
+      "assault_enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_extra_member": 1,
+      "max_crew": 8,
+      "max_assaults_alive": 3,
+      // The Cartel van: van_type (vehicles.json) on the road spot nearest the Contact at least van_spawn_min_m from him, reserved for the party. Its bay takes a duffel up to
+      // van_load_margin_m outside its volume too (the closed rear doors).
+      "van_type": "cartel_van",
+      "van_spawn_min_m": 8,
+      "van_load_margin_m": 0.35,
+      // The Drop point (cartel_drop zones): at least drop_min_m from the plantation's centre and drop_apart_m from another job's; the van must stop (slower than drop_stop_mps) within
+      // drop_radius_m of it, with at least the minimum loaded.
+      "drop_min_m": 300,
+      "drop_apart_m": 40,
+      "drop_radius_m": 10,
+      "drop_stop_mps": 1,
+      // fill_hold_seconds: during the heist a party member's hold of the interact key in the plantation fills a weed duffel in their hands (instead of High) until the maximum is filled.
+      // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
+      "fill_hold_seconds": 3,
+      "area_margin_m": 25
     }
   }
 }

@@ -750,7 +750,7 @@ A condition a player carries that is not an Item: no slot, no bag cell, no drop,
 _Avoid_: buff, effect, power-up, item (an Item is worn or carried)
 
 **Plantation**:
-A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. Numbers: `plantation.json`.
+A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. During a Harvest heist a player of its party gets no High from the hold: a hold of 3 s (`cartel.json` `jobs.harvest`) fills a weed Duffel in their hands, up to the Heist's maximum. Numbers: `plantation.json`.
 _Avoid_: weed field, drug zone
 
 **High**:
@@ -842,7 +842,7 @@ One task a giver hands out, with an objective, a reward and a way to fail, run b
 _Avoid_: quest, mission, task, Event (a Job is not one)
 
 **Heist**:
-A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. Planned (#437).
+A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a Drop point far from the objective is reserved; the van's bay takes only the party's Duffels; the Heist succeeds when the van stops within the drop radius with at least the minimum loaded (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The Trap house heist is planned.
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
@@ -850,7 +850,7 @@ A bag of goods (weed, cash, product) made for a Job's players (its party): only 
 _Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
 
 **Cartel van**:
-The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. The vehicle is built (#495); the Heist that uses it is planned (#437).
+The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. Built, with the Harvest that uses it (#495).
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:
@@ -862,7 +862,7 @@ Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of
 _Avoid_: target spot, hit zone
 
 **Assault**:
-A van of the Rival crew that comes in to attack a Heist's objective, one after another until the Cartel van leaves. Planned (#437).
+A van of the Rival crew that comes in to attack a Heist's objective: a Raid van (its road driving, ADR 0021) in from the map's edge to the road stop nearest the objective, which never drives off; its crew (Gunmen and Enforcers, by tier and squad size) gets out, heads for the objective and attacks the Job's players on sight, and fights on by a wrecked van. The first comes a grace time after the Cartel van reaches the objective, then one every interval (machine `Heist.Assaults`), none while the van is away with the minimum loaded (no chase), at most a few in the fight at once; its Job removes what is left at its end. Built (#495).
 _Avoid_: wave, attack, Raid
 
 **Rival crew**:

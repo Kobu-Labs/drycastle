@@ -100,6 +100,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 - The Contact's own plantation. During the job, holding E 3 s anywhere in the plantation fills a weed duffel in the player's hands (no High); outside a job the hold gives High as now.
 - A minimum and a maximum duffel count (tier, squad size). Assaults come in from the road side.
 - Folds in the old "Defend the plantation" idea.
+- Built (#495): the Heist template in `ShooterCore/Cartel/Heist.cs` (machines `Heist.Phase` and `Heist.Assaults`, `HeistRules`, `JobDrops`, `PlantationArea`), the server's `HeistServer` / `HeistRun` (`IHeistGoal` is where a kind plugs its objective in) and `HarvestJobKind` (`IPlantationFill` on the plantation's hold); Assaults are Raid vans of the Rival crew (`RaidServer.LaunchAssault`). Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` to test.
 
 ### Trap house
 

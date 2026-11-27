@@ -997,6 +997,52 @@ stateDiagram-v2
 - **Burning**: Fire for BaleBurnSeconds; everyone close enough is ignited each tick. Nobody is credited for those burns.
 - **Ash**: Burnt out: a dark heap. Stays until the bale despawns (a corpse's lifetime) or the round ends; it cannot be lit again.
 
+## Heist.Assaults
+
+When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval, only while the Heist is at its objective.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Grace
+    Grace --> Waiting
+    Grace --> Paused
+    Waiting --> Paused
+    Paused --> Waiting
+    Over --> [*]
+```
+
+From any state: Over
+
+- **Idle**: The van has not reached the objective yet; no clock.
+- **Grace**: The van reached the objective (clock: the grace seconds); at its end the first Assault is due.
+- **Waiting**: Assaults came (clock: the interval); at its end the next is due and the clock starts over.
+- **Paused**: The van left the objective with the minimum loaded: no new Assault. The time left is kept; the van's return goes on with it (Waiting).
+- **Over**: The Heist ended. Never left.
+
+## Heist.Phase
+
+One Heist from the Contact to the Drop point: the Cartel van to the objective, filling and loading under Assaults, the van to the drop; the van's destruction loses it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ToObjective
+    ToObjective --> AtObjective
+    AtObjective --> ToDrop
+    ToDrop --> AtObjective
+    ToDrop --> Delivered
+    Delivered --> [*]
+    Lost --> [*]
+```
+
+From any state: Lost
+
+- **ToObjective**: The Cartel van, put down beside the Contact, has not reached the objective's area yet; no Assault. Ends when it stands in the area.
+- **AtObjective**: The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.
+- **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; stopped within the drop radius it is Delivered.
+- **Delivered**: The van stopped at the Drop point with at least the minimum loaded: the Job succeeds; Respect counts what was loaded then. Never left.
+- **Lost**: The Cartel van was destroyed: the Job fails. Never left.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.

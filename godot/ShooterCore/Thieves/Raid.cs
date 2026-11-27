@@ -19,15 +19,23 @@ public sealed class Raid : IRaidCrew
     readonly Func<Vector3, Vector3> _edgeFor;
     readonly Queue<GangMemberKind> _queue = new();
     readonly LootBook? _loot;
+    readonly Vector3? _post;
     readonly List<LootOrigin> _loaded = new();
     Countdown _stagger;
     Edge _over;   // the end of the Raid, announced once (Over never goes back)
 
     /// <param name="loot">The event's Loot: with it the Thieves of the gang steal and load the van (<see cref="RaidWork"/>); without, they stand about.</param>
     public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, GangConfig gangCfg, GangRaidCounts crew, RaidPlan plan, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, LootBook? loot = null)
+        : this(van, gang, cfg, plan, Order(crew), snap, edgeFor, loot, null) { }
+
+    /// <summary>
+    /// A Raid whose crew gets out in <paramref name="order"/>. With a <paramref name="post"/> (a Heist's Assault, docs/cartel.md "Assaults") the crew heads there once out instead of standing at the
+    /// door, and a wrecked van does not send it off: it fights on until its Job removes it.
+    /// </summary>
+    public Raid(RaidVan van, ThiefGang gang, VanConfig cfg, RaidPlan plan, IEnumerable<GangMemberKind> order, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, LootBook? loot, Vector3? post)
     {
-        Van = van; Gang = gang; _cfg = cfg; Plan = plan; _snap = snap; _edgeFor = edgeFor; _loot = loot;
-        foreach (var k in Order(crew)) _queue.Enqueue(k);
+        Van = van; Gang = gang; _cfg = cfg; Plan = plan; _snap = snap; _edgeFor = edgeFor; _loot = loot; _post = post;
+        foreach (var k in order) _queue.Enqueue(k);
         van.Crew = this;
         van.StateChanged += OnVanState;
         if (loot != null) gang.Work = new RaidWork(loot, this);
@@ -95,7 +103,7 @@ public sealed class Raid : IRaidCrew
         switch (to)
         {
             case RaidVanState.Opening:
-                Gang.Post = Van.DoorPoint;
+                Gang.Post = _post ?? Van.DoorPoint;
                 _stagger.Start(0); // the first one steps out as the door starts to open
                 break;
             case RaidVanState.Boarding:
@@ -110,7 +118,7 @@ public sealed class Raid : IRaidCrew
                 break;
             case RaidVanState.Destroyed:
                 _queue.Clear();
-                Gang.FleeAll(_edgeFor(Van.Position));
+                if (_post == null) Gang.FleeAll(_edgeFor(Van.Position)); // an Assault's crew fights on by its wreck
                 var back = Van.LootReturnAll();
                 _loot?.ReturnAll(_loaded); // the Loot loaded goes back to its places (a van that drives off keeps it)
                 _loaded.Clear();
@@ -184,8 +192,8 @@ public sealed class RaidRoster : IGangHits
     public event Action<Raid>? Launched;
 
     public IReadOnlyList<Raid> Raids => _raids;
-    /// <summary>Raids not over: the vans in the village (a destroyed one is over, its wreck lies on).</summary>
-    public int Active => _raids.Count(r => !r.Over);
+    /// <summary>The Thieves' Raids not over: the vans in the village (a destroyed one is over, its wreck lies on). A Heist's Assaults are not counted (their Job ends them).</summary>
+    public int Active => _raids.Count(r => !r.Over && r.Gang.Crew == GangCrew.Raid);
     /// <summary>Where vans stopped this event: no other van stops near (<see cref="VanConfig.UsedApartM"/>).</summary>
     public IReadOnlyList<Vector2> UsedStops => _used;
 
@@ -193,24 +201,35 @@ public sealed class RaidRoster : IGangHits
     /// Puts a Raid in the world: the van at <paramref name="start"/> (the first point of the plan's path, or the stop for a plan with none) and its crew, queued to get out when the door opens. Null
     /// when the world has no room (the entity cap, no free slot).
     /// </summary>
-    public Raid? Launch(RaidPlan plan, RoadPath exit, Vector3 start, GangRaidCounts crew, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, Func<float, float, float>? ground)
+    public Raid? Launch(RaidPlan plan, RoadPath exit, Vector3 start, GangRaidCounts crew, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor, Func<float, float, float>? ground) =>
+        Launch(plan, exit, start, Raid.Order(crew), null, _cfg.Van, snap, edgeFor, ground, null);
+
+    /// <summary>
+    /// Puts a Raid in the world as <see cref="Launch(RaidPlan, RoadPath, Vector3, GangRaidCounts, Func{Vector3, Vector3}?, Func{Vector3, Vector3}, Func{float, float, float}?)"/>, with the crew in
+    /// <paramref name="order"/>, in <paramref name="gang"/> (null: a new Thieves gang; a Rival crew's for an Assault), on the van numbers <paramref name="van"/> and, with a <paramref name="post"/>,
+    /// the crew heading there once out (<see cref="Raid(RaidVan, ThiefGang, VanConfig, RaidPlan, IEnumerable{GangMemberKind}, Func{Vector3, Vector3}?, Func{Vector3, Vector3}, LootBook?, Vector3?)"/>).
+    /// A Rival crew's Raid steals nothing and leaves no used stop for the Thieves. Null when the world has no room.
+    /// </summary>
+    public Raid? Launch(RaidPlan plan, RoadPath exit, Vector3 start, IEnumerable<GangMemberKind> order, ThiefGang? gang, VanConfig van, Func<Vector3, Vector3>? snap, Func<Vector3, Vector3> edgeFor,
+        Func<float, float, float>? ground, Vector3? post)
     {
         var slot = FreeSlot();
         if (slot < 0) { Log?.Invoke("raid: every van slot is in use, no Raid launched"); return null; }
-        var van = new RaidVan(_cfg.Van, _world, plan.In, start, plan.In.IsEmpty ? plan.Yaw : plan.In.YawAt(0), slot, plan.DoorSide, _rng.Next())
+        var rv = new RaidVan(van, _world, plan.In, start, plan.In.IsEmpty ? plan.Yaw : plan.In.YawAt(0), slot, plan.DoorSide, _rng.Next())
         {
             Ground = ground,
             Exit = exit,
             Song = PickSong(),
         };
-        if (_entities.Spawn(van) is not { } entity) { Log?.Invoke("raid: the van could not be spawned (entity cap)"); return null; }
-        var gang = _gangs.NewGang(start);
-        var raid = new Raid(van, gang, _cfg.Van, _cfg.Gang, crew, plan, snap, edgeFor, Loot) { VanEntity = entity };
+        if (_entities.Spawn(rv) is not { } entity) { Log?.Invoke("raid: the van could not be spawned (entity cap)"); return null; }
+        gang ??= _gangs.NewGang(start);
+        var thieves = gang.Crew == GangCrew.Raid;
+        var raid = new Raid(rv, gang, van, plan, order, snap, edgeFor, thieves ? Loot : null, post) { VanEntity = entity };
         raid.Ended += r => RaidOver?.Invoke(r);
         raid.LootReturned += (r, n) => LootReturned?.Invoke(r, n);
-        van.Honked += _ => Honked?.Invoke(raid);
+        rv.Honked += _ => Honked?.Invoke(raid);
         _raids.Add(raid);
-        _used.Add(plan.StopAt);
+        if (thieves) _used.Add(plan.StopAt);
         Launched?.Invoke(raid);
         return raid;
     }
@@ -289,17 +308,20 @@ public sealed class RaidRoster : IGangHits
 
     // ---- ending ----
 
-    /// <summary>Removes every Raid at once: vans, crews, the dead too (the event was ended or cancelled, or a round began). The stops used are forgotten.</summary>
+    /// <summary>Removes every Raid of the Thieves at once: vans, crews, the dead too (the event was ended or cancelled, or a round began). The stops used are forgotten. A Heist's Assaults stay: their Job removes them.</summary>
     public void Clear()
     {
-        foreach (var r in _raids.ToList())
-        {
-            r.Van.Remove();
-            _entities.Despawn(r.VanEntity, WorldDespawnReason.Removed);
-            _gangs.Remove(r.Gang);
-        }
-        _raids.Clear();
+        foreach (var r in _raids.Where(r => r.Gang.Crew == GangCrew.Raid).ToList()) Remove(r);
         _used.Clear();
+    }
+
+    /// <summary>Removes one Raid now: its van, its crew, the dead too (a Heist's Assault when its Job ends). Removing it twice does nothing.</summary>
+    public void Remove(Raid r)
+    {
+        if (!_raids.Remove(r)) return;
+        r.Van.Remove();
+        _entities.Despawn(r.VanEntity, WorldDespawnReason.Removed);
+        _gangs.Remove(r.Gang);
     }
 
     void OnDespawned(WorldDespawned d)

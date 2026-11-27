@@ -65,6 +65,15 @@ internal sealed class RaidServer
 
     public bool NoRoads => _launcher.NoRoads;
 
+    /// <summary>The roads a van may use (a Heist puts its Cartel van on the spot nearest the Contact).</summary>
+    public RoadGraph Roads => _launcher.Roads;
+
+    /// <summary>A Heist's Assault: see <see cref="RaidLauncher.LaunchAssault"/>.</summary>
+    public Raid? LaunchAssault(NVec2 target, IReadOnlyList<NVec2> used, IReadOnlyList<GangMemberKind> order, ThiefGang gang, NVec3 post) => _launcher.LaunchAssault(target, used, order, gang, post);
+
+    /// <summary>Removes one Raid (a Heist's Assault when its Job ends): its van, its crew, the dead too.</summary>
+    public void Remove(Raid raid) => Roster.Remove(raid);
+
     public int Active => Roster.Active;
 
     /// <summary>The next van of the wave is due; <paramref name="places"/> are the spots something can be stolen at.</summary>
