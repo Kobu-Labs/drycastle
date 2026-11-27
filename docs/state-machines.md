@@ -995,6 +995,20 @@ stateDiagram-v2
 - **Warning**: The target has its red-dot warning; at zero the burst starts if it is still visible, else back to Waiting.
 - **Burst**: One round each round interval while the target stays visible; the last round or a lost target goes back to Waiting.
 
+## Hit.Target
+
+Where a Hit's marker points: the Hit spot until a party player comes near the Rival dealer, then the dealer himself until he dies or the Job ends.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Seek
+    Seek --> Strike
+    Strike --> [*]
+```
+
+- **Seek**: The marker is on the Hit spot; the objective reads "Find the rival dealer".
+- **Strike**: A party player came within reveal_m of the dealer: the marker follows him; "Kill the rival dealer".
+
 ## House.Debris
 
 A part that fell off a hollow house: one rigid body falling whole, split into pieces on its first hard impact, resting once it sleeps, then sinking away (fade mode) or frozen into the house's rubble mesh (stay mode, leaves the machine).

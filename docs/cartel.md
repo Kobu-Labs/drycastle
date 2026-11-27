@@ -62,6 +62,7 @@ Design grilled with the owner on 2026-11-27. Related: #366 (gang at the marihuan
 
 - **Delivery**: carry one duffel from the Contact to a drop point before the timer runs out.
 - **Hit**: kill a Rival dealer who stands outdoors at a random spot (zone kind `cartel_hit`) with a few guards (Gunmen and Enforcers). The guards attack the job's players on sight within a radius and ignore everyone else unless attacked. The target dying by anyone's hand is success.
+- Built (#494, #497): `DeliveryJobKind` and `HitJobKind` (ShooterCore/Cartel, cartel.json `jobs.delivery`, `jobs.hit`), points claimed by `CartelSpots` (book key `cartel_drop:<i>` / `cartel_hit:<i>`), the party a live `JobPartySet`, the server's world `CartelJobWorld`. Delivery: a `product` Duffel in the leader's hands; hold E 2 s within 4 m of the drop point. Hit: the dealer is the Rival crew's Gang boss (no new kind), guards on a ring round him; marker on the spot, then on him (`Hit.Target`). Test with `/cartel job delivery|hit [tier]`.
 
 ## Heists (v1)
 

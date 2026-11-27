@@ -30,6 +30,36 @@
       "name": "Test job",
       "seconds": [120, 110, 100, 90, 80],
       "succeed_seconds": 20
+    },
+    // delivery (DeliveryJobKind, #494): the leader gets one duffel at the Contact; a party player carrying it stands within radius_m of the job's drop point (a cartel_drop zone point)
+    // and holds the interact key hold_seconds: done. seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
+    // carrier cannot sprint or take a vehicle seat). min_contact_m: the drop point is at least this far (ground metres) from the Contact; apart_m: and this far from every point another
+    // running job holds (drop points and hit spots). No drop point left: the job does not start.
+    "delivery": {
+      "name": "Delivery",
+      "seconds": [240, 210, 185, 165, 150],
+      "duffel": "product",
+      "min_contact_m": 150,
+      "apart_m": 40,
+      "radius_m": 4,
+      "hold_seconds": 2
+    },
+    // hit (HitJobKind, #497): a Rival dealer (a Rival crew's Gang boss: his own look) stands at a cartel_hit zone point with guards; his death, by anyone's hand, is success. Killing the crew
+    // pays nothing. gunmen / enforcers: guards per tier for a party of one; gunmen_per_mate / enforcers_per_mate: added for each party member past the first; max_guards caps the sum
+    // (Gunmen kept first). ring_m: the guards stand on a ring this far round him (snapped to the navigation mesh). reveal_m: the marker shows the spot until a party player comes this
+    // near him, then follows him. min_contact_m and apart_m as delivery's.
+    "hit": {
+      "name": "Hit",
+      "seconds": [300, 270, 240, 220, 200],
+      "min_contact_m": 150,
+      "apart_m": 60,
+      "gunmen": [1, 2, 2, 3, 4],
+      "enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_mate": 1,
+      "enforcers_per_mate": 0,
+      "max_guards": 10,
+      "ring_m": 4,
+      "reveal_m": 35
     }
   }
 }
