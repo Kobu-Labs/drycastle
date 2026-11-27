@@ -20,5 +20,5 @@
   "fracture": { "cells_per_piece": 24, "impact_bias": 0.6, "dust_below_cells": 4 },
   "debris": { "rubble": "fade", "fade_after_s": 15, "fade_s": 2, "max_bodies": 64, "max_distance_m": 150,
               "break_impulse": 4.0, "second_break": true, "stay_cap_cells": 20000 },
-  "ram": { "enabled": true, "min_speed": 13.9, "keep_speed": 4.0, "momentum_per_cell": 130, "margin_m": 0.1, "lead_m": 0.15, "probe_m": 0.5, "settle_ticks": 6 }
+  "ram": { "enabled": true, "min_speed": 13.9, "keep_speed": 4.0, "momentum_per_cell": 130, "margin_m": 0.5, "lead_m": 0.15, "probe_m": 0.5, "settle_ticks": 6 }
 }

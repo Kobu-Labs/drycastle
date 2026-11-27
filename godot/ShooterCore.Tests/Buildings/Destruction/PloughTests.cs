@@ -42,14 +42,16 @@ public class PloughTests
         var g = c.Grid;
         var (plan, cut) = PlanOn(c, Car(16.7f));
         Assert.True(plan.Through);
-        // the car's cross-section (2.06 + 2 * 0.1 wide, from 0.2 over the floor to 0.1 over its roof) of a one-cell wall: 9 x 6 cells
-        Assert.InRange(plan.Count, 45, 65);
+        // the car's cross-section (2.06 + 2 margins wide, from 0.2 over the floor to a margin over its roof) of a one-cell wall
+        var margin = Cfg.Ram.MarginM;
+        var expected = (2.06f + 2 * margin) / 0.25f * (1.62f + margin - 0.2f) / 0.25f;
+        Assert.InRange(plan.Count, (int)(expected * 0.8f), (int)(expected * 1.2f));
         foreach (var p in cut)
         {
             var (x, y, z) = g.Coords(p.Cell);
             var m = g.ToMap(new Vector3(x + 0.5f, y + 0.5f, z + 0.5f));
-            Assert.InRange(m.X, 2f - 1.13f, 2f + 1.13f);
-            Assert.InRange(m.Z, FloorZ + 0.2f, FloorZ + 1.72f);
+            Assert.InRange(m.X, 2f - 1.03f - margin, 2f + 1.03f + margin);
+            Assert.InRange(m.Z, FloorZ + 0.2f, FloorZ + 1.62f + margin);
             Assert.Equal(1, y); // the wall it hits, nothing behind it
             Assert.Equal(CellMaterial.Wall, g.Material(p.Cell));
         }
@@ -210,7 +212,7 @@ public class PloughTests
         Assert.Equal(0, world.Hits);              // never stopped by the wall
         Assert.True(world.Cuts >= 1);
         Assert.True(-s.Position.Z + def.HalfLength > 1.5f); // its front is well inside the house
-        Assert.InRange(minSpeed, 6f, 13f);        // slowed by the wall (about 5 m/s) and the coasting, far from stopped
+        Assert.InRange(minSpeed, 3f, 13f);        // slowed by the wall (about 10 m/s) and the coasting, not stopped
     }
 
     [Fact]

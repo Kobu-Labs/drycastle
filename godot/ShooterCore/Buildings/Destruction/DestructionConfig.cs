@@ -152,7 +152,7 @@ public sealed record RamConfig
     /// <summary>Momentum (kg m/s) one cell of resist 1.0 takes to break; a cell of resist r takes r times it.</summary>
     public float MomentumPerCell { get; init; } = 130f; // calibrated on the village's houses, see docs/house-destruction.md "Ramming"
     /// <summary>The cut is this much wider than the vehicle on each side and higher than its roof (metres), so the hull does not scrape the hole.</summary>
-    public float MarginM { get; init; } = 0.1f;
+    public float MarginM { get; init; } = 0.5f; // two cells
     /// <summary>The sweep reaches this far past the motion of its look-ahead (metres).</summary>
     public float LeadM { get; init; } = 0.15f;
     /// <summary>How far ahead of an aircraft (or a fence-rammer) the wall it hit is looked for (metres).</summary>
