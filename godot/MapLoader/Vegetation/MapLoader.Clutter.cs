@@ -58,7 +58,7 @@ public sealed partial class MapLoader
 
         if (clutterFile != null)
             foreach (var f in BuildStoredClutter(mapDir, clutterFile, meshFile, meshes)) yield return 0.9f * f;
-        if (meadowFile != null) InitMeadow(Path.Combine(mapDir, meadowFile), meshes);
+        if (meadowFile != null) { InitMeadow(Path.Combine(mapDir, meadowFile), meshes); yield return 1f; }
     }
 
     IEnumerable<float> BuildStoredClutter(string mapDir, string clutterFile, string? meshFile, Dictionary<string, Mesh> meshes)
@@ -85,7 +85,7 @@ public sealed partial class MapLoader
         var done = 0;
         foreach (var g in doc.Groups)
         {
-            if (++done % 8 == 0) yield return (float)done / doc.Groups.Count;
+            yield return (float)done++ / doc.Groups.Count; // one group a step: the caller draws a frame when its time slice is used up
             if (!doc.KindMesh.TryGetValue(g.Kind, out var meshName) || !meshes.TryGetValue(meshName, out var mesh))
             {
                 ClutterWarn("kind:" + g.Kind, $"clutter: no mesh for kind '{g.Kind}'");
@@ -107,6 +107,7 @@ public sealed partial class MapLoader
             var centre = ToGodot((cx + 0.5f) * ClutterSettings.CellM, (cy + 0.5f) * ClutterSettings.CellM, 0f);
             var range = groups.Max(g => ClutterSettings.RangeOf(g.Kind)) * ClutterScale + ClutterSettings.CellAllowanceM;
             if (BuildMergedMesh(groups, centre, ClutterSettings.CellM, range, parent, "clutter_merged") is { } node) _clutterNodes.Add(node);
+            yield return 1f;
         }
         if (_clutterNodes.Count > 0)
             GD.Print($"clutter: {Stats.ClutterInstances} instances in {_clutterNodes.Count} nodes, scale {ClutterScale}");

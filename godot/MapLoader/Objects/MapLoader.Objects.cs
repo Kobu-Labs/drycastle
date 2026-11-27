@@ -183,7 +183,9 @@ public sealed partial class MapLoader
         {
             if (!_bakedObjects.TryGetValue(o.Group, out var l)) _bakedObjects[o.Group] = l = new();
             l.Add(o);
+            var t = LoadTimers.Start();
             AddObject(o);
+            if (LoadTimers.Enabled && LoadTimers.Ms(LoadTimers.Start() - t) is var ms and > 50) GD.Print($"loadobject {ms:F0} ms {o.Asset}"); // the join-time report: which object holds up a frame
             yield return (float)++n / list.Count;
         }
         var tcb = LoadTimers.Start(); SetCables(cables); LoadTimers.Lap("objects.cables", tcb); // after the poles they hang from
@@ -448,12 +450,14 @@ public sealed partial class MapLoader
         return ParseGltf(path);
     }
 
-    static Node3D? ParseGltf(string path)
+    /// <summary>Parses a glTF file into a scene; <paramref name="parsed"/> sees its state first (the texture prefetch reads its materials).</summary>
+    static Node3D? ParseGltf(string path, Action<string, GltfState>? parsed = null)
     {
         var doc = new GltfDocument();
         var state = new GltfState();
         var err = doc.AppendFromFile(path, state);
         if (err != Error.Ok) throw new InvalidDataException($"glTF load failed ({err}): {path}");
+        parsed?.Invoke(path, state);
         return doc.GenerateScene(state) as Node3D;
     }
 
@@ -468,9 +472,10 @@ public sealed partial class MapLoader
 
     /// <summary>
     /// Starts parsing glTF files on a worker thread, one after another, so the loader (and the game's model caches) find them parsed:
-    /// <see cref="TryTakeGltf"/> hands each one out once. A file already asked for is not parsed twice.
+    /// <see cref="TryTakeGltf"/> hands each one out once. A file already asked for is not parsed twice. With <paramref name="textures"/> a prefab's
+    /// pack textures are decoded ahead too (<see cref="PrefetchPrefabTextures"/>); a collision-only load draws nothing.
     /// </summary>
-    public static void PrefetchGltf(IEnumerable<string> paths)
+    public static void PrefetchGltf(IEnumerable<string> paths, bool textures = false)
     {
         var todo = new List<(string Path, System.Threading.Tasks.TaskCompletionSource<Node3D?> Done)>();
         foreach (var p in paths.Select(Path.GetFullPath).Distinct())
@@ -486,7 +491,7 @@ public sealed partial class MapLoader
             {
                 if (GltfStop) { done.TrySetCanceled(); continue; } // the game is closing: leave the rest unparsed
                 var t = LoadTimers.Start();
-                try { done.SetResult(ParseGltf(p)); }
+                try { done.SetResult(ParseGltf(p, textures ? PrefetchPrefabTextures : null)); }
                 catch (Exception e) { done.SetException(e); }
                 LoadTimers.Lap("worker.gltf_small", t);
             }
@@ -526,7 +531,7 @@ public sealed partial class MapLoader
     }
 
     /// <summary>Starts parsing the files of these assets' templates on a worker thread (the game's vehicle models of the private packs). Main thread.</summary>
-    public void PrefetchAssetModels(IEnumerable<string> assets) => PrefetchGltf(assets.Select(a => TemplatePath(a, out _)).OfType<string>().ToList());
+    public void PrefetchAssetModels(IEnumerable<string> assets) => PrefetchGltf(assets.Select(a => TemplatePath(a, out _)).OfType<string>().ToList(), !CollisionOnly);
 
     /// <summary>objects.json as read for the model prefetch (taken by the object build), or null.</summary>
     (List<PlacedObject> Objects, List<CableSpec> Cables)? _objectsAhead;
@@ -545,7 +550,7 @@ public sealed partial class MapLoader
             if (!CollisionOnly) foreach (var o in list) if (OwnModelPath(o) is { } own) paths.Add(own);
         }
         paths.AddRange(morePaths);
-        PrefetchGltf(paths);
+        PrefetchGltf(paths, !CollisionOnly);
     }
 
     // ---- parcel-run fragments ----

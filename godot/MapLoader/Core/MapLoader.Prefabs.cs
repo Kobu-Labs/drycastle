@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Godot;
 
@@ -42,7 +43,9 @@ public sealed partial class MapLoader
     /// <summary>A prefab GLB as a template: its bodies on the world layer, and (with a display) the pack's materials on its meshes.</summary>
     Node3D? LoadPrefab(string path)
     {
+        var t0 = Core.LoadTimers.Start();
         if (LoadGltf(path) is not { } scene) return null;
+        var t1 = Core.LoadTimers.Start();
         foreach (var imp in Descendants(scene).OfType<ImporterMeshInstance3D>().ToList())
         {
             // a scene generated outside the game loop may keep importer nodes: make them drawable (children, the bodies, move over)
@@ -56,6 +59,7 @@ public sealed partial class MapLoader
             body.SetMeta("surface", "metal");
         }
         if (CollisionOnly) return scene;
+        var t2 = Core.LoadTimers.Start();
         var materials = PrefabMaterials(Path.Combine(Path.GetDirectoryName(path) ?? "", "materials.json"));
         foreach (var mi in AllMeshes(scene))
         {
@@ -64,6 +68,8 @@ public sealed partial class MapLoader
                 if (mi.GetActiveMaterial(i) is { } blank && materials.TryGetValue(blank.ResourceName, out var mat))
                     mi.SetSurfaceOverrideMaterial(i, mat);
         }
+        if (Core.LoadTimers.Enabled && Core.LoadTimers.Ms(Core.LoadTimers.Start() - t0) > 50) // the join-time report: what a slow prefab spends its time on
+            GD.Print($"loadprefab {Core.LoadTimers.Ms(Core.LoadTimers.Start() - t0):F0} ms {Path.GetFileName(path)}: glTF {Core.LoadTimers.Ms(t1 - t0):F0} meshes {Core.LoadTimers.Ms(t2 - t1):F0} materials {Core.LoadTimers.Ms(Core.LoadTimers.Start() - t2):F0}");
         return scene;
     }
 
@@ -75,15 +81,114 @@ public sealed partial class MapLoader
         if (!File.Exists(file)) { Warn($"prefab materials not found: {file}; the pack's models are drawn plain"); return made; }
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(file));
-            foreach (var m in doc.RootElement.GetProperty("materials").EnumerateObject())
-                made.Specs[m.Name] = m.Value.Clone();
+            foreach (var (name, spec) in ReadMaterialSpecs(file)) made.Specs[name] = spec;
         }
         catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException)
         {
             Warn($"prefab materials unreadable: {file}: {e.Message}; the pack's models are drawn plain");
         }
         return made;
+    }
+
+    /// <summary>The material specs of a materials.json by name; throws when it is unreadable.</summary>
+    static Dictionary<string, JsonElement> ReadMaterialSpecs(string file)
+    {
+        using var doc = JsonDocument.Parse(File.ReadAllText(file));
+        var specs = new Dictionary<string, JsonElement>();
+        foreach (var m in doc.RootElement.GetProperty("materials").EnumerateObject()) specs[m.Name] = m.Value.Clone();
+        return specs;
+    }
+
+    /// <summary>A pack texture as a material wears it: decoded, at most <see cref="PrefabTextureMax"/>, with mipmaps, on the GPU; null when the file is missing or unreadable. Any thread.</summary>
+    static Texture2D? DecodePrefabTexture(string path)
+    {
+        var img = File.Exists(path) ? Image.LoadFromFile(path) : null;
+        if (img == null || img.IsEmpty()) return null;
+        if (img.GetWidth() > PrefabTextureMax || img.GetHeight() > PrefabTextureMax)
+        {
+            var k = (float)PrefabTextureMax / Math.Max(img.GetWidth(), img.GetHeight());
+            img.Resize(Math.Max(1, (int)(img.GetWidth() * k)), Math.Max(1, (int)(img.GetHeight() * k)), Image.Interpolation.Bilinear);
+        }
+        img.GenerateMipmaps();
+        return ImageTexture.CreateFromImage(img);
+    }
+
+    // ---- the textures decoded ahead (a pack's 4096 atlas took the main thread 0.3-0.8 s: docs/perf-investigation/join-time.md) ----
+
+    /// <summary>A texture being decoded ahead. State 0: waiting for a slot, 1: a worker decodes it, 2: the main thread took it before a worker started (decodes it itself).</summary>
+    sealed class TextureJob
+    {
+        public int State;
+        public System.Threading.Tasks.Task<Texture2D?> Done = null!;
+    }
+
+    /// <summary>Textures of prefab materials decoded ahead on worker threads, by full path; each is taken once (<see cref="TryTakePrefabTexture"/>).</summary>
+    static readonly ConcurrentDictionary<string, Lazy<TextureJob>> TexturesAhead = new();
+    /// <summary>The material specs the glTF workers read, by materials.json path (null: unreadable).</summary>
+    static readonly ConcurrentDictionary<string, Lazy<Dictionary<string, JsonElement>?>> SpecsAhead = new();
+    /// <summary>Two decodes at a time: the main thread keeps a core, and the texture the load needs next is not queued behind all the others.</summary>
+    static readonly System.Threading.SemaphoreSlim TextureSlots = new(2);
+
+    /// <summary>A prefab GLB was parsed on a glTF worker: starts decoding the textures of the pack materials it wears (a GLB with no materials.json beside it wears none).</summary>
+    static void PrefetchPrefabTextures(string glbPath, GltfState state)
+    {
+        var dir = Path.GetDirectoryName(glbPath) ?? "";
+        var file = Path.Combine(dir, "materials.json");
+        if (!File.Exists(file)) return;
+        var specs = SpecsAhead.GetOrAdd(file, f => new Lazy<Dictionary<string, JsonElement>?>(() =>
+        {
+            try { return ReadMaterialSpecs(f); }
+            catch (Exception) { return null; } // the main thread reads it again and warns
+        })).Value;
+        if (specs == null) return;
+        foreach (var blank in state.GetMaterials())
+        {
+            if (blank == null || !specs.TryGetValue(blank.ResourceName, out var spec)) continue;
+            foreach (var key in new[] { "albedo_texture", "normal_texture", "emission_texture" })
+                if (spec.TryGetProperty(key, out var v) && v.ValueKind == JsonValueKind.String && v.GetString() is { } rel
+                    && (key != "emission_texture" || spec.TryGetProperty("emission_color", out _)))
+                    PrefetchPrefabTexture(Path.GetFullPath(Path.Combine(dir, rel)));
+        }
+    }
+
+    static void PrefetchPrefabTexture(string path)
+    {
+        if (GltfStop) return;
+        _ = TexturesAhead.GetOrAdd(path, p => new Lazy<TextureJob>(() =>
+        {
+            var job = new TextureJob();
+            job.Done = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await TextureSlots.WaitAsync();
+                try
+                {
+                    if (GltfStop || System.Threading.Interlocked.CompareExchange(ref job.State, 1, 0) != 0) return null; // quitting, or the main thread took it
+                    var t = Core.LoadTimers.Start();
+                    var tex = DecodePrefabTexture(p);
+                    Core.LoadTimers.Lap("worker.prefab_textures", t);
+                    return tex;
+                }
+                finally { TextureSlots.Release(); }
+            });
+            lock (GltfWorkers) { GltfWorkers.RemoveAll(w => w.IsCompleted); GltfWorkers.Add(job.Done); }
+            return job;
+        })).Value;
+    }
+
+    /// <summary>The texture a worker decoded for <paramref name="path"/> (waits while it decodes); false when none was asked for, no worker had started on it, or it failed: the caller decodes it.</summary>
+    static bool TryTakePrefabTexture(string path, out Texture2D? tex, out string how)
+    {
+        tex = null;
+        how = "not prefetched";
+        if (!TexturesAhead.TryRemove(Path.GetFullPath(path), out var lazy)) return false;
+        var job = lazy.Value;
+        how = "queued";
+        if (System.Threading.Interlocked.CompareExchange(ref job.State, 2, 0) == 0) return false; // still queued: decoding it here is sooner than waiting for the queue
+        how = job.Done.IsCompleted ? "ahead" : "waited for the worker";
+        ((IAsyncResult)job.Done).AsyncWaitHandle.WaitOne();
+        if (!job.Done.IsCompletedSuccessfully) { how = "failed"; return false; }
+        tex = job.Done.Result;
+        return true;
     }
 
     static StandardMaterial3D PrefabMaterial(JsonElement m, string dir, Dictionary<string, Texture2D?> textures)
@@ -98,15 +203,10 @@ public sealed partial class MapLoader
             if (Str(key) is not { } rel) return null;
             if (textures.TryGetValue(rel, out var t)) return t;
             var path = Path.Combine(dir, rel);
-            var img = File.Exists(path) ? Image.LoadFromFile(path) : null;
-            if (img == null || img.IsEmpty()) return textures[rel] = null;
-            if (img.GetWidth() > PrefabTextureMax || img.GetHeight() > PrefabTextureMax)
-            {
-                var k = (float)PrefabTextureMax / Math.Max(img.GetWidth(), img.GetHeight());
-                img.Resize(Math.Max(1, (int)(img.GetWidth() * k)), Math.Max(1, (int)(img.GetHeight() * k)), Image.Interpolation.Bilinear);
-            }
-            img.GenerateMipmaps();
-            return textures[rel] = ImageTexture.CreateFromImage(img);
+            var t0 = Core.LoadTimers.Start();
+            var tex = TryTakePrefabTexture(path, out var ahead, out var how) ? ahead : DecodePrefabTexture(path);
+            if (Core.LoadTimers.Enabled && Core.LoadTimers.Ms(Core.LoadTimers.Start() - t0) is var ms and > 30) GD.Print($"loadtexture {ms:F0} ms {rel}: {how}"); // the join-time report
+            return textures[rel] = tex;
         }
 
         var mat = new StandardMaterial3D
