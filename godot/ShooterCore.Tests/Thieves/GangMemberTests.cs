@@ -24,6 +24,8 @@ public class GangMemberTests
         public readonly List<GangPlayer> List = new();
         public readonly List<(ushort Player, float Damage, ushort Member)> Hurts = new();
         public IReadOnlyList<GangPlayer> Players => List;
+        public Func<Vector3, Vector3>? SnapWith;
+        public Vector3 Snap(Vector3 p) => SnapWith?.Invoke(p) ?? p;
         public void Hurt(ushort player, float damage, ushort memberHitId) => Hurts.Add((player, damage, memberHitId));
         public FakeWorld Player(ushort id, float x, float z, bool onFoot = true) { List.Add(new GangPlayer(id, new Vector3(x, 0, z), onFoot)); return this; }
         public void Move(ushort id, float x, float z) { var i = List.FindIndex(p => p.Id == id); List[i] = List[i] with { Feet = new Vector3(x, 0, z) }; }
@@ -38,6 +40,8 @@ public class GangMemberTests
         public readonly GangRoster Roster;
         public readonly List<GangKilled> Kills = new();
         public bool NoRoutes;
+        /// <summary>Every route is where the member stands (the mesh's nearest point to a goal it cannot reach): it arrives at once and stands.</summary>
+        public bool DeadEndRoutes;
         public int RoutesServed;
 
         public Rig(Action<GangConfig>? tune = null)
@@ -58,7 +62,7 @@ public class GangMemberTests
         {
             Roster.Update(Dt);
             Entities.Tick(Dt);
-            if (Roster.ServeRoute((from, to) => { RoutesServed++; return NoRoutes ? Array.Empty<Vector3>() : new[] { from, to }; })) { }
+            if (Roster.ServeRoute((from, to) => { RoutesServed++; return NoRoutes ? Array.Empty<Vector3>() : DeadEndRoutes ? new[] { from, from } : new[] { from, to }; })) { }
         }
 
         public void Run(float seconds) { for (var t = 0f; t < seconds; t += Dt) Step(); }
@@ -827,5 +831,63 @@ public class GangMemberTests
         Assert.Equal(new Vector3(-100, 2, 0), GangPlacement.NearestEdge(new Vector3(-90, 2, 0), min, max));
         Assert.Equal(new Vector3(120, 2, 150), GangPlacement.NearestEdge(new Vector3(120, 2, 140), min, max));
         Assert.Equal(new Vector3(300, 0, 20), GangPlacement.NearestEdge(new Vector3(400, 0, 20), min, max)); // outside: pulled to it
+    }
+
+    // ---- the progress check (thieves.json gang.stuck) ----
+
+    [Fact]
+    public void AChaserWhoCannotGetOnDropsItsRouteAtStuckSecondsAndIsMovedToTheMeshAtSnapSeconds()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 60) { DeadEndRoutes = true };
+        rig.World.SnapWith = p => Vector3.Distance(p, Vector3.Zero) < 0.01f ? new Vector3(3, 0, 0) : p; // the mesh's nearest point to where it stands
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        rig.World.Player(1, 20, 0);
+        gang.NoteHit(1);
+        rig.Run(2.5f);
+        Assert.Equal(Vector3.Zero, e.Position); // the route ends where it stands: it runs in place
+        var served = rig.RoutesServed;
+        rig.Run(1f); // 3.5 s: stuck at 3 s, the route went and the member asked again at once
+        Assert.True(rig.RoutesServed > served, "a fresh route is asked for");
+        Assert.Equal(Vector3.Zero, e.Position);
+        rig.Run(3f); // 6.5 s: moved to the mesh
+        Assert.Equal(3f, e.Position.X, 3);
+    }
+
+    [Fact]
+    public void AChaserStuckTakesAnotherSpotOnTheRing()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 60) { DeadEndRoutes = true };
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        rig.World.Player(1, 20, 0);
+        gang.NoteHit(1);
+        rig.Step();
+        var first = e.SlotPoint!.Value;
+        rig.Run(3.5f);
+        Assert.NotEqual(first, e.SlotPoint!.Value);
+        Assert.True(Vector3.Distance(e.SlotPoint!.Value, new Vector3(20, 0, 0)) <= rig.Cfg.Enforcer.Melee.ReachM, "still a spot to strike from");
+    }
+
+    [Fact]
+    public void AChaserWhoMovesIsNeverStuckAndOneWhoStandsInItsStrikeSpotIsNotWatched()
+    {
+        var rig = new Rig(c => c.Aggro.ForgetSeconds = 60);
+        rig.World.SnapWith = _ => new Vector3(-50, 0, -50); // a snap would be seen at once
+        var gang = rig.Gang();
+        var e = One(gang, GangMemberKind.Enforcer);
+        rig.World.Player(1, 25, 0);
+        gang.NoteHit(1);
+        rig.Run(9); // arrives (about 5 s) and strikes
+        Assert.True(Vector3.Distance(e.Position, new Vector3(25, 0, 0)) <= rig.Cfg.Enforcer.Melee.ReachM, $"{e.Position} {e.State}");
+    }
+
+    [Fact]
+    public void ShippedStuckNumbersAndTheFileRejectsNonsense()
+    {
+        var s = Shipped.Gang.Stuck;
+        Assert.Equal((1f, 3f, 6f), (s.StuckM, s.StuckSeconds, s.SnapSeconds));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"stuck":{"stuck_m":1,"stuck_seconds":3,"snap_seconds":3}}}"""));
+        Assert.Throws<DataFileException>(() => ThievesFile.Parse("""{"version":1,"gang":{"stuck":{"stuck_m":0}}}"""));
     }
 }

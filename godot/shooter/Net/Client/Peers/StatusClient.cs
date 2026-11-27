@@ -67,6 +67,7 @@ public sealed class StatusClient
     {
         if (player == _ctx.MyId || !_ctx.Remotes.TryGetValue(player, out var r)) return;
         r.View?.SetHigh(Has(player, StatusKind.High) ? _plantation : null); // the cigarette and the red eyes (CharacterView.High.cs)
+        r.View?.SetFilling(Has(player, StatusKind.Filling)); // the Harvest filler bends and reaches (CharacterView.Apply)
         var burning = _statusOf.TryGetValue(player, out var s) && s.Burning;
         if (_flames.TryGetValue(player, out var flames) && !GodotObject.IsInstanceValid(flames)) { _flames.Remove(player); flames = null; }
         if (flames == null && burning)

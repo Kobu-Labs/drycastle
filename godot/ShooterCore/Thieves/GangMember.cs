@@ -198,6 +198,7 @@ public sealed partial class GangMember : IWorldEntity
     const float SlotArriveM = 0.3f; // at its spot when this near
     const float SlotStrikeM = 1f;   // it strikes from within this of its spot
     const float SlotRefreshM = 0.75f; // its spot is worked out again when the target moved this far
+    const int SlotTries = 6;        // spots tried round the ring for one that is on the mesh
     const float GoldenAngle = 2.3999632f; // slots spread evenly whatever their number, and a slot's angle never changes when others come and go
 
     readonly GangConfig _d;
@@ -213,12 +214,15 @@ public sealed partial class GangMember : IWorldEntity
     Vector3 _door;
     float _taken;                   // the hit count taken so far, weighted
     WalkGuard _guard;               // the detour round what the navigation mesh does not hold (trunk, closed door, parked vehicle)
+    readonly StuckWatch _stuck;     // the progress check (thieves.json gang.stuck)
+    bool _trying;                   // this tick it tried to get somewhere (GoTo, Follow): what the progress check watches
+    float _slotShift;               // radians added to the spot's angle on the ring: set when it was stuck, so it takes another spot
     Vector3 _slotPoint, _slotFor;   // the spot on the ring round the target, and where the target stood when it was worked out
     bool _slotValid;
 
     public GangMember(GangConfig cfg, GangMemberKind kind, IGangWorld world, Vector3 position, float yaw, ushort look, ushort hitId, int seed)
     {
-        _d = cfg; _k = cfg.Of(kind); _world = world; _rng = new Random(seed);
+        _d = cfg; _k = cfg.Of(kind); _world = world; _rng = new Random(seed); _stuck = new StuckWatch(cfg.Stuck);
         Kind = kind; Position = Home = position; Yaw = yaw; Look = look; HitId = hitId;
         if (kind != GangMemberKind.Thief) _fsm.Enter(GangMemberState.Guard);
         else _fsm.Restart(IdleSeconds());
@@ -401,6 +405,43 @@ public sealed partial class GangMember : IWorldEntity
     public void Tick(float dt)
     {
         if (Ended != null || dt <= 0) return;
+        _trying = false;
+        TickBrain(dt);
+        if (Ended == null && Alive) WatchProgress(dt);
+    }
+
+    /// <summary>
+    /// The progress check (<see cref="StuckWatch"/>): a member that tried to get somewhere this tick and has covered under gang.stuck.stuck_m in stuck_seconds drops its route and takes another spot round its
+    /// target or a fresh route (<see cref="Unstick"/>); still stuck at snap_seconds it is moved to the nearest walkable point of the mesh.
+    /// </summary>
+    void WatchProgress(float dt)
+    {
+        switch (_stuck.Step(dt, Position, _trying))
+        {
+            case StuckAction.Reroute:
+                Unstick();
+                break;
+            case StuckAction.Snap:
+                var on = _world.Snap(Position);
+                if (Flat(on, Position) > 0.05f) Position = on;
+                _stuck.Moved(Position);
+                Unstick();
+                break;
+        }
+    }
+
+    /// <summary>Drops the route (and a request on its way) and the spot it was heading for: a chaser's next spot is at another angle on the ring, the others ask for a fresh route at once.</summary>
+    void Unstick()
+    {
+        _slotShift = (float)(_rng.NextDouble() * MathF.Tau);
+        _slotValid = false;
+        ClearRoute();
+        _repath.Cancel();
+        if (State == GangMemberState.Flee) Request(_edge); // a fleeing member asks nowhere else
+    }
+
+    void TickBrain(float dt)
+    {
         _repath.Tick(dt);
         if (_routeLost.Tick(dt)) RouteTicket = 0; // the worker never answered: ask again
         TickAvoid(dt);
@@ -504,10 +545,17 @@ public sealed partial class GangMember : IWorldEntity
         {
             _slotFor = t.Feet;
             var away = MathF.Atan2(Home.Z - t.Feet.Z, Home.X - t.Feet.X);
-            var a = away + Slot * GoldenAngle;
-            var raw = new Vector3(t.Feet.X + MathF.Cos(a) * reach * SlotRing, t.Feet.Y, t.Feet.Z + MathF.Sin(a) * reach * SlotRing);
-            var snapped = _world.Snap(raw);
-            _slotPoint = Flat(snapped, t.Feet) <= reach * 0.9f && MathF.Abs(snapped.Y - t.Feet.Y) <= ReachDy ? snapped : t.Feet;
+            // its own angle on the ring first, then the ring round: a spot off the mesh (in the crops, under a vehicle) is no use, the next one may be
+            _slotPoint = t.Feet;
+            for (var k = 0; k < SlotTries; k++)
+            {
+                var a = away + Slot * GoldenAngle + _slotShift + k * (MathF.Tau / SlotTries);
+                var raw = new Vector3(t.Feet.X + MathF.Cos(a) * reach * SlotRing, t.Feet.Y, t.Feet.Z + MathF.Sin(a) * reach * SlotRing);
+                var snapped = _world.Snap(raw);
+                if (Flat(snapped, t.Feet) > reach * 0.9f || MathF.Abs(snapped.Y - t.Feet.Y) > ReachDy) continue;
+                _slotPoint = snapped;
+                break;
+            }
             _slotValid = true;
         }
         slotted = Flat(_slotPoint, t.Feet) > 0.01f;
@@ -562,6 +610,7 @@ public sealed partial class GangMember : IWorldEntity
     bool GoTo(Vector3 goal, float dt, float speed, float stop)
     {
         if (Flat(Position, goal) <= stop) { ClearRoute(); return true; }
+        _trying = true;
         var routeToGoal = _route.Count > 0 && Flat(_route[^1], goal) <= _d.RepathM;
         if (!routeToGoal && RouteRequest == null && _repath.Ready) { Request(goal); _repath.Start(_d.RepathSeconds); }
         if (_next < _route.Count) Follow(dt, speed);
@@ -575,6 +624,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>Walks the route from the current point, turning towards each leg. True when its end is reached.</summary>
     bool Follow(float dt, float speed)
     {
+        _trying = true;
         var budget = speed * dt;
         var turn = _d.TurnRateDegPerS * MathF.PI / 180f * dt;
         _guard.Tick(dt);

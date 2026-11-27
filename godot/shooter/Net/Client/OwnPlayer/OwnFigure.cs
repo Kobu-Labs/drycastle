@@ -21,8 +21,8 @@ internal sealed class OwnFigure
     /// <summary>The figure, or null before the first frame it was shown.</summary>
     public CharacterView? View { get; private set; }
 
-    /// <summary>Once per frame: <paramref name="show"/> false hides it (dead, seated, flung, at a turret); <paramref name="weaponId"/> is what the hand holds.</summary>
-    public void Update(bool show, string weaponId)
+    /// <summary>Once per frame: <paramref name="show"/> false hides it (dead, seated, flung, at a turret); <paramref name="weaponId"/> is what the hand holds; <paramref name="filling"/> the player fills a Duffel (the shadow bends and reaches).</summary>
+    public void Update(bool show, string weaponId, bool filling = false)
     {
         var me = _ctx.Me;
         if (me == null || _ctx.Bot || !ShotFx.Enabled) return;
@@ -43,6 +43,7 @@ internal sealed class OwnFigure
         View.SetStance(s.Stance);
         View.SetSwim(MovementStep.IsSwimming(s));
         View.SetAimPitch(me.Pitch);
+        View.SetFilling(filling);
         View.Apply(MathF.Sqrt(s.Velocity.X * s.Velocity.X + s.Velocity.Z * s.Velocity.Z), false, false, weaponId);
     }
 }

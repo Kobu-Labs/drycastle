@@ -1997,6 +1997,24 @@ stateDiagram-v2
 - **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
 
+## Thieves.Stuck
+
+The progress check of a Gang member trying to get somewhere: watching while it moves, rerouted once it made no stuck_m in stuck_seconds, then moved to the nearest walkable point if it still has not by snap_seconds.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Off
+    Off --> Watching
+    Watching --> Rerouted
+    Watching --> Off
+    Rerouted --> Watching
+    Rerouted --> Off
+```
+
+- **Off**: The member is not trying to get anywhere (standing, fighting, working): no check.
+- **Watching**: Trying to get somewhere (clock: stuck_seconds from where it last made stuck_m of progress). Moving on resets the clock; at its end the member is stuck: Reroute.
+- **Rerouted**: Its route was dropped for another spot or a fresh route (clock: snap_seconds less stuck_seconds). Progress goes back to Watching; at the clock's end it is moved to the nearest walkable point (Snap) and watched again.
+
 ## Trailer.Tow
 
 A trailer: standing loose, pulled by a tractor, or just released and not yet to be latched again.

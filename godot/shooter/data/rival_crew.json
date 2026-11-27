@@ -26,7 +26,7 @@
       "muzzle_up_m": 1.4, "muzzle_ahead_m": 0.45,
       "chase_stop_m": 2,
       // One per Gunman, by its look number. weapon: the weapon of weapons.json it fires (damage, falloff, headshot multiplier, pellets and pellet_spread, the sound and tracer clients play);
-      // burst rounds round_gap_seconds apart; damage_scale times the weapon's damage (a player's deagle round does 45 at close range). model: the Gang Warfare prop in its hand (assets-private/synty/glb).
+      // burst rounds round_gap_seconds apart; damage_scale times the weapon's damage (a player's deagle round does 45 at close range); a round that stops on a vehicle's hull hurts it the same way times vehicles.json bullet_damage_multiplier (the Cartel van can be shot to nothing). model: the Gang Warfare prop in its hand (assets-private/synty/glb).
       "weapons": [
         { "weapon": "deagle", "burst": 2, "round_gap_seconds": 0.4, "damage_scale": 0.4, "model": "props/gun_revolver_01" },
         { "weapon": "p90", "burst": 4, "round_gap_seconds": 0.1, "damage_scale": 0.5, "model": "props/gun_machine_pistol_01" },

@@ -15,6 +15,8 @@ public enum StatusKind : byte
     Blessing = 1,
     /// <summary>High from the marijuana plantation (<see cref="PlayerHigh"/>): the cigarette and the red eyes on the figure for everyone, the nausea for the player. The server keeps the bit equal to <see cref="PlayerHigh.IsHigh"/>; it ends at death, when the time runs out and at a round reset.</summary>
     High = 2,
+    /// <summary>A Harvest filler holding the interact key in the plantation (a weed Duffel fills, Cartel/HarvestJobKind.cs): everyone's figure bends and reaches and a rustle plays. The server keeps the bit equal to the fill hold under way; it never outlives it (death, a round reset and the end of the Job clear it).</summary>
+    Filling = 3,
 }
 
 /// <summary>
