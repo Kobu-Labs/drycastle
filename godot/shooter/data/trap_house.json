@@ -21,6 +21,17 @@
   // stand_m: how far in front of its face a player stands to work it.
   "safe": { "prop": "safe", "stand_m": 0.7, "rooms": ["bedroom", "storage", "study", "garage", "living", "dining", "kitchen", "living_kitchen", "hall"] },
 
+  // The Drill on the safe (GLOSSARY "Drill"; DrillRules, DrillServer). A party player holds the interact key set_hold_seconds at the safe's stand spot (within reach_m of it on the ground,
+  // reach_up_m of its height) to set it; it drills run_seconds (by tier: tier 1 first, a tier past the list takes the last) and jams jams_min to jams_max times, at random moments inside
+  // jam_window (fractions of the run); a party player holds fix_hold_seconds to fix a jam. Through, the safe opens and cash_duffels (by tier) cash Duffels lie in a row in front of it,
+  // duffel_out_m off its face and duffel_spread_m apart. Players within near_m of the safe are told its state (the sound, the sparks, the open door; the party also the bar).
+  // view (clients): the drill model (a Synty GLB with its atlas; without the pack a box of box [across, up, front to back]) at [x across, y up, z front] in the safe's frame, turned
+  // yaw_deg; door: the node of the safe model's door, turned door_open_deg about its hinge in door_open_seconds when done; a jammed drill sparks every spark_every_s.
+  "drill": { "run_seconds": [90, 105, 120], "jams_min": 1, "jams_max": 3, "jam_window": [0.15, 0.9], "set_hold_seconds": 2, "fix_hold_seconds": 3,
+             "reach_m": 1.2, "reach_up_m": 1.0, "near_m": 30, "cash_duffels": [2, 3, 4], "duffel_out_m": 0.35, "duffel_spread_m": 0.55,
+             "view": { "model": "apocalypse/SM_Prop_Drill_01", "atlas": "glb/apocalypse/tex/PolygonApocalypse_01_A.png", "at": [-0.1, 0.15, 0.42], "yaw_deg": 0, "box": [0.12, 0.3, 0.35],
+                       "door": "SM_Prop_Safe_Door_01", "door_open_deg": 105, "door_open_seconds": 0.8, "spark_every_s": 0.45 } },
+
   // A house whose rooms gave fewer than min tables with Duffel spots gets more of these, largest room first (not in skip_types): a heist needs product and cash to bag.
   "tables": { "min": 1, "props": ["table_product", "table_cash"], "skip_types": ["hall", "bathroom"] },
 

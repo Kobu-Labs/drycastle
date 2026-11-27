@@ -76,6 +76,7 @@ public partial class Hud : CanvasLayer
     RozhlasChips _rozhlas = null!;
     SpeedReadout _speed = null!;
     ContextPrompt _prompt = null!;
+    DrillPanel _drill = null!;
     AmmoReadout _ammo = null!;
     SeatPanel _seats = null!;
     TopBar _top = null!;
@@ -113,6 +114,7 @@ public partial class Hud : CanvasLayer
         _rozhlas = new RozhlasChips(_root); // the set holder's hint and ON AIR chip
         _speed = new SpeedReadout(_root);
         _prompt = new ContextPrompt(_root);
+        _drill = new DrillPanel(_root); // the Drill on a Trap house's safe, under the prompt line (#496)
         _ammo = new AmmoReadout(_root);
         _seats = new SeatPanel(_root); // the vehicle seat schematic above the vehicle readout
         _top = new TopBar(_root, _state);
@@ -246,6 +248,9 @@ public partial class Hud : CanvasLayer
 
     /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
     public void SetRadial(float? fraction) => _prompt.SetRing(fraction);
+
+    /// <summary>The Drill on the safe a party player is near (#496); null hides the panel.</summary>
+    public void SetDrill(DrillHudInfo? info) => _drill.Set(info);
 
     /// <summary>Vehicle speed readout (km/h); null hides it.</summary>
     public void SetVehicleSpeed(float? kmh) => _speed.SetSpeed(kmh);

@@ -20,6 +20,8 @@ public sealed class TrapHouseFile : IVersioned
     public TrapPostsData Posts { get; set; } = new();
     public TrapSafeData Safe { get; set; } = new();
     public TrapTablesData Tables { get; set; } = new();
+    /// <summary>The Drill on the safe (<see cref="DrillRules"/>).</summary>
+    public TrapDrillData Drill { get; set; } = new();
     /// <summary>The prop kinds; the index is the wire's kind byte.</summary>
     public List<TrapPropKind> Props { get; set; } = new();
     /// <summary>Room type to its rows [prop, min, max, place], as in the file; <see cref="RulesFor"/> reads them.</summary>
@@ -71,6 +73,7 @@ public sealed class TrapHouseFile : IVersioned
             NotNegative(p.HeightM, $"{what}: height_m", f);
         }
         if (KindOf(Safe.Prop) < 0) throw new DataFileException($"{f}: safe.prop '{Safe.Prop}' is not a prop");
+        Drill.Validate(f);
         if (Tables.Min < 0) throw new DataFileException($"{f}: tables.min must be 0 or more");
         foreach (var t in Tables.Props)
             if (KindOf(t) is var k && (k < 0 || Props[k].Duffel == "")) throw new DataFileException($"{f}: tables.props: '{t}' is not a prop with Duffel spots");
@@ -132,6 +135,58 @@ public sealed class TrapSafeData
     public string Prop { get; set; } = "safe";
     public float StandM { get; set; } = 0.7f;
     public List<string> Rooms { get; set; } = new();
+}
+
+/// <summary>trap_house.json <c>drill</c>: the Drill on a Trap house's safe (<see cref="DrillRules"/>, <see cref="Cartel.Drill"/>).</summary>
+public sealed class TrapDrillData
+{
+    /// <summary>Seconds it drills, by tier (tier 1 first; a tier past the list takes the last).</summary>
+    public List<float> RunSeconds { get; set; } = new() { 90 };
+    public int JamsMin { get; set; } = 1;
+    public int JamsMax { get; set; } = 3;
+    /// <summary>[from, to]: the fractions of the run the jams fall between.</summary>
+    public float[] JamWindow { get; set; } = { 0.15f, 0.9f };
+    public float SetHoldSeconds { get; set; } = 2;
+    public float FixHoldSeconds { get; set; } = 3;
+    public float ReachM { get; set; } = 1.2f;
+    public float ReachUpM { get; set; } = 1;
+    /// <summary>Players within this of the safe are told the Drill's state.</summary>
+    public float NearM { get; set; } = 30;
+    /// <summary>Cash Duffels by the opened safe, by tier.</summary>
+    public List<int> CashDuffels { get; set; } = new() { 2 };
+    public float DuffelOutM { get; set; } = 0.35f;
+    public float DuffelSpreadM { get; set; } = 0.55f;
+    public TrapDrillView View { get; set; } = new();
+
+    internal void Validate(string f)
+    {
+        if (RunSeconds.Count == 0 || RunSeconds.Any(s => !(s > 0) || !float.IsFinite(s))) throw new DataFileException($"{f}: drill.run_seconds lists the seconds by tier, each above 0");
+        if (JamsMin < 0 || JamsMax < JamsMin) throw new DataFileException($"{f}: drill needs 0 <= jams_min <= jams_max");
+        if (JamWindow.Length != 2 || !(JamWindow[0] > 0) || !(JamWindow[1] > JamWindow[0]) || !(JamWindow[1] < 1)) throw new DataFileException($"{f}: drill.jam_window is [from, to], 0 < from < to < 1");
+        if (!(SetHoldSeconds > 0) || !(FixHoldSeconds > 0)) throw new DataFileException($"{f}: drill.set_hold_seconds and fix_hold_seconds must be above 0");
+        if (!(ReachM > 0) || !(ReachUpM > 0) || !(NearM > ReachM)) throw new DataFileException($"{f}: drill needs reach_m and reach_up_m above 0 and near_m above reach_m");
+        if (CashDuffels.Count == 0 || CashDuffels.Any(n => n < 0)) throw new DataFileException($"{f}: drill.cash_duffels lists the count by tier, each 0 or more");
+        if (!(DuffelOutM >= 0) || !(DuffelSpreadM >= 0)) throw new DataFileException($"{f}: drill.duffel_out_m and duffel_spread_m must be 0 or more");
+        if (View.At.Length != 3 || View.Box.Length != 3 || !(View.DoorOpenSeconds >= 0) || !(View.SparkEverySeconds > 0)) throw new DataFileException($"{f}: drill.view needs at [x, y, z], box [x, y, z], door_open_seconds 0 or more and spark_every_s above 0");
+    }
+}
+
+/// <summary>trap_house.json <c>drill.view</c>: how a client draws the Drill on the safe and opens the safe's door.</summary>
+public sealed class TrapDrillView
+{
+    /// <summary>A Synty GLB under assets-private/synty/glb, with its atlas (a path under synty/); without the pack, a box of <see cref="Box"/>.</summary>
+    public string Model { get; set; } = "";
+    public string Atlas { get; set; } = "";
+    /// <summary>[x across, y up, z front] in the safe prop's frame.</summary>
+    public float[] At { get; set; } = { 0, 0.3f, 0.4f };
+    public float YawDeg { get; set; }
+    public float[] Box { get; set; } = { 0.12f, 0.3f, 0.35f };
+    /// <summary>The node of the safe's door in its model (it turns about its own origin, the hinge).</summary>
+    public string Door { get; set; } = "";
+    public float DoorOpenDeg { get; set; } = 105;
+    public float DoorOpenSeconds { get; set; } = 0.8f;
+    /// <summary>A jammed drill sparks this often.</summary>
+    public float SparkEverySeconds { get; set; } = 0.45f;
 }
 
 public sealed class TrapTablesData

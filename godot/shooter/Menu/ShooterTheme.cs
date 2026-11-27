@@ -204,6 +204,8 @@ public static class ShooterTheme
         Bar(t, "HealthBar", Good);
         Bar(t, "HealthBarLow", Danger);
         Bar(t, "ReloadBar", Warn);
+        Bar(t, "DrillBar", Accent);       // the Drill on a Trap house's safe, running or done
+        Bar(t, "DrillBarJammed", Warn);   // and jammed (the panel says so in words too)
         Bar(t, "StatBar", Accent);       // loadout editor: the chosen item's stat
         Bar(t, "StatBarSaved", Dim);     // loadout editor: the saved item's stat, for comparison
         t.SetFontSize("font_size", "ProgressBar", FontSmall);

@@ -33,6 +33,9 @@ internal sealed class TrapHouseServer
 
     TrapHousesNode? Node => _arenaMode ? null : TrapHousesNode.Current;
 
+    /// <summary>trap_house.json, when this map has houses to dress (the Drill reads its section).</summary>
+    public TrapHouseFile? Data => Node?.Data;
+
     /// <summary>Whether this map has a house that could be dressed.</summary>
     public bool On => Node != null;
 

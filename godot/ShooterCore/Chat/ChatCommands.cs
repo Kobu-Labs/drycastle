@@ -89,6 +89,8 @@ public static class ChatCommands
 
     /// <summary>Most Gunmen one /gunman puts down.</summary>
     public const int MaxTestGunmen = 12;
+    /// <summary>Highest tier /drill takes (a tier past trap_house.json drill's lists takes their last entry).</summary>
+    const int MaxDrillTier = 9;
 
     /// <summary>Largest /carve radius, metres (the MOAB's carve is 14).</summary>
     public const int MaxCarveRadius = 20;
@@ -128,6 +130,8 @@ public static class ChatCommands
         new("cartel", "TEST: the Cartel, for yourself: join or quit anywhere, add Respect (respect <n>), start a Job of a kind at any tier anywhere (job <kind> [tier], e.g. job test 2), or show your standing (status)",
             new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("value", ChatArgKind.Text, false) }),
         new("traphouse", "TEST: dress a hollow house as a Trap house now, for everyone: the nearest to you (no argument, or nearest) or one by building id (w...); off strips every one", new[] { new ChatArg("house", ChatArgKind.Text, false) }),
+        new("drill", "TEST: arm the safe of the dressed Trap house nearest you for yourself at a tier (1 by default): hold E at it to set the Drill, again to fix a jam; open, it gives cash Duffels. off disarms every one",
+            new[] { new ChatArg("tier", ChatArgKind.IntOrChoice, false, 1, MaxDrillTier) }),
         new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: hold the throw key to throw it, tap it to put it down", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
@@ -179,6 +183,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "night" => new[] { ("reset", "back to the shipped night") },
+            ChatArgKind.IntOrChoice when cmd.Name == "drill" => new[] { ("off", "disarm every safe") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
             ChatArgKind.IntOrChoice or ChatArgKind.Choice when cmd.Name == "gunman" => new[] { ("posted", "they hold their spots facing you (trap house defenders)"), ("clear", "remove the test Gunmen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
