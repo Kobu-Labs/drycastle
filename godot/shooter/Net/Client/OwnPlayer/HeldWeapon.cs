@@ -28,11 +28,15 @@ internal sealed class HeldWeapon
         _ctx = ctx; _aim = aim; _loadouts = loadouts; _binoculars = binoculars; _thrower = thrower; _flings = flings; _aircraft = aircraft; _scud = scud; _pounce = pounce; _targets = targets;
     }
 
+    /// <summary>The weapon id last shown in the hand ("" none): the own figure holds the same.</summary>
+    public string ShownId { get; private set; } = "";
+
     /// <summary>Shows the held weapon of the current hotbar slot (the server-confirmed one once known) low on the right; hidden while dead or driving.</summary>
     public void ShowViewmodel()
     {
         var slot = _ctx.Ammo?.Slot ?? _ctx.Hotbar.Want;
         var id = _thrower.HeldId() ?? (_ctx.Weapons != null && slot >= 1 && slot <= _ctx.Weapons.Weapons.Count ? _ctx.Weapons.Weapons[slot - 1].Id : ""); // the throw key held: the grenade, whatever was selected
+        ShownId = id;
         _ctx.Viewmodel.Show(id);
         _ctx.Viewmodel.Visible = _ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && _ctx.Me is not { ZoomFov: > 0 }; // an armed seat's rider holds their weapon (ADR 0011)
     }
