@@ -287,7 +287,7 @@ public partial class NetServer : Node
         _crates = new CrateServer(_ctx, Config.Killstreaks.Rewards, () => _shot.Query, () => _streaks.Rules);
         _streaks = BuildStreaks(); // after the match and the crate book: the care package streak needs both; the turret streak spawns into the match's entities
         _duffels = new DuffelServer(_ctx, Config.Duffels, () => _shot.Query, _seats.EnterableCar, _crates.AnyInReach); // the cartel's Duffels (#494): world entity 62
-        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null);
+        var keys = new KeyCompetition(_corpses, _crates, _areas, _garage, _houses, _mass, _rozhlas, _thieves, at => _seats.EnterableCar(new Vector3(at.X, at.Y, at.Z)) != null, c => _scud.HasLoadingOffer(c), c => _duffels.InReach(c) != null, c => _cartel.ContactInReach(c));
         _plantation = new PlantationServer(_ctx, Config.Plantation, _areas, keys, _sitters, _pounce, _streaks);
         _drills = new DrillServer(_ctx, _trapHouses, _duffels, keys, _sitters, _pounce, _streaks); // the Drills on the Trap houses' safes (#496): events 62-64
         _lockOn = new LockOnServer(_ctx, _fleet, _gunships, () => _streaks.Rules, _sitters, id => _pounce.IsPinned(id), CarPose.SeatPos, _shot.WorldHit, _rocketIds, _smoke, _carDamage.Damage, () => Config.Vehicles, _simClients);

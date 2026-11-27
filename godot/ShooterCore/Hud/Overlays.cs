@@ -6,10 +6,10 @@ namespace Drycastle.ShooterCore.Hud;
 /// Who wants the mouse released (a cursor to click with) instead of captured (looking around). The shell asks it every frame and writes
 /// <c>Input.MouseMode</c>; any other writer must ask the same question or it fights the shell (last writer in the frame wins).
 /// </summary>
-public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool EquipmentOpen, bool TacticalMapOpen, bool ChooserFreesMouse, bool HuntersLogOpen = false, bool MineralLogOpen = false)
+public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool EquipmentOpen, bool TacticalMapOpen, bool ChooserFreesMouse, bool HuntersLogOpen = false, bool MineralLogOpen = false, bool ContactPanelOpen = false)
 {
-    /// <summary>The respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint), the Hunter's Log, the Mineral Log and the corpse chooser's item list release the mouse.</summary>
-    public bool WantsFreeMouse => Dead || ChatOpen || EquipmentOpen || TacticalMapOpen || ChooserFreesMouse || HuntersLogOpen || MineralLogOpen;
+    /// <summary>The respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint), the Hunter's Log, the Mineral Log, the Contact panel and the corpse chooser's item list release the mouse.</summary>
+    public bool WantsFreeMouse => Dead || ChatOpen || EquipmentOpen || TacticalMapOpen || ChooserFreesMouse || HuntersLogOpen || MineralLogOpen || ContactPanelOpen;
 
     /// <summary>
     /// The sandbox map closes and gives the mouse back: captured unless a menu has opened meanwhile or another owner still wants the cursor (death, the chat box).
@@ -18,8 +18,8 @@ public readonly record struct MouseOwners(bool Dead, bool ChatOpen, bool Equipme
     public bool CapturesWhenMapCloses(bool menuOpen) => !menuOpen && !WantsFreeMouse;
 }
 
-/// <summary>The overlays of the HUD that never show together (a collection log, the Hunter's or the Mineral Log, is a centred panel on its own top layer, not full-screen).</summary>
-public enum Overlay { Equipment, TacticalMap, HuntersLog, MineralLog }
+/// <summary>The overlays of the HUD that never show together (a collection log, the Hunter's or the Mineral Log, and the cartel's Contact panel are centred panels on their own top layer, not full-screen).</summary>
+public enum Overlay { Equipment, TacticalMap, HuntersLog, MineralLog, ContactPanel }
 
 /// <summary>What the arbiter needs to know. <c>ControlMode</c>: a turret or the missile owns the screen. <c>Ending</c>: the match is over.</summary>
 public readonly record struct OverlayContext(bool ChatOpen, bool Dead, bool Ending, bool ControlMode, bool MenuOpen, bool ChooserOpen);

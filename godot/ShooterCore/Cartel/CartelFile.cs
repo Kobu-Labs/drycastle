@@ -35,6 +35,9 @@ public sealed class CartelFile : IVersioned
     /// <summary>How near the Contact (ground metres) a player must stand to join, quit or start a Job.</summary>
     public float ContactReachM { get; set; } = 3f;
 
+    /// <summary>How far (metres) a Job's marker must move before its party is sent the new point (a marker on something that moves is not sent every tick).</summary>
+    public float MarkerResendM { get; set; } = 2f;
+
     /// <summary>One section per kind of Job, by the kind's id (<c>test</c>, later <c>delivery</c>, the heists): only that kind reads it.</summary>
     public Dictionary<string, JsonElement> Jobs { get; set; } = new();
 
@@ -81,6 +84,7 @@ public sealed class CartelFile : IVersioned
         static DataFileException Bad(string text) => new($"cartel.json: {text}");
         if (Ranks.Count == 0) throw Bad("ranks must list at least one rank");
         if (!(ContactReachM > 0)) throw Bad("contact_reach_m must be more than 0");
+        if (!(MarkerResendM >= 0) || !float.IsFinite(MarkerResendM)) throw Bad("marker_resend_m must be 0 or more");
         if (Ranks[0].Respect != 0) throw Bad("the first rank's respect must be 0");
         var ids = new HashSet<string>();
         for (var i = 0; i < Ranks.Count; i++)

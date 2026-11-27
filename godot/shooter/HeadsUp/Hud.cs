@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Cartel;
 using Drycastle.Shooter.HeadsUp.Badges;
 using Drycastle.Shooter.HeadsUp.Prompts;
 using Drycastle.Shooter.HeadsUp.RoundFlow;
@@ -9,6 +10,7 @@ using Drycastle.Shooter.Hunts;
 using Drycastle.Shooter.Maps;
 using Drycastle.Shooter.Menu;
 using Drycastle.Shooter.Net.Client;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Hud;
 using Drycastle.ShooterCore.Killstreaks;
@@ -80,6 +82,7 @@ public partial class Hud : CanvasLayer
     AmmoReadout _ammo = null!;
     SeatPanel _seats = null!;
     TopBar _top = null!;
+    JobTracker _job = null!;
     KillFeed _feed = null!;
     FpsCounter _fps = null!;
     RespawnScreen _respawn = null!;
@@ -118,6 +121,7 @@ public partial class Hud : CanvasLayer
         _ammo = new AmmoReadout(_root);
         _seats = new SeatPanel(_root); // the vehicle seat schematic above the vehicle readout
         _top = new TopBar(_root, _state);
+        _job = new JobTracker(_root, _mapMarkers); // the cartel Job's tracker and end card at the right edge, under the kill feed (#494)
         _feed = new KillFeed(this, _root.Theme, _state, id => KillWeaponName?.Invoke(id)); // beside the panels root, not under it: a control session hides the panels and keeps the feed (ticket #154)
         _fps = new FpsCounter(_root, _feed, _state); // after the feed: it moves the feed clear of the chip
         _protection.AddChip(_root);
@@ -172,6 +176,7 @@ public partial class Hud : CanvasLayer
     {
         var now = HudUi.Now;
         _top.Tick();
+        _job.Tick();
         _respawn.Tick();
         _protection.Tick(now);
         _hit.Tick(now);
@@ -366,11 +371,12 @@ public partial class Hud : CanvasLayer
     // ---- chat ----
     public bool ChatOpen => _chat?.IsOpen ?? false;
 
-    /// <summary>Opens the chat box. The Hunter's Log closes first: it sits on the top layer, so it would cover the box and take its Q / E keys.</summary>
+    /// <summary>Opens the chat box. The Hunter's Log (and the other top-layer panels) closes first: it sits on the top layer, so it would cover the box and take its Q / E keys.</summary>
     public void OpenChat(string prefill = "")
     {
         _screens.CloseHuntersLog();
         _screens.CloseMineralLog();
+        _screens.CloseContactPanel();
         _chat.Open(prefill);
     }
 
@@ -415,4 +421,14 @@ public partial class Hud : CanvasLayer
     public void OpenMineralLog() => _screens.OpenMineralLog();
     public void CloseMineralLog() => _screens.CloseMineralLog();
     public bool BackMineralLog() => _screens.BackMineralLog();
+
+    // ---- the cartel (#494) ----
+    /// <summary>The player's Job tracker: its panel and its marker on the maps and in the world follow it every frame.</summary>
+    public void AttachJobTracker(CartelTracker tracker, Func<string, string> kindName, Func<ushort, string> nameOf) => _job.Attach(tracker, kindName, nameOf);
+
+    public bool ContactPanelOpen => _screens?.ContactPanelOpen ?? false;
+    public void AttachContactPanel(ContactPanel panel) => _screens.AttachContactPanel(panel);
+    public bool OpenContactPanel(bool menuOpen = false, bool chooserOpen = false) => _screens.OpenContactPanel(menuOpen, chooserOpen);
+    public void CloseContactPanel() => _screens.CloseContactPanel();
+    public bool BackContactPanel() => _screens.BackContactPanel();
 }

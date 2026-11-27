@@ -22,6 +22,8 @@
   ],
   // contact_reach_m: how near the Contact (ground metres) a player must stand to join, quit or start a job (the map's placed Contact; a map without one has no Cartel).
   "contact_reach_m": 3,
+  // marker_resend_m: a Job's marker (the HUD's minimap and world marker for its party) is sent again only once its point has moved this many metres (0: every change).
+  "marker_resend_m": 2,
   // One section per kind of Job, read only by that kind.
   "jobs": {
     // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when

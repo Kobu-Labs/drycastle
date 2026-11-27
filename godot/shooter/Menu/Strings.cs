@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Cartel;
 using Drycastle.Shooter.Chat;
 using Drycastle.Shooter.Churches;
 using Drycastle.Shooter.Crystals;
@@ -237,6 +238,7 @@ public static class Strings
         foreach (var (k, v) in ScudStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in HuntersLogStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in MineralLogStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in CartelStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

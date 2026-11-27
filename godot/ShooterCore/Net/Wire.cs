@@ -86,7 +86,7 @@ public enum EventKind : byte
     HeadLampState = 31,
     /// <summary>Server broadcast: a Phoenix was first hit and starts to fall (<see cref="PhoenixFallCodec"/>: u16 world entity id, f32 x3 where it was hit, f32 x3 the crash site, f32 fall seconds, 30 bytes). Not sent to a joiner: its state and position say the rest.</summary>
     PhoenixFall = 32,
-    /// <summary>Client to server: a request at the Contact, join or quit the Cartel or start a Job (<see cref="CartelCodec.EncodeRequest"/>). Kinds 33-39 belong to the Cartel (#437); 37-39 are free.</summary>
+    /// <summary>Client to server: a request at the Contact, join or quit the Cartel or start a Job (<see cref="CartelCodec.EncodeRequest"/>). Kinds 33-39 belong to the Cartel (#437); 38-39 are free.</summary>
     CartelRequest = 33,
     /// <summary>Server to the player: their Cartel standing, membership, Respect, rank and flags (<see cref="CartelCodec.EncodeStatus"/>), at join and after every change.</summary>
     CartelStatus = 34,
@@ -94,6 +94,8 @@ public enum EventKind : byte
     CartelJob = 35,
     /// <summary>Server to everyone: a player reached a new Cartel rank (<see cref="CartelCodec.EncodeRankUp"/>: u16 player id, u8 rank); the client shows the toast (the chat line comes with it).</summary>
     CartelRankUp = 36,
+    /// <summary>Server to the players of a Job's party: its objective line and marker (<see cref="CartelCodec.EncodeObjective"/>), when either changes and to a member who joins it midway.</summary>
+    CartelObjective = 37,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -454,6 +456,7 @@ public static class Wire
     //   vNEXT (Delivery + Hit jobs, #494, #497): no wire change: kinds "delivery" and "hit" ride CartelJob (35); the Rival dealer is a Rival crew's Gang boss (kind 2), the Duffel the existing entity 62
     //   vNEXT (Safe + Drill): the Drill on a Trap house's safe (#496): events 62 DrillState and 63 DrillCleared (to the players near the safe) and 64 DrillReach (to one player) (DrillCodec)
     //   vNEXT (Harvest heist, #495): no wire change: the Assault vans are Raid vans (entity 55) with Gunmen and Enforcers (entity 54); the Job's line and marker go with the Job core's messages
+    //   vNEXT (Contact panel + HUD): event 37 CartelObjective (CartelCodec.EncodeObjective: a Job's tracker line and marker, server to its party)
     public const byte ProtocolVersion = 88;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)

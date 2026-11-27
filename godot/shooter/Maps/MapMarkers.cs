@@ -32,6 +32,8 @@ public sealed class MapMarkers
     public GunfireBlips? Blips { get; set; }
     /// <summary>The player's waypoint (set by clicking the tactical map): drawn on both maps and in the world.</summary>
     public Waypoint Waypoint { get; } = new();
+    /// <summary>Where the player's Job points (Godot axes; null: no Job, or none to show): a star on both maps and in the world (#494). Set each frame by the Job tracker.</summary>
+    public System.Numerics.Vector3? Job { get; set; }
     /// <summary>Team deathmatch: pings use the enemy colour (orange) and friends and squad mates are drawn.</summary>
     public bool TeamColours { get; set; }
 

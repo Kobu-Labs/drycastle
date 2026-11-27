@@ -624,6 +624,7 @@ public sealed partial class TacticalMap : Control
                 foreach (var bl in _blipScratch) MapGlyphs.Blip(this, At(bl.Position, b), bl, still, 1.3f);
             }
             foreach (var strike in m.Strikes.Live(Time.GetTicksMsec() / 1000.0)) MapGlyphs.Strike(this, At(strike.At, b), strike.RadiusM * _o._k);
+            if (m.Job is { } job) MapGlyphs.Job(this, At(new System.Numerics.Vector2(job.X, job.Z), b), 1.3f);
             if (m.Waypoint.At is { } wp) MapGlyphs.Waypoint(this, At(wp, b), 1.3f);
             var me = At(new System.Numerics.Vector2(m.Player.X, m.Player.Y), b);
             MapGlyphs.Player(this, me, TacticalMapMath.HeadingRadians(m.Yaw));
@@ -809,6 +810,29 @@ static class MapGlyphs
         var tri = new[] { p + new Vector2(-9, -15) * scale, p + new Vector2(9, -15) * scale, p };
         c.DrawColoredPolygon(new[] { tri[0] + new Vector2(-2, -2), tri[1] + new Vector2(2, -2), tri[2] + new Vector2(0, 3) }, ShooterTheme.Outline);
         c.DrawColoredPolygon(tri, ShooterTheme.Waypoint);
+    }
+
+    /// <summary>The cartel Job's marker: a five-pointed star in the Job amber (a shape no other marker has; never colour only).</summary>
+    public static void Job(CanvasItem c, Vector2 p, float scale)
+    {
+        StarPoints(p, 10f * scale, 4.2f * scale, StarLine);
+        Array.Copy(StarLine, StarFill, StarFill.Length);
+        c.DrawPolyline(StarLine, ShooterTheme.Outline, 4f, true);
+        c.DrawColoredPolygon(StarFill, ShooterTheme.JobMark);
+    }
+
+    static readonly Vector2[] StarLine = new Vector2[11], StarFill = new Vector2[10]; // reused: the maps draw every frame
+
+    /// <summary>A five-pointed star round <paramref name="p"/>, point up, as a closed line of 11 points (the last is the first) into <paramref name="into"/>.</summary>
+    public static void StarPoints(Vector2 p, float outer, float inner, Vector2[] into)
+    {
+        for (var i = 0; i < 10; i++)
+        {
+            var a = -Mathf.Pi / 2 + i * Mathf.Pi / 5;
+            var r = i % 2 == 0 ? outer : inner;
+            into[i] = p + new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * r;
+        }
+        into[10] = into[0];
     }
 
     /// <summary>The player: an arrow pointing along the view, <paramref name="rotation"/> radians clockwise from up (north on the sheet), in a ring so nothing else on the map looks like it.</summary>

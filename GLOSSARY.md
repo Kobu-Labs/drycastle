@@ -822,7 +822,7 @@ A rare Mystery Animal of the night sky (`phoenix` in `animals.json`, model `phoe
 _Avoid_: firebird, Event (it is not an Event), boss
 
 **Cartel**:
-The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Membership (machine `Cartel.Membership`: outsider, member, quit) and Respect are stored on the Profile; a guest cannot join, bots never do. The Contact's place is to come: until then he answers anywhere (#494).
+The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Membership (machine `Cartel.Membership`: outsider, member, quit) and Respect are stored on the Profile; a guest cannot join, bots never do. Requests count only in reach of the Contact (#494).
 _Avoid_: gang (the Rival crew and the Thieves' Raids are gangs), faction, mafia
 
 **Cartel rank**:
@@ -834,11 +834,11 @@ What a finished cartel Job pays, and all it pays: the Cartel rank's own experien
 _Avoid_: XP, rep, reputation, money
 
 **Contact**:
-The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. He stands on his marker, a Placed object (`prim:cartel_contact`, the first one by id) set by hand in the map editor, facing its arrow; the game hides the marker (it stops nothing) and draws a Gang Warfare character there (`contact.json`). A map without one has no cartel, with no error. Planned (#437).
+The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. He stands on his marker, a Placed object (`prim:cartel_contact`, the first one by id) set by hand in the map editor, facing its arrow; the game hides the marker (it stops nothing) and draws a Gang Warfare character there (`contact.json`). A map without one has no cartel, with no error. In his reach (`contact_reach_m`, on foot) the interact key is his when nothing else wants it: it opens the Contact panel (non-pausing, like the Hunter's Log; Esc closes it, walking away too): a member's Cartel rank, Respect and the bar to the next rank, Quit, and the job list by kind and tier (locked tiers say the rank they need) with Start for the leader (anyone else reads "Your leader starts jobs"); anyone else reads what the Cartel is and Join. Near him the plantation's hold never makes a player high (#494).
 _Avoid_: NPC (alone), quest giver, dealer
 
 **Job**:
-One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. The core is built (#494, `JobBook`, machine `Job.Run`): one running Job per owner (a solo player, or in team deathmatch a Squad), many at once; a timer; it fails at the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, or when nobody is left; two Jobs never share a reserved thing (a drop point). Kinds of Job plug in; the objectives are their own.
+One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. The core is built (#494, `JobBook`, machine `Job.Run`): one running Job per owner (a solo player, or in team deathmatch a Squad), many at once; a timer; it fails at the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, or when nobody is left; two Jobs never share a reserved thing (a drop point). Kinds of Job plug in; the objectives are their own. Only its party sees it: a HUD tracker (the kind, the tier, the objective line, the time left), a star marker on the minimap, the tactical map and in the world, and an end card (done with the Respect paid, or failed with the reason).
 _Avoid_: quest, mission, task, Event (a Job is not one)
 
 **Heist**:

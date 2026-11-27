@@ -223,7 +223,7 @@ public partial class Shooter : Node3D
                 _client is { TeamAdmin.CanManage: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.Screens.OpenHuntersLog(),
                 _client is { Squads.CanUse: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.Screens.OpenMineralLog()),
             WantsFreeMouse = () => _client is { Screens.WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
-            BackHandler = () => (_client?.Chat.Close() ?? false) || (_client?.Screens.CloseEquipment() ?? false) || (_client?.Screens.CloseHuntersLog() ?? false) || (_client?.Screens.CloseMineralLog() ?? false) || (_client?.Screens.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
+            BackHandler = () => (_client?.Chat.Close() ?? false) || (_client?.Screens.CloseEquipment() ?? false) || (_client?.Screens.CloseHuntersLog() ?? false) || (_client?.Screens.CloseMineralLog() ?? false) || (_client?.Screens.CloseContactPanel() ?? false) || (_client?.Screens.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), the Mineral Log, the Contact panel (its quit question first), then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -328,6 +328,7 @@ public partial class Shooter : Node3D
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.Duffels = _data.Duffels;
+            client.Cartel = _data.Cartel;
             client.OnFailed = (why, joined) =>
             {
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
