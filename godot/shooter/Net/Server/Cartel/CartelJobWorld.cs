@@ -7,7 +7,7 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// The world the simple Jobs run in (#494 Delivery, #497 Hit; docs/cartel.md "Simple jobs"): the Duffels (<see cref="DuffelServer"/>), the Rival crew (<see cref="RivalCrewServer"/>) and the players' feet and
+/// The world the simple Jobs run in (#494 Delivery, #497 Hit; docs/cartel.md "Simple jobs"): the Duffels (a Delivery places its own on the pallet; <see cref="DuffelServer"/>), the Rival crew (<see cref="RivalCrewServer"/>) and the players' feet and
 /// interact key (the last input's <see cref="ServerClient.UseKey"/>). The rules are ShooterCore's (<see cref="DeliveryJobKind"/>, <see cref="HitJobKind"/>).
 /// </summary>
 internal sealed class CartelJobWorld : IDeliveryWorld, IHitWorld
@@ -26,9 +26,6 @@ internal sealed class CartelJobWorld : IDeliveryWorld, IHitWorld
     }
 
     public DuffelBook Duffels => _duffels.Book;
-
-    public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier) =>
-        _ctx.Players.TryGetValue(carrier, out var c) ? _duffels.Give(kind, party, c) : null;
 
     public NVec3? Feet(ushort player) =>
         _ctx.Players.TryGetValue(player, out var c) && c.Car == null && _ctx.IsAlive(player) ? c.Body.GlobalPosition.ToNumerics() : null;

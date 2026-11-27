@@ -55,6 +55,21 @@ def test_primitive_matches_declared_size_and_stands_on_ground(name) -> None:
     assert hex_to_rgb(prim.colour) in prim.builder(None).colours.tolist()
 
 
+def test_cartel_pallet_is_the_synty_pallets_footprint_with_four_gold_spot_plates() -> None:
+    prim = PRIMITIVES["cartel_pallet"]
+    mesh = build_primitive("cartel_pallet")
+    lo, hi = bbox(mesh)
+    assert (hi - lo) == pytest.approx([1.441, 1.418, 0.235], abs=1e-6)  # SM_Prop_Pallet_01.glb: 1.441 x 0.235 x 1.418
+    assert prim.size_m == (1.441, 0.235, 1.418)
+    gold = hex_to_rgb(prim.params["spot_colour"])
+    plates = mesh.tris[(mesh.colours == gold).all(axis=1)]  # the gold faces: only the four plates
+    assert len(plates) > 0 and plates.reshape(-1, 3)[:, 2].min() == pytest.approx(0.225)
+    xs, ys = plates.reshape(-1, 3)[:, 0], plates.reshape(-1, 3)[:, 1]
+    for sx, sy in prim.params["spots"]:  # each spot's plate lies within the footprint
+        assert ((abs(xs - sx) <= 0.35 + 1e-9) & (abs(ys - sy) <= 0.175 + 1e-9)).any()
+    assert xs.max() <= 1.441 / 2 and ys.max() <= 1.418 / 2
+
+
 def test_wall_default_and_params() -> None:
     lo, hi = bbox(build_primitive("wall"))
     assert (hi - lo) == pytest.approx([3.0, 0.2, 1.2])

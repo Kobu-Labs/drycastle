@@ -265,6 +265,38 @@ def cartel_contact_mesh(params: dict | None = None) -> Mesh:
     return _mesh(tris, cols)
 
 
+def cartel_pallet_mesh(params: dict | None = None) -> Mesh:
+    """The marker of the Cartel pallet (docs/cartel.md "Delivery"): a plain wooden pallet, three runners under five deck boards, with a gold
+    plate on each of the four bag spots, so the editor shows where the pallet stands and where the bags lie. The footprint and height are the
+    Gang Warfare pallet's (``SM_Prop_Pallet_01.glb``, read from the glb); the spots are ``pallet.spots`` of ``godot/shooter/data/cartel.json``
+    (mirrored, the four lie symmetric). The game hides this marker and draws that pallet there (``godot/shooter/Cartel/PalletView.cs``); the
+    marker itself is solid, a box of the footprint like any placed prop."""
+    p = {**PRIMITIVES["cartel_pallet"].params, **(params or {})}
+    length, width, h = float(p["length_m"]), float(p["width_m"]), float(p["height_m"])
+    plate = float(p["spot_plate_m"])
+    tris: list = []
+    cols: list = []
+
+    def add(p0, p1, w: float, z0: float, z1: float, colour: str) -> None:
+        part = box_tris(p0, p1, w, z0, z1)
+        tris.extend(part)
+        cols.extend([hex_to_rgb(colour)] * len(part))
+
+    deck_top, runner_top = h - plate, h * 0.5
+    runner = 0.14  # the runners: along y, at both edges and the middle
+    for x in (-(length / 2 - runner / 2), 0.0, length / 2 - runner / 2):
+        add((x, -width / 2), (x, width / 2), runner, 0.0, runner_top, p["colour"])
+    boards = 5  # the deck: five boards along x, with a gap between
+    bw = 0.24
+    gap = (width - boards * bw) / (boards - 1)
+    for j in range(boards):
+        y = -width / 2 + bw / 2 + j * (bw + gap)
+        add((-length / 2, y), (length / 2, y), bw, runner_top, deck_top, p["colour"])
+    for sx, sy in p["spots"]:  # the bag spots (x across the width, y along the depth, the plate a bag long by half a bag deep)
+        add((sx - 0.35, sy), (sx + 0.35, sy), 0.35, deck_top, h, p["spot_colour"])
+    return _mesh(tris, cols)
+
+
 def bunker_prim_mesh(params: dict | None = None) -> Mesh:
     """WW2 pillbox: rounded concrete dome on a chamfered rectangle, door facing -y (the object's
     front), firing slits, weathering streaks. Long axis along x. The closed form: a placed object
@@ -343,6 +375,20 @@ PRIMITIVES: dict[str, Primitive] = {
         },
         (0.8, 1.8, 0.8),
         "#3a3532",
+    ),
+    "cartel_pallet": Primitive(
+        cartel_pallet_mesh,
+        {
+            "length_m": 1.441,
+            "width_m": 1.418,
+            "height_m": 0.235,
+            "spot_plate_m": 0.01,
+            "spots": [(-0.36, -0.33), (0.36, -0.33), (-0.36, 0.33), (0.36, 0.33)],
+            "colour": "#8a6a45",
+            "spot_colour": "#c9a227",
+        },
+        (1.441, 0.235, 1.418),
+        "#8a6a45",
     ),
     "radio_tower": Primitive(
         radio_tower_mesh,

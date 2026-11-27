@@ -38,6 +38,9 @@ public sealed class CartelFile : IVersioned
     /// <summary>How far (metres) a Job's marker must move before its party is sent the new point (a marker on something that moves is not sent every tick).</summary>
     public float MarkerResendM { get; set; } = 2f;
 
+    /// <summary>The Cartel pallet's bag spots and look (<c>pallet</c>); every Delivery's Duffel lies on one of its spots.</summary>
+    public CartelPalletData Pallet { get; set; } = new();
+
     /// <summary>One section per kind of Job, by the kind's id (<c>test</c>, later <c>delivery</c>, the heists): only that kind reads it.</summary>
     public Dictionary<string, JsonElement> Jobs { get; set; } = new();
 
@@ -94,6 +97,7 @@ public sealed class CartelFile : IVersioned
             if (!ids.Add(r.Id)) throw Bad($"ranks[{i}]: the id '{r.Id}' is used twice");
             if (i > 0 && r.Respect <= Ranks[i - 1].Respect) throw Bad($"ranks[{i}] ({r.Id}): respect must be more than the rank before's");
         }
+        Pallet.Validate();
         if (Tiers.Count == 0) throw Bad("tiers must list at least one tier");
         if (Tiers.Count > byte.MaxValue) throw Bad("at most 255 tiers");
         for (var i = 0; i < Tiers.Count; i++)

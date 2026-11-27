@@ -1,6 +1,7 @@
 using System.Numerics;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Fsm;
+using Drycastle.ShooterCore.Intel;
 using Drycastle.ShooterCore.Jobs;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Scenery;
@@ -23,7 +24,16 @@ public class SimpleJobsTests
     ]}
     """;
 
-    static readonly CartelMap Map = CartelMap.From(ZonePoints.Parse(Points), new ContactPose(Vector3.Zero, new Vector2(0, 1)));
+    // the pallet 4 m east of the Contact, not turned: its four spots lie on its deck, 0.235 m up
+    static readonly PalletPose Pallet = new(new Vector3(4, 0, 0), 0f);
+    static readonly CartelPalletData Deck = CartelFile.Default.Pallet;
+
+    static readonly CartelMap Map = CartelMap.From(ZonePoints.Parse(Points), new ContactPose(Vector3.Zero, new Vector2(0, 1)), Pallet);
+
+    // as many far-apart drop points as the pallet has spots, and one more
+    static CartelMap WideMap(PalletPose? pallet) => CartelMap.From(ZonePoints.Parse("""
+    {"version": 2, "zones": [{"kind": "cartel_drop", "areas": ["Z-1"], "area_m2": 600, "points": [[200, 0, 0], [400, 0, 0], [600, 0, 0], [800, 0, 0], [1000, 0, 0], [1200, 0, 0]]}]}
+    """), new ContactPose(Vector3.Zero, new Vector2(0, 1)), pallet);
 
     sealed class Parties : IJobParties
     {
@@ -52,7 +62,6 @@ public class SimpleJobsTests
         public HitCrewOrder? Order;
         public World() => Duffels = new DuffelBook(DuffelsFile.Default, Entities, new Flat());
         public DuffelBook Duffels { get; }
-        public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier) => Duffels.Give(kind, party, carrier, At.GetValueOrDefault(carrier));
         public Vector3? Feet(ushort p) => At.TryGetValue(p, out var f) ? f : null;
         public bool UseHeld(ushort p) => Holding.Contains(p);
         public Func<ushort, bool>? Hostile;
@@ -68,12 +77,12 @@ public class SimpleJobsTests
         public void Remove() => Removed++;
     }
 
-    static (JobBook Book, Parties Parties, World World, DeliveryJobKind Delivery, HitJobKind Hit) Setup(int seed = 1)
+    static (JobBook Book, Parties Parties, World World, DeliveryJobKind Delivery, HitJobKind Hit) Setup(int seed = 1, CartelMap? map = null)
     {
         var parties = new Parties();
         var world = new World();
         var data = CartelFile.Default;
-        var delivery = new DeliveryJobKind(data, () => Map, new Random(seed), world);
+        var delivery = new DeliveryJobKind(data, () => map ?? Map, new Random(seed), world);
         var hit = new HitJobKind(data, () => Map, new Random(seed), world);
         var book = new JobBook();
         book.Register(delivery); book.Register(hit);
@@ -111,20 +120,31 @@ public class SimpleJobsTests
             Assert.Contains(new Vector3(0, 0, -400), drops); // 200 and 210 east are within apart_m of one another: one of them, and the north one
             Assert.Null(book.Start(CartelRules.Giver, delivery, 1, JobOwner.Solo(3), 3, parties, out var why));
             Assert.Contains("free", why);
-            Assert.Null(world.Duffels.CarriedBy(3)); // a refused start gives nothing
+            Assert.Equal(2, world.Duffels.Count); // a refused start puts nothing on the pallet
             Assert.Equal(2, CartelSpots.Held(book, Map).Count);
         }
     }
 
     [Fact]
-    public void A_delivery_gives_the_leader_its_duffel_and_a_hold_at_the_drop_hands_it_over()
+    public void A_delivery_lays_its_duffel_on_a_pallet_spot_and_a_party_player_carries_it_to_the_drop()
     {
         var (book, parties, world, delivery, _) = Setup();
         world.At[1] = Vector3.Zero;
         var job = Start(book, parties, delivery, 1);
         var o = (DeliveryJobKind.Run)job.Objective;
-        Assert.Same(o.Duffel, world.Duffels.CarriedBy(1));
+        Assert.Null(world.Duffels.CarriedBy(1)); // never in anyone's hands
+        Assert.Equal(DuffelState.Lying, o.Duffel.State);
         Assert.Equal(DuffelKind.Product, o.Duffel.Kind);
+        Assert.Equal(Pallet.SpotAt(Deck, 0), o.Duffel.Position);
+        Assert.Equal(Pallet.SpotAt(Deck, 0), o.Spot);
+        Assert.Equal(0.235f, o.Duffel.Position.Y, 3); // on the deck
+        Assert.True(Vector2.Distance(new(o.Duffel.Position.X, o.Duffel.Position.Z), new(Pallet.Position.X, Pallet.Position.Z)) < 1); // within the pallet's footprint
+        Assert.Equal("Take the duffel from the pallet", o.Objective(job));
+        Assert.Equal(o.Duffel.Position, o.Marker(job)); // the marker is on the pallet
+        Assert.Contains(CartelPallet.Key(0), book.ReservedBy(job));
+
+        world.At[1] = o.Spot; // the leader takes it off the pallet
+        Assert.True(world.Duffels.PickUp(1, o.Spot));
         Assert.Equal("Take the duffel to the drop point", o.Objective(job));
         Assert.Equal(o.Drop, o.Marker(job));
         var ended = new List<JobEnded>();
@@ -143,6 +163,81 @@ public class SimpleJobsTests
         Ticks(book, parties, ended, 10);
         Assert.True(Assert.Single(ended).Succeeded);
         Assert.Equal(0, world.Duffels.Count); // the duffel goes with the job
+        Assert.False(book.IsReserved(CartelPallet.Key(0))); // and its spot is free again
+    }
+
+    [Fact]
+    public void The_pallet_has_four_spots_a_fifth_delivery_is_refused_and_a_spot_is_freed_when_its_job_ends()
+    {
+        var wide = WideMap(Pallet);
+        var (book, parties, world, delivery, _) = Setup(map: wide);
+        var spots = new List<Vector3>();
+        for (ushort leader = 1; leader <= 4; leader++)
+        {
+            var job = Start(book, parties, delivery, leader);
+            spots.Add(((DeliveryJobKind.Run)job.Objective).Spot);
+        }
+        Assert.Equal(4, spots.Distinct().Count()); // four bags, four spots
+        Assert.Equal(4, world.Duffels.Count);
+        Assert.Equal(Enumerable.Range(0, 4).Select(i => Pallet.SpotAt(Deck, i)), spots);
+        Assert.True(delivery.PalletFull(book));
+
+        Assert.Null(book.Start(CartelRules.Giver, delivery, 1, JobOwner.Solo(5), 5, parties, out var why));
+        Assert.Equal("The pallet is full.", why);
+        Assert.Equal(why, CartelWords.Start.Text(JobStartRefusal.PalletFull));
+        Assert.Equal(4, world.Duffels.Count); // the refused start put nothing down and held nothing
+        Assert.Equal(4, book.Running.Count);
+        Assert.False(book.IsReserved(CartelPallet.Key(4)));
+
+        // the rules list it after every other refusal, and only when asked
+        var facts = new JobStartFacts(false, true, true, true, 1, 0, true, true, true, false, false, false, PalletFull: true);
+        Assert.Equal(JobStartRefusal.PalletFull, CartelRules.CanStart(CartelFile.Default, facts));
+        Assert.Equal(JobStartRefusal.MateBusy, CartelRules.CanStart(CartelFile.Default, facts with { MateBusy = true }));
+        Assert.Equal(JobStartRefusal.None, CartelRules.CanStart(CartelFile.Default, facts with { PalletFull = false }));
+        Assert.Equal("The pallet is full.", CartelRules.Words(JobStartRefusal.PalletFull, CartelFile.Default, 1));
+
+        var ended = new List<JobEnded>();
+        book.EndByAdmin(book.Running[1], won: false, parties, ended); // the second Delivery ends: its spot is free again
+        Assert.False(delivery.PalletFull(book));
+        var again = Start(book, parties, delivery, 5);
+        Assert.Equal(Pallet.SpotAt(Deck, 1), ((DeliveryJobKind.Run)again.Objective).Spot);
+    }
+
+    [Fact]
+    public void Spots_turn_with_the_pallet()
+    {
+        var turned = new PalletPose(new Vector3(10, 2, 20), 90f);
+        var spot = turned.SpotAt(Deck, 0); // (-0.36, -0.33) in the pallet's frame
+        var o = IntelRoom.Rotate(new Vector2(-0.36f, -0.33f), 90f);
+        Assert.Equal(new Vector3(10 + o.X, 2 + Deck.TopM, 20 + o.Y), spot);
+        Assert.Equal(MathF.PI / 2, turned.YawRad, 4);
+    }
+
+    [Fact]
+    public void A_map_without_a_pallet_has_no_delivery()
+    {
+        var (book, parties, world, delivery, _) = Setup(map: WideMap(null));
+        Assert.False(delivery.PalletFull(book));
+        Assert.Null(book.Start(CartelRules.Giver, delivery, 1, JobOwner.Solo(1), 1, parties, out var why));
+        Assert.Equal("This map has no pallet.", why);
+        Assert.Equal(0, world.Duffels.Count);
+    }
+
+    [Fact]
+    public void A_delivery_fails_when_its_duffel_is_gone_whatever_took_it()
+    {
+        var (book, parties, world, delivery, _) = Setup();
+        var job = Start(book, parties, delivery, 1);
+        var o = (DeliveryJobKind.Run)job.Objective;
+        var ended = new List<JobEnded>();
+        Ticks(book, parties, ended, 5);
+        Assert.Empty(ended); // lying on the pallet is fine
+        world.Duffels.Remove(o.Duffel); // not the Job's own end: a vehicle it was loaded in went, say
+        Ticks(book, parties, ended, 1);
+        var end = Assert.Single(ended);
+        Assert.False(end.Succeeded);
+        Assert.Equal(JobFailReason.Objective, end.Job.Reason);
+        Assert.False(book.IsReserved(CartelPallet.Key(0)));
     }
 
     [Fact]
@@ -152,6 +247,7 @@ public class SimpleJobsTests
         world.At[1] = Vector3.Zero;
         var job = Start(book, parties, delivery, 1);
         var o = (DeliveryJobKind.Run)job.Objective;
+        Assert.True(world.Duffels.PickUp(1, o.Spot));
         world.At[1] = o.Drop;
         var ended = new List<JobEnded>();
         var need = (int)MathF.Ceiling(delivery.Numbers.HoldSeconds / Dt);
@@ -174,8 +270,9 @@ public class SimpleJobsTests
         world.At[1] = Vector3.Zero; world.At[2] = Vector3.Zero;
         var job = Start(book, parties, delivery, 1);
         var o = (DeliveryJobKind.Run)job.Objective;
+        Assert.True(world.Duffels.PickUp(1, o.Spot));
         Assert.True(world.Duffels.Drop(1, new Vector3(5, 0, 5)));
-        Assert.Equal("Pick the duffel up", o.Objective(job));
+        Assert.Equal("Pick the duffel up", o.Objective(job)); // not on the pallet any more
         Assert.Equal(new Vector3(5, 0, 5), o.Marker(job));
         Assert.True(world.Duffels.PickUp(2, new Vector3(5, 0, 5))); // the mate is of the party
         world.At[2] = o.Drop; world.Duffels.Follow(2, o.Drop);

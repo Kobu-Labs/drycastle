@@ -13,9 +13,8 @@ namespace Drycastle.Shooter.Net.Client.Incidents;
 /// The Duffels on the client (GLOSSARY "Duffel"; world entity <see cref="DuffelRules.TypeId"/>; duffels.json <c>view</c>). Everyone sees a carried Duffel on its carrier's back and a lying or flying one
 /// where it is (interpolated); a loaded one is the cargo volume's to show and is hidden here. The own carried Duffel is not drawn (the eye is inside the body), but it burdens the predicted body
 /// (<see cref="Characters.Player.Burden"/>, the server's numbers) from the very input that takes it or lets it go, as the server does: the client predicts its own pick-up (the interact key's press
-/// on the Duffel in reach), drop and throw (the throw key's release), and each predicted input keeps the burden it ran with for the replay (<see cref="OwnPlayer.OwnPrediction"/>), so carrying
-/// corrects nothing. Only the server knows a Duffel's party, so the key's owner and the prompt follow its <see cref="EventKind.DuffelReach"/>; the throw key's charge fills the hold ring, counted as
-/// the server counts it (<see cref="DuffelThrowKey"/>). A refusal (<see cref="EventKind.DuffelNotice"/>) is a toast.
+/// on the Duffel in reach) and throw (the throw key's fresh press), and each predicted input keeps the burden it ran with for the replay (<see cref="OwnPlayer.OwnPrediction"/>), so carrying
+/// corrects nothing. Only the server knows a Duffel's party, so the key's owner and the prompt follow its <see cref="EventKind.DuffelReach"/>. A refusal (<see cref="EventKind.DuffelNotice"/>) is a toast.
 /// </summary>
 public sealed class DuffelsClient
 {
@@ -28,7 +27,7 @@ public sealed class DuffelsClient
     /// <summary>The Duffel the server last said this player's key would pick up (0 none).</summary>
     ushort _reach;
     /// <summary>
-    /// The kind this player carries at the newest input, as predicted (null none): taken at the press that picks one up, gone at the throw key's release. The replica wins when it still
+    /// The kind this player carries at the newest input, as predicted (null none): taken at the press that picks one up, gone at the throw key's press. The replica wins when it still
     /// disagrees after <see cref="ConfirmSeconds"/> (a pick-up the server refused, or a change only the server made: a Job's gift, a drop on death).
     /// </summary>
     DuffelKind? _carried;
@@ -36,8 +35,7 @@ public sealed class DuffelsClient
     DuffelKind? _replicated;
     /// <summary>Runs while a prediction waits for the replica to agree.</summary>
     Countdown _unconfirmed;
-    Edge _use;
-    DuffelThrowKey _key;
+    Edge _use, _throw;
     CachedLine _take, _carry, _noSeat;
 
     /// <summary>Longer than a round trip takes: a prediction the replica has not confirmed by then was wrong.</summary>
@@ -50,9 +48,6 @@ public sealed class DuffelsClient
         ctx.WorldEntities.Spawned += OnSpawned;
         ctx.WorldEntities.Despawned += OnDespawned;
     }
-
-    /// <summary>How full the hold ring is for the throw key's charge (0 when not charging).</summary>
-    public float ChargeFraction => _key.State == DuffelKeyState.Charging && _key.Held >= _data.TapSeconds ? MathF.Max(0.05f, _key.Charge(_data)) : 0f;
 
     public void OnEvent(EventKind kind, byte[] payload)
     {
@@ -137,8 +132,8 @@ public sealed class DuffelsClient
     }
 
     /// <summary>
-    /// Runs on the input tick with the input about to be predicted and sent: predicts the own pick-up (the interact key's press on the Duffel in reach), drop and throw (the throw key, followed as
-    /// the server follows it; it fills the ring), and sets the body's burden for this input. The server takes the Duffel before it moves the body on that input, so this runs before the step.
+    /// Runs on the input tick with the input about to be predicted and sent: predicts the own pick-up (the interact key's press on the Duffel in reach) and throw (the throw key's fresh press,
+    /// followed as the server follows it), and sets the body's burden for this input. The server takes the Duffel before it moves the body on that input, so this runs before the step.
     /// </summary>
     public void TickKey(in MoveInput mi, float dt)
     {
@@ -147,7 +142,7 @@ public sealed class DuffelsClient
         else if (_unconfirmed.Ready) _carried = _replicated;
         var onFoot = !_ctx.Dead && !_ctx.Driving;
         if (_use.Pressed(mi.Has(MoveButtons.Use)) && onFoot && _carried == null && _targets.Duffel is { } id && _views.TryGetValue(id, out var v)) Predict(v.Kind);
-        if (_key.Tick(mi.Has(MoveButtons.DuffelThrow), _carried != null && onFoot, dt, _data, out _) != DuffelRelease.None) Predict(null);
+        if (_throw.Pressed(mi.Has(MoveButtons.DuffelThrow)) && _carried != null && onFoot) Predict(null);
         if (_ctx.Me != null) _ctx.Me.Burden = _carried is { } kind && !_ctx.Dead ? _data.BurdenOf(kind) : MoveBurden.None;
     }
 
@@ -161,11 +156,10 @@ public sealed class DuffelsClient
     public string? Prompt() =>
         _targets.Duffel is { } id && _views.TryGetValue(id, out var v) ? _take.Get(v.Kind, "interact", "hud.duffel.take") : null;
 
-    /// <summary>While carrying (and not charging): how to throw or put it down; the last line of the prompt chain.</summary>
-    public string? CarryHint() =>
-        _carried is { } kind && _key.State == DuffelKeyState.Idle ? _carry.Get(kind, "duffel_throw", "hud.duffel.carry") : null;
+    /// <summary>While carrying: how to throw it; the last line of the prompt chain.</summary>
+    public string? CarryHint() => _carried is { } kind ? _carry.Get(kind, "duffel_throw", "hud.duffel.carry") : null;
 
-    /// <summary>The ride's prompt, or while carrying on foot (the server refuses a carrier every seat) why there is no seat and how to put the Duffel down, in place of its "get in".</summary>
+    /// <summary>The ride's prompt, or while carrying on foot (the server refuses a carrier every seat) why there is no seat and how to get rid of the Duffel, in place of its "get in".</summary>
     public string? InsteadOfRide(string? ride) =>
         ride != null && _carried is { } kind && !_ctx.Driving ? _noSeat.Get(kind, "duffel_throw", "hud.duffel.noseat") : ride;
 

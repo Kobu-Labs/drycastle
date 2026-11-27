@@ -654,24 +654,10 @@ stateDiagram-v2
     Loaded --> [*]
 ```
 
-- **Lying**: On the ground (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
-- **Carried**: On a party player's back: no sprint, slower by its weight. The throw key's tap puts it down (Lying, or Loaded in a cargo volume), a charged release throws it (Flying); the carrier's death drops it where they fell.
+- **Lying**: On the ground, or on a Job's pallet spot (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
+- **Carried**: On a party player's back: no sprint, slower by its weight. One press of the throw key throws it at once (Flying); the carrier's death, a seat or leaving the party puts it down where they were (Lying).
 - **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.
 - **Loaded**: In a cargo volume, counted by its owner; it stays there until the Job removes it.
-
-## Duffel.ThrowKey
-
-The Duffel throw key: up, or held from a fresh press while carrying (charging); the release puts the Duffel down (a tap) or throws it (a hold).
-
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Charging
-    Charging --> Idle
-```
-
-- **Idle**: Key up, or held since before the player could throw (a held key must be let go first).
-- **Charging**: Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.
 
 ## Editor.Shape
 

@@ -79,6 +79,26 @@ public class CartelMapTests
     public void The_marker_stops_nothing() => Assert.True(ObjectColliders.IsPassThrough(CartelZones.ContactAsset, solid: true));
 
     [Fact]
+    public void The_pallet_marker_is_solid_like_any_placed_prop_and_the_map_keeps_its_pose()
+    {
+        Assert.False(ObjectColliders.IsPassThrough(CartelZones.PalletAsset, solid: true));
+        var pose = new PalletPose(new Vector3(3, 1, 2), 45f);
+        Assert.Equal(pose, CartelMap.From(ZonePoints.Parse(Points), null, pose).Pallet);
+        Assert.Null(CartelMap.From(ZonePoints.Parse(Points), null).Pallet);
+        Assert.Null(CartelMap.Empty.Pallet);
+    }
+
+    [Fact]
+    public void The_pallet_section_is_checked_with_the_field_named()
+    {
+        Assert.Equal(4, CartelFile.Default.Pallet.Spots.Count);
+        Assert.Throws<DataFileException>(() => CartelFile.Parse("""{"version": 1, "pallet": {"top_m": 0}}"""));
+        Assert.Throws<DataFileException>(() => CartelFile.Parse("""{"version": 1, "pallet": {"spots": []}}"""));
+        Assert.Throws<DataFileException>(() => CartelFile.Parse("""{"version": 1, "pallet": {"spots": [[1]]}}"""));
+        Assert.Throws<DataFileException>(() => CartelFile.Parse("""{"version": 1, "pallet": {"size_m": [1, 1]}}"""));
+    }
+
+    [Fact]
     public void Broken_files_are_refused()
     {
         Assert.Throws<DataFileException>(() => ContactFile.Parse("""{"version": 1, "facing": [0, 2]}"""));

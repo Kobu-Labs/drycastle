@@ -24,6 +24,20 @@
   "contact_reach_m": 3,
   // marker_resend_m: a Job's marker (the HUD's minimap and world marker for its party) is sent again only once its point has moved this many metres (0: every change).
   "marker_resend_m": 2,
+  // pallet (CartelPalletData, ShooterCore/Cartel/CartelPallet.cs): the Cartel pallet a Delivery's Duffel lies on. It stands where the first placed object of the marker prim:cartel_pallet stands (set
+  // by hand in the map editor, Objects tool, category other, a few metres from the Contact); a map without one has no Delivery. The marker is solid like any placed prop (a low box the pallet's
+  // size); the game hides it and draws the Gang Warfare pallet there. spots: one [x, z] per bag spot, metres from the pallet's centre in its own frame (x along its width, z along its depth, before
+  // its turn); a Delivery holds one while it runs, so there are as many Deliveries at once as spots ("The pallet is full" past that). top_m: the deck's height above the base, where a bag lies.
+  // size_m [x, y (up), z] is the model's, read from SM_Prop_Pallet_01.glb (the marker primitive in pipeline kits/primitives.py has the same footprint); it only feeds the box drawn without the
+  // private pack, in colour. model: under assets-private/synty/glb (no .glb), atlas: under synty/.
+  "pallet": {
+    "top_m": 0.235,
+    "spots": [[-0.36, -0.33], [0.36, -0.33], [-0.36, 0.33], [0.36, 0.33]],
+    "model": "gang-warfare/SM_Prop_Pallet_01",
+    "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+    "size_m": [1.441, 0.235, 1.418],
+    "colour": "#8a6a45"
+  },
   // One section per kind of Job, read only by that kind.
   "jobs": {
     // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when
@@ -33,8 +47,9 @@
       "seconds": [120, 110, 100, 90, 80],
       "succeed_seconds": 20
     },
-    // delivery (DeliveryJobKind, #494): the leader gets one duffel at the Contact; a party player carrying it stands within radius_m of the job's drop point (a cartel_drop zone point)
-    // and holds the interact key hold_seconds: done. seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
+    // delivery (DeliveryJobKind, #494): the job's duffel lies on a free spot of the pallet by the Contact (never in anyone's hands; no pallet on the map, or none of its spots free: the job does not
+    // start); a party player picks it up (the interact key), carries it to within radius_m of the job's drop point (a cartel_drop zone point) and holds the interact key hold_seconds: done. The
+    // duffel's loss, whatever destroys it, fails the job ("The objective was lost"). seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
     // carrier cannot sprint or take a vehicle seat). min_contact_m: the drop point is at least this far (ground metres) from the Contact; apart_m: and this far from every point another
     // running job holds (drop points and hit spots). No drop point left: the job does not start.
     "delivery": {
