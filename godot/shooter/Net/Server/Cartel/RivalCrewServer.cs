@@ -47,6 +47,9 @@ internal sealed class RivalCrewServer
         return crew;
     }
 
+    /// <summary>The point on the navigation mesh nearest <paramref name="p"/> (itself without a mesh): where a member added outdoors stands.</summary>
+    public NVec3 Snap(NVec3 p) => _gangs.Snap(p);
+
     /// <summary>Removes a crew and every member it still has, the dead too.</summary>
     public void Remove(ThiefGang crew) => _gangs.Roster.Remove(crew);
 

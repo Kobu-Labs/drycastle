@@ -32,12 +32,13 @@ internal sealed class ThievesPayout
     readonly Func<ushort, bool> _scores;
     readonly Action<IEnumerable<XpGrant>> _awardXp;
     readonly ThievesCredit _credit = new();
+    readonly GangRoster _gangs;
 
     /// <summary>Counts the hits on members and vans, and watches for a killed Gang boss. Made after the Gang and the Raids, whose hit routing it wraps.</summary>
     public ThievesPayout(ServerContext ctx, ThievesFile data, int eventWinXp, ItemsFile items, WeaponsFile weapons, CorpseBook corpses, Action<ushort> broadcastCorpseItems, Random rng,
         Func<ushort, bool> scores, Action<IEnumerable<XpGrant>> awardXp, GangRoster gangs, RaidRoster raids)
     {
-        _ctx = ctx; _cfg = data.Reward; _items = items; _weapons = weapons; _corpses = corpses; _broadcastCorpseItems = broadcastCorpseItems; _winXp = eventWinXp; _rng = rng; _scores = scores; _awardXp = awardXp;
+        _ctx = ctx; _cfg = data.Reward; _items = items; _weapons = weapons; _corpses = corpses; _broadcastCorpseItems = broadcastCorpseItems; _winXp = eventWinXp; _rng = rng; _scores = scores; _awardXp = awardXp; _gangs = gangs;
         ctx.Match.Gang = new CreditedGangHits(gangs, _credit, id => gangs.GangOf(id)?.Crew != GangCrew.RivalCrew); // a Job's Rival crew earns no part in the Thieves' reward
         ctx.Match.Vans = new CreditedVanHits(raids, _credit);
         gangs.Killed += OnBossKilled;
@@ -61,7 +62,7 @@ internal sealed class ThievesPayout
     /// <summary>A member was killed by a hit: a Gang boss leaves the Gold chain on a corpse where he fell.</summary>
     void OnBossKilled(GangKilled k)
     {
-        if (!ThievesReward.LeavesChain(k.Kind)) return;
+        if (!ThievesReward.LeavesChain(k.Kind) || _gangs.GangOf(k.HitId)?.Crew == GangCrew.RivalCrew) return; // a Rival dealer (a Rival crew's Gang boss) pays nothing
         var item = _items.IndexOf(_cfg.ChainItem);
         if (item < 0) { GD.PrintErr($"server: the Gang boss's reward item '{_cfg.ChainItem}' is not in items.json: no corpse"); return; }
         var knife = _weapons.Weapons.FindIndex(w => w.Kind == WeaponKind.Melee); // a weapon nobody can take into a hotbar position (CorpseRules.CanReplace): the corpse is for its item

@@ -54,6 +54,13 @@ internal sealed class DuffelServer
         return d;
     }
 
+    /// <summary>Takes every Duffel of the party out of the world (its Job ended) and unburdens whoever carried one. The count removed.</summary>
+    public int RemoveParty(IReadOnlySet<ushort> party)
+    {
+        foreach (var d in Book.Carried()) if (ReferenceEquals(d.Party, party)) Unburden(d.Carrier);
+        return Book.RemoveParty(party);
+    }
+
     void Carry(ServerClient c, Duffel d)
     {
         c.Body.Burden = _data.BurdenOf(d.Kind);

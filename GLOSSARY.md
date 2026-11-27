@@ -854,11 +854,11 @@ The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare pan
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:
-A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). Planned (#437).
+A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). A Delivery's carrier hands it over by holding the interact key within the drop radius. A Job claims its point in the Job book (`CartelSpots`): at least a data distance from the Contact and apart from every point another running Job holds (cartel.json `jobs.delivery`, #494).
 _Avoid_: secure zone, delivery spot
 
 **Hit spot**:
-Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of the `cartel_hit` zones (a Runtime zone), drawn on open ground. Planned (#437).
+Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of the `cartel_hit` zones (a Runtime zone), drawn on open ground, claimed as a Drop point is (cartel.json `jobs.hit`, #497).
 _Avoid_: target spot, hit zone
 
 **Assault**:
@@ -878,7 +878,7 @@ A hollow house the Rival crew holds for a Heist: dressed with the gang's props f
 _Avoid_: stash house, drug den, hideout
 
 **Rival dealer**:
-The target of a Hit: a Gang member of the Rival crew standing outdoors with guards. Planned (#437).
+The target of a Hit: a Gang member of the Rival crew standing outdoors at a Hit spot with guards (Gunmen and Enforcers, by tier and party size), the crew's Gang boss with the Gang boss's look; he leaves no Gold chain and pays nothing. His death, by anyone's hand, is the Hit's success; the party's marker shows the spot until one of them comes near him, then follows him (machine `Hit.Target`, #497).
 _Avoid_: target (alone), boss (that is the Gang boss)
 
 **Drill**:
