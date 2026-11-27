@@ -273,6 +273,8 @@ public class HeistData
     /// <summary>The drop (a Receiver: a stash house, a helicopter's landing spot or a boat's mooring): at least drop_min_m from the objective, drop_apart_m from another Job's. The van is "at the drop" within the Receiver's own area (cartel.json receivers).</summary>
     public float DropMinM { get; set; } = 300;
     public float DropApartM { get; set; } = 40;
+    /// <summary>The Rival chase cars after the van once it leaves the objective with the minimum (docs/cartel.md "Chase cars"): when, how big, where, how they fight and when they give up.</summary>
+    public ChaseData Chase { get; set; } = new();
     /// <summary>The first Assault at the drop comes this long after the van arrives in its area (then every assault_interval_seconds).</summary>
     public float DropGraceSeconds { get; set; } = 20;
 
@@ -298,6 +300,7 @@ public class HeistData
         foreach (var (v, name) in new[] { (VanSpawnMinM, "van_spawn_min_m"), (VanLoadMarginM, "van_load_margin_m"), (DropMinM, "drop_min_m"), (DropApartM, "drop_apart_m") })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
         if (!float.IsFinite(DropGraceSeconds) || DropGraceSeconds < 0) throw Bad("drop_grace_seconds must be 0 or more");
+        Chase.Validate($"{what}.chase", tiers);
     }
 }
 

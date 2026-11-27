@@ -352,6 +352,32 @@ stateDiagram-v2
 - **Resting**: Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.
 - **Fading**: Shrinks to nothing over FadeSeconds, then the slot is free.
 
+## Chase.Car
+
+One Rival chase car of a Heist: it follows the Cartel van on the roads with its crew in the windows, stops and lets the crew out when the van is slow and near (or off the road, or its driver died), or gives up when it stays far behind.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Spawned
+    Spawned --> Chasing
+    Chasing --> Stopping
+    Chasing --> GivingUp
+    Stopping --> Out
+    Stopping --> GivingUp
+    Out --> Gone
+    GivingUp --> Gone
+    Gone --> [*]
+```
+
+From any state: Gone
+
+- **Spawned**: Just put down on a road behind the van with its crew seated: nothing driven yet. The next step is Chasing.
+- **Chasing**: Drives after the van on the roads, keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, the car is stuck (stalled_seconds), or the van is off the road and the car reached the road point nearest it. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
+- **Stopping**: Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.
+- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. Gone once the crew is gone.
+- **GivingUp**: Stayed more than give_up_m from the van for give_up_seconds: the server removes the car and its crew at once, then it is Gone.
+- **Gone**: Removed from the world (given up, spent, destroyed and its wreck gone, or its Heist ended). Never left.
+
 ## Church.Door
 
 Should the church doors be open: shut or open, each with or without the deferred close-when-empty armed. The demon fight's door-grace clock runs beside (not a state).
@@ -894,6 +920,7 @@ stateDiagram-v2
     Posted --> Windup
     Posted --> Flee
     Posted --> Board
+    Posted --> Guard
     Windup --> Posted
     Swing --> Posted
     Flee --> [*]
@@ -927,7 +954,7 @@ From any state: Dead
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
 - **Aim**: A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.
 - **Fire**: The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.
-- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.
+- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car); getting out it is Guard.
 
 ## Garage.Door
 
@@ -1045,6 +1072,24 @@ From any state: Over
 - **DropGrace**: The van reached the drop's area (clock: the drop grace seconds, about 20); at its end the first Assault comes to the drop.
 - **DropWaiting**: Assaults came to the drop (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.
 - **Over**: The Heist ended. Never left.
+
+## Heist.Chases
+
+When a Heist's next Rival chase car is due: from the van leaving the objective with the minimum loaded (the first after a delay, then every interval, at most max_alive in the fight), until the van reaches the drop.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Running
+    Running --> [*]
+    Over --> [*]
+```
+
+From any state: Over
+
+- **Idle**: The van has not left the objective with the minimum yet; no chase car.
+- **Running**: The van is on its way to the drop (a clock: the first_after_seconds, then the interval after each car put down, the retry after one that found no spot). At its end a car is due, if fewer than max_alive are in the fight.
+- **Over**: The van reached the drop, or the Heist ended: no new car. The ones out fight on. Never left.
 
 ## Heist.Phase
 

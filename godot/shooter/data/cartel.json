@@ -206,7 +206,53 @@
       // rustle. Blocked (a duffel in the hands, the maximum filled, the van not at the plantation yet) the prompt says why and the hold does not count. Outside a heist the plantation's hold stays silent.
       "fill_hold_seconds": 3,
       "fill_show_after_seconds": 0.3,
-      "area_margin_m": 25
+      "area_margin_m": 25,
+      // chase (ChaseData, ShooterCore/Cartel/ChaseData.cs; docs/cartel.md "Chase cars"; GLOSSARY "Chase car"): Rival cars after the van from the moment it leaves the objective with the minimum loaded (a Trap house: leaving the house) until it reaches the drop
+      // (the ones out then fight on). A chase car is vehicle_type of vehicles.json in its skin number "skin" (an index of that type's skins: the car's are yellow, blue, green, red, grey; 3, the red one, is the darkest by the mean luminance of the
+      // catalogue renders: 60 against blue 85, green 86, yellow 131, grey 137; an atlas swap, no new skin), driven on the roads by an NPC through the drive model, a Rival Enforcer at the wheel and 1 to 3 Gunmen in the other seats
+      // (gunmen per tier, plus gunmen_per_extra_member per party member beyond the first, at most max_gunmen). first_after_seconds: the first car comes this long after the van left; then one every interval_seconds while fewer than max_alive are
+      // in the fight (a car in the fight: its crew inside, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: a point of the van's trail (its way since the objective, the objective first) that lies
+      // spawn_back_min_m to spawn_back_max_m behind it, the nearest road within spawn_road_m of it, at least spawn_player_min_m from every player, out of the party's sight (a line of sight check, as a Gunman's), spawn_apart_m from the other
+      // chase cars and clear of vehicles. FIGHT: the Gunmen shoot from the windows only while the car is within shoot_range_m of the van; while it moves faster than moving_mps their rounds are turned off their line by up to moving_aim_error_deg
+      // (rival_crew.json's gun.aim_error_deg is the standing one). The car stops (brakes, the handbrake once it nearly stands) and the crew gets out and fights on foot as a Rival crew when the van is slower than stop_speed_mps within stop_within_m, when
+      // its driver is dead (it rolls; stop_seconds at most), when it made no 1 m/s for stalled_seconds while it wants on, or, with the van off the road (no road within off_road_m of it), when it reached the road point nearest the van (arrive_m): roads only.
+      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps: the car's top speed is 44.4); the way is planned again every repath_seconds. A car more
+      // than give_up_m from the van for give_up_seconds gives up and is removed with its crew. A destroyed car's crew inside dies with it; its wreck lies wreck_seconds (keep it under vehicles.json destroyed_return_time) then goes. seat_drop_m: the crew
+      // sits as standing figures this far below the seat's point (the torso at the window, the legs in the body: no sitting clip in the pack); exit_side_m: they step out this far beyond the door side. Killing them pays nothing (Rival crew rules).
+      "chase": {
+        "vehicle_type": "car",
+        "skin": 3,
+        "first_after_seconds": 20,
+        "interval_seconds": 45,
+        "max_alive": 2,
+        "spawn_retry_seconds": 3,
+        "gunmen": [1, 1, 2, 2, 3],
+        "gunmen_per_extra_member": 1,
+        "max_gunmen": 3,
+        "spawn_player_min_m": 150,
+        "spawn_back_min_m": 150,
+        "spawn_back_max_m": 500,
+        "spawn_road_m": 30,
+        "spawn_apart_m": 25,
+        "shoot_range_m": 40,
+        "moving_aim_error_deg": 9,
+        "moving_mps": 2,
+        "stop_speed_mps": 5,
+        "stop_within_m": 30,
+        "stop_seconds": 12,
+        "stalled_seconds": 6,
+        "arrive_m": 8,
+        "off_road_m": 15,
+        "follow_m": 14,
+        "catch_up_gain": 1,
+        "max_speed_mps": 38,
+        "repath_seconds": 1,
+        "give_up_m": 250,
+        "give_up_seconds": 20,
+        "wreck_seconds": 20,
+        "seat_drop_m": 0.5,
+        "exit_side_m": 0.7
+      }
     },
     // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0047). A random hollow
     // house with road access (trap_house.json choice) is dressed for the job and stripped after; the Rival crew holds it, product and cash duffels lie on its tables, its safe takes the
@@ -243,7 +289,42 @@
       "van_load_margin_m": 0.35,
       "drop_min_m": 300,
       "drop_apart_m": 40,
-      "drop_grace_seconds": 20
+      "drop_grace_seconds": 20,
+      // chase: as harvest's (the van leaving the house's area with the minimum starts them).
+      "chase": {
+        "vehicle_type": "car",
+        "skin": 3,
+        "first_after_seconds": 20,
+        "interval_seconds": 45,
+        "max_alive": 2,
+        "spawn_retry_seconds": 3,
+        "gunmen": [1, 1, 2, 2, 3],
+        "gunmen_per_extra_member": 1,
+        "max_gunmen": 3,
+        "spawn_player_min_m": 150,
+        "spawn_back_min_m": 150,
+        "spawn_back_max_m": 500,
+        "spawn_road_m": 30,
+        "spawn_apart_m": 25,
+        "shoot_range_m": 40,
+        "moving_aim_error_deg": 9,
+        "moving_mps": 2,
+        "stop_speed_mps": 5,
+        "stop_within_m": 30,
+        "stop_seconds": 12,
+        "stalled_seconds": 6,
+        "arrive_m": 8,
+        "off_road_m": 15,
+        "follow_m": 14,
+        "catch_up_gain": 1,
+        "max_speed_mps": 38,
+        "repath_seconds": 1,
+        "give_up_m": 250,
+        "give_up_seconds": 20,
+        "wreck_seconds": 20,
+        "seat_drop_m": 0.5,
+        "exit_side_m": 0.7
+      }
     }
   }
 }

@@ -603,6 +603,7 @@ public partial class NetServer : Node
         _loop.Step(dt);
         _riding.Step(dt); // the dead pilots and drivers move with the vehicles that just moved
         _harvester.AfterVehicles(dt); // what the harvester ran over, the corpses it draws in, the bales' fire
+        _heists.AfterVehicles(); // the Rival chase cars' crews sit on the seats where their cars are now
         _diag.Lap(Ph.Vehicles);
     }
 

@@ -93,7 +93,7 @@ internal sealed class VehicleLoop
         // a hollow house's wall it hit hard enough breaks (any vehicle), a thin fence it drives into breaks (ground vehicles, moving or stopped by it): through, the crash is only what it took
         if ((car.LastImpact > 0 || !car.Flies) && _ram(car) is { } lost) car.LastImpact = lost;
         // a wall takes speed from a driven car; a helicopter is hurt by what it hits whoever flies it, or nobody
-        if (driver != null || car.Flies) _damage.Crash(car, car.LastImpact, 0);
+        if (driver != null || car.NpcInput != null || car.Flies) _damage.Crash(car, car.LastImpact, 0);
         if (car.Life.DetonationDue(_ctx.Now)) { _blast.Detonate(car); return; }
         PutRidersOnSeats(car);
         if (driver != null && car.Def.RunOver && !car.Afloat && (!car.Flies || car.Flight.Agl <= car.Def.Flight!.RunOverAgl)) _runOver.Vehicle(car, driver); // road kill: on land only; a helicopter only skimming the ground
@@ -191,7 +191,7 @@ internal sealed class VehicleLoop
     /// <summary>
     /// The tick of a driven vehicle (the amphibious transport, ADR 0010; the car, ADR 0014). With a driver, it was already stepped in <c>InputServer</c>, once
     /// for each of the driver's inputs (that is what lets the driver's client predict it), so there is nothing to step here unless the inputs have
-    /// stopped arriving. With nobody at the wheel it is stepped hands off every tick: it coasts to a stop, on its wheels or on the water. The hardest
+    /// stopped arriving. With an NPC at the wheel (<see cref="ServerCar.NpcInput"/>) it is stepped by the NPC's inputs every tick. With nobody at the wheel it is stepped hands off every tick: it coasts to a stop, on its wheels or on the water. The hardest
     /// impact since the last tick goes to the crash damage rules.
     /// </summary>
     void StepDriven(ServerCar car, ServerClient? driver, float dt)
@@ -200,6 +200,11 @@ internal sealed class VehicleLoop
         {
             car.Wake();
             car.StepDrive(new DriveInput { Throttle = driver.Throttle, Steer = driver.Steer, Handbrake = driver.Handbrake }, dt);
+        }
+        else if (driver == null && car.NpcInput is { } npc)
+        {
+            car.Wake();
+            car.StepDrive(npc, dt); // an NPC at the wheel (a Rival chase car): its inputs are the server's, one step a tick
         }
         else if (driver == null || _ctx.Tick - car.DriveTick > DriveStarveTicks)
         {

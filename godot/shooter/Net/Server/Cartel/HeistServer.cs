@@ -56,6 +56,7 @@ internal sealed class HeistServer
     {
         Ctx = ctx; Cartel = cartel; Parties = parties; Duffels = duffels; Cargo = cargo; Receivers = receivers; _vehicles = vehicles; Raids = raids; _rivals = rivals; Map = map; Polygons = polygons; _ground = ground; _rng = rng;
         receivers.RunOf = RunOf;
+        Chases = new ChaseServer(ctx, vehicles, rivals, () => raids.Roads, ground, rng);
         Harvest = new HarvestJobKind(this, data);
         cartel.Register(Harvest);
     }
@@ -69,6 +70,8 @@ internal sealed class HeistServer
     /// <summary>The Receivers: where a Heist's drop is.</summary>
     public ReceiverServer Receivers { get; }
     public RaidServer Raids { get; }
+    /// <summary>The Rival chase cars of every running Heist (docs/cartel.md "Chase cars").</summary>
+    public ChaseServer Chases { get; }
     public JobVehicles Vehicles => _vehicles();
     public Func<CartelMap> Map { get; }
     public Func<ZonePolygons> Polygons { get; }
@@ -76,6 +79,9 @@ internal sealed class HeistServer
     public HarvestJobKind Harvest { get; }
 
     public float Ground(float x, float z) => _ground(x, z);
+
+    /// <summary>After the vehicles moved: the crews of the Rival chase cars ride on their seats of this tick (<see cref="ChaseServer.AfterVehicles"/>).</summary>
+    public void AfterVehicles() => Chases.AfterVehicles();
 
     /// <summary>The running Heist whose party the player is in now, or null.</summary>
     public HeistRun? RunOf(ushort player) => Cartel.Jobs.Involving(player, Parties)?.Objective as HeistRun;
@@ -151,8 +157,8 @@ internal sealed class HeistServer
 /// (<see cref="HeistAssaults"/>), and counts the van's bay (<see cref="VehicleCargo"/>). It succeeds the moment the Receiver is sent off with the minimum on it, fails when the van is destroyed, and its end removes
 /// the van, the party's Duffels (but those on a Receiver that is still leaving) and the Assaults.
 /// <para>
-/// The seam for the Rival chase cars (a later wave): <see cref="LeftObjective"/> is raised when the van left the objective's area with the minimum loaded (the drive to the drop begins), <see cref="ReachedDrop"/>
-/// when the van came within the drop's area (the drive is over); <see cref="VanFeet"/>, <see cref="Heist"/> and <see cref="Receiver"/> say where everything is.
+/// The seam of the Rival chase cars (<see cref="Chases"/>, docs/cartel.md "Chase cars"): <see cref="LeftObjective"/> is raised when the van left the objective's area with the minimum loaded (the drive to the drop begins),
+/// <see cref="ReachedDrop"/> when the van came within the drop's area (the drive is over); <see cref="VanFeet"/>, <see cref="Heist"/> and <see cref="Receiver"/> say where everything is.
 /// </para>
 /// </summary>
 internal sealed class HeistRun : IJobObjective
@@ -168,6 +174,7 @@ internal sealed class HeistRun : IJobObjective
         _s = s; Job = job; Data = data; Goal = goal; _van = van; Receiver = receiver; Heist = heist;
         _riders.Update(job.Party.Version);
         Assaults = new HeistAssaults(data.MaxAssaultsAlive);
+        Chases = s.Chases.Begin(this);
         _bay = s.Cargo.BayOf(van)!; // the van's bay is a cargo volume like every vehicle's; this Job's van takes only its party's Duffels, and counts them
         _bay.Restrict(job.Party);
         _bay.MarginM = data.VanLoadMarginM;
@@ -190,11 +197,15 @@ internal sealed class HeistRun : IJobObjective
     /// <summary>The Duffels loaded in the van now (the bay's count).</summary>
     public int Loaded => _bay.Loaded;
     public NVec3 VanFeet => CarPose.Present(_van).Feet;
+    /// <summary>The van's speed, metres a second.</summary>
+    public float VanSpeed => MathF.Abs(_van.State.Speed);
     public HeistAssaults Assaults { get; }
+    /// <summary>The Rival chase cars after the van (docs/cartel.md "Chase cars"): they start at <see cref="LeftObjective"/> and no new one comes after <see cref="ReachedDrop"/>.</summary>
+    public ChaseFleet Chases { get; }
 
-    /// <summary>The van left the objective's area with at least the minimum loaded: the drive to the drop begins (the Assaults stop). A later wave's chase cars start here.</summary>
+    /// <summary>The van left the objective's area with at least the minimum loaded: the drive to the drop begins (the Assaults stop, the chase cars start).</summary>
     public event Action<HeistRun>? LeftObjective;
-    /// <summary>The van came within the drop's area: the drive is over, the party unloads (the Assaults come to the drop). A later wave's chase cars stop coming here.</summary>
+    /// <summary>The van came within the drop's area: the drive is over, the party unloads (the Assaults come to the drop, no new chase car comes).</summary>
     public event Action<HeistRun>? ReachedDrop;
 
     /// <summary>Where an Assault goes now: the van at the drop once it is there, else the objective's centre.</summary>
@@ -217,6 +228,7 @@ internal sealed class HeistRun : IJobObjective
         var inDrop = CarPose.Flat(feet, r.Position) <= r.Data.AreaM;
         var t = Heist.Step(new HeistFacts(_van.Destroyed, Goal.InArea(feet), inDrop, Loaded, r.Sent ? r.SentWith : r.Loaded, r.Sent), dt);
         if (t.AssaultDue) _s.LaunchAssault(this);
+        if (t.Step == JobStep.Running) Chases.Tick(dt);
         return t.Step;
     }
 
@@ -266,6 +278,9 @@ internal sealed class HeistRun : IJobObjective
     /// <summary>An admin's <c>/cartel assault</c>: an Assault now, by the clock's own path and cap (the clock goes on as it was). Null when it was sent; else why not.</summary>
     public string? SendAssault() => _s.LaunchAssault(this);
 
+    /// <summary>An admin's <c>/cartel chase</c>: a Rival chase car now, by the spot rules and the cap of the clock's (the clock goes on as it was). Null when it was sent; else why not.</summary>
+    public string? SendChase() => Chases.SendNow();
+
     public int BonusRespect => Heist.Phase == HeistPhase.Delivered ? HeistRules.Bonus(Data, Job.Tier, Heist.Received, Heist.Min) : 0;
 
     public string Objective(Job job) => Goal.Line(Heist, Heist.Line(Goal.Place, Goal.FillLine));
@@ -280,6 +295,7 @@ internal sealed class HeistRun : IJobObjective
 
     public void End(Job job)
     {
+        Chases.Clear();
         _van.Exploded -= OnExploded;
         _bay.DuffelLoaded -= OnLoaded;
         _bay.Restrict(null);
@@ -290,6 +306,6 @@ internal sealed class HeistRun : IJobObjective
         foreach (var raid in Assaults.TakeAll()) _s.Raids.Remove(raid);
         _s.Vehicles.Remove(_van);
         Goal.End();
-        GD.Print($"server: {job} over: {Heist.Phase}, {Heist.Received} received, {Assaults.Sent} Assault(s); van, {duffels} duffel(s) and crews removed");
+        GD.Print($"server: {job} over: {Heist.Phase}, {Heist.Received} received, {Assaults.Sent} Assault(s); van, {duffels} duffel(s), crews and chase cars removed");
     }
 }
