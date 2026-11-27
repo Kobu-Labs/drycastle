@@ -241,11 +241,15 @@ public class HeistData
 /// <summary>The Harvest's numbers (cartel.json <c>jobs.harvest</c>): the Heist template's and the plantation's own.</summary>
 public sealed class HarvestData : HeistData
 {
+    /// <summary>The kind's id in cartel.json <c>jobs</c>.</summary>
+    public const string KindId = "harvest";
     public HarvestData() => Name = "Harvest";
     /// <summary>A party member's hold of the interact key in the plantation that fills a weed Duffel (instead of the High of plantation.json).</summary>
     public float FillHoldSeconds { get; set; } = 3;
     /// <summary>The objective's area: the plantation's outline grown by this.</summary>
     public float AreaMarginM { get; set; } = 25;
+    /// <summary>The filler's figure bends and reaches (everyone sees it, the status bit Filling) once the hold has run this long: a tap of the key shows nothing and sends nothing.</summary>
+    public float FillShowAfterSeconds { get; set; } = 0.3f;
 
     /// <summary>The template's checks and the plantation's own.</summary>
     public override void Validate(string what, int tiers)
@@ -253,6 +257,7 @@ public sealed class HarvestData : HeistData
         base.Validate(what, tiers);
         if (!float.IsFinite(FillHoldSeconds) || FillHoldSeconds <= 0) throw new DataFileException($"{what}: fill_hold_seconds must be more than 0");
         if (!float.IsFinite(AreaMarginM) || AreaMarginM < 0) throw new DataFileException($"{what}: area_margin_m must be 0 or more");
+        if (!float.IsFinite(FillShowAfterSeconds) || FillShowAfterSeconds < 0 || FillShowAfterSeconds >= FillHoldSeconds) throw new DataFileException($"{what}: fill_show_after_seconds must be 0 or more and less than fill_hold_seconds");
     }
 }
 

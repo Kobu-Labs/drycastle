@@ -115,7 +115,10 @@
       "drop_stop_mps": 1,
       // fill_hold_seconds: during the heist a party member's hold of the interact key in the plantation fills a weed duffel in their hands (instead of High) until the maximum is filled.
       // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
+      // While the hold runs the player sees "Hold E: fill a duffel" and the hold ring; once it has run fill_show_after_seconds everyone sees the figure bend and reach (a tap shows nothing) and hears a
+      // rustle. Blocked (a duffel in the hands, the maximum filled, the van not at the plantation yet) the prompt says why and the hold does not count. Outside a heist the plantation's hold stays silent.
       "fill_hold_seconds": 3,
+      "fill_show_after_seconds": 0.3,
       "area_margin_m": 25
     },
     // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0047). A random hollow

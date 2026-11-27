@@ -123,6 +123,8 @@ internal sealed class ServerClient
     /// <summary>The high of the plantation (Net/Server/Highs/PlantationServer.cs) and the interact key's hold inside one; the replicated bit is <see cref="StatusKind.High"/> of <see cref="Status"/>.</summary>
     public readonly PlayerHigh High = new();
     public InteractHold PlantHold;
+    /// <summary>What this player was last told their plantation hold does (<see cref="EventKind.HarvestFill"/>): the reach in the low byte, the harvest's maximum above it.</summary>
+    public ushort FillTold;
     /// <summary>The use key's hold on lying Loot (Thieves/LootServer.cs) and the health it was last seen at (a drop is a hit taken).</summary>
     public LootReturnHold LootHold;
     public float LootHealth;

@@ -61,6 +61,8 @@ public sealed class ThievesFile : IVersioned
         var h = g.Hits;
         Positive(h.HeadshotWeight, "gang.hits.headshot_weight"); NotNegative(h.ExplosiveWeight, "gang.hits.explosive_weight"); NotNegative(h.VehicleWeaponWeight, "gang.hits.vehicle_weapon_weight");
         Positive(g.Aggro.ForgetSeconds, "gang.aggro.forget_seconds"); Positive(g.Aggro.GiveUpM, "gang.aggro.give_up_m");
+        Positive(g.Stuck.StuckM, "gang.stuck.stuck_m"); Positive(g.Stuck.StuckSeconds, "gang.stuck.stuck_seconds");
+        if (!float.IsFinite(g.Stuck.SnapSeconds) || g.Stuck.SnapSeconds <= g.Stuck.StuckSeconds) throw new DataFileException("thieves.json: gang.stuck.snap_seconds must be more than stuck_seconds");
         Positive(g.SeparationM, "gang.separation_m"); NotNegative(g.SeparationMps, "gang.separation_mps");
         Positive(g.CorpseSeconds, "gang.corpse_seconds"); NotNegative(g.KillXp, "gang.kill_xp");
         Positive(g.TurnRateDegPerS, "gang.turn_rate_deg_per_s"); Positive(g.RepathSeconds, "gang.repath_seconds"); Positive(g.RepathM, "gang.repath_m");
@@ -125,6 +127,8 @@ public sealed class GangConfig
     public GangSight Sight { get; set; } = new();
     public GangHitWeights Hits { get; set; } = new();
     public GangAggro Aggro { get; set; } = new();
+    /// <summary>When a member that is trying to get somewhere is stuck (<see cref="StuckWatch"/>).</summary>
+    public GangStuck Stuck { get; set; } = new();
     /// <summary>A Thief that takes a hit which does not kill it while it carries Loot (hauling, loading, climbing down, hopping out) drops the Loot where it stands and looks for work again, so it joins the fight; the Loot lies there for a player to send back or a Thief to take up.</summary>
     public bool HitDropsLoot { get; set; } = true;
     /// <summary>How long a killed member lies before it is removed.</summary>
@@ -209,6 +213,14 @@ public sealed class GangAggro
     public float ForgetSeconds { get; set; } = 8;
     /// <summary>A player this far from every living member of the Raid is let go.</summary>
     public float GiveUpM { get; set; } = 30;
+}
+
+/// <summary>The progress check (thieves.json <c>gang.stuck</c>): under stuck_m covered in stuck_seconds a member takes another spot or a fresh route; still stuck at snap_seconds it is moved to the nearest walkable point.</summary>
+public sealed class GangStuck
+{
+    public float StuckM { get; set; } = 1f;
+    public float StuckSeconds { get; set; } = 3f;
+    public float SnapSeconds { get; set; } = 6f;
 }
 
 /// <summary>Where a dev-fallback crew appears (<c>/event thieves</c> before the van exists): a road point between these distances of the admin, the crew spread this far round it.</summary>
