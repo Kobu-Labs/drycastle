@@ -1,8 +1,9 @@
 namespace Drycastle.ShooterCore.Jobs;
 
 /// <summary>
-/// A Job's party as a set, read live from <see cref="IJobParties.MembersOf"/> at every question (a Squad mate who joins midway is in it at once, one who leaves is out). One instance per Job: what a
-/// Job hands its Duffels (<see cref="Cartel.Duffel.Party"/>, removed together by reference) and the players its Rival crew attacks on sight.
+/// A Job's party as a set, read live from <see cref="IJobParties"/> at every question (a Squad mate who joins midway is in it at once, one who leaves is out). One instance per Job: what a
+/// Job hands its Duffels (<see cref="Cartel.Duffel.Party"/>, removed together by reference) and the players its Rival crew attacks on sight. <see cref="Contains"/> is
+/// <see cref="IJobParties.Has"/> (asked per lying Duffel per player per tick: no allocation); the count and the enumeration read the members list.
 /// </summary>
 public sealed class JobPartySet(IJobParties parties, JobOwner owner) : IReadOnlySet<ushort>
 {
@@ -10,11 +11,7 @@ public sealed class JobPartySet(IJobParties parties, JobOwner owner) : IReadOnly
 
     IReadOnlyList<ushort> Now => parties.MembersOf(owner);
 
-    public bool Contains(ushort player)
-    {
-        foreach (var m in Now) if (m == player) return true;
-        return false;
-    }
+    public bool Contains(ushort player) => parties.Has(owner, player);
 
     public int Count => Now.Count;
     public IEnumerator<ushort> GetEnumerator() => Now.GetEnumerator();

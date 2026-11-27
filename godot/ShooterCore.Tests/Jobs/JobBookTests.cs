@@ -215,4 +215,36 @@ public class JobBookTests
         Assert.Equal(0, q.LeaderOf(JobOwner.Squad(squad)));
         Assert.Empty(q.MembersOf(JobOwner.Squad(squad)));
     }
+
+    [Fact]
+    public void ASoloPlayerWhoJoinsASquadLeavesTheSoloJobForTheSquads()
+    {
+        double t = 0;
+        var tdm = new MatchSim(new MatchConfig { Mode = "tdm" }, () => t, new[] { Vector3.Zero, new Vector3(100, 0, 0) }, new Random(1));
+        for (ushort i = 1; i <= 3; i++) { tdm.AddPlayer(i, $"p{i}"); tdm.SetTeam(i, Teams.A); }
+        Assert.Equal(SquadResult.Ok, tdm.CreateSquad(3, "s", out var squad));
+        var parties = new MatchJobParties(tdm);
+        var kind = new SpotKind("a");
+        var other = new SpotKind("b");
+        var book = new JobBook();
+        book.Register(kind);
+        var ended = new List<JobEnded>();
+        var solo = Start(book, parties, kind, 1);
+        Assert.Equal(JobOwner.Solo(1), solo.Owner);
+        var squadJob = book.Start(CartelRules.Giver, other, 1, parties.OwnerOf(3), 3, out var why) ?? throw new Xunit.Sdk.XunitException(why);
+        Assert.True(parties.Has(solo.Owner, 1));
+        Assert.False(parties.Has(squadJob.Owner, 1));
+
+        Assert.Equal(SquadResult.Ok, tdm.JoinSquad(1, squad));
+        Assert.False(parties.Has(solo.Owner, 1)); // one party at most
+        Assert.True(parties.Has(squadJob.Owner, 1));
+        Assert.Equal(0, parties.LeaderOf(solo.Owner));
+        Assert.Empty(parties.MembersOf(solo.Owner));
+        book.Tick(0.1f, parties, ended);
+        var end = Assert.Single(ended);
+        Assert.Same(solo, end.Job);
+        Assert.Equal(JobFailReason.Abandoned, solo.Reason);
+        Assert.Same(squadJob, book.Involving(1, parties));
+        Assert.True(squadJob.Active);
+    }
 }
