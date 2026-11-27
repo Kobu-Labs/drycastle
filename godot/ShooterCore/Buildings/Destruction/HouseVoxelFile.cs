@@ -45,7 +45,7 @@ public static class HouseVoxelFile
             for (var i = 0; i < pc; i++)
             {
                 var m = d[p];
-                if (m > (byte)CellMaterial.Roof) throw new InvalidDataException($"house_voxels.bin: house {id} palette material {m}");
+                if (m > (byte)CellMaterial.Concrete) throw new InvalidDataException($"house_voxels.bin: house {id} palette material {m}");
                 palette[i] = ((CellMaterial)m, d[p + 1], d[p + 2], d[p + 3]);
                 p += 4;
             }

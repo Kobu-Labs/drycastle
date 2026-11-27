@@ -16,6 +16,8 @@ public sealed partial class MapLoader
         public HouseNode(string id) { Id = id; }
         public string Id { get; }
         public MeshInstance3D? Visual { get; internal set; }
+        /// <summary>Its textured faces (house_&lt;bid&gt;_visual_tex_&lt;texture&gt;, fence walls): siblings of <see cref="Visual"/> drawn with a library texture.</summary>
+        public List<MeshInstance3D> Textured { get; } = new();
         public CollisionShape3D? Collision { get; internal set; }
     }
 
@@ -37,11 +39,13 @@ public sealed partial class MapLoader
         return h;
     }
 
-    /// <summary>Registers a house visual (house_&lt;bid&gt;_visual); false for any other node.</summary>
+    /// <summary>Registers a house visual (house_&lt;bid&gt;_visual) or a textured sibling (house_&lt;bid&gt;_visual_tex_&lt;texture&gt;); false for any other node.</summary>
     bool RegisterHouseVisual(MeshInstance3D mi, string name)
     {
-        if (HouseId(name, HouseVisual) is not { } id) return false;
-        HouseOf(id).Visual = mi;
+        var (baseName, texture) = SplitTexNode(name);
+        if (HouseId(baseName, HouseVisual) is not { } id) return false;
+        if (texture == null) HouseOf(id).Visual = mi;
+        else HouseOf(id).Textured.Add(mi);
         return true;
     }
 

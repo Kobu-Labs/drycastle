@@ -285,7 +285,7 @@ public partial class Shooter : Node3D
             steps.Add(() => CarFx.Warm(def)); // the model and every skin
         }
         steps.Add(GlassFx.Load);
-        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath, Buildings.Destruction.HouseWorldNode.ShaderPath })
+        foreach (var sh in new[] { CharacterView.SuitShaderPath, CharacterView.TuftShaderPath, GunshipOverlay.ShaderPath, DayNightCycle.SkyShaderPath, Buildings.Destruction.HouseWorldNode.ShaderPath, Buildings.Destruction.HouseWorldNode.TexShaderPath, Drycastle.Shooter.Fences.FenceWorldNode.ShaderPath })
         {
             var path = sh;
             steps.Add(() => GD.Load<Shader>(path));
@@ -389,7 +389,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"));
+        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("fence_destruction.json"));
         // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
         if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
         var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
@@ -426,6 +426,7 @@ public partial class Shooter : Node3D
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
         if (HouseDoorsNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } houseDoors) AddChild(houseDoors); // the hollow houses' doors (interiors.json): shut until a player opens them, solid on the server too
         if (!_map.CollisionOnly && Buildings.Destruction.HouseWorldNode.Create(_map, _data?.HouseDestruction ?? Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default) is { } houseWorld) AddChild(houseWorld); // destructible hollow houses (house_voxels.bin), client side
+        if (!_map.CollisionOnly && Drycastle.Shooter.Fences.FenceWorldNode.Create(_map, _data?.FenceDestruction ?? Drycastle.ShooterCore.Fences.FenceDestructionConfig.Default) is { } fenceWorld) AddChild(fenceWorld); // destructible thin fences (fences.json), client side: colliders always, pieces and falling bodies when drawn
         if (MechanicGarage.Create(_map, Path.GetFullPath(dir), !_map.CollisionOnly) is { } mechanicGarage) AddChild(mechanicGarage); // the mechanic's garage (#320): solid on the server too, its plate a glass pane
         if (!_map.CollisionOnly) // the bunkers' dark interiors and their lamps (#224)
         {
@@ -490,7 +491,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var config = new ServerConfig
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, FenceDestruction = _data.FenceDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation,

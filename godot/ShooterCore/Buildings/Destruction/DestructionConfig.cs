@@ -14,7 +14,7 @@ public sealed record DestructionConfig : IVersioned
     /// <summary>Off: no house is ever carved (the server sends no ops).</summary>
     public bool Enabled { get; init; } = true;
     public CarveSection Carve { get; init; } = new();
-    /// <summary>Keyed by <see cref="CellMaterial"/> in snake_case (foundation, floor, wall, partition, ceiling, roof).</summary>
+    /// <summary>Keyed by <see cref="CellMaterial"/> in snake_case (foundation, floor, wall, partition, ceiling, roof; brick, stone, concrete for the fence walls).</summary>
     public Dictionary<string, MaterialDef> Materials { get; init; } = DefaultMaterials();
     public SupportSection Support { get; init; } = new();
     public FractureConfig Fracture { get; init; } = new();
@@ -53,6 +53,9 @@ public sealed record DestructionConfig : IVersioned
         ["partition"] = new() { Resist = 0.6f, Weight = 2, Strength = 800 },
         ["ceiling"] = new() { Resist = 0.9f, Weight = 2, Strength = 2500 },
         ["roof"] = new() { Resist = 0.5f, Weight = 1, Strength = 400 },
+        ["brick"] = new() { Resist = 2.6f, Weight = 4, Strength = 1500 }, // the fence walls (docs/fence-destruction.md F4)
+        ["stone"] = new() { Resist = 3.2f, Weight = 5, Strength = 2000 },
+        ["concrete"] = new() { Resist = 2.0f, Weight = 4, Strength = 1500 },
     };
 
     DestructionConfig Validate()

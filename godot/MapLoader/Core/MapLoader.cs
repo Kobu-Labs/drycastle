@@ -26,6 +26,8 @@ public sealed partial class MapLoader
     // Kept for the later runtime swap of one parcel's props; ReplaceParcel leaves them alone.
     readonly Dictionary<string, MeshInstance3D> _propsVisuals = new();
     readonly Dictionary<string, List<CollisionShape3D>> _propsShapes = new();
+    // Chunk-level props_collision shapes (fences and trees of no parcel) by chunk (ix, iy).
+    readonly Dictionary<(int X, int Y), List<CollisionShape3D>> _chunkPropsShapes = new();
     readonly Dictionary<string, Node3D> _replacements = new();
     readonly List<(Vector3[] faces, Aabb box)> _terrain = new();
     readonly List<MeshInstance3D> _terrainVisuals = new();
@@ -68,6 +70,8 @@ public sealed partial class MapLoader
     /// <summary>The building visual of a parcel (parcel_&lt;ID&gt;_visual); null when it has none.</summary>
     public Node3D? ParcelVisual(string parcelId) => _visuals.GetValueOrDefault(parcelId);
     public IReadOnlyDictionary<string, List<CollisionShape3D>> PropsShapes => _propsShapes;
+    /// <summary>The chunk-level props_collision shapes (props of no parcel) by chunk (ix, iy of chunk_&lt;ix&gt;_&lt;iy&gt;).</summary>
+    public IReadOnlyDictionary<(int X, int Y), List<CollisionShape3D>> ChunkPropsShapes => _chunkPropsShapes;
     public IReadOnlyDictionary<string, ParcelInfo> Parcels => _parcels;
     public IReadOnlyList<SpawnPoint> SpawnPoints => _spawns;
     /// <summary>Point lookup over the parcel polygons (valid after Load).</summary>
@@ -421,6 +425,7 @@ public sealed partial class MapLoader
             ApplyMaterial(mi, name);
             Stats.Triangles += TriangleCount(mi.Mesh);
             var (baseName, texture) = SplitTexNode(name);
+            if (texture != null) RegisterPropsTex(baseName, texture, mi); // MapLoader.Textures.cs
             if (PropsParcelId(baseName) is { } propsId)
             {
                 if (texture == null) _propsVisuals[propsId] = mi;
@@ -514,6 +519,11 @@ public sealed partial class MapLoader
             _terrain.Add((faces, FacesAabb(faces)));
             _terrainGrid = null;
         }
+        else if (name == "props_collision" && ChunkOf(mi) is { } chunk)
+        {
+            if (!_chunkPropsShapes.TryGetValue(chunk, out var l)) _chunkPropsShapes[chunk] = l = new();
+            l.Add(cs);
+        }
         else if (name.StartsWith("parcel_") && name.EndsWith("_props_collision"))
         {
             var id = name["parcel_".Length..^"_props_collision".Length];
@@ -527,6 +537,19 @@ public sealed partial class MapLoader
             l.Add(cs);
         }
         return cs;
+    }
+
+    /// <summary>The (ix, iy) of the chunk_&lt;ix&gt;_&lt;iy&gt; node above <paramref name="n"/>; null when there is none.</summary>
+    static (int X, int Y)? ChunkOf(Node n)
+    {
+        for (var p = n.GetParent(); p != null; p = p.GetParent())
+        {
+            var s = p.Name.ToString();
+            if (!s.StartsWith("chunk_")) continue;
+            var parts = s.Split('_');
+            if (parts.Length == 3 && int.TryParse(parts[1], out var x) && int.TryParse(parts[2], out var y)) return (x, y);
+        }
+        return null;
     }
 
     // Chunk nodes have identity transforms in the exported files; faces are used as-is.

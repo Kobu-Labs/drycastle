@@ -153,6 +153,7 @@ public partial class NetClient : Node
     readonly MoabClient _moab;
     readonly DoorsClient _doors;
     readonly HousesClient _houses;
+    readonly FencesClient _fences;
     readonly UavClient _uav;
     readonly IntelClient _intel;
     BlipsClient _blips = null!;
@@ -265,6 +266,7 @@ public partial class NetClient : Node
         _moab = new MoabClient(Ctx);
         _doors = new DoorsClient(Ctx);
         _houses = new HousesClient(Ctx);
+        _fences = new FencesClient(Ctx);
         _uav = new UavClient(Ctx);
         _intel = new IntelClient(Ctx);
         _poop = new PoopClient(Ctx);
@@ -395,6 +397,7 @@ public partial class NetClient : Node
         Ctx.Cars.Clear(); _flight.Clear(); _driveClient.Clear(); // the probes are under Owned and go with them
         _glass.Teardown();
         _houses.Teardown();
+        _fences.Teardown();
         if (Ctx.Me != null && GodotObject.IsInstanceValid(Ctx.Me)) Ctx.Me.QueueFree();
         Ctx.Me = null;
         FreeOwned();
@@ -662,6 +665,7 @@ public partial class NetClient : Node
         _thieves.OnEvent(kind, payload); // the Raid vans' honk
         _doors.OnEvent(kind, payload); // the church doors, the Obecny Urad's door and the bus garage's doors
         _houses.OnEvent(kind, payload); // house destruction: carve ops, catch-up cells, rubble and reset
+        _fences.OnEvent(kind, payload); // fence destruction: the pieces that broke, a joiner's catch-up, the round reset
         _rozhlas.OnEvent(kind, payload); // the village loudspeaker's phase, broadcast and offset
         _mass.OnEvent(kind, payload); // the Holy Mass: chant, bells, the player's seat, the blessing
         _demon.OnEvent(kind, payload); // the demon: fireballs, the curse

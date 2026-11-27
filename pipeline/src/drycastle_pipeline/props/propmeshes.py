@@ -1,7 +1,7 @@
 """Low-poly prop meshes: fence boxes and blocky trees (counter-clockwise seen from outside).
 
-Fence sections with a type are drawn by ``fencestyles`` (textured panels, columns, caps); the plain
-box here is the look of a section without one, and the collision shape of every section.
+Fence sections are drawn by ``fencestyles`` (textured panels and boxes, columns, caps); the box here is the
+collision shape of every section.
 """
 
 import math
@@ -58,17 +58,10 @@ def _mesh(tris: list, colours: list[list[int]]) -> Mesh:
     return Mesh(np.array(tris, float), np.array(colours, np.uint8))
 
 
-def fence_mesh(
-    sections: list[dict], cfg: dict, bottom: bool = False, untyped_only: bool = False
-) -> Mesh:
-    """One thin box per fence section (visual: no bottom face; collision: closed).
-
-    ``untyped_only`` leaves out the sections that have a fence type (``fencestyles`` draws those).
-    """
+def fence_mesh(sections: list[dict], cfg: dict, bottom: bool = False) -> Mesh:
+    """One thin box per fence section (flat colour; collision: closed, with ``bottom``)."""
     tris, cols = [], []
     for s in sections:
-        if untyped_only and s.get("type", cfg.get("type")) is not None:
-            continue
         # custom (edited) sections carry their own style; the rest use the rules
         height = float(s.get("height_m", cfg["height_m"]))
         thick = float(s.get("thickness_m", cfg["thickness_m"]))
@@ -398,14 +391,10 @@ def ground_objects_mesh(objects: list[dict], cfg: dict) -> Mesh:
 
 
 def fence_meshes(sections: list[dict], cfg: dict) -> tuple[Mesh, dict]:
-    """The visual of some fence sections: flat-colour triangles, and textured ones by texture id.
-
-    Sections without a fence type are plain boxes; typed ones get their style (``fencestyles``).
-    """
+    """The visual of some fence sections: flat-colour triangles, and textured ones by texture id (``fencestyles``)."""
     from drycastle_pipeline.props.fencestyles import styled_fence_meshes
 
-    styled_flat, textured = styled_fence_meshes(sections, cfg)
-    return Mesh.concat([fence_mesh(sections, cfg, untyped_only=True), styled_flat]), textured
+    return styled_fence_meshes(sections, cfg)
 
 
 def parcel_props_meshes(

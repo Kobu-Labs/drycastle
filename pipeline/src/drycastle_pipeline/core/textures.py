@@ -87,7 +87,7 @@ class TexturedMesh:
     tris: np.ndarray  # (n, 3, 3) float64, local metres, counter-clockwise seen from outside
     colours: np.ndarray  # (n, 3) uint8 tint (white = the texture as drawn)
     uvs: np.ndarray  # (n, 3, 2) float64, see the module docstring
-
+    uv2: np.ndarray | None = None  # (n, 3, 2) float64 second UV set (TEXCOORD_1), or None: the fence pieces' (section, piece) coordinate
     @classmethod
     def empty(cls) -> "TexturedMesh":
         return cls(np.zeros((0, 3, 3)), np.zeros((0, 3), np.uint8), np.zeros((0, 3, 2)))
@@ -96,10 +96,14 @@ class TexturedMesh:
     def concat(cls, meshes: list["TexturedMesh"]) -> "TexturedMesh":
         if not meshes:
             return cls.empty()
+        uv2 = None
+        if any(m.uv2 is not None for m in meshes):  # all or none within one texture; a part without gets zeros
+            uv2 = np.concatenate([m.uv2 if m.uv2 is not None else np.zeros((len(m.tris), 3, 2)) for m in meshes])
         return cls(
             np.concatenate([m.tris for m in meshes]),
             np.concatenate([m.colours for m in meshes]),
             np.concatenate([m.uvs for m in meshes]),
+            uv2,
         )
 
     @property
@@ -111,26 +115,29 @@ class TexturedBuilder:
     """Collects textured quads and triangles by texture id; ``meshes()`` gives one mesh per texture."""
 
     def __init__(self) -> None:
-        self._parts: dict[str, tuple[list, list, list]] = {}
+        self._parts: dict[str, tuple[list, list, list, list]] = {}
 
-    def tri(self, tid: str, pts, uvs, tint) -> None:
-        tris, cols, tex = self._parts.setdefault(tid, ([], [], []))
+    def tri(self, tid: str, pts, uvs, tint, uv2=None) -> None:
+        tris, cols, tex, tex2 = self._parts.setdefault(tid, ([], [], [], []))
         tris.append(pts)
         tex.append(uvs)
         cols.append(tint)
+        if uv2 is not None:
+            tex2.append(uv2)
 
-    def quad(self, tid: str, pts, uvs, tint, two_sided: bool = False) -> None:
-        """A quad given as four corners in counter-clockwise order (seen from its front)."""
-        self.tri(tid, [pts[0], pts[1], pts[2]], [uvs[0], uvs[1], uvs[2]], tint)
-        self.tri(tid, [pts[0], pts[2], pts[3]], [uvs[0], uvs[2], uvs[3]], tint)
+    def quad(self, tid: str, pts, uvs, tint, two_sided: bool = False, uv2=None) -> None:
+        """A quad given as four corners in counter-clockwise order (seen from its front); ``uv2``: a second UV per corner."""
+        u2 = uv2 or [None] * 4
+        self.tri(tid, [pts[0], pts[1], pts[2]], [uvs[0], uvs[1], uvs[2]], tint, uv2 and [u2[0], u2[1], u2[2]])
+        self.tri(tid, [pts[0], pts[2], pts[3]], [uvs[0], uvs[2], uvs[3]], tint, uv2 and [u2[0], u2[2], u2[3]])
         if two_sided:
-            self.tri(tid, [pts[0], pts[2], pts[1]], [uvs[0], uvs[2], uvs[1]], tint)
-            self.tri(tid, [pts[0], pts[3], pts[2]], [uvs[0], uvs[3], uvs[2]], tint)
+            self.tri(tid, [pts[0], pts[2], pts[1]], [uvs[0], uvs[2], uvs[1]], tint, uv2 and [u2[0], u2[2], u2[1]])
+            self.tri(tid, [pts[0], pts[3], pts[2]], [uvs[0], uvs[3], uvs[2]], tint, uv2 and [u2[0], u2[3], u2[2]])
 
     def meshes(self) -> dict[str, TexturedMesh]:
         return {
-            tid: TexturedMesh(np.array(t, float), np.array(c, np.uint8), np.array(uv, float))
-            for tid, (t, c, uv) in sorted(self._parts.items())
+            tid: TexturedMesh(np.array(t, float), np.array(c, np.uint8), np.array(uv, float), np.array(uv2, float) if uv2 else None)
+            for tid, (t, c, uv, uv2) in sorted(self._parts.items())
             if t
         }
 

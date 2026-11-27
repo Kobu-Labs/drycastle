@@ -16,7 +16,7 @@ from drycastle_pipeline.core.textures import (
 from drycastle_pipeline.edits.schema import COLUMN_TYPES, FENCE_TYPES, parse
 from drycastle_pipeline.export.gltf import build_chunk_scene, parcel_props_nodes
 from drycastle_pipeline.props.fencestyles import COLUMN_STYLES, FENCE_STYLES, styled_fence_meshes
-from drycastle_pipeline.props.propmeshes import fence_meshes, parcel_props_meshes
+from drycastle_pipeline.props.propmeshes import fence_mesh, fence_meshes, parcel_props_meshes
 
 PROPS = load_section("props")
 FENCE = PROPS["fences"]
@@ -102,12 +102,15 @@ def test_every_type_builds_its_texture_and_flat_parts(ftype: str) -> None:
     assert min(float(m.tris[..., 2].min()) for m in textured.values()) < 0  # sunk into the ground
 
 
-def test_untyped_sections_stay_plain_boxes() -> None:
+def test_untyped_sections_are_boxes_of_the_plain_texture() -> None:
     plain = [{k: v for k, v in s.items() if k != "type"} for s in run("picket")]
-    styled_flat, styled_textured = styled_fence_meshes(plain, FENCE)
-    assert styled_flat.face_count == 0 and styled_textured == {}
+    box = fence_mesh(plain, FENCE)  # the box they were drawn as before
     flat, textured = fence_meshes(plain, FENCE)
-    assert flat.face_count == 10 * len(plain) and textured == {}
+    assert flat.face_count == 0 and set(textured) == {"plain"}
+    mesh = textured["plain"]
+    assert mesh.face_count == 10 * len(plain) and (mesh.colours == box.colours[0]).all()
+    assert np.allclose(mesh.tris.min(axis=(0, 1)), box.tris.min(axis=(0, 1))) and np.allclose(mesh.tris.max(axis=(0, 1)), box.tris.max(axis=(0, 1)))
+    assert not texture("plain").alpha and texture("plain").tintable
     # the rules can give every rule fence a type
     flat, textured = fence_meshes(plain, {**FENCE, "type": "wire"})
     assert set(textured) == {"wire"} and flat.face_count > 0
