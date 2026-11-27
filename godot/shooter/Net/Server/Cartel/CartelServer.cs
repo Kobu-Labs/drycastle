@@ -29,6 +29,8 @@ internal sealed class CartelServer
     readonly List<JobEnded> _ended = new();
     /// <summary>What each running Job's party was last told: its leader and members (a change is sent again; a member who left is told "no job").</summary>
     readonly Dictionary<int, (ushort Leader, ushort[] Members)> _told = new();
+    /// <summary>What each running Job's party was last sent of its objective (<see cref="EventKind.CartelObjective"/>): the line and the marker. A party change sends it again to all.</summary>
+    readonly Dictionary<int, (string Line, System.Numerics.Vector3? Marker)> _objectiveSent = new();
 
     /// <param name="parties">Who runs a Job (<see cref="MatchJobParties"/>).</param>
     /// <param name="contact">Where the Contact stands; <see cref="MapContactSite"/>, the map's placed Contact.</param>
@@ -51,7 +53,11 @@ internal sealed class CartelServer
         _book.Tick(dt, _parties, _ended);
         Settle();
         TellParties();
+        TellObjectives();
     }
+
+    /// <summary>The player stands in reach of the map's Contact (false on a map without one): his panel has the interact key there, not the plantation's hold.</summary>
+    public bool ContactInReach(ServerClient c) => _contact.Present && AtContact(c);
 
     /// <summary>A player died: the Job they lead (solo, or as the Squad's leader) fails.</summary>
     public void OnDied(ushort victim)
@@ -137,6 +143,7 @@ internal sealed class CartelServer
         if (why != JobStartRefusal.None) { _ctx.ChatTo(c, ChatLineKind.Error, CartelRules.Words(why, _data, tier)); return; }
         if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, out var refusal) is not { } job) { _ctx.ChatTo(c, ChatLineKind.Error, refusal ?? "The job cannot start now."); return; }
         TellParties();
+        TellObjectives();
         foreach (var m in members)
         {
             if (!_ctx.Players.TryGetValue(m, out var mc) || mc.IsBot) continue;
@@ -154,6 +161,7 @@ internal sealed class CartelServer
         {
             var job = e.Job;
             _told.Remove(job.Id);
+            _objectiveSent.Remove(job.Id);
             var reward = e.Succeeded ? CartelRules.Reward(_data, job) : 0;
             foreach (var m in e.Members)
             {
@@ -198,6 +206,7 @@ internal sealed class CartelServer
             var members = _parties.MembersOf(job.Owner).ToArray();
             if (_told.TryGetValue(job.Id, out var was) && was.Leader == job.Leader && was.Members.AsSpan().SequenceEqual(members)) continue;
             _told[job.Id] = (job.Leader, members);
+            _objectiveSent.Remove(job.Id); // the objective goes again to everyone, a member who joined midway among them
             foreach (var m in members)
                 if (_ctx.Players.TryGetValue(m, out var mc) && !mc.IsBot) _ctx.SendEvent(mc, EventKind.CartelJob, CartelCodec.EncodeJob(JobMsg(job, mc, 0)));
             if (was.Members == null) continue;
@@ -206,6 +215,27 @@ internal sealed class CartelServer
                     _ctx.SendEvent(gc, EventKind.CartelJob, CartelCodec.EncodeJob(CartelJobMsg.None));
         }
     }
+
+    /// <summary>
+    /// Sends each running Job's party its objective line and marker (<see cref="IJobObjective.Objective"/>, <see cref="IJobObjective.Marker"/>) when the line changed, the marker
+    /// came or went or moved more than <see cref="CartelFile.MarkerResendM"/>, or the party changed (<see cref="TellParties"/> forgets what was sent).
+    /// </summary>
+    void TellObjectives()
+    {
+        foreach (var job in _book.Running)
+        {
+            var line = job.Objective.Objective(job) ?? "";
+            var marker = job.Objective.Marker(job);
+            if (_objectiveSent.TryGetValue(job.Id, out var was) && was.Line == line && SameMarker(was.Marker, marker)) continue;
+            _objectiveSent[job.Id] = (line, marker);
+            var payload = CartelCodec.EncodeObjective(new CartelObjectiveMsg(job.Id, line, marker));
+            foreach (var m in _parties.MembersOf(job.Owner))
+                if (_ctx.Players.TryGetValue(m, out var mc) && !mc.IsBot) _ctx.SendEvent(mc, EventKind.CartelObjective, payload);
+        }
+    }
+
+    bool SameMarker(System.Numerics.Vector3? a, System.Numerics.Vector3? b) =>
+        a is { } x ? b is { } y && System.Numerics.Vector3.Distance(x, y) <= _data.MarkerResendM : b == null;
 
     static CartelJobMsg JobMsg(Job job, ServerClient to, int paid)
     {

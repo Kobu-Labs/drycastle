@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Text;
 using Drycastle.ShooterCore.Jobs;
 
@@ -43,14 +44,20 @@ public enum CartelJobFlags : byte
 /// The receiver's Job (<see cref="Net.EventKind.CartelJob"/>): sent to its party when it starts, when the party or its leader changes, and when it ends (then once, with the
 /// end state, the reason and what the receiver was paid). <see cref="JobId"/> 0 is "no job" (the receiver left the party).
 /// </summary>
+/// <summary>
+/// The objective of the receiver's Job (<see cref="Net.EventKind.CartelObjective"/>): the HUD tracker's line (empty: the kind's name only) and where the party's marker points
+/// (Godot axes; null: no marker). Sent to the party when either changes and to a member who joins it midway; the Job's end (<see cref="CartelJobMsg"/>) clears it.
+/// </summary>
+public readonly record struct CartelObjectiveMsg(int JobId, string Line, Vector3? Marker);
+
 public readonly record struct CartelJobMsg(int JobId, JobState State, JobFailReason Reason, string Kind, byte Tier, ushort Leader, float SecondsLeft, int RespectPaid, CartelJobFlags Flags)
 {
     public static readonly CartelJobMsg None = new(0, 0, JobFailReason.None, "", 0, 0, 0, 0, CartelJobFlags.None);
 }
 
 /// <summary>
-/// The Cartel's wire (protocol history: "vNEXT (Cartel profile + Job core)"). Kinds 33-36: <see cref="Net.EventKind.CartelRequest"/> (client to server),
-/// <see cref="Net.EventKind.CartelStatus"/>, <see cref="Net.EventKind.CartelJob"/> (server to a player), <see cref="Net.EventKind.CartelRankUp"/> (server to everyone).
+/// The Cartel's wire (protocol history: "vNEXT (Cartel profile + Job core)", "vNEXT (Contact panel + HUD)"). Kinds 33-37: <see cref="Net.EventKind.CartelRequest"/> (client to server),
+/// <see cref="Net.EventKind.CartelStatus"/>, <see cref="Net.EventKind.CartelJob"/> (server to a player), <see cref="Net.EventKind.CartelRankUp"/> (server to everyone), <see cref="Net.EventKind.CartelObjective"/> (server to a Job's party).
 /// Little endian throughout. A decode of a short or bad payload is false.
 /// </summary>
 public static class CartelCodec
@@ -124,6 +131,38 @@ public static class CartelCodec
         if (d.Length < 19 || d[18] > MaxKindBytes || d.Length != 19 + d[18] || d[4] > (byte)JobState.Failed) return false;
         j = new CartelJobMsg(BinaryPrimitives.ReadInt32LittleEndian(d), (JobState)d[4], (JobFailReason)d[5], Encoding.UTF8.GetString(d.Slice(19, d[18])), d[6],
             BinaryPrimitives.ReadUInt16LittleEndian(d[7..]), BinaryPrimitives.ReadSingleLittleEndian(d[9..]), BinaryPrimitives.ReadInt32LittleEndian(d[13..]), (CartelJobFlags)d[17]);
+        return true;
+    }
+
+    /// <summary>Longest objective line on the wire, bytes of UTF-8 (a longer one is cut at a character boundary).</summary>
+    public const int MaxLineBytes = 255;
+
+    /// <summary>i32 job id, u8 1 when there is a marker, f32 x3 the marker (0 without one), u8 line length, line (UTF-8).</summary>
+    public static byte[] EncodeObjective(CartelObjectiveMsg o)
+    {
+        var line = Encoding.UTF8.GetBytes(o.Line ?? "");
+        var n = Math.Min(line.Length, MaxLineBytes);
+        while (n > 0 && n < line.Length && (line[n] & 0xC0) == 0x80) n--; // never split a character
+        var b = new byte[18 + n];
+        var s = b.AsSpan();
+        BinaryPrimitives.WriteInt32LittleEndian(s, o.JobId);
+        var m = o.Marker ?? Vector3.Zero;
+        b[4] = o.Marker.HasValue ? (byte)1 : (byte)0;
+        BinaryPrimitives.WriteSingleLittleEndian(s[5..], m.X);
+        BinaryPrimitives.WriteSingleLittleEndian(s[9..], m.Y);
+        BinaryPrimitives.WriteSingleLittleEndian(s[13..], m.Z);
+        b[17] = (byte)n;
+        line.AsSpan(0, n).CopyTo(s[18..]);
+        return b;
+    }
+
+    public static bool TryDecodeObjective(ReadOnlySpan<byte> d, out CartelObjectiveMsg o)
+    {
+        o = default;
+        if (d.Length < 18 || d[4] > 1 || d.Length != 18 + d[17]) return false;
+        var m = new Vector3(BinaryPrimitives.ReadSingleLittleEndian(d[5..]), BinaryPrimitives.ReadSingleLittleEndian(d[9..]), BinaryPrimitives.ReadSingleLittleEndian(d[13..]));
+        if (d[4] == 1 && !(float.IsFinite(m.X) && float.IsFinite(m.Y) && float.IsFinite(m.Z))) return false;
+        o = new CartelObjectiveMsg(BinaryPrimitives.ReadInt32LittleEndian(d), Encoding.UTF8.GetString(d.Slice(18, d[17])), d[4] == 1 ? m : null);
         return true;
     }
 

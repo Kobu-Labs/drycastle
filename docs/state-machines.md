@@ -301,6 +301,25 @@ stateDiagram-v2
 - **Member**: starts Jobs (as the leader of their party) and earns Respect
 - **Quit**: left the Cartel: rank and Respect kept frozen; a rejoin carries on from them
 
+## Cartel.Tracker
+
+The HUD tracker of the player's Job: hidden with no Job, running while it runs (kind, tier, objective line, time left, marker), then its end card for a while.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hidden
+    Hidden --> Running
+    Hidden --> Ended
+    Running --> Ended
+    Running --> Hidden
+    Ended --> Hidden
+    Ended --> Running
+```
+
+- **Hidden**: no Job: nothing shows, no marker
+- **Running**: the clock is the time left; each Job message sets it again; the marker shows
+- **Ended**: the end card: success and the Respect paid, or the failure's reason; its clock runs the card's seconds, then hidden. A new Job replaces it
+
 ## Casing.Phase
 
 One spent casing: in the air or sliding, lying still on the floor, fading out, or a free slot.

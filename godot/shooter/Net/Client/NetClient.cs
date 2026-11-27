@@ -172,6 +172,9 @@ public partial class NetClient : Node
     /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     DuffelsClient _duffels = null!;
+    /// <summary>cartel.json (the host sets it from the data directory; the shipped defaults otherwise): the Contact's reach, the ranks, tiers and kinds the panel lists.</summary>
+    public Drycastle.ShooterCore.Cartel.CartelFile Cartel = Drycastle.ShooterCore.Cartel.CartelFile.Default;
+    CartelClient _cartel = null!;
     SessionLog _session = null!;
     PerfLog _perf = null!;
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
@@ -327,6 +330,7 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
         _duffels = new DuffelsClient(Ctx, Duffels, _interact);
+        _cartel = new CartelClient(Ctx, Cartel, () => Chat.Context.IsAdmin, () => _screens.OpenContactPanel());
         _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction);
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
@@ -386,6 +390,7 @@ public partial class NetClient : Node
         foreach (var r in Ctx.Rockets.Values) r.Snd?.Release();
         Ctx.Cars.ReleaseSounds();
         _rozhlas.Reset(); // the mic is shut
+        _cartel.Clear();
         _server.Disconnect();
         Ctx.Remotes.Clear();
         foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
@@ -415,7 +420,7 @@ public partial class NetClient : Node
     /// <summary>The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it).</summary>
     string? PromptLine(string? ride) =>
         _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt() ?? _minerals.Prompt()
-        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _duffels.CarryHint();
+        ?? _crates.Prompt() ?? _duffels.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
 
     void HudWelcome()
     {
@@ -428,6 +433,8 @@ public partial class NetClient : Node
         Ctx.Hud.AttachEquipment(this); // F (#268)
         Ctx.Hud.AttachHuntersLog(_hunts.Environment()); // J (#336)
         Ctx.Hud.AttachMineralLog(); // N
+        Ctx.Hud.AttachContactPanel(new Drycastle.Shooter.Cartel.ContactPanel(_cartel)); // the interact key at the Contact (#494)
+        Ctx.Hud.AttachJobTracker(_cartel.Tracker, _cartel.KindName, id => Ctx.Names.GetValueOrDefault(id, Strings.F("player.unknown", id)));
         _hunts.Data.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         Ctx.Hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         Ctx.Hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
@@ -504,6 +511,7 @@ public partial class NetClient : Node
         _corpses.Render(delta);
         _groundItems.Render();
         _duffels.Render(); // the Duffels: on backs, on the ground, in flight; the own one burdens the body
+        _cartel.Render(delta); // the Job tracker's clock, the Contact's key and his panel's reach
         _crates.Render();
         _minerals.Render();
         _turrets.Render();
@@ -659,6 +667,7 @@ public partial class NetClient : Node
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
+        _cartel.OnEvent(kind, payload); // the Cartel: the own standing, Job and objective, everyone's rank-ups (#494)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
         _match.OnEvent(kind, payload); // the match: phase, scoreboard, kills, the own spawn and death
         Loadouts.OnEvent(kind, payload);

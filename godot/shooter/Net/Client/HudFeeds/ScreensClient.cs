@@ -7,7 +7,7 @@ using Drycastle.ShooterCore.Sandbox;
 namespace Drycastle.Shooter.Net.Client.HudFeeds;
 
 /// <summary>
-/// The HUD's screens a key opens: the Equipment screen (F, #268), the tactical map (M), the Hunter's Log (J, #336) and the Mineral Log (N). Their keys (not while a menu, the chat box or the corpse chooser
+/// The HUD's screens a key opens: the Equipment screen (F, #268), the tactical map (M), the Hunter's Log (J, #336), the Mineral Log (N) and the cartel's Contact panel (the interact key at the Contact, #494). Their keys (not while a menu, the chat box or the corpse chooser
 /// is up, <see cref="OverlayArbiter"/>), Esc through the Close methods (the shell then does not open Pause), and who owns the mouse meanwhile (<see cref="WantsFreeMouse"/>: the shell asks it every frame).
 /// </summary>
 public sealed class ScreensClient
@@ -30,12 +30,18 @@ public sealed class ScreensClient
     public bool TacticalMapOpen => _ctx.Hud?.TacticalMapOpen ?? false;
     public bool HuntersLogOpen => _ctx.Hud?.HuntersLogOpen ?? false;
     public bool MineralLogOpen => _ctx.Hud?.MineralLogOpen ?? false;
+    public bool ContactPanelOpen => _ctx.Hud?.ContactPanelOpen ?? false;
 
     /// <summary>Each Close is for Esc: true when the screen was open. The Hunter's Log goes up one level of the log first.</summary>
     public bool CloseEquipment() => _ctx.Hud?.CloseEquipment() ?? false;
     public bool CloseTacticalMap() => _ctx.Hud?.CloseTacticalMap() ?? false;
     public bool CloseHuntersLog() => _ctx.Hud?.BackHuntersLog() ?? false;
     public bool CloseMineralLog() => _ctx.Hud?.BackMineralLog() ?? false;
+    /// <summary>The Contact panel goes up one level (its quit question) first.</summary>
+    public bool CloseContactPanel() => _ctx.Hud?.BackContactPanel() ?? false;
+
+    /// <summary>The interact key at the cartel's Contact: his panel, unless a menu, the chat box, the corpse chooser or the match says no. True when it opened.</summary>
+    public bool OpenContactPanel() => _ctx.Hud?.OpenContactPanel(_ctx.MenuIsOpen, _chooser.IsOpen) ?? false;
 
     /// <summary>The pause menu's entries.</summary>
     public void OpenHuntersLog() => _ctx.Hud?.OpenHuntersLog();
@@ -43,7 +49,7 @@ public sealed class ScreensClient
 
     /// <summary>Who wants the cursor now.</summary>
     public bool WantsFreeMouse => Owners.WantsFreeMouse;
-    MouseOwners Owners => new(_ctx.Dead, _chat.IsOpen, EquipmentOpen, TacticalMapOpen, _chooser.HasItems, HuntersLogOpen, MineralLogOpen);
+    MouseOwners Owners => new(_ctx.Dead, _chat.IsOpen, EquipmentOpen, TacticalMapOpen, _chooser.HasItems, HuntersLogOpen, MineralLogOpen, ContactPanelOpen);
 
     /// <summary>The map key, then the Equipment, Hunter's Log and Mineral Log keys. True when one was used.</summary>
     public bool HandleInput(InputEvent e) => HandleMapKey(e) || HandleEquipmentKey(e) || HandleHuntersLogKey(e) || HandleMineralLogKey(e);
@@ -111,12 +117,13 @@ public sealed class ScreensClient
     public void Update()
     {
         var hud = _ctx.Hud;
-        if (_ctx.Me != null) _ctx.Me.MoveWithFreeMouse = EquipmentOpen || TacticalMapOpen || HuntersLogOpen || MineralLogOpen;
-        if (hud is not ({ EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true } or { MineralLogOpen: true })) return;
+        if (_ctx.Me != null) _ctx.Me.MoveWithFreeMouse = EquipmentOpen || TacticalMapOpen || HuntersLogOpen || MineralLogOpen || ContactPanelOpen;
+        if (hud is not ({ EquipmentOpen: true } or { TacticalMapOpen: true } or { HuntersLogOpen: true } or { MineralLogOpen: true } or { ContactPanelOpen: true })) return;
         var overlays = hud.Overlays(_ctx.MenuIsOpen, _chooser.IsOpen);
         if (hud.EquipmentOpen && OverlayArbiter.YieldsToMenu(Overlay.Equipment, overlays)) hud.CloseEquipment();
         if (hud.TacticalMapOpen && OverlayArbiter.YieldsToMenu(Overlay.TacticalMap, overlays)) hud.CloseTacticalMap();
         if (hud.HuntersLogOpen && OverlayArbiter.YieldsToMenu(Overlay.HuntersLog, overlays)) hud.CloseHuntersLog();
         if (hud.MineralLogOpen && OverlayArbiter.YieldsToMenu(Overlay.MineralLog, overlays)) hud.CloseMineralLog();
+        if (hud.ContactPanelOpen && OverlayArbiter.YieldsToMenu(Overlay.ContactPanel, overlays)) hud.CloseContactPanel();
     }
 }
