@@ -207,7 +207,12 @@ internal sealed class VehiclesClient
         else _ctx.Cars.Sounds.Engine(v, p, dt, _drive.StateOf(v)?.Speed);
         if (drive != null) _drive.StepFx(v, drive, p, dt); // the body's lean, wheels, propeller, wake and spray
         else v.Roller?.Step(p, rot.Y, dt); // wheels of a vehicle that is not predicted: from its drawn motion
-        v.CargoDoors?.Step(dt); // a boot lid, hatch or van door on its way open or shut
+        if (v.CargoDoors is { } cargoDoors) // a boot lid, hatch or van door: where the server says the doors stand, on its way open or shut
+        {
+            cargoDoors.SetOpen(_ctx.Cars.CargoOpen.Contains(v.Id), instant: !v.CargoDoorsSet);
+            v.CargoDoorsSet = true;
+            cargoDoors.Step(dt);
+        }
         var seat = _ctx.Driving && _ctx.Me != null ? _rider.OwnSeatIn(v) : -1; // the seat the local player has in this vehicle
         if (seat >= 0) _rider.Track(v, seat);
         if (seat == 0 || seat > 0 && !flakMine) RideCar(v, seat, p, rot, s.Yaw, flies, drive, dt);

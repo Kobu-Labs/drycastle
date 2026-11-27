@@ -448,12 +448,12 @@ public partial class NetClient : Node
 
     /// <summary>
     /// The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it). A Duffel in
-    /// reach comes right after: the server's interact key takes it before the Loot, the doors and the seats. While carrying one, the seat in reach is refused, so its "get in" says why instead.
+    /// reach comes right after: the server's interact key takes it before the Loot, the doors and the seats; a cargo vehicle's doors (or the take-out) come after the village doors, before the seat. While carrying one, the seat in reach is refused, so its "get in" says why instead.
     /// </summary>
     string? PromptLine(string? ride)
     {
         ride = _duffels.InsteadOfRide(ride);
-        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
+        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _duffels.CargoPrompt() ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
             ?? _minerals.Prompt() ?? _crates.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
     }
 

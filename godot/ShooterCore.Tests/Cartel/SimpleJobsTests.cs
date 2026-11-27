@@ -167,6 +167,35 @@ public class SimpleJobsTests
     }
 
     [Fact]
+    public void A_duffel_loaded_in_a_vehicle_sends_the_party_to_the_drop_to_take_it_out_and_a_lost_vehicle_fails_the_job()
+    {
+        var (book, parties, world, delivery, _) = Setup();
+        var job = Start(book, parties, delivery, 1);
+        var o = (DeliveryJobKind.Run)job.Objective;
+        world.At[1] = o.Spot;
+        Assert.True(world.Duffels.PickUp(1, o.Spot));
+        var def = new Drycastle.ShooterCore.Vehicles.VehicleCargoVolumeDef { Centre = new[] { 0f, 0.75f, 0f }, Size = new[] { 2f, 1.5f, 4f }, Capacity = 2 };
+        var bay = new VehicleCargo(0x4001, def, () => new Drycastle.ShooterCore.Weapons.VehiclePose(o.Spot + new Vector3(0, 0, -6), 0, 0, 0, 0), 0.35f);
+        world.Duffels.AddVolume(bay);
+        world.Duffels.Throw(1, o.Spot + new Vector3(0, 1.65f, 0), 0, 0);
+        for (var i = 0; i < 120; i++) world.Entities.Tick(Dt);
+        Assert.Equal(DuffelState.Loaded, o.Duffel.State);
+
+        var line = o.Objective(job);
+        Assert.Contains(JobText.Throw, line); // the client puts the bound key in
+        Assert.Contains("drop point", line);
+        Assert.Equal("Drive the duffel to the drop point, take it out (X) and hand it over", JobText.Fill(line, "F", "X"));
+        Assert.Equal(o.Drop, o.Marker(job)); // not where it went in: the vehicle moves
+        var ended = new List<JobEnded>();
+        Ticks(book, parties, ended, 30);
+        Assert.Empty(ended); // loaded is not lost
+
+        world.Duffels.RemoveLoadedIn(bay); // the vehicle was destroyed
+        Ticks(book, parties, ended, 2);
+        Assert.Equal(JobFailReason.Objective, Assert.Single(ended).Job.Reason);
+    }
+
+    [Fact]
     public void The_pallet_has_four_spots_a_fifth_delivery_is_refused_and_a_spot_is_freed_when_its_job_ends()
     {
         var wide = WideMap(Pallet);

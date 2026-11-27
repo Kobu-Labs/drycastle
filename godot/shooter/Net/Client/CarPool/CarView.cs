@@ -28,6 +28,8 @@ internal sealed class CarView
     public VehicleWheels? Roller;
     /// <summary>The boot lid, hatch or rear doors of a cargo type (vehicles.json cargo_volume "doors"; null for every other type, a model without them, and a headless client): <c>CargoDoors?.SetOpen(open)</c> swings them, <c>VehiclesClient.RenderCar</c> steps it.</summary>
     public CargoDoorsView? CargoDoors;
+    /// <summary>The cargo doors have been told where they stand once (the first time stands there at once: a vehicle that comes into view already open).</summary>
+    public bool CargoDoorsSet;
     public readonly Interpolator Buf = new();
     /// <summary>The vehicle's visible parts (<see cref="CarFx.VisualName"/>): a boat's wave bob and tilt move this, not the root.</summary>
     public Node3D? Visual;

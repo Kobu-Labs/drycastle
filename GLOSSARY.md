@@ -862,15 +862,19 @@ A Job in Payday's style: fill Duffels at the objective, throw them into the Cart
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
-A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. One press of the throw key (X) throws it 8 m, whatever it weighs (no charge, it is never put down at will); the carrier's death drops it where they fell. One that is thrown into a cargo volume (the Cartel van's back) is loaded and counted there. A Delivery's Duffel starts lying on the Cartel pallet. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
+A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. One press of the throw key (X) throws it 8 m, whatever it weighs (no charge, it is never put down at will); the carrier's death drops it where they fell. One that is thrown into a cargo volume (a vehicle's boot, bed or bay) that accepts it is loaded and drawn there; a party player with empty hands takes the last loaded one out again. A Delivery's Duffel starts lying on the Cartel pallet. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
 _Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
 
 **Cartel pallet**:
 The pallet by the Contact (a Placed object, the marker `prim:cartel_pallet`, the first one by id) that a Delivery's Duffel lies on until a party player takes it: four bag spots, one per running Delivery, so a fifth is refused ("The pallet is full."). A map without one has no Delivery.
 _Avoid_: table, crate
 
+**Cargo volume**:
+The box of a cargo vehicle (`cargo_volume` of its type in `vehicles.json`: the truck's open bed, the car's boot, the Golf's hatch, the Cartel van's bay) that takes thrown Duffels, up to its capacity, each on its own slot. Its doors (the boot lid, the hatch, the van's rear doors) are Closed or Open and are worked with the interact key at the vehicle's access point; a throw loads only while they are open and the party is allowed, a truck's bed only from above. A destroyed, retired or reset vehicle loses what it held. Built (Delivery rework, protocol 92).
+_Avoid_: trunk, boot (that is the car's one), hold
+
 **Cartel van**:
-The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. Built, with the Harvest that uses it (#495).
+The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes only its Job's own loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. Built, with the Harvest that uses it (#495).
 _Avoid_: getaway car, Raid van (that is the Thieves')
 
 **Drop point**:

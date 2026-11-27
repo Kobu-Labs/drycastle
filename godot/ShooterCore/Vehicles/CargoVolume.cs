@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Vehicles;
 /// vehicles.json "cargo_volume" of a type (the Cartel van's bay, #495): an upright box in the vehicle frame (forward -Z, origin on the ground, as the seats and the hood) that takes loads
 /// thrown or put into it (Duffels), and how many it takes. It is not drawn and stops nothing: what reaches it is the caller's rule (<see cref="CargoVolume.Contains"/>).
 /// The Delivery rework (docs/cartel.md "Cargo vehicles") gave every cargo type its own: the truck's open bed (<see cref="FromTop"/>), the car's and the Golf's boot, the van's bay. Beside the box it says where
-/// each loaded Duffel is drawn (<see cref="Slots"/>), where a player stands to open, load and take out (<see cref="Access"/>) and what swings open (<see cref="Doors"/>).
+/// each loaded Duffel is drawn (<see cref="Slots"/>), where a player stands to open, load and take out (<see cref="Access"/>) and what swings open (<see cref="Doors"/>). The Duffels' side of it is <c>VehicleCargo</c> (ShooterCore/Cartel).
 /// </summary>
 public class VehicleCargoVolumeDef
 {
@@ -15,7 +15,7 @@ public class VehicleCargoVolumeDef
     public float[] Centre { get; set; } = { 0, 0, 0 };
     /// <summary>The box's size [width (x), height (y), length (z)], metres.</summary>
     public float[] Size { get; set; } = { 1, 1, 1 };
-    /// <summary>How many loads it holds at once (the loader counts them: a Heist's van bay).</summary>
+    /// <summary>How many loads it holds at once, 1..15 (a loaded Duffel's slot rides in four bits of its entity state).</summary>
     public int Capacity { get; set; } = 1;
     /// <summary>
     /// True for an open bed (the truck): a load enters only coming down through the box's top face (the boards stop what comes from the side, it falls beside). False: it enters from any side the caller lets
@@ -31,6 +31,10 @@ public class VehicleCargoVolumeDef
     public float[]? Access { get; set; }
     /// <summary>How far from <see cref="Access"/> a player still opens, loads and takes out, metres.</summary>
     public float AccessRadiusM { get; set; } = 1.5f;
+    /// <summary>What the doors are called in the prompt ("boot", "hatch", "rear doors": "Open the boot"); the cargo area's name when empty.</summary>
+    public string Label { get; set; } = "";
+    /// <summary>The most loads a type can hold: the slot index is four bits of a loaded Duffel's entity state.</summary>
+    public const int MaxCapacity = 15;
     /// <summary>The nodes of the model that swing open (a boot lid, a hatch, a van's rear doors; the client's <c>CargoDoorsView</c>). Empty: the cargo area is always open (the truck's bed).</summary>
     public List<VehicleCargoDoorDef> Doors { get; set; } = new();
 
@@ -41,7 +45,7 @@ public class VehicleCargoVolumeDef
     public string? Problem(VehicleDef v)
     {
         if (Centre is not { Length: 3 } || Size is not { Length: 3 } || Centre.Any(x => !float.IsFinite(x)) || Size.Any(x => !(x > 0) || !float.IsFinite(x))) return "centre is [x, y, z] and size [width, height, length], all positive";
-        if (Capacity is < 1 or > 255) return "capacity is 1..255";
+        if (Capacity is < 1 or > MaxCapacity) return $"capacity is 1..{MaxCapacity}";
         const float eps = 0.002f;
         if (MathF.Abs(Centre[0]) + Size[0] / 2 > v.HalfWidth + eps || MathF.Abs(Centre[2]) + Size[2] / 2 > v.HalfLength + eps || Centre[1] - Size[1] / 2 < -eps || Centre[1] + Size[1] / 2 > v.Height + eps)
             return "the volume must lie inside the hit box (half_width, half_length, height)";
@@ -97,6 +101,70 @@ public static class CargoVolume
             && MathF.Abs(p.Y - v.Centre[1]) <= v.Size[1] / 2 + margin
             && MathF.Abs(p.Z - v.Centre[2]) <= v.Size[2] / 2 + margin;
     }
+
+    /// <summary>
+    /// Where the segment from <paramref name="a"/> to <paramref name="b"/> (the vehicle's own frame: the world segment unrotated about its feet) first meets the box grown by <paramref name="margin"/>: the entry
+    /// point and the way in. A segment that starts inside enters at its start. <paramref name="fromTop"/> is true when it comes down through the top face (or starts inside and moves down). The returned
+    /// <paramref name="normal"/> is the horizontal way out a refused load is put aside by: the face entered from the side, or, for a load that meets the top (or the floor), the nearest side face (the point
+    /// moves onto it), so a refused load never hangs on the top of the box.
+    /// </summary>
+    public static bool Enter(VehicleCargoVolumeDef v, Vector3 a, Vector3 b, float margin, out Vector3 at, out Vector3 normal, out bool fromTop)
+    {
+        var centre = new Vector3(v.Centre[0], v.Centre[1], v.Centre[2]);
+        var half = new Vector3(v.Size[0], v.Size[1], v.Size[2]) / 2 + new Vector3(margin);
+        var rel = a - centre;
+        var d = b - a;
+        float t = 0; var axis = -1; var sign = 0f;
+        if (!(MathF.Abs(rel.X) <= half.X && MathF.Abs(rel.Y) <= half.Y && MathF.Abs(rel.Z) <= half.Z))
+        {
+            float near = float.NegativeInfinity, far = float.PositiveInfinity;
+            for (var i = 0; i < 3; i++)
+            {
+                var p = Axis(rel, i); var dd = Axis(d, i); var h = Axis(half, i);
+                if (MathF.Abs(dd) < 1e-9f) { if (MathF.Abs(p) > h) { at = default; normal = default; fromTop = false; return false; } continue; }
+                var t0 = (-h - p) / dd; var t1 = (h - p) / dd;
+                var enter = MathF.Min(t0, t1); var leave = MathF.Max(t0, t1);
+                if (enter > near) { near = enter; axis = i; sign = dd > 0 ? -1f : 1f; }
+                far = MathF.Min(far, leave);
+            }
+            if (near > far || near > 1f || far < 0f) { at = default; normal = default; fromTop = false; return false; }
+            t = MathF.Max(near, 0f);
+        }
+        var local = a + d * t;
+        var r = local - centre;
+        fromTop = axis == 1 ? sign > 0 : axis < 0 && d.Y < 0;
+        if (axis == 0 || axis == 2)
+        {
+            normal = axis == 0 ? new Vector3(sign, 0, 0) : new Vector3(0, 0, sign);
+        }
+        else
+        {
+            // the top or the floor (or inside already): out by the nearest side
+            var toX = half.X - MathF.Abs(r.X); var toZ = half.Z - MathF.Abs(r.Z);
+            if (toX <= toZ) { var s = r.X < 0 ? -1f : 1f; normal = new Vector3(s, 0, 0); local.X = centre.X + s * half.X; }
+            else { var s = r.Z < 0 ? -1f : 1f; normal = new Vector3(0, 0, s); local.Z = centre.Z + s * half.Z; }
+        }
+        at = local;
+        return true;
+    }
+
+    static float Axis(Vector3 v, int i) => i == 0 ? v.X : i == 1 ? v.Y : v.Z;
+
+    /// <summary>
+    /// Whether a player standing at the world point <paramref name="point"/> is within the type's access radius of its access point (a vehicle placed as in <see cref="Contains"/>): the flat distance,
+    /// the feet within <see cref="AccessBandM"/> of the access point's height. Null when the type has no access point, else the flat distance in metres (the nearest vehicle wins).
+    /// </summary>
+    public static float? AccessDistance(VehicleCargoVolumeDef v, Vector3 feet, float yaw, float pitch, float roll, Vector3 point)
+    {
+        if (v.Access is not { Length: 3 } a) return null;
+        var at = feet + FlightMath.Rotate(new Vector3(a[0], a[1], a[2]), yaw, pitch, roll);
+        if (MathF.Abs(point.Y - at.Y) > AccessBandM) return null;
+        var d = MathF.Sqrt((point.X - at.X) * (point.X - at.X) + (point.Z - at.Z) * (point.Z - at.Z));
+        return d <= v.AccessRadiusM ? d : null;
+    }
+
+    /// <summary>How far above or below the access point (metres) a player's feet still count as standing there: not on a roof, not in a pit.</summary>
+    public const float AccessBandM = 2f;
 
     /// <summary>The volume's centre in the world, for a vehicle placed as in <see cref="Contains"/> (where a load is drawn going in, where a marker points).</summary>
     public static Vector3 Centre(VehicleCargoVolumeDef v, Vector3 feet, float yaw, float pitch, float roll) =>

@@ -99,6 +99,14 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public event Action<ServerCar, ushort>? Exploded;
 
+    /// <summary>
+    /// Raised when this vehicle's life ends or starts over: destroyed (blown up, or retired: gone for good) or reset (a spawn, a respawn after destruction, a fall out of the world, a new round). What it carries in
+    /// its cargo volume is gone with it and its cargo doors are shut (CargoServer, docs/cartel.md "Cargo vehicles").
+    /// </summary>
+    public event Action<ServerCar>? LifeEnded;
+
+    void RaiseLifeEnded() => LifeEnded?.Invoke(this);
+
     /// <summary>Tells the listeners of <see cref="Exploded"/>; CarBlast calls it once the vehicle is destroyed.</summary>
     public void RaiseExploded(ushort attacker) => Exploded?.Invoke(this, attacker);
 
@@ -196,6 +204,7 @@ public partial class ServerCar : CharacterBody3D
     {
         DropLinks(); // a destroyed tractor lets its trailer go, a destroyed trailer its tractor
         Life.Destroy(returnAt); Asleep = false; RestCount = 0;
+        LifeEnded?.Invoke(this);
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
@@ -227,6 +236,7 @@ public partial class ServerCar : CharacterBody3D
         TickEndPos = GlobalPosition;
         HitCooldown.Clear();
         Lights = false;
+        LifeEnded?.Invoke(this);
     }
 
     /// <summary>A flying type back on its skids at the origin, rotor stopped. The origin is put on the ground under it when that is within a few metres (a sandbox spawn on a slope).</summary>

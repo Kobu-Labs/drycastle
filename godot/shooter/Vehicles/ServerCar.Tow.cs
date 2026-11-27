@@ -184,6 +184,7 @@ public partial class ServerCar
         DropLinks();
         Life.Destroy(double.PositiveInfinity);
         Retired = true;
+        RaiseLifeEnded();
         CollisionLayer = 0;
         Velocity = Vector3.Zero;
         PlaceSolid(); // its solid box goes with it

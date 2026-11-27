@@ -23,6 +23,9 @@
   "max_elevation_deg": 65,
   "hand_ahead_m": 0.4,
   "wall_gap_m": 0.2,
+  // Every live vehicle whose type has a cargo_volume in vehicles.json takes Duffels (docs/cartel.md "Cargo vehicles"): a throw that reaches the box, grown by cargo_margin_m on every side (one that lands against the open
+  // doors still loads), is loaded when the volume accepts it (doors open, a slot free, its party allowed, a truck's bed entered from above) and stops as at a wall otherwise.
+  "cargo_margin_m": 0.35,
   "max_flight_seconds": 5,
   // What every client draws (DuffelsClient.cs): back is where a carried Duffel sits on its carrier, metres from the feet in the figure's frame (x right, y up, z back); scale the prop's;
   // box the fallback box (length, height, depth) without the pack.

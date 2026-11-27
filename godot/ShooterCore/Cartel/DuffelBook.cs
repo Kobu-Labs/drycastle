@@ -11,7 +11,7 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <item>A Job (or <c>/duffel</c>) makes one for a party with <see cref="Give"/> (in a player's hands) or <see cref="Place"/> (on the ground), and takes its own away with <see cref="Remove"/> or <see cref="RemoveParty"/>.</item>
 /// <item>One per player: a party player who carries none picks up the nearest lying one in reach (<see cref="PickUp"/>).</item>
 /// <item>The carrier throws it (<see cref="Throw"/>: one press, a fixed range, an arc); it is put down where they stand only when they cannot carry it on (<see cref="Drop"/>: death, a seat, leaving the party or the server).</item>
-/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>) takes a Duffel that flies or lands into it: Loaded, and the volume's owner counts it (<see cref="LoadedIn"/>).</item>
+/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot (<see cref="LoadedIn"/>); one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
 /// </list>
 /// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a throw, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
 /// </summary>
@@ -23,6 +23,7 @@ public sealed class DuffelBook
     readonly Dictionary<ushort, Duffel> _byId = new();
     readonly Dictionary<ushort, Duffel> _byCarrier = new();
     readonly List<ICargoVolume> _volumes = new();
+    uint _loadCount;
 
     public DuffelBook(DuffelsFile data, WorldEntityManager entities, IDuffelWorld world)
     {
@@ -136,6 +137,47 @@ public sealed class DuffelBook
         return true;
     }
 
+    /// <summary>
+    /// The Duffel that comes out of a cargo volume into the hands of a party player standing at <paramref name="feet"/> with empty hands: of the nearest volume whose open cargo area they stand at
+    /// (<see cref="ICargoVolume.TakeOutDistance"/>) that holds one of their party's, the last loaded. Null when there is none (not their party's, hands full).
+    /// </summary>
+    public Duffel? Takeable(ushort player, Vector3 feet)
+    {
+        if (_byCarrier.ContainsKey(player)) return null;
+        ICargoVolume? volume = null; var best = float.PositiveInfinity;
+        foreach (var v in _volumes)
+            if (v.TakeOutDistance(feet) is { } dist && dist < best && HasLoaded(v, player)) { volume = v; best = dist; }
+        if (volume == null) return null;
+        Duffel? last = null;
+        foreach (var d in _byId.Values)
+            if (d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, volume) && d.MayTouch(player) && (last == null || d.LoadOrder > last.LoadOrder)) last = d;
+        return last;
+    }
+
+    bool HasLoaded(ICargoVolume v, ushort player)
+    {
+        foreach (var d in _byId.Values) if (d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, v) && d.MayTouch(player)) return true;
+        return false;
+    }
+
+    /// <summary>The player takes the Duffel <see cref="Takeable"/> out into their hands; it leaves its slot. Null when nothing can be taken out.</summary>
+    public Duffel? TakeOut(ushort player, Vector3 feet)
+    {
+        if (Takeable(player, feet) is not { } d) return null;
+        d.Volume!.Unload(d);
+        d.TakeUp(player, feet);
+        SetCarrier(player, d);
+        return d;
+    }
+
+    /// <summary>Takes every Duffel loaded in the volume out of the world (its vehicle was destroyed, retired or reset); the count removed.</summary>
+    public int RemoveLoadedIn(ICargoVolume volume)
+    {
+        var gone = _byId.Values.Where(d => d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, volume)).ToList();
+        foreach (var d in gone) Remove(d);
+        return gone.Count;
+    }
+
     /// <summary>One flight step (from the entity's tick): gravity, the world, the volumes, and the landing.</summary>
     internal void StepFlight(Duffel d, float dt)
     {
@@ -144,9 +186,14 @@ public sealed class DuffelBook
         var vel = d.Velocity;
         var next = before + vel * dt - new Vector3(0, 0.5f * g * dt * dt, 0);
         vel -= new Vector3(0, g * dt, 0);
-        // a cargo volume is met before the world: the van's hull does not stop a drop (ADR 0028), its box catches the bag on the way through
-        var mid = (before + next) * 0.5f;
-        if ((VolumeFor(d, mid) ?? VolumeFor(d, next)) is { } v) { Load(d, v, next); return; }
+        // a cargo volume is met before the world: a vehicle's hull does not stop a drop (ADR 0028), its cargo box does: it takes the bag that it accepts, and stops the one it does not as a wall does
+        if (Meet(before, next) is { } hit)
+        {
+            if (hit.Volume.Accepts(d, hit.Meet.FromTop)) { Load(d, hit.Volume, next); return; }
+            var aside = hit.Meet.At + new Vector3(hit.Meet.Normal.X, 0, hit.Meet.Normal.Z) * (float)_data.WallGapM;
+            d.Fly(aside, new Vector3(0, MathF.Min(vel.Y, 0), 0));
+            return;
+        }
         if (_world.Blocked(before, next, out var at, out var normal))
         {
             if (normal.Y >= 0.5f) { Land(d, at); return; }
@@ -161,20 +208,28 @@ public sealed class DuffelBook
 
     void Land(Duffel d, Vector3 at)
     {
-        if (VolumeFor(d, at + new Vector3(0, 0.1f, 0)) is { } v) { Load(d, v, at); return; }
+        var p = at + new Vector3(0, 0.1f, 0);
+        foreach (var v in _volumes) if (v.Contains(p) && v.Accepts(d, false)) { Load(d, v, at); return; } // lands against the doors: it counts (a bed is never loaded from the ground)
         d.PutDown(at);
     }
 
-    ICargoVolume? VolumeFor(Duffel d, Vector3 p)
+    /// <summary>The nearest volume the segment meets, and where.</summary>
+    (ICargoVolume Volume, CargoMeet Meet)? Meet(Vector3 from, Vector3 to)
     {
-        foreach (var v in _volumes) if (v.Contains(p) && v.Accepts(d)) return v;
-        return null;
+        (ICargoVolume, CargoMeet)? best = null; var bd = float.PositiveInfinity;
+        foreach (var v in _volumes)
+        {
+            if (!v.Meets(from, to, out var m)) continue;
+            var dist = Vector3.DistanceSquared(from, m.At);
+            if (dist < bd) { bd = dist; best = (v, m); }
+        }
+        return best;
     }
 
     void Load(Duffel d, ICargoVolume v, Vector3 at)
     {
-        d.LoadInto(v, at);
-        v.Load(d);
+        var slot = v.Load(d);
+        d.LoadInto(v, slot, at, ++_loadCount);
     }
 
     void SetCarrier(ushort player, Duffel d)
@@ -216,6 +271,7 @@ public sealed class DuffelBook
     void Forget(ushort id)
     {
         if (!_byId.Remove(id, out var d)) return;
+        if (d.State == DuffelState.Loaded) d.Volume?.Unload(d);
         if (d.Carrier != 0 && _byCarrier.TryGetValue(d.Carrier, out var c) && c == d) TakeFrom(d.Carrier, out _);
     }
 }
@@ -265,6 +321,18 @@ public static class DuffelCodec
         notice = default;
         if (p.Length < 1 || p[0] > (byte)DuffelNotice.VanReserved) return false;
         notice = (DuffelNotice)p[0];
+        return true;
+    }
+
+    /// <summary>The take-out event's payload: u16 vehicle id (0: nothing to take out now), u8 the kind of the Duffel that would come out.</summary>
+    public static byte[] EncodeTake(ushort vehicle, DuffelKind kind) => new[] { (byte)vehicle, (byte)(vehicle >> 8), (byte)kind };
+
+    public static bool TryDecodeTake(ReadOnlySpan<byte> p, out ushort vehicle, out DuffelKind kind)
+    {
+        vehicle = 0; kind = default;
+        if (p.Length < 3 || p[2] >= DuffelRules.AllKinds.Length) return false;
+        vehicle = (ushort)(p[0] | p[1] << 8);
+        kind = (DuffelKind)p[2];
         return true;
     }
 
