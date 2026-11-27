@@ -3,6 +3,7 @@ using Drycastle.Shooter.Characters;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Bots;
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Hud;
@@ -109,6 +110,10 @@ internal sealed class ServerClient
     public Edge UseKey, StreakKey;
     /// <summary>The grenade throw key (G): held to aim, released to throw (<see cref="GrenadeThrower"/>).</summary>
     public readonly GrenadeThrower Throw = new();
+    /// <summary>The Duffel throw key (X, <see cref="DuffelThrowKey"/>): its hold, and its last up/down, fed every input on foot so a key held through a pick-up is not a fresh press (<c>Cartel/DuffelServer.cs</c>).</summary>
+    public DuffelThrowKey DuffelKey;
+    /// <summary>The Duffel this player was last told is in reach (<see cref="EventKind.DuffelReach"/>; 0 none).</summary>
+    public ushort DuffelReach;
     /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (<c>Scuds/ScudLoading.cs</c>).</summary>
     public readonly ScudReloadKey ReloadKey = new();
     /// <summary>The interact key's hold at the rozhlas dictation table (RozhlasSetServer.cs).</summary>
@@ -156,6 +161,8 @@ internal sealed class PlayerProfile
     public CamoSpec Camo => Camos[Math.Clamp(Active, 0, Loadout.MaxSlot)];
     /// <summary>The Companion chosen on the Equipment screen (an id of companions.json, #488); empty: none chosen, the first one owned is out.</summary>
     public string Companion = "";
+    /// <summary>Where the player stands with the Cartel (ADR 0046): membership and Respect, stored with the Profile; a guest's is never stored (a guest cannot join).</summary>
+    public CartelStanding Cartel = new();
 }
 
 /// <summary>A profile still being read on the database thread. Only the task is shared; the result is applied on the tick.</summary>

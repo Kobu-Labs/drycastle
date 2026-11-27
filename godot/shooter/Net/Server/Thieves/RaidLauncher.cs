@@ -43,7 +43,8 @@ internal sealed class RaidLauncher
 
     public bool NoRoads => Roads.IsEmpty;
 
-    RoadGraph Roads => _roads ??= _map != null ? RoadGraph.Parse(_map.RoadsJson, _data.Van.MinRoadWidthM) : RoadGraph.Empty;
+    /// <summary>The roads a van may use (at least <see cref="VanConfig.MinRoadWidthM"/> wide), read once; empty without a map. A Heist puts its Cartel van on them too.</summary>
+    public RoadGraph Roads => _roads ??= _map != null ? RoadGraph.Parse(_map.RoadsJson, _data.Van.MinRoadWidthM) : RoadGraph.Empty;
 
     /// <summary>The roads the fixed routes are driven over: every road wide enough (<c>raids.route_min_road_width_m</c>, 0: footpaths too).</summary>
     RoadGraph RouteRoads => _routeRoads ??= _map != null ? RoadGraph.Parse(_map.RoadsJson, _data.Raids.RouteMinRoadWidthM) : RoadGraph.Empty;
@@ -139,6 +140,31 @@ internal sealed class RaidLauncher
         var raid = _roster.Launch(plan, exit, start, crew, p => nav.Snap(new Vector3(p.X, p.Y, p.Z)).ToNumerics(), FleePoint, Ground);
         if (raid == null) { Shrink("the world has no room for it"); return; }
         GD.Print($"server: Thieves van {n}/{of}: {(plan.Fallback ? "parked (fallback)" : plan.RouteName != null ? $"on route '{plan.RouteName}' from ({start0.X:F0},{start0.Y:F0}), {plan.In.Length:F0} m of road" : $"in from ({start0.X:F0},{start0.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}) with {plan.Targets} targets near, crew of {crew.Size}");
+    }
+
+    /// <summary>
+    /// A Heist's Assault (docs/cartel.md "Assaults"): a van of the Rival crew in from the map's edge over the roads, as a Raid's (ADR 0021), to the road stop nearest <paramref name="target"/> that is
+    /// not within used_apart_m of <paramref name="used"/> (the Heist's earlier stops and its Cartel van) and lets the crew step out on the navigation mesh; with no way in, parked on the road spot
+    /// nearest it. The van stays until the Job removes it; <paramref name="gang"/> (the Rival crew's, empty) gets out in <paramref name="order"/> and heads for <paramref name="post"/> (snapped onto the
+    /// mesh). Null with no navigation mesh, no road, no stop or no room in the world.
+    /// </summary>
+    public Raid? LaunchAssault(NVec2 target, IReadOnlyList<NVec2> used, IReadOnlyList<GangMemberKind> order, ThiefGang gang, NVec3 post)
+    {
+        if (_nav() is not { } nav || Roads.IsEmpty) return null;
+        var vc = _data.Van;
+        var (min, max) = Extent();
+        var plan = RaidPlanner.Plan(Roads, min, max, Array.Empty<NVec2>(), used, new[] { target }, vc, _rng, AcceptStop)
+            ?? RaidPlanner.Fallback(Roads, target, vc.HalfLengthM * 4, _rng, AcceptStop);
+        if (plan == null) { GD.Print($"server: Assault to ({target.X:F0},{target.Y:F0}): no road stop the crew can step out at"); return null; }
+        var exit = plan.Out ?? RaidPlanner.Exit(Roads, plan, min, max, vc);
+        var start0 = plan.In.IsEmpty ? plan.StopAt : plan.In.Start;
+        var start = new NVec3(start0.X, _map?.GroundHeightOrMean(start0.X, start0.Y) ?? 0f, start0.Y);
+        var stays = vc.Copy();
+        stays.StaySeconds = float.PositiveInfinity; // it never drives off: the Job removes it
+        var snapped = nav.Snap(new Vector3(post.X, post.Y, post.Z)).ToNumerics();
+        var raid = _roster.Launch(plan, exit, start, order, gang, stays, p => nav.Snap(new Vector3(p.X, p.Y, p.Z)).ToNumerics(), FleePoint, Ground, snapped);
+        if (raid != null) GD.Print($"server: Assault van {(plan.Fallback ? "parked (fallback)" : $"in from ({start0.X:F0},{start0.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}), crew of {order.Count}");
+        return raid;
     }
 
     /// <summary>The van that was due could not be launched: the wave loses it (the event is won with the vans it has).</summary>

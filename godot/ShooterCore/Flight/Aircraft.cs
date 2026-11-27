@@ -72,7 +72,7 @@ public sealed class Aircraft : IWorldEntity
     /// <summary>Registers the aircraft type once (idempotent). Hp is sent (as a percentage of the kind's) so clients can show damage.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(WireType) == null) registry.Register(new WorldEntityDef(WireType, "aircraft", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(WireType, "aircraft", HasHp: true));
     }
 
     public byte TypeId => WireType;

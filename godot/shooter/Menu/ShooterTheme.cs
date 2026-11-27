@@ -90,6 +90,13 @@ public static class ShooterTheme
     public const float MapTrailCasing = 3.5f;
     /// <summary>The waypoint's ink in the world and on the maps: a light green (friendly, as in other shooters), never on a dark plate; its text is outlined instead.</summary>
     public static readonly Color Waypoint = new(0.70f, 1.00f, 0.66f);
+    /// <summary>The cartel Job's marker on the maps and in the world: a star (a shape no other marker has) in this amber.</summary>
+    public static readonly Color JobMark = new(1.00f, 0.72f, 0.28f);
+    /// <summary>The Job tracker (HUD, right edge): its width, and how long its end card stays.</summary>
+    public const int JobTrackerW = 45 * Space;
+    public const float JobCardSeconds = 6f;
+    /// <summary>The Contact panel: its share of the screen's width (as the logs), never narrower than this, and a tier button's width.</summary>
+    public const int ContactMinW = 80 * Space, ContactTierW = 17 * Space;
     public const int MapGutter = 28;
     public const float MapFadeSeconds = 0.15f;
 
@@ -204,6 +211,8 @@ public static class ShooterTheme
         Bar(t, "HealthBar", Good);
         Bar(t, "HealthBarLow", Danger);
         Bar(t, "ReloadBar", Warn);
+        Bar(t, "DrillBar", Accent);       // the Drill on a Trap house's safe, running or done
+        Bar(t, "DrillBarJammed", Warn);   // and jammed (the panel says so in words too)
         Bar(t, "StatBar", Accent);       // loadout editor: the chosen item's stat
         Bar(t, "StatBarSaved", Dim);     // loadout editor: the saved item's stat, for comparison
         t.SetFontSize("font_size", "ProgressBar", FontSmall);

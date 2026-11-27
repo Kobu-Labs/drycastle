@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  // The cartel's Rival crew (GLOSSARY: Rival crew, Gunman, Gang member; docs/cartel.md "Assaults", "Trap house"). Its people are Gang members on the Thieves' brain (thieves.json gang: walking, turning,
+  // routes, separation, hit weights): an Enforcer (the Thieves' Enforcer, its pipe, speeds and size, with the Hit count below) or a Gunman (below). Killing one pays no XP.
+  // Lengths are metres, speeds metres per second, times seconds. Every number is a first guess: nothing here was tried in the game yet.
+
+  // Who a crew fights: the players its Job names, on sight: within radius_m of a member that can see them (a clear line from eye_m above its feet to chest_m above theirs, looked at every
+  // check_seconds); and, as every Gang member, anyone who hits a member. Everyone else is left alone.
+  "sight": { "radius_m": 35, "check_seconds": 0.25, "eye_m": 1.6, "chest_m": 1.0 },
+  // A player is fought until forget_seconds after they were last seen or last hit a member, or until they are give_up_m from every living member (not below sight.radius_m).
+  "aggro": { "forget_seconds": 10, "give_up_m": 60 },
+  "corpse_seconds": 10,
+  // Hits is the Hit count: the weighted hits a member takes before it dies (a bullet 1, a headshot 2: thieves.json gang.hits).
+  "enforcer": { "hits": 8.75 },
+  "gunman": {
+    "hits": 6, "walk_speed": 1.6, "run_speed": 4.8, "hit_scale": 1.0,
+    // The Thieves' kinds' melee: a Gunman never swings, the numbers only fill the kind.
+    "melee": { "damage": 10, "reach_m": 2, "windup_seconds": 0.45, "interval_seconds": 1.0 },
+    "gun": {
+      // A Gunman that sees its target within range_m (flat) stops, turns to it for aim_seconds (the telegraph: time to get into cover), then fires its weapon's burst, then aims again.
+      // Out of sight or range it runs at the target on the navigation mesh and stops chase_stop_m from it; a posted one turns to it and waits.
+      "aim_seconds": 0.8,
+      // Each round leaves within aim_error_deg of the line from the muzzle to the target's chest (uniform by area in that cone): at 20 m, 3 degrees is about a metre off.
+      "aim_error_deg": 3.0,
+      "range_m": 40,
+      "muzzle_up_m": 1.4, "muzzle_ahead_m": 0.45,
+      "chase_stop_m": 2,
+      // One per Gunman, by its look number. weapon: the weapon of weapons.json it fires (damage, falloff, headshot multiplier, pellets and pellet_spread, the sound and tracer clients play);
+      // burst rounds round_gap_seconds apart; damage_scale times the weapon's damage (a player's deagle round does 45 at close range). model: the Gang Warfare prop in its hand (assets-private/synty/glb).
+      "weapons": [
+        { "weapon": "deagle", "burst": 2, "round_gap_seconds": 0.4, "damage_scale": 0.4, "model": "props/gun_revolver_01" },
+        { "weapon": "p90", "burst": 4, "round_gap_seconds": 0.1, "damage_scale": 0.5, "model": "props/gun_machine_pistol_01" },
+        { "weapon": "remington870", "burst": 1, "round_gap_seconds": 0, "damage_scale": 0.35, "model": "props/gun_shotgun_01" }
+      ]
+    }
+  },
+  // Client only. models: a Gunman's body (assets-private/synty/glb), by look number; the atlas is the Thieves' pick (thieves.json gang.view.atlases). gunman_color: its capsule without the pack.
+  // tint: multiplies every Rival member's body (the atlas; the capsule of an Enforcer or dealer), so the crew reads apart from the Thieves.
+  // grip: the gun in the right hand (position, rotation x y z w in the hand bone's frame; the model turned and shifted onto it), the pipe's grip to start with: nudge it here.
+  // aim: the right hand forward at the shoulder while it aims and fires (the carry overlay's arm IK: rest-pose axes, its right hand is -X, up +Y, forward +Z).
+  "view": {
+    "models": ["gang_enforcer_01", "gang_thief_01"],
+    "gunman_color": "#3b4656",
+    "tint": "#8aa6e0",
+    "grip": { "bone": "Hand_R", "position": [-0.0879, 0.0391, 0.0163], "rotation": [-0.4785, -0.3531, 0.3529, 0.7224], "model_rotation_deg": [0, 0, 0], "model_offset": [0, 0, 0] },
+    "aim": { "right": [-0.2, 1.4, 0.45], "elbow_down": 0.4, "elbow_out": 0.3, "hand_roll_deg": 0 }
+  }
+}

@@ -17,7 +17,7 @@ public static class GroundItemRules
     /// <summary>Registers the type once (idempotent). The hp byte carries the pickup count, the state byte the item.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "ground item", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "ground item", HasHp: true));
     }
 
     public static bool InReach(Vector3 player, Vector3 item, float slack = 0) =>

@@ -45,7 +45,7 @@ public static class DemonRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "demon", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "demon", HasHp: true));
     }
 
     /// <summary>The hit volume of a demon at the pose: a crouching figure's capsule, <paramref name="scale"/> times as big as a player's, centred <paramref name="bodyHeightM"/> off the surface along its normal.</summary>

@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  // The drug Cartel (docs/cartel.md, ADR 0046; GLOSSARY "Cartel", "Cartel rank", "Respect", "Job"). Read by ShooterCore/Cartel/CartelFile.cs; nothing here was played: first guesses.
+  // ranks: the personal ladder, lowest first. respect: the total Respect a member needs to hold the rank (the first is 0, each next more). Respect only grows; a member who
+  // quits keeps it frozen until they rejoin. The name is what players see (the rank-up toast); the id is the key tiers name.
+  "ranks": [
+    { "id": "runner",  "name": "Runner",  "respect": 0 },
+    { "id": "dealer",  "name": "Dealer",  "respect": 1000 },
+    { "id": "sicario", "name": "Sicario", "respect": 3000 },
+    { "id": "capo",    "name": "Capo",    "respect": 7000 },
+    { "id": "patron",  "name": "Patrón",  "respect": 15000 }
+  ],
+  // tiers: the Contact lists jobs by tier, 1 first, numbered without a gap. rank: the lowest rank of the leader that opens it (never lower than the tier before's);
+  // respect: what a finished job of the tier pays EVERY earning member of the party at the moment of success (a member of the Cartel with a stored Profile, not in sandbox mode).
+  // A failed job pays nothing. Reward depends on the tier only; a heist adds its own bonus (jobs.<heist>.bonus_respect_per_duffel).
+  "tiers": [
+    { "tier": 1, "rank": "runner",  "respect": 100 },
+    { "tier": 2, "rank": "dealer",  "respect": 200 },
+    { "tier": 3, "rank": "sicario", "respect": 350 },
+    { "tier": 4, "rank": "capo",    "respect": 550 },
+    { "tier": 5, "rank": "patron",  "respect": 800 }
+  ],
+  // contact_reach_m: how near the Contact (ground metres) a player must stand to join, quit or start a job (the map's placed Contact; a map without one has no Cartel).
+  "contact_reach_m": 3,
+  // marker_resend_m: a Job's marker (the HUD's minimap and world marker for its party) is sent again only once its point has moved this many metres (0: every change).
+  "marker_resend_m": 2,
+  // One section per kind of Job, read only by that kind.
+  "jobs": {
+    // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when
+    // they run out. succeed_seconds: it succeeds once it has run this long (the leader alive, nothing else to do). Set it above a tier's seconds to test the timer.
+    "test": {
+      "name": "Test job",
+      "seconds": [120, 110, 100, 90, 80],
+      "succeed_seconds": 20
+    },
+    // delivery (DeliveryJobKind, #494): the leader gets one duffel at the Contact; a party player carrying it stands within radius_m of the job's drop point (a cartel_drop zone point)
+    // and holds the interact key hold_seconds: done. seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
+    // carrier cannot sprint or take a vehicle seat). min_contact_m: the drop point is at least this far (ground metres) from the Contact; apart_m: and this far from every point another
+    // running job holds (drop points and hit spots). No drop point left: the job does not start.
+    "delivery": {
+      "name": "Delivery",
+      "seconds": [240, 210, 185, 165, 150],
+      "duffel": "product",
+      "min_contact_m": 150,
+      "apart_m": 40,
+      "radius_m": 4,
+      "hold_seconds": 2
+    },
+    // hit (HitJobKind, #497): a Rival dealer (a Rival crew's Gang boss: his own look) stands at a cartel_hit zone point with guards; his death, by anyone's hand, is success. Killing the crew
+    // pays nothing. gunmen / enforcers: guards per tier for a party of one; gunmen_per_mate / enforcers_per_mate: added for each party member past the first; max_guards caps the sum
+    // (Gunmen kept first). ring_m: the guards stand on a ring this far round him (snapped to the navigation mesh). reveal_m: the marker shows the spot until a party player comes this
+    // near him, then follows him. min_contact_m and apart_m as delivery's.
+    "hit": {
+      "name": "Hit",
+      "seconds": [300, 270, 240, 220, 200],
+      "min_contact_m": 150,
+      "apart_m": 60,
+      "gunmen": [1, 2, 2, 3, 4],
+      "enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_mate": 1,
+      "enforcers_per_mate": 0,
+      "max_guards": 10,
+      "ring_m": 4,
+      "reveal_m": 35
+    },
+    // harvest: the Harvest heist (HarvestJobKind on the Heist template: ShooterCore/Cartel/Heist.cs HeistData, HarvestData; docs/cartel.md "Heists", "Harvest"). Every per-tier array has one
+    // number per tier, tier 1 first. "Extra member": each party member beyond the first (the squad's size when the leader starts it).
+    "harvest": {
+      "name": "Harvest",
+      // seconds: the job's timer per tier, a safety: it fails when they run out.
+      "seconds": [900, 870, 840, 810, 780],
+      // The fewest duffels loaded that the drop takes (min) and the most the party can fill (max), per tier, plus per extra member; never more than the van's bay takes (vehicles.json
+      // cartel_van cargo_volume.capacity).
+      "min_duffels": [2, 3, 3, 4, 4],
+      "min_per_extra_member": 1,
+      "max_duffels": [5, 6, 7, 8, 9],
+      "max_per_extra_member": 1,
+      // Respect for each duffel loaded above the minimum at the drop, times the tier, on top of the tier's respect (each earning member).
+      "bonus_respect_per_duffel": 15,
+      // Assaults (Rival crew vans): the first comes grace_seconds after the Cartel van reaches the plantation's area, the next every assault_interval_seconds while the heist is there. A van
+      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: assault_gunmen and assault_enforcers per tier, plus
+      // gunmen_per_extra_member Gunmen per extra member, at most max_crew (at most 15). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
+      "grace_seconds": [60, 55, 50, 45, 40],
+      "assault_interval_seconds": [100, 90, 80, 70, 60],
+      "assault_gunmen": [1, 2, 2, 3, 3],
+      "assault_enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_extra_member": 1,
+      "max_crew": 8,
+      "max_assaults_alive": 3,
+      // The Cartel van: van_type (vehicles.json) on the road spot nearest the Contact at least van_spawn_min_m from him, reserved for the party. Its bay takes a duffel up to
+      // van_load_margin_m outside its volume too (the closed rear doors).
+      "van_type": "cartel_van",
+      "van_spawn_min_m": 8,
+      "van_load_margin_m": 0.35,
+      // The Drop point (cartel_drop zones): at least drop_min_m from the plantation's centre and drop_apart_m from another job's; the van must stop (slower than drop_stop_mps) within
+      // drop_radius_m of it, with at least the minimum loaded.
+      "drop_min_m": 300,
+      "drop_apart_m": 40,
+      "drop_radius_m": 10,
+      "drop_stop_mps": 1,
+      // fill_hold_seconds: during the heist a party member's hold of the interact key in the plantation fills a weed duffel in their hands (instead of High) until the maximum is filled.
+      // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
+      "fill_hold_seconds": 3,
+      "area_margin_m": 25
+    },
+    // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0047). A random hollow
+    // house with road access (trap_house.json choice) is dressed for the job and stripped after; the Rival crew holds it, product and cash duffels lie on its tables, its safe takes the
+    // Drill (trap_house.json drill: run time, jams, cash duffels by tier). Every per-tier array has one number per tier, tier 1 first; "extra member" as harvest's.
+    "trap_house": {
+      "name": "Trap house",
+      // seconds: the job's timer per tier, a safety: it fails when they run out.
+      "seconds": [900, 870, 840, 810, 780],
+      // min / max duffels as harvest's (never more than the van's bay takes). Only a house whose tables have at least the minimum's duffel spots is taken (the safe is a bonus); the tables
+      // hold the maximum less the safe's cash duffels (never fewer than the minimum, never more than the spots); the open safe's cash duffels load like the rest.
+      "min_duffels": [2, 2, 3, 3, 3],
+      "min_per_extra_member": 0,
+      "max_duffels": [4, 5, 6, 7, 8],
+      "max_per_extra_member": 1,
+      "bonus_respect_per_duffel": 15,
+      // Posted defenders (the Rival crew holding the house, on the dressing's posts: they turn and shoot, never walk): defender_gunmen and defender_enforcers per tier, plus
+      // defender_gunmen_per_extra_member Gunmen per extra member, at most max_defenders and never more than the house has posts (Gunmen kept first).
+      "defender_gunmen": [2, 2, 3, 3, 4],
+      "defender_enforcers": [1, 2, 2, 3, 3],
+      "defender_gunmen_per_extra_member": 1,
+      "max_defenders": 10,
+      // area_m: the objective's area, where the van loads and the Assaults go on: within this of the house's centre or of the road spot where the van parks (its door's nearest road).
+      "area_m": 20,
+      // Assaults, the Cartel van and the Drop point (from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded.
+      "grace_seconds": [60, 55, 50, 45, 40],
+      "assault_interval_seconds": [100, 90, 80, 70, 60],
+      "assault_gunmen": [1, 2, 2, 3, 3],
+      "assault_enforcers": [2, 2, 3, 3, 4],
+      "gunmen_per_extra_member": 1,
+      "max_crew": 8,
+      "max_assaults_alive": 3,
+      "van_type": "cartel_van",
+      "van_spawn_min_m": 8,
+      "van_load_margin_m": 0.35,
+      "drop_min_m": 300,
+      "drop_apart_m": 40,
+      "drop_radius_m": 10,
+      "drop_stop_mps": 1
+    }
+  }
+}

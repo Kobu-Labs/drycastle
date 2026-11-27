@@ -1,5 +1,6 @@
 using Npgsql;
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Hunts;
 using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Progression;
@@ -146,6 +147,24 @@ public sealed class PostgresProgressionStore : IProgressionStore
 
         public Task SetCompanionAsync(long playerId, string companionId) =>
             db.Write("set companion", c => Exec(c, "UPDATE players SET companion = @c WHERE id = @id;", ("c", companionId ?? ""), ("id", playerId)));
+
+        public Task<CartelRecord> GetCartelAsync(long playerId) => db.Read(c =>
+        {
+            using var cmd = c.CreateCommand();
+            cmd.CommandText = "SELECT cartel_membership, cartel_respect FROM players WHERE id = @id;";
+            cmd.Parameters.AddWithValue("id", playerId);
+            using var r = cmd.ExecuteReader();
+            return r.Read() ? new CartelRecord((CartelMembership)r.GetInt32(0), r.GetInt32(1)) : CartelRecord.None;
+        });
+
+        public Task SetCartelMembershipAsync(long playerId, CartelMembership membership) =>
+            db.Write("set cartel membership", c => Exec(c, "UPDATE players SET cartel_membership = @m WHERE id = @id;", ("m", (int)membership), ("id", playerId)));
+
+        public Task AddRespectAsync(long playerId, int amount)
+        {
+            if (amount < 0) throw new ArgumentOutOfRangeException(nameof(amount), amount, "Respect cannot go down");
+            return db.Write("add respect", c => Exec(c, "UPDATE players SET cartel_respect = LEAST(cartel_respect::bigint + @a, 2147483647) WHERE id = @id;", ("a", amount), ("id", playerId)));
+        }
 
         public Task AddXpAsync(long playerId, int amount)
         {

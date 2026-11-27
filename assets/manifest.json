@@ -875,6 +875,27 @@
       "pack": null
     },
     {
+      "id": "prim:cartel_contact",
+      "category": "other",
+      "name": "Cartel Contact (marker: the game draws him here, facing the arrow)",
+      "file": null,
+      "size_m": [
+        0.8,
+        1.8,
+        0.8
+      ],
+      "tags": [
+        "cartel",
+        "contact",
+        "marker",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/primitives.py)",
+      "pack": null
+    },
+    {
       "id": "prim:pot",
       "category": "pot",
       "name": "Flower pot",

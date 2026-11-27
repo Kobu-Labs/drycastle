@@ -1,4 +1,5 @@
 using Godot;
+using Drycastle.Shooter.Cartel;
 using Drycastle.Shooter.Chat;
 using Drycastle.Shooter.Churches;
 using Drycastle.Shooter.Crystals;
@@ -61,6 +62,11 @@ public static class Strings
         ("hud.corpse.giant.item", "Tap {0}  put on {1}"), ("hud.corpse.giant.items", "Tap {0}  take an item"),
         ("item.bigfoot_head", "Bigfoot head"), ("item.gold_chain", "Gold chain"), ("companion.none", "No Companion yet"), ("companion.locked", "{0} (locked: reach {1} in the Hunter's Log)"), ("toast.companion.marked.one", "Your Companion marked an enemy"), ("toast.companion.marked", "Your Companion marked {0} enemies"), ("companion.out", "{0} (with you)"), ("toast.item.crumbled", "The item crumbles in your hands"), ("toast.item.bagfull", "Your bag is full"), ("hud.ground.take", "{0}  Pick up {1}"),
         ("hud.crate.hold", "Hold {0}  open care package"), ("hud.crate.opening", "Opening..."), ("hud.mineral.hold", "Hold {0}  take {1}"),
+        ("hud.duffel.take", "{0}  Pick up the {1} duffel"), ("hud.duffel.carry", "Hold {0}  throw the {1} duffel, tap to put it down"), ("hud.duffel.noseat", "No seat while you carry the {1} duffel: tap {0} to put it down"), ("duffel.weed", "weed"), ("duffel.cash", "cash"), ("duffel.product", "product"),
+        ("hud.drill.set", "Hold {0}  set the drill on the safe"), ("hud.drill.fix", "Hold {0}  fix the jammed drill"),
+        ("hud.drill.armed", "Safe"), ("hud.drill.armed.detail", "Hold {0} at the safe to set the drill"), ("hud.drill.running", "Drilling"), ("hud.drill.left", "{0} s left"),
+        ("hud.drill.jammed", "Drill jammed"), ("hud.drill.jammed.detail", "Hold {0} at the safe to fix it"), ("hud.drill.done", "Safe open"), ("hud.drill.done.detail", "Take the cash"),
+        ("toast.duffel.noseat", "No seat while you carry a duffel: throw it in or put it down first ({0})"), ("toast.duffel.carrying", "You carry a duffel already: one at a time"), ("toast.van.reserved", "Cartel van: only the heist crew can get in."),
         ("hud.loot.hold", "Hold {0}  send the {1} back"), ("loot.tire", "tire"), ("loot.pet", "pet"), ("loot.dish", "satellite dish"), ("loot.connector", "connector"),
         ("toast.streak.granted", "Care package: {0} is ready. Press {1} to use it."), ("toast.streak.replaced", "Care package: {0} is ready and replaced {1}. Press {2} to use it."),
         ("corpse.title", "Take {0}"), ("corpse.title.with_items", "Take {0} or an item"), ("corpse.title.items", "Take an item"), ("corpse.option", "{0}  {1}"), ("corpse.primary", "Replace primary: {0}"), ("corpse.secondary", "Replace secondary: {0}"),
@@ -123,7 +129,7 @@ public static class Strings
         ("bind.move_forward", "Move forward"), ("bind.move_back", "Move back"), ("bind.move_left", "Move left"), ("bind.move_right", "Move right"),
         ("bind.jump", "Jump / helicopter climb"), ("bind.sprint", "Sprint"), ("bind.crouch", "Crouch / helicopter descend"), ("bind.prone", "Prone"), ("bind.fire", "Fire"), ("bind.reload", "Reload"),
         ("bind.interact", "Interact"), ("bind.scoreboard", "Scoreboard (hold)"),
-        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5 / vehicle seat 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Head lamp (on foot) / vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.throw_grenade", "Throw grenade (hold to aim, release to throw; aim key cancels)"), ("bind.inventory", "Equipment screen (toggle)"),
+        ("bind.slot_1", "Weapon slot 1 / vehicle seat 1"), ("bind.slot_2", "Weapon slot 2 / vehicle seat 2"), ("bind.slot_3", "Weapon slot 3 / vehicle seat 3"), ("bind.slot_4", "Weapon slot 4 / vehicle seat 4"), ("bind.slot_5", "Weapon slot 5 / vehicle seat 5"), ("bind.zoom", "Scope zoom"), ("bind.headlights", "Head lamp (on foot) / vehicle headlights"), ("bind.vehicle_view", "Vehicle view (chase / cockpit)"), ("bind.rozhlas_talk", "Talk on the rozhlas (hold, set holder)"), ("bind.killstreak", "Use killstreak"), ("bind.throw_grenade", "Throw grenade (hold to aim, release to throw; aim key cancels)"), ("bind.duffel_throw", "Throw duffel (hold to charge, release to throw; tap to put it down)"), ("bind.inventory", "Equipment screen (toggle)"),
         ("weapon.m4a1", "M4A1"), ("weapon.aug", "AUG"), ("weapon.g36", "G36"), ("weapon.rpk", "RPK"), ("weapon.m249", "M249"), ("weapon.m60", "M60"), ("weapon.pkm", "PKM"),
         ("weapon.mp5", "MP5"), ("weapon.ump45", "UMP45"), ("weapon.p90", "P90"), ("weapon.remington870", "Remington 870"), ("weapon.spas12", "SPAS-12"), ("weapon.benelli_m4", "Benelli M4"), ("weapon.aa12", "AA-12"),
         ("streak.uav", "UAV"), ("streak.attack_missile", "Attack missile"), ("streak.turret", "Turret"), ("streak.care_package", "Care package"),
@@ -232,6 +238,7 @@ public static class Strings
         foreach (var (k, v) in ScudStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in HuntersLogStrings.Table) tr.AddMessage(k, v);
         foreach (var (k, v) in MineralLogStrings.Table) tr.AddMessage(k, v);
+        foreach (var (k, v) in CartelStrings.Table) tr.AddMessage(k, v);
         TranslationServer.AddTranslation(tr);
         TranslationServer.SetLocale("en");
     }

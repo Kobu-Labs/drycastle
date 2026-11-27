@@ -78,6 +78,10 @@ public enum KeyCompetitor
     Loot = 256,
     /// <summary>A rocket cart beside an empty Scud truck (a hold loads it).</summary>
     ScudCart = 512,
+    /// <summary>A lying Duffel the player may pick up (a press takes it).</summary>
+    Duffel = 1024,
+    /// <summary>The cartel's Contact (a press opens his panel): he stands at the plantation, so near him the hold never makes a player high.</summary>
+    Contact = 2048,
 }
 
 /// <summary>The rules of the plantation hold, in one place so the server and the tests agree.</summary>

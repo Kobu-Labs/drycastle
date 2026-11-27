@@ -375,8 +375,8 @@ public static class BigfootRules
     /// <summary>Registers the Bigfoot and its log once (idempotent): the Bigfoot carries its hit count left in the hp byte, the log nothing.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "bigfoot", HasHp: true));
-        if (registry.Find(TrunkTypeId) == null) registry.Register(new WorldEntityDef(TrunkTypeId, "bigfoot trunk", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "bigfoot", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TrunkTypeId, "bigfoot trunk", HasHp: false));
     }
 
     public static BigfootAct ActOf(byte state) => (BigfootAct)(state & ActMask);

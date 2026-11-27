@@ -91,7 +91,7 @@ public sealed class ThievesClient
             return;
         }
         if (e.Type != GangRules.TypeId) return;
-        var view = GangMemberView.Make(_data, GangRules.KindOf(e.State.Hp), e.State.Owner, _items.Find(_data.Reward.ChainItem)?.Model ?? "");
+        var view = GangMemberView.Make(_data, GangRules.KindOf(e.State.Hp), e.State.Owner, _items.Find(_data.Reward.ChainItem)?.Model ?? "", GangRules.RivalOf(e.State.Hp));
         view.Name = $"GangMember{e.Id}";
         _ctx.Owned.AddChild(view);
         _gang[e.Id] = new GangNode { View = view };

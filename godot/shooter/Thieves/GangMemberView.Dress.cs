@@ -6,7 +6,7 @@ namespace Drycastle.Shooter.Thieves;
 
 /// <summary>
 /// What a member wears, each a <see cref="BoneAttachment3D"/> on the skeleton (docs/events/thieves/08, thieves.json <c>gang.view.dress</c>): the Enforcer's pipe in the right hand, a lit cigarette at the mouth of one
-/// member in three, the Gang boss's gold chain at the neck, and the speaker on the hip (put on by <see cref="MountSpeaker"/> when the audio says the member has one). Offsets are in the rest pose's axes from the bone's
+/// member in three, the Thieves' Gang boss's gold chain at the neck (not the Rival dealer's), and the speaker on the hip (put on by <see cref="MountSpeaker"/> when the audio says the member has one). Offsets are in the rest pose's axes from the bone's
 /// origin, so a bone's own roll does not matter; the pipe's grip alone is in its hand bone's frame (the pack's weapon convention). A prop whose file is missing is left out (the pipe is a stick then).
 /// </summary>
 public sealed partial class GangMemberView
@@ -38,7 +38,7 @@ public sealed partial class GangMemberView
         var d = _view.Dress;
         if (GangLook.Smokes(_view, _look) && SyntyLib.Instance(d.Cigarette.Model, d.Cigarette.Atlas) is { } cig)
             Mount(d.Cigarette.Bone, RestAt(d.Cigarette.Bone, d.Cigarette.Offset, d.Cigarette.RotationDeg), cig, "Cigarette");
-        if (_kind == GangMemberKind.GangBoss && _chainModel != "" && ModelLib.Instance(_chainModel) is { } chain)
+        if (_kind == GangMemberKind.GangBoss && !_rival && _chainModel != "" && ModelLib.Instance(_chainModel) is { } chain) // the Rival dealer leaves no chain, so he wears none
         {
             chain.Scale = Vector3.One * d.Chain.Scale;
             Mount(d.Chain.Bone, RestAt(d.Chain.Bone, d.Chain.Offset, d.Chain.RotationDeg), chain, "Chain");
@@ -72,6 +72,44 @@ public sealed partial class GangMemberView
             body.RotationDegrees = new Vector3(-30, 0, 0);
         }
     }
+
+    /// <summary>
+    /// A Gunman's gun (its weapon by look number, <see cref="GangLook.Gun"/>): the Gang Warfare prop gripped in the right hand (rival_crew.json <c>view.grip</c>), else a dark box (also on the capsule, at its right
+    /// hip). The muzzle flash and tracer are the shared Shot events', from where the server's muzzle is.
+    /// </summary>
+    void AddGun()
+    {
+        if (_cfg.Of(GangMemberKind.Gunman).Gun is not { Weapons.Count: > 0 } gun) return;
+        var weapon = GangLook.Gun(gun, _look);
+        var grip = _data.RivalCrew.View.Grip;
+        var hand = _skeleton != null && _skeleton.FindBone(grip.Bone) >= 0;
+        Node3D body;
+        if (hand && weapon.Model != "" && SyntyLib.Instance(weapon.Model, weapon.Atlas) is { } model)
+        {
+            model.Transform = new Transform3D(Rot(grip.ModelRotationDeg), V3(grip.ModelOffset));
+            body = model;
+        }
+        else body = GunBox();
+        if (hand)
+        {
+            var att = new BoneAttachment3D { Name = "GunHand", BoneName = grip.Bone };
+            _skeleton!.AddChild(att);
+            var at = new Node3D { Name = "Grip", Transform = new Transform3D(new Basis(new Quaternion(grip.Rotation[0], grip.Rotation[1], grip.Rotation[2], grip.Rotation[3]).Normalized()), V3(grip.Position)) };
+            att.AddChild(at);
+            at.AddChild(body);
+        }
+        else
+        {
+            _pivot.AddChild(body);
+            body.Position = new Vector3(0.38f, 1.0f, -0.25f);
+        }
+    }
+
+    static MeshInstance3D GunBox() => new()
+    {
+        Name = "Gun", Mesh = new BoxMesh { Size = new Vector3(0.06f, 0.14f, 0.32f) },
+        MaterialOverride = new StandardMaterial3D { AlbedoColor = new Color("#1e1e22"), Roughness = 0.6f, Metallic = 0.5f },
+    };
 
     static MeshInstance3D Stick() => new()
     {

@@ -10,6 +10,17 @@ using Drycastle.ShooterCore.Status;
 
 namespace Drycastle.Shooter.Net.Server.Highs;
 
+/// <summary>A Job that turns the plantation's hold into its own (the Harvest heist fills a weed Duffel): asked at every input of a hold that counts.</summary>
+internal interface IPlantationFill
+{
+    /// <summary>The seconds this player's hold takes when the Job owns it, or null: the plantation as always (High).</summary>
+    double? HoldSecondsFor(ServerClient c);
+    /// <summary>The Job owns this player's hold but it cannot complete now (a Harvest player who carries a Duffel, or whose harvest is all filled): the hold does not count at all, so neither a Duffel nor High.</summary>
+    bool Blocks(ServerClient c);
+    /// <summary>The player's hold completed (once per hold).</summary>
+    void Completed(ServerClient c);
+}
+
 /// <summary>
 /// The marijuana plantation on the server (GLOSSARY "Plantation", "High"; plantation.json). A human player on foot and alive inside a <c>plantation</c> zone (the polygons of zone_polygons.json,
 /// <see cref="ZonePolygons"/>) who holds the interact key for <see cref="PlantationFile.HoldSeconds"/>, with nothing else in reach of the key, gets high for <see cref="PlantationFile.HighSeconds"/>
@@ -33,14 +44,20 @@ internal sealed class PlantationServer
         _ctx = ctx; _data = data; _areas = areas; _competition = competition; _sitters = sitters; _pounce = pounce; _streaks = streaks;
     }
 
+    /// <summary>A Harvest heist's hold (docs/cartel.md "Harvest"): for a player of a running Harvest the hold fills a weed Duffel instead of High. Null: the plantation as always.</summary>
+    public IPlantationFill? Fill { get; set; }
+
     /// <summary>
     /// Every input of a player, with the interact key's state (next to <see cref="VillageRadio.RozhlasServer.OnInput"/>): held for <see cref="PlantationFile.HoldSeconds"/> inside a plantation, on foot and alive,
     /// with nothing else in reach of the key, makes the player high (once per hold). Silent otherwise.
     /// </summary>
     public void Use(ServerClient c, bool useDown)
     {
-        var counts = !c.IsBot && c.Joined && _areas.ZonePolygons.Has(PlantationRules.Kind) && HoldCounts(c);
-        if (c.PlantHold.Tick(useDown, counts, 1.0 / Wire.TickRate, _data.HoldSeconds)) GetHigh(c);
+        var counts = !c.IsBot && c.Joined && _areas.ZonePolygons.Has(PlantationRules.Kind) && HoldCounts(c) && Fill?.Blocks(c) != true;
+        var fill = counts ? Fill?.HoldSecondsFor(c) : null; // a Harvest's player fills a Duffel instead
+        if (!c.PlantHold.Tick(useDown, counts, 1.0 / Wire.TickRate, fill ?? _data.HoldSeconds)) return;
+        if (fill != null) Fill!.Completed(c);
+        else GetHigh(c);
     }
 
     bool HoldCounts(ServerClient c)

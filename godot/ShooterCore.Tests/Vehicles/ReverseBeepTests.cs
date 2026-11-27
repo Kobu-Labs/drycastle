@@ -46,7 +46,7 @@ public class ReverseBeepTests
     public void Exactly_the_bigger_vehicles_have_the_alarm()
     {
         var ids = Shipped.Vehicles.Where(v => v.ReverseBeep).Select(v => v.Id).OrderBy(x => x).ToArray();
-        Assert.Equal(new[] { "amphibious", "bus", "flak", "harvester", "humvee", "scud", "truck" }, ids);
+        Assert.Equal(new[] { "amphibious", "bus", "cartel_van", "flak", "harvester", "humvee", "scud", "truck" }, ids);
         Assert.All(Shipped.Vehicles.Where(v => v.ReverseBeep), v => Assert.True(v.Mass >= 2000));
         Assert.All(Shipped.Vehicles.Where(v => !v.ReverseBeep && v.Medium != VehicleMedium.Air && v.Trailer == null), v => Assert.True(v.Mass < 2000, v.Id));
     }

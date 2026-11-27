@@ -226,7 +226,7 @@ public partial class Shooter : Node3D
                 _client is { TeamAdmin.CanManage: true } tc ? () => _shell.Push(new TeamsScreen(tc)) : null, () => _client?.Redeploy(null), () => _client is { Dead: false }, () => _client?.Screens.OpenHuntersLog(),
                 _client is { Squads.CanUse: true } sc ? () => _shell.Push(new SquadsScreen(sc)) : null, () => _client?.Screens.OpenMineralLog()),
             WantsFreeMouse = () => _client is { Screens.WantsFreeMouse: true }, // MouseOwners: the respawn screen, the chat box, the Equipment screen, the tactical map (click to set the waypoint) and the corpse chooser's item list release the mouse (buttons to click, keys to type, cells to drag or click)
-            BackHandler = () => (_client?.Chat.Close() ?? false) || (_client?.Screens.CloseEquipment() ?? false) || (_client?.Screens.CloseHuntersLog() ?? false) || (_client?.Screens.CloseMineralLog() ?? false) || (_client?.Screens.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), then the tactical map, before it opens Pause
+            BackHandler = () => (_client?.Chat.Close() ?? false) || (_client?.Screens.CloseEquipment() ?? false) || (_client?.Screens.CloseHuntersLog() ?? false) || (_client?.Screens.CloseMineralLog() ?? false) || (_client?.Screens.CloseContactPanel() ?? false) || (_client?.Screens.CloseTacticalMap() ?? false), // Esc closes the chat box, then the Equipment screen, the Hunter's Log (another player's log first goes up to My Log), the Mineral Log, the Contact panel (its quit question first), then the tactical map, before it opens Pause
         };
         AddChild(_shell);
         GD.Print("SHOOTER_MENU role=client");
@@ -457,6 +457,8 @@ public partial class Shooter : Node3D
                 World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), Report = { PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080") }, Sandbox = { Requested = SandboxAsked(_cfg) }, KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
+            client.Duffels = _data.Duffels;
+            client.Cartel = _data.Cartel;
             client.OnFailed = (why, joined) =>
             {
                 if (!joined) done.TrySetResult(JoinResult.Failed(Strings.F("connect.err.join", $"{host}:{port}", why)));
@@ -524,7 +526,7 @@ public partial class Shooter : Node3D
         static string Read(string f) =>
             Godot.FileAccess.Open($"res://data/{f}", Godot.FileAccess.ModeFlags.Read)?.GetAsText()
             ?? throw new DataFileException($"{f}: cannot open ({Godot.FileAccess.GetOpenError()})");
-        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("fence_destruction.json"));
+        var data = GameData.Parse(Read("weapons.json"), Read("match.json"), Read("vehicles.json"), Read("perks.json"), Read("levels.json"), Read("killstreaks.json"), Read("turret.json"), Read("environment.json"), Read("camo.json"), Read("glass.json"), Read("animals.json"), Read("items.json"), Read("holy_mass.json"), Read("holy_mass_demon.json"), Read("bigfoot.json"), Read("pets.json"), Read("wildlife.json"), Read("thieves.json"), Read("scud.json"), Read("plantation.json"), Read("companions.json"), Read("house_destruction.json"), Read("cartel.json"), Read("rival_crew.json"), Read("duffels.json"), Read("fence_destruction.json"));
         // the hit shapes of the wild species: the free packs' in the data folder, the paid packs' in the private asset folder (both optional)
         if (Godot.FileAccess.FileExists("res://data/animal_shapes.json")) data.Shapes = AnimalShapes.Parse(Read("animal_shapes.json"));
         var privateShapes = System.IO.Path.Combine(GamePaths.PrivateAssets(), "animal-shapes.json");
@@ -587,6 +589,7 @@ public partial class Shooter : Node3D
         if (GarageDoorNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } garageDoors) AddChild(garageDoors); // the bus garage's doors: shut until a player opens them, solid on the server too
         yield return 0.96f;
         if (HouseDoorsNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } houseDoors) AddChild(houseDoors); // the hollow houses' doors (interiors.json): shut until a player opens them, solid on the server too
+        if (TrapHousesNode.Create(Path.GetFullPath(dir), !_map.CollisionOnly) is { } trapHouses) AddChild(trapHouses); // the Trap houses' props (#496): none until the server dresses a house; boxes on the server too
         yield return 0.96f;
         tPost = global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.props_doors", tPost);
         if (!_map.CollisionOnly && Buildings.Destruction.HouseWorldNode.Create(_map, _data?.HouseDestruction ?? Drycastle.ShooterCore.Buildings.Destruction.DestructionConfig.Default) is { } houseWorld) AddChild(houseWorld); // destructible hollow houses (house_voxels.bin), client side
@@ -621,6 +624,7 @@ public partial class Shooter : Node3D
         if (!_map.CollisionOnly && _map.ObjectsOf(_data.Plantation.Reflectors.Asset) is { Count: > 0 } stands) // the plantation's reflector stands: real beams at night
             AddChild(new PlantationReflectors { Stands = stands.Select(o => o.Transform).ToList(), Data = _data.Plantation.Reflectors });
         if (!_map.CollisionOnly) AddChild(new Rozhlas { Speakers = _map.MegaphoneSpeakers() }); // the megaphone poles
+        if (!_map.CollisionOnly) Drycastle.Shooter.Cartel.ContactView.AddTo(this, _map); // the cartel's Contact on his marker (none on a map without one)
         if (!_map.CollisionOnly) AddChild(new RozhlasFeedPlayer { Speakers = _map.MegaphoneSpeakers() }); // the live feed (a hijacker's voice) from the same poles
         global::Drycastle.MapLoader.Core.LoadTimers.Lap("post.lamps_signs_rozhlas", tPost);
         GD.Print($"map {_map.MapVersion}: chunks={s.ChunksLoaded} colliders={s.CollidersBuilt} spawns={_map.SpawnPoints.Count} lamps={_map.Lamps.Count} pole_lamps={poleLamps.Count} load={s.LoadSeconds:F2}s");
@@ -665,7 +669,7 @@ public partial class Shooter : Node3D
             World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, FenceDestruction = _data.FenceDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
-            Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation,
+            Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation, Cartel = _data.Cartel,
             CarSmoke = cfg.Flag("car-smoke"), BlastSmoke = cfg.Flag("blast-smoke"), SmokeKind = cfg.Str("car-kind", "car"),
             Weapons = _data.Weapons, Items = _data.Items, HolyMass = _data.HolyMass, Demon = _data.Demon, BigfootData = _data.Bigfoot, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, PetsData = _data.Pets, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, WeaponsSmoke = cfg.Flag("weapons-smoke"), RpgSmoke = cfg.Flag("rpg-smoke"),
             MatchSmoke = cfg.Flag("match-smoke"), DebugCommands = cfg.Flag("debug-cmds") || cfg.Flag("match-smoke"),
@@ -686,6 +690,7 @@ public partial class Shooter : Node3D
             MapDir = Path.GetFullPath(GamePaths.Map(cfg.Str("map", ""))),
             NavCacheDir = cfg.Str("nav-cache", Path.Combine(OS.GetUserDataDir(), "navcache")),
         };
+        config.Duffels = _data.Duffels;
         var server = new NetServer { Config = config };
         if (config.AdminAll) GD.Print("server: every player is an admin (--admin-all, dev only)");
         if (config.AdminTokens.Count > 0) GD.Print($"server: {config.AdminTokens.Count} admin token(s) (--admin-token): those players can use chat commands");
@@ -785,6 +790,7 @@ public partial class Shooter : Node3D
             Sim = NetSim.Parse(cfg.Str("net-sim")), LossBot = cfg.Str("loss-bot"), LossOut = cfg.Str("loss-out"), PerfStreaks = cfg.Str("perf-streaks"), PerfOut = cfg.Str("perf-out"), Report = { PerfPlay = cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(cfg), PerfRes = cfg.Str("perf-res", "1920x1080") }, PerfStreakPeriod = double.TryParse(cfg.Str("perf-streak-period", "2"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var psp) ? psp : 2, PerfVehicles = cfg.Str("perf-vehicles"),
             LossMeasure = double.TryParse(cfg.Str("loss-measure", "30"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var lm) ? lm : 30,
             FxDemo = cfg.Str("fx-demo"), MatchBot = cfg.Str("match-bot"), CarBot = cfg.Str("car-bot"), CarLoop = cfg.Flag("car-loop"), CarLoopSeconds = double.TryParse(cfg.Str("car-loop-seconds", "120"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cls) ? cls : 120, RpgBot = cfg.Str("rpg-bot"), BlastBot = cfg.Str("blast-bot"), WeaponsBot = cfg.Str("rpg-bot") != "" ? cfg.Str("rpg-bot") : cfg.Str("blast-bot") != "" ? cfg.Str("blast-bot") : cfg.Str("weapons-bot"), Weapons = _data.Weapons, PerkData = _data.Perks, CamoData = _data.Camo, Vehicles = _data.Vehicles, Scud = _data.Scud, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map,
+            Duffels = _data.Duffels, Cartel = _data.Cartel, // the throw and the carry, the Contact's list of Jobs: as a played client's
         });
     }
 

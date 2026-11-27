@@ -44,7 +44,7 @@ public static class CompanionRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "companion", HasHp: false, Interest: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "companion", HasHp: false, Interest: true));
     }
 
     /// <summary>

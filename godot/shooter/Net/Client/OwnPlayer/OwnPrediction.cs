@@ -11,7 +11,8 @@ namespace Drycastle.Shooter.Net.Client.OwnPlayer;
 /// </summary>
 internal sealed class OwnPrediction
 {
-    sealed class Pending { public NetInput Input; public MoveState After; }
+    /// <summary>One predicted input: the state it left the body in, and the burden it ran with (a Duffel taken or let go between inputs: the replay steps each input as the server did).</summary>
+    sealed class Pending { public NetInput Input; public MoveState After; public MoveBurden Burden; }
 
     /// <summary>The most inputs kept waiting for an ack.</summary>
     const int MaxPending = 120;
@@ -28,10 +29,10 @@ internal sealed class OwnPrediction
     /// <summary>The part of an on-foot correction still to be drawn (metres, world), faded out over a few frames.</summary>
     public Vector3 ViewFix { get; private set; }
 
-    /// <summary>A predicted input waits for its ack, with the body's state after it.</summary>
+    /// <summary>A predicted input waits for its ack, with the body's state after it and the burden it was stepped with (the body's now).</summary>
     public void Add(NetInput input, MoveState after)
     {
-        _pending.Add(new Pending { Input = input, After = after });
+        _pending.Add(new Pending { Input = input, After = after, Burden = _ctx.Me?.Burden ?? MoveBurden.None });
         if (_pending.Count > MaxPending) _pending.RemoveAt(0);
     }
 
@@ -70,7 +71,7 @@ internal sealed class OwnPrediction
     /// <summary>The server took over the body and the eye starts afresh: no inputs, no reconcile, no glide.</summary>
     public void Reset() { Drop(); ViewFix = Vector3.Zero; }
 
-    /// <summary>Puts the body at the server's position and replays the unacked inputs, in a physics tick so the steps match the server's.</summary>
+    /// <summary>Puts the body at the server's position and replays the unacked inputs, each with its own burden, in a physics tick so the steps match the server's.</summary>
     public void Replay()
     {
         if (_reconcile is not { } s) return;
@@ -79,11 +80,14 @@ internal sealed class OwnPrediction
         var before = me.State.Position; // where the eye was drawn: the predicted present
         if (me.IsOnFloor() != s.OnFloor) _ctx.Rub.FloorFlagMismatch++; // measurement: a replay that would start with the wrong floor flag without SetStateForReplay
         me.SetStateForReplay(s); // the body's floor flag must match the state's before the first replayed step (I-rubber-banding round 2)
+        var burden = me.Burden;
         for (var i = 0; i < _pending.Count; i++)
         {
+            me.Burden = _pending[i].Burden;
             me.Simulate(_pending[i].Input.ToMove(_speedFor(_pending[i].Input.Slot)), 1f / Wire.TickRate);
             _pending[i].After = me.State;
         }
+        me.Burden = burden;
         // I-rubber-banding: the state moved by the correction; the eye keeps drawing the old place and glides over (FadeCorrection).
         // A respawn or teleport (beyond SnapDistance) is not a correction to glide over.
         var moved = before - me.State.Position;

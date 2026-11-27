@@ -12,7 +12,7 @@ public static class PoopRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "poop", HasHp: false, Interest: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "poop", HasHp: false, Interest: true));
     }
 }
 

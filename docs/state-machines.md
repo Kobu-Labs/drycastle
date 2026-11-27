@@ -285,6 +285,41 @@ stateDiagram-v2
 - **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
 - **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
+## Cartel.Membership
+
+Whether a player works for the Cartel: an outsider until they join at the Contact, a member who runs Jobs and earns Respect, or quit with rank and Respect frozen until they rejoin.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Outsider
+    Outsider --> Member
+    Member --> Quit
+    Quit --> Member
+```
+
+- **Outsider**: never joined: no rank, 0 Respect
+- **Member**: starts Jobs (as the leader of their party) and earns Respect
+- **Quit**: left the Cartel: rank and Respect kept frozen; a rejoin carries on from them
+
+## Cartel.Tracker
+
+The HUD tracker of the player's Job: hidden with no Job, running while it runs (kind, tier, objective line, time left, marker), then its end card for a while.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hidden
+    Hidden --> Running
+    Hidden --> Ended
+    Running --> Ended
+    Running --> Hidden
+    Ended --> Hidden
+    Ended --> Running
+```
+
+- **Hidden**: no Job: nothing shows, no marker
+- **Running**: the clock is the time left; each Job message sets it again; the marker shows
+- **Ended**: the end card: success and the Respect paid, or the failure's reason; its clock runs the card's seconds, then hidden. A new Job replaces it
+
 ## Casing.Phase
 
 One spent casing: in the air or sliding, lying still on the floor, fading out, or a free slot.
@@ -584,6 +619,60 @@ stateDiagram-v2
 - **Asleep**: Resting phases show as Waiting; the health is back to full and the pounce, flame and leap clocks are cleared.
 - **Awake**: Fighting: the hits needed grow with the players inside and never shrink; the fight clock, the roar clock and the leap clock run.
 
+## Drill.Run
+
+The drill on a Trap house's safe: armed for a Job's party, set by one of them, running toward the open safe, jammed now and then until one of them fixes it, done.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Armed
+    Armed --> Running
+    Running --> Jammed
+    Running --> Done
+    Jammed --> Running
+    Done --> [*]
+```
+
+- **Armed**: The safe waits for the party: a party player's hold of the interact key at its stand spot (drill.set_hold_seconds) sets the drill on it. No clock.
+- **Running**: Drills: the progress grows with time. Clock: the seconds to the next stop, the next jam (drill.jams, at random moments inside drill.jam_window) or the end (drill.run_seconds by tier).
+- **Jammed**: Stuck at its progress, sparking: a party player's hold at the safe (drill.fix_hold_seconds) sets it running again. No clock: it waits as long as it takes.
+- **Done**: Through: the safe stands open and its cash Duffels lie by it (drill.cash_duffels by tier). Never left; the Drill goes when its house is stripped.
+
+## Duffel.Place
+
+A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a cargo volume (the Cartel van's back).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Lying
+    Lying --> Carried
+    Carried --> Flying
+    Carried --> Lying
+    Carried --> Loaded
+    Flying --> Lying
+    Flying --> Loaded
+    Loaded --> [*]
+```
+
+- **Lying**: On the ground (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
+- **Carried**: On a party player's back: no sprint, slower by its weight. The throw key's tap puts it down (Lying, or Loaded in a cargo volume), a charged release throws it (Flying); the carrier's death drops it where they fell.
+- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.
+- **Loaded**: In a cargo volume, counted by its owner; it stays there until the Job removes it.
+
+## Duffel.ThrowKey
+
+The Duffel throw key: up, or held from a fresh press while carrying (charging); the release puts the Duffel down (a tap) or throws it (a hold).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Charging
+    Charging --> Idle
+```
+
+- **Idle**: Key up, or held since before the player could throw (a held key must be let go first).
+- **Charging**: Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.
+
 ## Editor.Shape
 
 The shape tools of the map editor (ground patches, zones): draw a polygon, ask for the water level, select a shape, drag one of its corners.
@@ -784,6 +873,29 @@ stateDiagram-v2
     Load --> Flee
     Load --> Board
     Board --> Flee
+    Guard --> Aim
+    Guard --> Posted
+    Idle --> Aim
+    Idle --> Posted
+    Chase --> Aim
+    Aim --> Fire
+    Aim --> Chase
+    Aim --> Posted
+    Aim --> Guard
+    Aim --> Flee
+    Aim --> Board
+    Fire --> Aim
+    Fire --> Chase
+    Fire --> Posted
+    Fire --> Guard
+    Fire --> Flee
+    Fire --> Board
+    Posted --> Aim
+    Posted --> Windup
+    Posted --> Flee
+    Posted --> Board
+    Windup --> Posted
+    Swing --> Posted
     Flee --> [*]
     Dead --> [*]
 ```
@@ -813,6 +925,9 @@ From any state: Dead
 - **Falling**: Falls from the top to the base's height under gravity (no clock: the height), off the navigation mesh. Ends in Down; shot dead here it keeps falling and lies.
 - **Down**: Lies knocked down (clock: the shock's down seconds); a lying hit volume, normal hits count. Ends in GetUp.
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
+- **Aim**: A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.
+- **Fire**: The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.
+- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.
 
 ## Garage.Door
 
@@ -901,6 +1016,52 @@ stateDiagram-v2
 - **Burning**: Fire for BaleBurnSeconds; everyone close enough is ignited each tick. Nobody is credited for those burns.
 - **Ash**: Burnt out: a dark heap. Stays until the bale despawns (a corpse's lifetime) or the round ends; it cannot be lit again.
 
+## Heist.Assaults
+
+When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval, only while the Heist is at its objective.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Grace
+    Grace --> Waiting
+    Grace --> Paused
+    Waiting --> Paused
+    Paused --> Waiting
+    Over --> [*]
+```
+
+From any state: Over
+
+- **Idle**: The van has not reached the objective yet; no clock.
+- **Grace**: The van reached the objective (clock: the grace seconds); at its end the first Assault is due.
+- **Waiting**: Assaults came (clock: the interval); at its end the next is due and the clock starts over.
+- **Paused**: The van left the objective with the minimum loaded: no new Assault. The time left is kept; the van's return goes on with it (Waiting).
+- **Over**: The Heist ended. Never left.
+
+## Heist.Phase
+
+One Heist from the Contact to the Drop point: the Cartel van to the objective, filling and loading under Assaults, the van to the drop; the van's destruction loses it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ToObjective
+    ToObjective --> AtObjective
+    AtObjective --> ToDrop
+    ToDrop --> AtObjective
+    ToDrop --> Delivered
+    Delivered --> [*]
+    Lost --> [*]
+```
+
+From any state: Lost
+
+- **ToObjective**: The Cartel van, put down beside the Contact, has not reached the objective's area yet; no Assault. Ends when it stands in the area.
+- **AtObjective**: The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.
+- **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; stopped within the drop radius it is Delivered.
+- **Delivered**: The van stopped at the Drop point with at least the minimum loaded: the Job succeeds; Respect counts what was loaded then. Never left.
+- **Lost**: The Cartel van was destroyed: the Job fails. Never left.
+
 ## HelicopterGunner.Phase
 
 The helicopter's gun cycle: wait, warn the picked enemy, fire a burst, wait again.
@@ -917,6 +1078,20 @@ stateDiagram-v2
 - **Waiting**: Counting down the cycle gap; at zero it picks the best visible enemy (none: waits another gap). No target.
 - **Warning**: The target has its red-dot warning; at zero the burst starts if it is still visible, else back to Waiting.
 - **Burst**: One round each round interval while the target stays visible; the last round or a lost target goes back to Waiting.
+
+## Hit.Target
+
+Where a Hit's marker points: the Hit spot until a party player comes near the Rival dealer, then the dealer himself until he dies or the Job ends.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Seek
+    Seek --> Strike
+    Strike --> [*]
+```
+
+- **Seek**: The marker is on the Hit spot; the objective reads "Find the rival dealer".
+- **Strike**: A party player came within reveal_m of the dealer: the marker follows him; "Kill the rival dealer".
 
 ## House.Debris
 
@@ -1075,6 +1250,23 @@ stateDiagram-v2
 - **Idle**: Key up, or held with nothing in reach (Held is 0).
 - **Charging**: Key held at something in reach and the open request is not sent yet: Held counts up.
 - **Sent**: The open request is sent: nothing more until the key is released. Leaving reach zeroes Held but stays Sent; a despawn (Reset) ends it too.
+
+## Job.Run
+
+One Job from its start to its end: active against its timer until its objective succeeds, or it fails (the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, nobody left, the kind's own failure, an admin).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Active
+    Active --> Succeeded
+    Active --> Failed
+    Succeeded --> [*]
+    Failed --> [*]
+```
+
+- **Active**: the objective runs and the timer counts down
+- **Succeeded**: the objective was met (or an admin ended it so): every earning member of the party at that moment is paid
+- **Failed**: pays nothing; the reason says why
 
 ## Killstreak.Hold
 

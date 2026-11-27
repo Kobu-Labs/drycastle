@@ -93,6 +93,15 @@ public partial class ServerCar : CharacterBody3D
     /// <summary>The velocity (Godot frame) it had going into the step of <see cref="LastImpact"/>: what a ram into a house reads (HouseRam).</summary>
     public System.Numerics.Vector3 LastImpactVelocity;
 
+    /// <summary>
+    /// The hook of this vehicle's destruction: raised once when it blows up (CarBlast.Detonate: bullets, a blast, a crash, a chain), after it is destroyed, with the attacker it is
+    /// credited to (0: nobody). Not raised when it is taken out on purpose (<see cref="Retire"/>) or hidden (a harvester parked away). A Job listens to fail its Heist (#495).
+    /// </summary>
+    public event Action<ServerCar, ushort>? Exploded;
+
+    /// <summary>Tells the listeners of <see cref="Exploded"/>; CarBlast calls it once the vehicle is destroyed.</summary>
+    public void RaiseExploded(ushort attacker) => Exploded?.Invoke(this, attacker);
+
     /// <summary>Runs after a crash sound went out: the vehicle's next one waits for it (vehicles.json crash_sound_gap, #410).</summary>
     public Countdown CrashSoundGap;
 

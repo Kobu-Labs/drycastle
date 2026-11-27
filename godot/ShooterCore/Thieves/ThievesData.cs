@@ -20,6 +20,19 @@ public sealed class ThievesFile : IVersioned
     /// <summary>Voice lines, the speaker and the songs (ticket 09): <see cref="ThievesAudioConfig"/>.</summary>
     public ThievesAudioConfig Audio { get; set; } = new();
 
+    /// <summary>The Rival crew (rival_crew.json, #495, #496): not a key of thieves.json; the host parses that file and attaches it (<see cref="WithRivalCrew"/>), so every user of the Gang members' data has it.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Cartel.RivalCrewFile RivalCrew { get; private set; } = Cartel.RivalCrewFile.Default;
+
+    /// <summary>Attaches rival_crew.json: its Gunman becomes this file's <see cref="GangConfig.Gunman"/> and its models <see cref="GangModels.Gunman"/> (the client draws a Gunman from them).</summary>
+    public ThievesFile WithRivalCrew(Cartel.RivalCrewFile rival)
+    {
+        RivalCrew = rival;
+        Gang.Gunman = rival.Gunman;
+        Gang.View.Models.Gunman = rival.View.Models;
+        return this;
+    }
+
     /// <summary>The event's reward (ticket 10).</summary>
     public ThievesRewardConfig Reward { get; set; } = new();
 
@@ -104,6 +117,12 @@ public sealed class GangConfig
     public GangKindConfig Thief { get; set; } = new() { Hits = 20, WalkSpeed = 1.8f, RunSpeed = 5.5f, HitScale = 1f, Melee = new() { Damage = 10 } };
     public GangKindConfig Enforcer { get; set; } = new() { Hits = 35, WalkSpeed = 1.6f, RunSpeed = 5f, HitScale = 1.04f, Melee = new() { Damage = 25 } };
     public GangKindConfig GangBoss { get; set; } = new() { Hits = 80, WalkSpeed = 1.4f, RunSpeed = 4.5f, HitScale = 1.15f, Melee = new() { Damage = 10 } };
+    /// <summary>The Rival crew's Gunman (GLOSSARY "Gunman"): not in thieves.json; rival_crew.json's <c>gunman</c> (<see cref="ThievesFile.WithRivalCrew"/>), so a client draws it at the server's size.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public GangKindConfig Gunman { get; set; } = new() { Hits = 6, WalkSpeed = 1.6f, RunSpeed = 4.8f, HitScale = 1f, Gun = new() };
+    /// <summary>How a crew that attacks players on sight notices them (the Rival crew, <see cref="ThiefGang.HostileTo"/>); a Raid attacks nobody on sight. rival_crew.json's <c>sight</c>.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public GangSight Sight { get; set; } = new();
     public GangHitWeights Hits { get; set; } = new();
     public GangAggro Aggro { get; set; } = new();
     /// <summary>A Thief that takes a hit which does not kill it while it carries Loot (hauling, loading, climbing down, hopping out) drops the Loot where it stands and looks for work again, so it joins the fight; the Loot lies there for a player to send back or a Thief to take up.</summary>
@@ -135,7 +154,10 @@ public sealed class GangConfig
     public GangSpawn Spawn { get; set; } = new();
     public GangView View { get; set; } = new();
 
-    public GangKindConfig Of(GangMemberKind kind) => kind switch { GangMemberKind.Enforcer => Enforcer, GangMemberKind.GangBoss => GangBoss, _ => Thief };
+    public GangKindConfig Of(GangMemberKind kind) => kind switch { GangMemberKind.Enforcer => Enforcer, GangMemberKind.GangBoss => GangBoss, GangMemberKind.Gunman => Gunman, _ => Thief };
+
+    /// <summary>A shallow copy (the Rival crew's config is the Thieves' with some sections replaced: <see cref="Cartel.RivalCrewFile.GangOf"/>).</summary>
+    public GangConfig Copy() => (GangConfig)MemberwiseClone();
 }
 
 public sealed class GangRaidCounts
@@ -156,6 +178,11 @@ public sealed class GangKindConfig
     /// <summary>Grows the hit volume (<see cref="HitTarget.Scale"/>) and the drawn body: 1 is a player.</summary>
     public float HitScale { get; set; } = 1f;
     public GangMelee Melee { get; set; } = new();
+    /// <summary>A kind that fights at range (the Gunman): its gun. Null: it fights hand to hand.</summary>
+    public GangGun? Gun { get; set; }
+
+    /// <summary>The same kind with another Hit count (the Rival crew's Enforcer is the Thieves' with its own).</summary>
+    public GangKindConfig WithHits(float hits) => new() { Hits = hits, WalkSpeed = WalkSpeed, RunSpeed = RunSpeed, HitScale = HitScale, Melee = Melee, Gun = Gun };
 }
 
 /// <summary>A swing: the windup (a player can step out of reach in it), the damage if the target is still within reach when it lands, and the time from one swing's start to the next (one a second).</summary>
@@ -294,6 +321,9 @@ public sealed class VanConfig
     public float RamMassScale { get; set; } = 3;
     public float RamFallbackDamage { get; set; } = 100;
     public VanView View { get; set; } = new();
+
+    /// <summary>A shallow copy (a Heist's Assault van is the Raid van that never leaves: another stay).</summary>
+    public VanConfig Copy() => (VanConfig)MemberwiseClone();
 }
 
 /// <summary>

@@ -18,12 +18,21 @@ public sealed class WorldEntityRegistry
     public static readonly WorldEntityRegistry Shared = new();
     readonly Dictionary<byte, WorldEntityDef> _defs = new();
 
+    readonly object _gate = new(); // tests build books on parallel threads against Shared
+
     public void Register(WorldEntityDef def)
     {
-        if (!_defs.TryAdd(def.Id, def)) throw new InvalidOperationException($"world entity type {def.Id} is already registered as {_defs[def.Id].Name}");
+        lock (_gate)
+            if (!_defs.TryAdd(def.Id, def)) throw new InvalidOperationException($"world entity type {def.Id} is already registered as {_defs[def.Id].Name}");
     }
 
-    public WorldEntityDef? Find(byte id) => _defs.GetValueOrDefault(id);
+    /// <summary>Registers the type unless its id is taken already (by the same type: a feature built twice in one process).</summary>
+    public void RegisterOnce(WorldEntityDef def)
+    {
+        lock (_gate) _defs.TryAdd(def.Id, def);
+    }
+
+    public WorldEntityDef? Find(byte id) { lock (_gate) return _defs.GetValueOrDefault(id); }
 }
 
 /// <summary>

@@ -10,7 +10,7 @@ What is generic (this file; no vehicle's numbers in it):
   - `hull` holds the body (interior included), glass panes, steering wheel, seat/lamp empties and lamp lenses; wheels are SIBLINGS of `hull`, named
     `wheel_<name>`, centred on the tyre (measured from the wheel mesh, not the pack's pivot), `Position.Y` = radius, a `wheel_<name>_steer` parent on a
     steered one. Any number of wheels: the names are the facts file's (fl/fr/rl/rr, l1..r3, ...)
-  - the glass mesh (optional: an open vehicle has none) is cut into its welded pieces: one `glass_N` node per pane (double-sided glass material), each with
+  - the glass mesh, or several (optional: an open vehicle has none; a van's rear door windows are meshes of their own), is cut into its welded pieces: one `glass_N` node per pane (double-sided glass material), each with
     centre, normal, size and a convex outline (the `glass` list of vehicles.json)
   - the steering wheel mesh (optional) is split into `steering_wheel_rim` and `steering_wheel_spokes` (by radius from its axis)
   - two wheels (`wheel_f`, `wheel_r`) or any other count, each its own radius (a bike's differ); `dx` moves a wheel the pack put off its pair's x
@@ -174,14 +174,15 @@ def build(cfg, parts, skin_mat, info=None):
     extra_src = [parts[n] for n in cfg.get("parts", [])]
     node_src = [(n, parts[n["node"]]) for n in cfg.get("nodes", [])]
     control_src = {c["name"]: [parts[n] for n in c["nodes"]] for c in cfg.get("controls", [])}
-    glass_src = parts[cfg["glass"]["node"]] if cfg.get("glass") else None
+    glass_nodes = ([cfg["glass"]["node"]] if isinstance(cfg["glass"]["node"], str) else cfg["glass"]["node"]) if cfg.get("glass") else []
+    glass_srcs = [parts[n] for n in glass_nodes]           # one glass mesh, or several (a van's rear door windows are their own meshes)
     steer_src = parts[cfg["steering"]["node"]] if cfg.get("steering") else None
     dx_of = {w["name"]: w.get("dx", 0.0) for w in cfg["wheels"]}
 
     # frame: yaw, then ground = lowest wheel point, then the footprint centre
     wm = {n: m.apply(yaw @ w) for n, (m, w) in wheel_src.items()}
     ground = -min(bbox(m)[0][1] for m in wm.values())
-    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + [t for t in (glass_src, steer_src) if t] + [t for _, t in node_src] + list(wheel_src.values())
+    drawn = [parts[cfg["body"]]] + extra_src + [t for ts in control_src.values() for t in ts] + glass_srcs + [t for t in (steer_src,) if t] + [t for _, t in node_src] + list(wheel_src.values())
     pts = np.vstack([m.apply(yaw @ w).v for m, w in drawn])
     lo, hi = pts.min(axis=0), pts.max(axis=0)
     cz = -(lo[2] + hi[2]) / 2 if cfg["origin"]["centre"] == "bounds" else 0.0
@@ -271,12 +272,12 @@ def build(cfg, parts, skin_mat, info=None):
     # glass: one pane per welded piece of the glass mesh
     found = []
     gl = K.GlassSet(cfg["vehicle"])
-    if glass_src:
-        g_l, g_w = glass_src
-        g = g_l.apply(M @ g_w)
+    if glass_srcs:
+        gs = [g_l.apply(M @ g_w) for g_l, g_w in glass_srcs]
+        g = K.merge(gs) if len(gs) > 1 else gs[0]
         comp = components(g)
         inside = put(cfg["glass"]["inside"])
-    for ci in range(comp.max() + 1 if glass_src else 0):
+    for ci in range(comp.max() + 1 if glass_srcs else 0):
         sub = g.subset(comp == ci)
         pts = sub.v
         c0 = pts.mean(axis=0)
@@ -373,7 +374,8 @@ def vec(v):
 def write_materials(cfg, private, skins):
     """glb/<out_dir>/materials.json: the atlas materials of the skins (the source pack's material, another texture), kept beside this vehicle's others."""
     src = json.loads((private / (Path(cfg["source"]).parent / "materials.json")).read_text())["materials"]
-    base = src[cfg["atlas_material"]]
+    # the pack's own emission (a lamp texture lit all the time) is dropped: the lamps are the contract's lens plates, lit by CarLights
+    base = {k: v for k, v in src[cfg["atlas_material"]].items() if not k.startswith("emission")}
     out_dir = private / cfg["out_dir"]
     path = out_dir / "materials.json"
     doc = json.loads(path.read_text()) if path.exists() else {"materials": {}}

@@ -165,6 +165,24 @@ public sealed class VehicleSeat
     /// <summary>Seats a dead rider's corpse still sits in (ADR 0026): nobody can take or switch to one. A blocked seat has no occupant, so it does not keep the vehicle occupied.</summary>
     readonly bool[] _blocked;
 
+    /// <summary>
+    /// The players this vehicle is reserved for (the Cartel van of a Heist: the Job's players); null when anybody may board. Who already sits in it keeps the seat when the list
+    /// changes (the owner of the reservation takes a rider out if it must). Not cleared by <see cref="Clear()"/>: the vehicle keeps it through a round's seat clearing.
+    /// </summary>
+    HashSet<ushort>? _reserved;
+
+    /// <summary>Only <paramref name="riders"/> may board from now on (<see cref="Admits"/>); an empty list lets nobody in.</summary>
+    public void Reserve(IEnumerable<ushort> riders) => _reserved = new HashSet<ushort>(riders.Where(p => p != 0));
+
+    /// <summary>Anybody may board again.</summary>
+    public void Unreserve() => _reserved = null;
+
+    /// <summary>Whether the vehicle is reserved for some players (<see cref="Reserve"/>).</summary>
+    public bool IsReserved => _reserved != null;
+
+    /// <summary>Whether <paramref name="player"/> may take a seat: anybody unless the vehicle is reserved, then only the reserved riders.</summary>
+    public bool Admits(ushort player) => player != 0 && (_reserved == null || _reserved.Contains(player));
+
     public bool IsBlocked(int seat) => _blocked[seat];
     public void Block(int seat) => _blocked[seat] = true;
     public void Unblock(int seat) => _blocked[seat] = false;
@@ -191,10 +209,10 @@ public sealed class VehicleSeat
         return -1;
     }
 
-    /// <summary>Takes <paramref name="seat"/> (-1: the first free one). False for player 0, a taken seat, a player already seated or no free seat.</summary>
+    /// <summary>Takes <paramref name="seat"/> (-1: the first free one). False for player 0, a player the vehicle is not reserved for (<see cref="Admits"/>), a taken seat, a player already seated or no free seat.</summary>
     public bool TryEnter(ushort player, int seat = -1)
     {
-        if (player == 0 || SeatOf(player) >= 0) return false;
+        if (!Admits(player) || SeatOf(player) >= 0) return false;
         if (seat < 0) { for (var i = 0; i < _occupant.Length && seat < 0; i++) if (IsFree(i)) seat = i; }
         if (seat < 0 || seat >= _occupant.Length || !IsFree(seat)) return false;
         _occupant[seat] = player;
@@ -208,7 +226,7 @@ public sealed class VehicleSeat
     public bool TryBoard(ushort player, int seat, out bool kicked)
     {
         kicked = false;
-        if (player == 0 || SeatOf(player) >= 0 || seat < 0 || seat >= _occupant.Length || !IsBoardable(seat)) return false;
+        if (!Admits(player) || SeatOf(player) >= 0 || seat < 0 || seat >= _occupant.Length || !IsBoardable(seat)) return false;
         kicked = _blocked[seat];
         _blocked[seat] = false;
         _occupant[seat] = player;

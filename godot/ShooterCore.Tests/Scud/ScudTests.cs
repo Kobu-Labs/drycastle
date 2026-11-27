@@ -606,8 +606,8 @@ public class ScudTests
         Assert.False(truck.SeatExposed(0)); Assert.False(truck.SeatExposed(1)); // both under the cab
         Assert.True(truck.Hp >= 1000);
         Assert.Equal("pack:synty-simple-military/scud", truck.Model);
-        // every other type returns, as before
-        Assert.All(data.Vehicles.Vehicles.Where(v => v.Id is not ("scud" or "rocket_cart")), v => Assert.True(v.Returns)); // the cart is the event's to replace
+        // every other type returns, as before (the cart is the event's to replace, the Cartel van a Job's)
+        Assert.All(data.Vehicles.Vehicles.Where(v => v.Id is not ("scud" or "rocket_cart" or "cartel_van")), v => Assert.True(v.Returns));
     }
 
     [Theory]

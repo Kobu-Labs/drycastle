@@ -236,6 +236,35 @@ def radio_tower_mesh(params: dict | None = None) -> Mesh:
     return _mesh(tris, cols)
 
 
+def cartel_contact_mesh(params: dict | None = None) -> Mesh:
+    """The marker of the cartel's Contact (docs/cartel.md "Contact"): a plain standing figure on a square plate, facing the
+    object's front (-y, as the bunker's door) with a gold arrow on the plate and a nose on the head, so the editor shows where
+    he stands and which way he looks. The game hides this marker and draws the Contact's own character there
+    (``godot/shooter/Cartel/ContactView.cs``, ``godot/shooter/data/contact.json``)."""
+    p = {**PRIMITIVES["cartel_contact"].params, **(params or {})}
+    plate, h = float(p["plate_m"]), float(p["height_m"])
+    t = float(p["plate_thickness_m"])
+    tris: list = []
+    cols: list = []
+
+    def add(p0, p1, width: float, z0: float, z1: float, colour: str) -> None:
+        part = box_tris(p0, p1, width, z0, z1)
+        tris.extend(part)
+        cols.extend([hex_to_rgb(colour)] * len(part))
+
+    half = plate / 2
+    add((-half, 0.0), (half, 0.0), plate, 0.0, t, p["colour"])  # the plate: the figure's whole plan
+    # the arrow: the way he faces
+    add((0.0, -0.1), (0.0, -half + 0.04), 0.14, t, t + 0.01, p["arrow_colour"])
+    leg_top, torso_top = h * 0.53, h * 0.84
+    add((-0.18, 0.0), (0.18, 0.0), 0.22, t, leg_top, p["legs_colour"])
+    add((-0.22, 0.0), (0.22, 0.0), 0.26, leg_top, torso_top, p["suit_colour"])
+    add((-0.11, 0.0), (0.11, 0.0), 0.22, torso_top + 0.02, h, p["skin_colour"])
+    nose_z = torso_top + 0.02 + (h - torso_top) * 0.4
+    add((0.0, -0.11), (0.0, -0.17), 0.08, nose_z, nose_z + 0.06, p["skin_colour"])
+    return _mesh(tris, cols)
+
+
 def bunker_prim_mesh(params: dict | None = None) -> Mesh:
     """WW2 pillbox: rounded concrete dome on a chamfered rectangle, door facing -y (the object's
     front), firing slits, weathering streaks. Long axis along x. The closed form: a placed object
@@ -299,6 +328,21 @@ PRIMITIVES: dict[str, Primitive] = {
         {"length_m": 6.5, "width_m": 4.2, "chamfer_m": 1.0},
         (6.6, 2.67727, 4.3),
         "#a9a698",
+    ),
+    "cartel_contact": Primitive(
+        cartel_contact_mesh,
+        {
+            "plate_m": 0.8,
+            "plate_thickness_m": 0.03,
+            "height_m": 1.8,
+            "colour": "#3a3532",
+            "arrow_colour": "#c9a227",
+            "legs_colour": "#2b2b33",
+            "suit_colour": "#e8e2d0",
+            "skin_colour": "#c68e62",
+        },
+        (0.8, 1.8, 0.8),
+        "#3a3532",
     ),
     "radio_tower": Primitive(
         radio_tower_mesh,

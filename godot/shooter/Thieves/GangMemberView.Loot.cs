@@ -57,7 +57,8 @@ public sealed partial class GangMemberView
     void UpdateCarry(GangMemberState state)
     {
         if (_carry == null) return;
-        var pose = _carrying is { } k && _view.Carry.Kinds.TryGetValue(k.ToString().ToLowerInvariant(), out var kind) ? _view.Carry.Poses.GetValueOrDefault(kind.Pose) : null;
+        var pose = _kind == GangMemberKind.Gunman ? (state is GangMemberState.Aim or GangMemberState.Fire ? _data.RivalCrew.View.Aim : null) // a Gunman raises its gun (it carries no Loot)
+            : _carrying is { } k && _view.Carry.Kinds.TryGetValue(k.ToString().ToLowerInvariant(), out var kind) ? _view.Carry.Poses.GetValueOrDefault(kind.Pose) : null;
         var on = pose != null && state is not (GangMemberState.Dead or GangMemberState.ClimbUp or GangMemberState.ClimbDown or GangMemberState.WorkAloft or GangMemberState.Shocked or GangMemberState.Falling or GangMemberState.Down or GangMemberState.GetUp);
         if (pose != null) Goals(pose);
         Fade(on ? 1f : 0f);

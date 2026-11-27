@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Audio;
+using Drycastle.Shooter.Cartel;
 using Drycastle.Shooter.Crystals;
 using Drycastle.Shooter.HeadsUp.Badges;
 using Drycastle.Shooter.Hunts;
@@ -11,7 +12,8 @@ using Drycastle.ShooterCore.Hud;
 namespace Drycastle.Shooter.HeadsUp.Screens;
 
 /// <summary>
-/// The full-screen overlays of the HUD: the tactical map (M), the Equipment screen (F, with the Companion picker of #488), the Hunter's Log (J) and the Mineral Log (N). They never show
+/// The full-screen overlays of the HUD: the tactical map (M), the Equipment screen (F, with the Companion picker of #488), the Hunter's Log (J), the Mineral Log (N) and the
+/// cartel's Contact panel (the interact key at the Contact, #494). They never show
 /// together, so opening one closes the others; death, the end of the match and a control session close them all (<see cref="OverlayArbiter"/>). None pauses the game: the mouse mode
 /// is the shell's (it asks the Open properties), and Esc goes through the Close and Back methods.
 /// The map and the Equipment screen live under the HUD root, above the panels but below the scoreboard and the XP panel (the controls given as <c>onTop</c> are moved back above them);
@@ -31,6 +33,7 @@ internal sealed class OverlayScreens
     EquipmentScreen? _equipment;
     HuntersLogScreen? _huntersLog;
     MineralLogScreen? _mineralLog;
+    ContactPanel? _contact;
     Control? _logRoot;
 
     /// <param name="layer">The HUD layer, which gets the logs' root.</param>
@@ -43,6 +46,9 @@ internal sealed class OverlayScreens
         var waypoint = new WaypointMarker(markers.Waypoint, () => minimap.Base) { MouseFilter = Control.MouseFilterEnum.Ignore };
         waypoint.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(waypoint);
+        var job = new JobMarker(markers) { MouseFilter = Control.MouseFilterEnum.Ignore }; // the cartel Job's star in the world (#494)
+        job.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+        root.AddChild(job);
         _map = new TacticalMap(markers, () => overlays(false, false).ChatOpen);
         _map.SetAnchorsPreset(Control.LayoutPreset.FullRect);
         root.AddChild(_map);
@@ -83,6 +89,7 @@ internal sealed class OverlayScreens
                 _equipment?.Close(); // the overlays never show together
                 CloseHuntersLog();
                 CloseMineralLog();
+                CloseContactPanel();
                 _map.TeleportHint = _sandbox.On;
                 _map.Open(_minimap.Base?.World);
                 return true;
@@ -121,7 +128,7 @@ internal sealed class OverlayScreens
         switch (OverlayArbiter.Key(Overlay.Equipment, _equipment.IsOpen, _overlays(menuOpen, chooserOpen)))
         {
             case OverlayKeyVerdict.Close: _equipment.Close(); return true;
-            case OverlayKeyVerdict.Open: _map.Close(); CloseHuntersLog(); CloseMineralLog(); _equipment.Open(); return true;
+            case OverlayKeyVerdict.Open: _map.Close(); CloseHuntersLog(); CloseMineralLog(); CloseContactPanel(); _equipment.Open(); return true;
             default: return false;
         }
     }
@@ -169,6 +176,7 @@ internal sealed class OverlayScreens
         _equipment?.Close();
         _map.Close();
         _mineralLog?.Close();
+        _contact?.Close();
         _huntersLog.Open();
     }
 
@@ -219,6 +227,7 @@ internal sealed class OverlayScreens
         _equipment?.Close();
         _map.Close();
         _huntersLog?.Close();
+        _contact?.Close();
         _mineralLog.Open();
     }
 
@@ -231,6 +240,39 @@ internal sealed class OverlayScreens
     /// <summary>Esc closes it. True when it was open, so the Esc is used and Pause does not open.</summary>
     public bool BackMineralLog() => _mineralLog is { IsOpen: true } log && log.HandleBack();
 
+    // ---- the cartel's Contact panel ----
+
+    public bool ContactPanelOpen => _contact?.IsOpen ?? false;
+
+    /// <summary>After <see cref="AttachHuntersLog"/>: the panel shares the logs' top layer.</summary>
+    public void AttachContactPanel(ContactPanel panel)
+    {
+        if (_contact != null || _logRoot == null) return;
+        _contact = panel;
+        _logRoot.AddChild(panel);
+    }
+
+    /// <summary>The interact key at the Contact: opens the panel unless the arbiter says no (a menu, the chat box, the corpse chooser, death, the end of the match). True when it opened.</summary>
+    public bool OpenContactPanel(bool menuOpen, bool chooserOpen)
+    {
+        if (_contact == null || _contact.IsOpen || OverlayArbiter.Key(Overlay.ContactPanel, false, _overlays(menuOpen, chooserOpen)) != OverlayKeyVerdict.Open) return false;
+        _equipment?.Close();
+        _map.Close();
+        _huntersLog?.Close();
+        _mineralLog?.Close();
+        _contact.Open();
+        return true;
+    }
+
+    public void CloseContactPanel()
+    {
+        if (_contact is not { IsOpen: true }) return;
+        _contact.Close();
+    }
+
+    /// <summary>Esc: the quit question first, else the panel closes. True when it was open, so the Esc is used and Pause does not open.</summary>
+    public bool BackContactPanel() => _contact is { IsOpen: true } p && p.HandleBack();
+
     // ---- per frame ----
 
     /// <summary>Closes what is open when death, the end of the match or a control session takes the screen, and drops a waypoint the player reached. One flag check per closed screen.</summary>
@@ -241,5 +283,6 @@ internal sealed class OverlayScreens
         if (_equipment is { IsOpen: true } && OverlayArbiter.ScreenTaken(_overlays(false, false))) _equipment.Close();
         if (_huntersLog is { IsOpen: true } && OverlayArbiter.ScreenTaken(_overlays(false, false))) CloseHuntersLog();
         if (_mineralLog is { IsOpen: true } && OverlayArbiter.ScreenTaken(_overlays(false, false))) CloseMineralLog();
+        if (_contact is { IsOpen: true } && OverlayArbiter.ScreenTaken(_overlays(false, false))) CloseContactPanel();
     }
 }

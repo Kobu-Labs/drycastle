@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Killstreaks;
 using Drycastle.ShooterCore.Match;
 using Drycastle.ShooterCore.Net;
@@ -117,6 +118,7 @@ internal sealed class ProfileServer
         var active = await store.Loadouts.GetActiveSlotAsync(p.Id);
         var unlocks = await store.Unlocks.GetAllAsync(p.Id);
         var companion = await store.Profiles.GetCompanionAsync(p.Id);
+        var cartel = await store.Profiles.GetCartelAsync(p.Id);
         var camos = Enumerable.Repeat(CamoSpec.Default, Loadout.SlotCount).ToArray();
         foreach (var (slot, spec) in await store.Camo.GetAllAsync(p.Id))
             if (slot is >= 0 and <= Loadout.MaxSlot) camos[slot] = spec;
@@ -137,7 +139,7 @@ internal sealed class ProfileServer
         return new PlayerProfile
         {
             DbId = p.Id, Persist = true, Name = p.Name, Xp = p.Xp, Level = p.Level,
-            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(), Camos = camos, Companion = companion,
+            Loadouts = slots, Active = Math.Clamp(active, 0, Loadout.MaxSlot), Unlocks = unlocks.ToList(), Camos = camos, Companion = companion, Cartel = CartelStanding.From(cartel),
         };
     }
 

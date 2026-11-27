@@ -27,6 +27,7 @@ using Drycastle.ShooterCore.Sandbox;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Scud;
 using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
@@ -87,6 +88,18 @@ public enum EventKind : byte
     PhoenixFall = 32,
     /// <summary>Server to a joiner, last of what the join sends (the welcome, the world's entities, the houses): the client ends its loading screen once it has applied it. No payload.</summary>
     JoinSynced = 33,
+    /// <summary>Server to the player: their Cartel standing, membership, Respect, rank and flags (<see cref="CartelCodec.EncodeStatus"/>), at join and after every change.</summary>
+    CartelStatus = 34,
+    /// <summary>Server to a Job's party: the receiver's Job, its state, timer, leader and, at its end, the reason and what they were paid (<see cref="CartelCodec.EncodeJob"/>); job id 0 clears it.</summary>
+    CartelJob = 35,
+    /// <summary>Server to everyone: a player reached a new Cartel rank (<see cref="CartelCodec.EncodeRankUp"/>: u16 player id, u8 rank); the client shows the toast.</summary>
+    CartelRankUp = 36,
+    /// <summary>Server to the players of a Job's party: its objective line and marker (<see cref="CartelCodec.EncodeObjective"/>), when either changes and to a member who joins it midway.</summary>
+    CartelObjective = 37,
+    /// <summary>Server to the player: the Contact refused their request (<see cref="CartelCodec.EncodeRefusal"/>: the action, the refusal's code and its words); the Contact panel shows the words.</summary>
+    CartelRefused = 38,
+    /// <summary>Client to server: a request at the Contact, join or quit the Cartel or start a Job (<see cref="CartelCodec.EncodeRequest"/>). Kinds 34-39 belong to the Cartel (#437; 33 is JoinSynced).</summary>
+    CartelRequest = 39,
     /// <summary>Client to server: the player's own Respawn, with an optional loadout slot to select first (<see cref="Redeploy.Encode"/>: u8, 255 for none); the server kills them as a suicide (<see cref="MatchSim.ForceDeath"/>).</summary>
     Redeploy = 28,
     /// <summary>Client to server, every ten seconds: the client's performance numbers of the period (<see cref="ClientReport"/>), for the metrics store. A server that does not know it ignores it, so it is not a protocol version.</summary>
@@ -108,6 +121,16 @@ public enum EventKind : byte
     GunshipStatus = 60,
     /// <summary>Server broadcast: an impact on a surface from a gunship round or shell (<see cref="ImpactCodec"/>).</summary>
     ImpactFx = 61,
+    /// <summary>Server broadcast, and to a joiner for every dressed house: a hollow house is dressed as a Trap house (<see cref="Drycastle.ShooterCore.Cartel.TrapHouseCodec"/>: the house id and its props). Kinds 66-69 belong to the Trap house (#496); 68-69 are free.</summary>
+    TrapHouseDressed = 66,
+    /// <summary>Server broadcast: a Trap house is stripped, its props gone (<see cref="Drycastle.ShooterCore.Cartel.TrapHouseCodec"/>: the house id).</summary>
+    TrapHouseStripped = 67,
+    /// <summary>Server to a player near a Trap house's safe (within trap_house.json drill.near_m), on every change and when they come near: its Drill's state and progress (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: house, state, party flag, progress and run seconds). Kinds 62-65 belong to the Drill (#496); 65 is free.</summary>
+    DrillState = 62,
+    /// <summary>Server to a player told of a Drill: it is gone (disarmed, its house stripped, a round reset) or they went far from it (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: the house).</summary>
+    DrillCleared = 63,
+    /// <summary>Server to one player: what their interact key's hold at a safe would do now, set or fix the Drill, or nothing (<see cref="Drycastle.ShooterCore.Cartel.DrillCodec"/>: u8 DrillHold, house), sent when it changes. Only the server knows the party and what else wins the key.</summary>
+    DrillReach = 64,
     /// <summary>Server to the owner only: the UAV's enemy pulse and seconds left (<see cref="UavEvents"/>), every second while up.</summary>
     UavPing = 90,
     // 120 was Ac130Blast (one message per shell, protocol 11); protocol 12 coalesces the gunship FX into 121-123, so 120 is not reused.
@@ -301,6 +324,10 @@ public enum EventKind : byte
     ScudImpact = 84,
     /// <summary>Server to the crew of a truck: why a command did nothing or a proposal ended (<see cref="ScudNoticeCode"/>).</summary>
     ScudNotice = 85,
+    /// <summary>Server to one player: why a Duffel action was refused (<see cref="Drycastle.ShooterCore.Cartel.DuffelCodec"/>: u8 <see cref="Drycastle.ShooterCore.Cartel.DuffelNotice"/>); the client words it. Kinds 42-46 belong to the Duffels (#494).</summary>
+    DuffelNotice = 42,
+    /// <summary>Server to one player: the lying Duffel their interact key would pick up now (<see cref="Drycastle.ShooterCore.Cartel.DuffelCodec"/>: u16 world entity id, 0 none), sent when it changes. Only the server knows a Duffel's party, so the prompt and the key's owner follow this.</summary>
+    DuffelReach = 43,
 }
 
 public abstract record ReliableMsg;
@@ -435,7 +462,9 @@ public static class Wire
     //   v87 house destruction (docs/house-destruction.md): events 242 HouseCarve, 243 HouseCells, 244 HouseSettings and 249 HouseResync (client to server)
     //   v88 fence destruction (docs/fence-destruction.md): events 224 FenceBreak and 225 FenceSync
     //   v89 the join's end: event 33 JoinSynced (to a joiner, after the welcome and its world spawns); the client applies the join under its loading screen
-    public const byte ProtocolVersion = 89;
+    //   v90 the drug Cartel (#437, docs/cartel.md): Cartel profile + Job core: events 39 CartelRequest, 34 CartelStatus, 35 CartelJob and 36 CartelRankUp (CartelCodec); Squad leader: the scoreboard message's squad tail ends in a leader tail (u16 leader per squad, #494); Cartel van vehicle: vehicle type 13 cartel_van in vehicles.json (#495); no event or record changes (a reserved seat is refused with a ChatLine); Duffels, #494: world entity type 62 (Duffel: state byte state bits 0-1 + kind bits 2-3, owner field the carrier); events 42 DuffelNotice and 43 DuffelReach (server to one player); input button bit 8192 DuffelThrow; Trap house dressing: events 66 TrapHouseDressed (a hollow house's Trap house props, to everyone and to a joiner) and 67 TrapHouseStripped (#496, ADR 0047); Gunman + posted defenders: Gang member kind 3 Gunman (bits 1-2 of the hp byte, GangRules.PackHp); states 23 Aim, 24 Fire, 25 Posted (GangMemberState); a Gunman's rounds are the shared events 2 Shot and 12 PelletFan from shooter 0 (no new event kind); Delivery + Hit jobs, #494, #497: no wire change: kinds "delivery" and "hit" ride CartelJob (35); the Rival dealer is a Rival crew's Gang boss (kind 2), the Duffel the existing entity 62; Safe + Drill: the Drill on a Trap house's safe (#496): events 62 DrillState and 63 DrillCleared (to the players near the safe) and 64 DrillReach (to one player) (DrillCodec); Harvest heist, #495: no wire change: the Assault vans are Raid vans (entity 55) with Gunmen and Enforcers (Gang members, entity 57); the Job's line and marker go with the Job core's messages; Contact panel + HUD: event 37 CartelObjective (CartelCodec.EncodeObjective: a Job's tracker line and marker, server to its party); Trap house heist: no wire change: kind "trap_house" rides CartelJob (35) and CartelObjective (37); the house is the dressing's events 66-67, the safe the Drill's 62-64, the defenders posted Gang members (entity 57, state 25 Posted)
+    //   v91 Cartel fixes (#437): event 38 CartelRefused (CartelCodec.EncodeRefusal: u8 action, u8 code, u8 length, the words); CartelJob flag bit 8 Guest (the receiver has no saved profile); JobStartRefusal values NoCartel, CannotBegin and CartelJoinRefusal values NotMember, NoCartel, FarFromContact (both enums sent as bytes); event 42 DuffelNotice value 2 VanReserved (a reserved Cartel van seat is refused with a toast, no longer a ChatLine); Gang member (entity 57) hp byte bit 7 = Rival crew (GangRules.RivalOf); JobFailReason value 7 Admin in CartelJob (35)
+    public const byte ProtocolVersion = 91;
     /// <summary>64-bit FNV-1a: cheap, deterministic, and enough to tell two map builds apart at join (E-06).</summary>
     public static ulong Fnv1a64(ReadOnlySpan<byte> data)
     {

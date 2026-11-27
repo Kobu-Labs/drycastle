@@ -27,7 +27,7 @@ public static class TurretRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "turret", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "turret", HasHp: true));
     }
 }
 

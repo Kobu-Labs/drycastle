@@ -43,7 +43,7 @@ public static class CarePackageRules
     /// <summary>Registers the type once (idempotent). A crate carries no hit points.</summary>
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "care package", HasHp: false));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "care package", HasHp: false));
     }
 
     /// <summary>The landing point of a drop: <see cref="DropDistanceMetres"/> ahead of <paramref name="feet"/> along the owner's yaw (the movement forward).</summary>

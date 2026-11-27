@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  // The Duffels of the cartel's Jobs (GLOSSARY "Duffel", docs/cartel.md "Duffels"; ShooterCore/Cartel/Duffel*.cs). A Duffel is made for a party (the Job's players); only they pick it up (the interact key,
+  // within reach_m flat and reach_up_m up or down of the feet). One per player. A carrier cannot sprint, walks at speed_scale of the speed, can still shoot, and takes no vehicle seat.
+  // Nothing here was seen in the game: tune by feel.
+  //
+  // kinds: weight_kg is what the rest follows (light weed, medium cash, heavy product): speed_scale multiplies the carrier's speed (on top of the weapon's), throw_m is how far a full charge throws it
+  // on flat ground. model: the prop (a pack model id; the farm grain bag stands in for a duffel, no pack has one), colour: the box drawn without the pack.
+  "kinds": {
+    "weed":    { "weight_kg": 8,  "speed_scale": 0.9, "throw_m": 12, "model": "pack:synty-farm/SM_Prop_GrainBag_01", "colour": "#4f6b3a" },
+    "cash":    { "weight_kg": 15, "speed_scale": 0.8, "throw_m": 9,  "model": "pack:synty-farm/SM_Prop_GrainBag_01", "colour": "#3d5a73" },
+    "product": { "weight_kg": 25, "speed_scale": 0.7, "throw_m": 6,  "model": "pack:synty-farm/SM_Prop_GrainBag_01", "colour": "#7a5b3a" }
+  },
+  "reach_m": 2.0,
+  "reach_up_m": 1.8,
+  // The throw key (duffel_throw, X by default): released before tap_seconds it puts the Duffel down at the feet (Loaded when the feet are in a cargo volume: standing in the van's back); held longer it
+  // throws, charging for charge_seconds more. The shortest throw goes min_throw_share of throw_m, a full charge all of it.
+  "tap_seconds": 0.2,
+  "charge_seconds": 1.0,
+  "min_throw_share": 0.5,
+  // The arc: it leaves hand_ahead_m in front of the eye at the look's pitch plus lift_deg (held between min_elevation_deg and max_elevation_deg), at the speed that carries the range at lift_deg from a
+  // standing eye's height down to flat ground. Gravity is the players'. A wall stops it and it falls straight down wall_gap_m off the face; a flight still going after max_flight_seconds comes down where it is.
+  "lift_deg": 25,
+  "min_elevation_deg": -10,
+  "max_elevation_deg": 65,
+  "hand_ahead_m": 0.4,
+  "wall_gap_m": 0.2,
+  "max_flight_seconds": 5,
+  // What every client draws (DuffelsClient.cs): back is where a carried Duffel sits on its carrier, metres from the feet in the figure's frame (x right, y up, z back); scale the prop's;
+  // box the fallback box (length, height, depth) without the pack.
+  "view": {
+    "back": [0, 1.25, 0.28],
+    "scale": 0.8,
+    "box": [0.7, 0.3, 0.35]
+  }
+}

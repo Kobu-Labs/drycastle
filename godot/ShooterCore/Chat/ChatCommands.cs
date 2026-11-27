@@ -87,6 +87,11 @@ public static class ChatCommands
     /// <summary>Bounds of /explode's wave speed, metres a second.</summary>
     public const int MinExplodeSpeed = 5, MaxExplodeSpeed = 400;
 
+    /// <summary>Most Gunmen one /gunman puts down.</summary>
+    public const int MaxTestGunmen = 12;
+    /// <summary>Highest tier /drill takes (a tier past trap_house.json drill's lists takes their last entry).</summary>
+    const int MaxDrillTier = 9;
+
     /// <summary>Largest /carve radius, metres (the MOAB's carve is 14).</summary>
     public const int MaxCarveRadius = 20;
 
@@ -114,12 +119,20 @@ public static class ChatCommands
             new[] { new ChatArg("size", ChatArgKind.Int, true, 1, MaxExplodeSize), new ChatArg("distance", ChatArgKind.Int, true, 0, MaxExplodeDistance), new ChatArg("speed", ChatArgKind.Int, false, MinExplodeSpeed, MaxExplodeSpeed) }),
         new("scud", "TEST: the Scud truck. spawn: a truck stands in front of you; reload: the truck you ride or the nearest within 40 m is loaded at once; blast: a Scud blast 200 m ahead of you (kills, destroys, shatters glass); state: its launcher's state",
             new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("gunman", "TEST: Gunmen of the Rival crew (3 by default) 12 m in front of you, hostile to you only; posted: they hold their spots, turn and shoot, never walk; clear: remove them",
+            new[] { new ChatArg("count", ChatArgKind.IntOrChoice, false, 1, MaxTestGunmen), new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("squad", "Squads (team deathmatch): create one with a name, join one by name or number, leave yours, or list your team's", new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("name", ChatArgKind.Text, false) }, AdminOnly: false),
         new("night", "TEST (this client only): tune the night lighting, all in percent: moon light (default 8), ambient floor (4), night exposure (90). No arguments shows the values, reset restores them. Use /time midnight to see it",
             new[] { new ChatArg("moon", ChatArgKind.IntOrChoice, false, 0, 100), new ChatArg("ambient", ChatArgKind.Int, false, 0, 100), new ChatArg("exposure", ChatArgKind.Int, false, 10, 200) }, ClientSide: true),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
         new("carve", "TEST: carve a sphere of that radius (metres) out of the hollow houses where your crosshair meets the world. No damage, no glass, no blast", new[] { new ChatArg("radius", ChatArgKind.Int, true, 1, MaxCarveRadius) }),
         new("houses", "TEST: make every hollow house whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("cartel", "TEST: the Cartel, for yourself: join or quit anywhere, add Respect (respect <n>), start a Job of a kind at any tier anywhere (job <kind> [tier], e.g. job test 2), or show your standing (status). On your running Job: end it (end win|fail), set its timer (time <seconds>), send an Assault on a heist (assault), or go to its marker (goto)",
+            new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("value", ChatArgKind.Text, false) }),
+        new("traphouse", "TEST: dress a hollow house as a Trap house now, for everyone: the nearest to you (no argument, or nearest) or one by building id (w...); off strips every one", new[] { new ChatArg("house", ChatArgKind.Text, false) }),
+        new("drill", "TEST: arm the safe of the dressed Trap house nearest you for yourself at a tier (1 by default): hold E at it to set the Drill, again to fix a jam; open, it gives cash Duffels. off disarms every one",
+            new[] { new ChatArg("tier", ChatArgKind.IntOrChoice, false, 1, MaxDrillTier) }),
+        new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: hold the throw key to throw it, tap it to put it down", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
         new("fences", "TEST: make every broken fence whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
@@ -163,13 +176,18 @@ public static class ChatCommands
                 ("cancel", "remove the running event with no reward (with current; the Holy Mass cannot be cancelled)"),
             },
             ChatArgKind.Choice when cmd.Name == "scud" => new[] { ("spawn", "a Scud truck stands in front of you"), ("reload", "the truck you ride (or the nearest within 40 m) is loaded at once, when its rack is down"), ("blast", "TEST: a Scud blast 200 m ahead of you, credited to you"), ("state", "say the launcher's state of the truck") },
+            ChatArgKind.Choice when cmd.Name == "cartel" => new[] { ("join", "join the Cartel (no Contact needed)"), ("quit", "quit the Cartel: rank and Respect are kept"), ("respect", "add that much Respect (a rank-up is announced)"), ("job", "start a Job: the kind, then the tier (1 by default; any tier)"), ("status", "your membership, Respect, rank and Job"), ("end", "end your running Job now: win (it pays) or fail"), ("time", $"set your running Job's timer: seconds left, 1 to {Cartel.CartelAdmin.MaxTimerSeconds}"), ("assault", "send an Assault on your running heist now (max_assaults_alive still holds)"), ("goto", "go to your Job's marker, on the ground under it") },
+            ChatArgKind.Choice when cmd.Name == "duffel" => new[] { ("weed", "light: a long throw, a little slower"), ("cash", "medium"), ("product", "heavy: a short throw, much slower") },
             ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
+            ChatArgKind.Text when cmd.Name == "traphouse" => new[] { ("nearest", "the hollow house nearest to you"), ("off", "strip every Trap house") },
             ChatArgKind.Choice when cmd.Name == "fences" => new[] { ("restore", "every fence whole, as at the round's start") },
             ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },
             ChatArgKind.IntOrChoice when cmd.Name == "night" => new[] { ("reset", "back to the shipped night") },
+            ChatArgKind.IntOrChoice when cmd.Name == "drill" => new[] { ("off", "disarm every safe") },
             ChatArgKind.IntOrChoice when cmd.Name == "citizens" => new[] { ("clear", "remove every citizen") },
+            ChatArgKind.IntOrChoice or ChatArgKind.Choice when cmd.Name == "gunman" => new[] { ("posted", "they hold their spots facing you (trap house defenders)"), ("clear", "remove the test Gunmen") },
             ChatArgKind.Choice when cmd.Name == "help" => Visible(ctx).Select(c => (c.Name, c.Summary)).ToList(),
             _ => Array.Empty<(string, string)>(),
         };

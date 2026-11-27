@@ -72,7 +72,7 @@ public static class RaidVanRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "raid van", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "raid van", HasHp: true));
     }
 
     /// <summary>The two capsules of the van's hit volume, from its centre target: prone figures grown to the box (radius 0.56 times the scale), <paramref name="offsetM"/> ahead and behind the centre.</summary>

@@ -1,6 +1,7 @@
 using Godot;
 using Drycastle.Shooter.Net.Bots;
 using Drycastle.Shooter.Net.Server.Combat;
+using Drycastle.Shooter.Net.Server.Shooting;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Colliders;
 using Drycastle.ShooterCore.Corpses;
@@ -27,6 +28,11 @@ namespace Drycastle.Shooter.Net.Server.Thieves;
 /// (<see cref="RouteTick"/>), the answers are applied through <see cref="DeliverRoute"/>.
 /// </para>
 /// <para>
+/// The Rival crew's (#495) are members of this roster too (<see cref="GangCrew.RivalCrew"/>): a Gunman's line of sight is <see cref="Clear"/> and its rounds <see cref="Shoot"/>, resolved against the walls and the
+/// living players on server time (no rewind: ADR 0013 rewinds only a player's shot), hurting through the damage path under <see cref="SpecialWeapons.Gang"/> and shown with the shared Shot and PelletFan events from
+/// no player (as the helicopter helper's). Their kills pay nothing and they have no voice.
+/// </para>
+/// <para>
 /// Their audio (docs/events/thieves/09): who says what is decided by <see cref="GangAudio"/> and sent as <see cref="EventKind.ThiefVoice"/> to everyone; a member that carries a speaker has it in bit 6 of
 /// its hp byte; when it is killed the speaker drops where it fell as the plain Item <see cref="SpeakerItemId"/> (bag only, silent).
 /// </para>
@@ -46,6 +52,12 @@ internal sealed class GangServer : IGangWorld
     readonly Func<long> _nextTicket;
     readonly Func<IWalkerGround> _walk;
     readonly ItemsFile _items;
+    readonly WeaponsFile _weapons;
+    readonly ShotWorld _shot;
+    readonly TargetBook _targets;
+    readonly ImpactFx _impacts;
+    readonly Dictionary<string, int> _weaponIndex = new();
+    readonly List<ThiefGang> _voiced = new();
     readonly CorpseBook _corpses;
     readonly Func<ushort, bool> _scores;
     readonly Action<IEnumerable<XpGrant>> _awardXp;
@@ -56,9 +68,11 @@ internal sealed class GangServer : IGangWorld
     bool _speakerItemWarned;
 
     public GangServer(ServerContext ctx, ThievesFile data, WeaponsFile weapons, ItemsFile items, CorpseBook corpses, DealDamage deal, Func<BotNav?> nav, Func<long> nextTicket,
-        Func<IWalkerGround> walk, Func<ushort, bool> scores, Action<IEnumerable<XpGrant>> awardXp)
+        Func<IWalkerGround> walk, Func<ushort, bool> scores, Action<IEnumerable<XpGrant>> awardXp, ShotWorld shot, TargetBook targets, ImpactFx impacts)
     {
         _ctx = ctx; _data = data; _items = items; _corpses = corpses; _deal = deal; _nav = nav; _nextTicket = nextTicket; _walk = walk; _scores = scores; _awardXp = awardXp;
+        _weapons = weapons; _shot = shot; _targets = targets; _impacts = impacts;
+        for (var i = 0; i < weapons.Weapons.Count; i++) _weaponIndex.TryAdd(weapons.Weapons[i].Id, i);
         GangRules.Register(WorldEntityRegistry.Shared);
         Roster = new GangRoster(data.Gang, this, ctx.Match.Entities, System.Environment.TickCount) { Log = s => GD.PrintErr($"server: {s}") };
         Roster.SourceOf = w => BigfootRules.SourceOf(w, weapons.Weapons.Count, i => weapons.Weapons[i].Kind == WeaponKind.Projectile);
@@ -77,6 +91,54 @@ internal sealed class GangServer : IGangWorld
     public NVec3 Snap(NVec3 p) => _nav() is { } nav ? nav.Snap(new Vector3(p.X, p.Y, p.Z)).ToNumerics() : p;
 
     public IWalkerGround? Walk => _walk();
+
+    /// <summary>True when no world surface (a wall, cover, a vehicle's hull) lies between the two points: the same stop as a bullet's.</summary>
+    public bool Clear(NVec3 from, NVec3 to)
+    {
+        var d = NVec3.Distance(from, to);
+        if (d <= 0) return true;
+        var dir = (to - from) / d;
+        return _shot.WorldDistance(new Vector3(from.X, from.Y, from.Z), new Vector3(dir.X, dir.Y, dir.Z), d) >= d - 0.05f;
+    }
+
+    /// <summary>
+    /// A Gunman's round, or a shotgun's pellets round its line (the weapon's pellet_spread): each flies to the first wall or hull, or the first living player on it (where they stand now: no rewind), whom it
+    /// hurts by the weapon's damage with falloff times the Gunman's damage_scale. Everyone sees and hears it as a Shot (a PelletFan for a shotgun) from no player; a round that stops on a wall puffs dust.
+    /// </summary>
+    public void Shoot(GangShot s)
+    {
+        if (_ctx.Match.Phase != MatchPhase.Running || !_weaponIndex.TryGetValue(s.Weapon.Weapon, out var wi)) return;
+        var w = _weapons.Weapons[wi];
+        var range = MathF.Min(s.RangeM * 1.5f, w.Range > 0 ? w.Range : ShotServer.MaxRange); // a little past its range: the target may step back as the round leaves
+        var from = new Vector3(s.From.X, s.From.Y, s.From.Z);
+        var targets = _targets.Rent();
+        try
+        {
+            _shot.AddPlayers(targets);
+            targets.RemoveAll(_shot.IsArmouredRider); // no round reaches an armoured seat (ADR 0035)
+            if (w.Pellets > 1)
+            {
+                var dirs = HitMath.PelletDirections(s.Dir, w.PelletSpread, w.Pellets, s.Seed);
+                var walls = new float[dirs.Length];
+                for (var i = 0; i < dirs.Length; i++) walls[i] = _shot.WorldDistance(from, new Vector3(dirs[i].X, dirs[i].Y, dirs[i].Z), range);
+                _ctx.Broadcast(EventKind.PelletFan, WeaponCodec.Encode(new PelletFanMsg(0, (byte)wi, s.From, s.Dir, s.Seed, w.PelletSpread)));
+                foreach (var (id, t) in HitMath.ResolvePellets(w, s.From, dirs, range, walls, targets, s.MemberHitId))
+                    if (_ctx.Players.ContainsKey(id)) _deal(s.MemberHitId, SpecialWeapons.Gang, id, t.Damage * s.Weapon.DamageScale, t.Head, false);
+                return;
+            }
+            var wall = _shot.WorldDistance(from, new Vector3(s.Dir.X, s.Dir.Y, s.Dir.Z), range);
+            var hit = HitMath.Raycast(s.From, s.Dir, range, wall, targets, s.MemberHitId);
+            var end = s.From + s.Dir * (hit?.Distance ?? MathF.Min(wall, range));
+            _ctx.Broadcast(EventKind.Shot, WeaponCodec.Encode(new ShotMsg(0, (byte)wi, s.From, end)));
+            if (hit is { } h && _ctx.Players.ContainsKey(h.Id))
+            {
+                _impacts.Broadcast(end, ImpactSize.Puff, body: true);
+                _deal(s.MemberHitId, SpecialWeapons.Gang, h.Id, HitMath.HitscanDamage(w, h.Distance, h.Head) * s.Weapon.DamageScale, h.Head, false);
+            }
+            else if (wall <= range) _impacts.BulletPuff(end);
+        }
+        finally { _targets.Return(targets); }
+    }
 
     // ---- the tick ----
 
@@ -122,12 +184,13 @@ internal sealed class GangServer : IGangWorld
 
     // ---- what a kill does ----
 
-    /// <summary>A member was killed by a hit: a little XP for the killer, no kill feed, streak or assist; a speaker it carried lies where it fell.</summary>
+    /// <summary>A member was killed by a hit: a little XP for the killer (its gang's kill_xp: none for the Rival crew), no kill feed, streak or assist; a speaker it carried lies where it fell.</summary>
     void OnKilled(GangKilled k)
     {
         GD.Print($"server: #{k.Killer} killed a {k.Kind} (hit id {k.HitId})");
         DropSpeaker(k);
-        if (k.Killer != 0 && _data.Gang.KillXp > 0 && _scores(k.Killer)) _awardXp(new[] { new XpGrant(k.Killer, _data.Gang.KillXp, XpReason.GangKill) });
+        var xp = Roster.GangOf(k.HitId)?.Config.KillXp ?? _data.Gang.KillXp;
+        if (k.Killer != 0 && xp > 0 && _scores(k.Killer)) _awardXp(new[] { new XpGrant(k.Killer, xp, XpReason.GangKill) });
     }
 
     void DropSpeaker(GangKilled k)
@@ -148,7 +211,7 @@ internal sealed class GangServer : IGangWorld
 
     // ---- audio ----
 
-    /// <summary>Once a tick: the voice lines. Humans only listen: bots do not hear a thing.</summary>
+    /// <summary>Once a tick: the voice lines of the Raids (the Rival crew has none). Humans only listen: bots do not hear a thing.</summary>
     public void AudioTick(float dt)
     {
         if (Roster.Gangs.Count == 0) return;
@@ -156,7 +219,9 @@ internal sealed class GangServer : IGangWorld
         _listeners.Clear();
         foreach (var c in _ctx.Players.Values)
             if (c is { IsBot: false, Joined: true } && _ctx.IsAlive(c.Id)) _listeners.Add(new GangPlayer(c.Id, c.Body.GlobalPosition.ToNumerics(), c.Car == null));
-        _audio.Update(dt, Roster.Gangs, _listeners, Say);
+        _voiced.Clear();
+        foreach (var g in Roster.Gangs) if (g.Crew == GangCrew.Raid) _voiced.Add(g);
+        _audio.Update(dt, _voiced, _listeners, Say);
     }
 
     void Say(GangMember m, byte line)

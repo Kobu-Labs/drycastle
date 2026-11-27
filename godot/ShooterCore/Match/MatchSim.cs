@@ -37,7 +37,7 @@ public static class SpecialWeapons
     public const byte Helper = 245;
     /// <summary>The flak truck's shells (a gunner's rounds): its kills are ordinary kills, not the streak's, like the vehicle machine gun.</summary>
     public const byte Flak = 243;
-    /// <summary>What a Gang member does to a player (a fist or a pipe, Thieves event): the kill feed names it.</summary>
+    /// <summary>What a Gang member does to a player (a fist or a pipe, Thieves event; a Gunman's round, the Rival crew): the kill feed names it.</summary>
     public const byte Gang = 240;
     /// <summary>What the Bigfoot does to a player (its logs, shockwave and launch, issue #264): the kill feed names it.</summary>
     public const byte Bigfoot = 241;
@@ -88,6 +88,8 @@ public sealed class MatchPlayer
     public byte Team;
     /// <summary>The squad (#379, <see cref="MatchSim.CreateSquad"/>): an opt-in tag inside the team, 0 for none. Bots and the teamless never have one; it clears with a team change.</summary>
     public byte Squad;
+    /// <summary>When the player entered <see cref="Squad"/> (a join counter, 0 for none): the smallest in a squad is its leader (#494, <see cref="MatchSim.SquadLeader"/>).</summary>
+    public ulong SquadSince { get; internal set; }
     /// <summary>A bot: the balance moves bots before humans.</summary>
     public bool Bot;
     /// <summary>Sandbox mode (#156): godmode, and no kills, score or round end. Ranked after everyone else.</summary>

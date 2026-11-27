@@ -43,7 +43,7 @@ public static class CitizenRules
 
     public static void Register(WorldEntityRegistry registry)
     {
-        if (registry.Find(TypeId) == null) registry.Register(new WorldEntityDef(TypeId, "citizen", HasHp: true));
+        registry.RegisterOnce(new WorldEntityDef(TypeId, "citizen", HasHp: true));
     }
 }
 

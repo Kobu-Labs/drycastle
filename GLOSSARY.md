@@ -608,7 +608,7 @@ One of the two sides (A and B) of a team deathmatch round. A joining player goes
 _Avoid_: clan, faction
 
 **Squad**:
-A small opt-in group inside one Team in team deathmatch (#379, #288): up to 4 human players, with a name, no leader. Nobody is put in one: from the Pause menu's Squads screen (or `/squad create [name]`, `join <name|number>`, `leave`, `list`) a player creates a squad with a typed name (trimmed, up to 16 characters; empty: "<player>'s squad") or joins one of their own team's squads (a full one refuses). A player is in one squad at a time: creating or joining leaves the old one, and a squad with no member disappears. Bots are never in a squad. A squad is only a tag: friend logic (`AreFriends`), scoring and team colours do not look at it. A team change (an admin's move, the round-start balance), a mode change and leaving the match take a player out of their squad. Squad mates are blue discs with their names on the minimap and tactical map (the other teammates stay green), their through-wall name tags gain the squad's name, and the scoreboard groups a team's rows by squad.
+A small opt-in group inside one Team in team deathmatch (#379, #288): up to 4 human players, with a name and a leader. Nobody is put in one: from the Pause menu's Squads screen (or `/squad create [name]`, `join <name|number>`, `leave`, `list`) a player creates a squad with a typed name (trimmed, up to 16 characters; empty: "<player>'s squad") or joins one of their own team's squads (a full one refuses). A player is in one squad at a time: creating or joining leaves the old one, and a squad with no member disappears. Bots are never in a squad. A squad is only a tag: friend logic (`AreFriends`), scoring and team colours do not look at it. A team change (an admin's move, the round-start balance), a mode change and leaving the match take a player out of their squad. The creator leads the squad; when the leader leaves it (any of these ways out), the member who has been in it longest takes over and the squad is told (#494, ADR 0046 §5). Only the leader starts a Job. The leader is named on the Squads screen ("(leader)"), on the scoreboard ("[squad, leader]") and in `/squad list`. Squad mates are blue discs with their names on the minimap and tactical map (the other teammates stay green), their through-wall name tags gain the squad's name, and the scoreboard groups a team's rows by squad.
 _Avoid_: party, group, clan, fireteam
 
 **Friend / enemy colours**:
@@ -723,7 +723,7 @@ The vehicle of a Raid: a scripted world entity that follows the road graph (in a
 _Avoid_: truck, transport, car
 
 **Gang member**:
-A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only while that player keeps attacking them: a hit on a member of their Raid makes the whole Raid fight that player (Enforcers, the Gang boss and a Thief with free hands) until 8 s after their last hit, they die or are 30 m from every living member; then the Thieves go back to stealing and the Enforcers and the Gang boss to guarding. Members do not stack on one spot: chasers take different places round the player. Killed by hits (a Hit count of 5 / 8.75 / 20: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57.
+A person of a Raid: a world entity with its own brain and a Hit count, not a Citizen (a Citizen dies of one hit and never reacts) and not a bot. Three kinds: a **Thief** steals Loot and carries it to the van; an **Enforcer** carries a pipe, steals nothing and guards the Thieves and the van; the **Gang boss** stays by the van and wears the Gold chain. They attack a player only while that player keeps attacking them: a hit on a member of their Raid makes the whole Raid fight that player (Enforcers, the Gang boss and a Thief with free hands) until 8 s after their last hit, they die or are 30 m from every living member; then the Thieves go back to stealing and the Enforcers and the Gang boss to guarding. Members do not stack on one spot: chasers take different places round the player. Killed by hits (a Hit count of 5 / 8.75 / 20: a bullet 1, a headshot 2, an explosive or a vehicle weapon a weight) or by a vehicle running it over; it lies 10 s, pays a little XP and is not in the kill feed. Turrets and killstreak weapons shoot it, bots ignore it. World entity wire type 57. The Rival crew's people are Gang members too: its Enforcer (the same kind, its own Hit count) and the **Gunman**, who fights at range; a Rival crew also attacks on sight the players its Job names (within the sight radius, in a member's line of sight), and killing one pays nothing. Any member can be **posted**: it holds a given spot and facing, turns and fights from there and never walks (a Trap house defender).
 _Avoid_: NPC (alone), enemy, bandit, robber; boss (alone: say Gang boss)
 
 **Loot**:
@@ -766,7 +766,7 @@ A condition a player carries that is not an Item: no slot, no bag cell, no drop,
 _Avoid_: buff, effect, power-up, item (an Item is worn or carried)
 
 **Plantation**:
-A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. Numbers: `plantation.json`.
+A zone of the `plantation` kind: a marijuana field on the map (drawn like any zone; a Runtime zone, exported as polygons). A player on foot and alive inside one who holds the interact key (E) for 1.5 s, with nothing else in reach of the key, gets **High**. Nothing is shown for the hold (no prompt, no ring). The plantation has the lowest priority of the interact key: a corpse, a ground item, a crate, the garage doors, a ladder, a vehicle, the Mass seat, the rozhlas set and lying Loot all win it. The server counts the hold (`InteractHold`), and no bot gets high. During a Harvest heist a player of its party gets no High from the hold: a hold of 3 s (`cartel.json` `jobs.harvest`) fills a weed Duffel in their hands, up to the Heist's maximum. Numbers: `plantation.json`.
 _Avoid_: weed field, drug zone
 
 **High**:
@@ -837,3 +837,66 @@ A rare Mystery Animal of the night sky (`phoenix` in `animals.json`, model `phoe
 **When it comes**: the server's day clock counts a night each time it passes midnight (`spawn_hour` 0, `phoenix` block of `wildlife.json`) and every `nights_between`th (5) one puts a Phoenix in the sky at that hour (the first on the 5th night), if a round is running and none is still alive. The count is the server's own, not reset by a round; a stopped clock never passes midnight; an admin who sets the time moves it without counting a night. **Flying**: a slow circle (`patrol_radius_m` 350, cut to fit the map, `speed_mps` 14) with its body centre 80-140 m above the ground; bullets, blasts and rockets hit it (its hit box is the wingspan 3 m by 1.1 m by 4 m long), a knife cannot reach it, a vehicle never runs it over. **Falling**: any hit that deals damage, from any weapon, however big, starts a straight dive of `fall_seconds` (4) to the crash site, speeding up; it is not a hit target while it dives (`Animal.Targetable`): bullets and blasts pass through it, so no more hits count. Its hit box height has 0.5 m of margin (3 m by 1.1 m by 4 m). **Crash site**: ground 40-120 m from the hit, ahead of it if that is clear (else all round), with a free 6 m circle (`crash_clear_m` 3): ground all over it (not deep water), no more than 0.9 m up or down across it, nothing solid in it, 10 m from every building. **Crashed**: alive and still until killed or the round ends. **Burning**: the second hit; the shooter is the Killer, the Mystery creature Phoenix is caught (a Hunt, with that shot's distance), a flame burns `burn_seconds` (6). **Dead**: the body is gone at once on every client (the flame consumed it, embers rise) and the entity ends `dead_seconds` (6) later; the Mineral pheonixite lies where it burned for a minute, free for anybody who has not found it (the server keeps it in `WildlifeKeeper.Drops`, raises `MineralDropped` and makes it a dynamic Mineral node there). **Dawn**: at `dawn_hour` (5) a Phoenix still Flying flies off and is gone; one that was hit stays. It counts toward `max_animals`. Nothing announces it (the first catch and a longest shot are announced like any Mystery creature's). The fire, embers and flame are client-only looks (`"fx": "phoenix"`). Admins can call one at once with `/phoenix`. Phases are the `Flying`, `Falling`, `Crashed` and `Burning` states of `AnimalState` (the state byte's low four bits 11-14); the wire carries them with the dive's pitch, and event `PhoenixFall` (the line of the fall).
 _Avoid_: firebird, Event (it is not an Event), boss
 
+**Cartel**:
+The drug cartel a player can choose to work for: joined and quit at the Contact, it hands out Jobs and gives a Cartel rank. Membership (machine `Cartel.Membership`: outsider, member, quit) and Respect are stored on the Profile; a guest cannot join, bots never do. Requests count only in reach of the Contact (#494).
+_Avoid_: gang (the Rival crew and the Thieves' Raids are gangs), faction, mafia
+
+**Cartel rank**:
+A Cartel member's position on their own ladder (Runner, Dealer, Sicario, Capo, Patrón), climbed with Respect (the curve and names in `cartel.json`). Not stored itself: it follows from the Respect on the Profile; a player who quits keeps it frozen until they rejoin. A rank-up is told to everyone (#494).
+_Avoid_: level (that is XP's), title, position
+
+**Respect**:
+What a finished cartel Job pays, and all it pays: the Cartel rank's own experience, apart from XP. A finished Job pays its tier's Respect (`cartel.json` tiers) to every member of the party at that moment who is in the Cartel, has a stored Profile and is not in sandbox mode (#494).
+_Avoid_: XP, rep, reputation, money
+
+**Contact**:
+The cartel's man at the plantation, whom nothing can hurt: where a player joins or quits the Cartel and where a Job is started. He stands on his marker, a Placed object (`prim:cartel_contact`, the first one by id) set by hand in the map editor, facing its arrow; the game hides the marker (it stops nothing) and draws a Gang Warfare character there (`contact.json`). A map without one has no cartel, with no error. In his reach (`contact_reach_m`, on foot) the interact key is his when nothing else wants it: it opens the Contact panel (non-pausing, like the Hunter's Log; Esc closes it, walking away too): a member's Cartel rank, Respect and the bar to the next rank, Quit, and the job list by kind and tier (locked tiers say the rank they need) with Start for the leader (anyone else reads "Your leader starts jobs"); anyone else reads what the Cartel is and Join. Near him the plantation's hold never makes a player high (#494).
+_Avoid_: NPC (alone), quest giver, dealer
+
+**Job**:
+One task a giver hands out, with an objective, a reward and a way to fail, run by one player or by a Squad (started by its leader). The Cartel's are the first: Delivery and Hit are simple Jobs, Harvest and Trap house are Heists; bus and ambulance jobs are to follow. The core is built (#494, `JobBook`, machine `Job.Run`): one running Job per owner (a solo player, or in team deathmatch a Squad), many at once; a timer; it fails at the timer, a round reset, the leader quitting the giver, the solo player's or the leader's death, or when nobody is left; two Jobs never share a reserved thing (a drop point). Kinds of Job plug in; the objectives are their own. Only its party sees it: a HUD tracker (the kind, the tier, the objective line, the time left), a star marker on the minimap, the tactical map and in the world, and an end card (done with the Respect paid, or failed with the reason).
+_Avoid_: quest, mission, task, Event (a Job is not one)
+
+**Heist**:
+A Job in Payday's style: fill Duffels at the objective, throw them into the Cartel van and drive it to a Drop point while Assaults come in. The template (machine `Heist.Phase`: to the objective, at the objective, to the drop, delivered or lost): the Cartel van appears on the road spot nearest the Contact, reserved for the party; a Drop point far from the objective is reserved; the van's bay takes only the party's Duffels; the Heist succeeds when the van stops within the drop radius with at least the minimum loaded (a minimum and a maximum by tier and squad size), and pays a bonus per Duffel above the minimum times the tier; the van destroyed fails it; its end removes the van, the Duffels and the Assaults. The first is the **Harvest** (#495): the Contact's plantation is the objective, and a hold there fills a weed Duffel. Numbers in `cartel.json` `jobs.harvest`; `/cartel job harvest [tier]` starts one. The second is the **Trap house heist** (#496): a Trap house is the objective, its product and cash Duffels lie on its tables and its safe takes a Drill; numbers in `jobs.trap_house`, `/cartel job trap_house [tier]`.
+_Avoid_: raid (that is the Thieves'), robbery
+
+**Duffel**:
+A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. Holding the throw key (X) charges a throw of about 6 to 12 m by weight; a tap puts it down at the feet; the carrier's death drops it where they fell. One that is thrown or put down into a cargo volume (the Cartel van's back) is loaded and counted there. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
+_Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
+
+**Cartel van**:
+The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. Built, with the Harvest that uses it (#495).
+_Avoid_: getaway car, Raid van (that is the Thieves')
+
+**Drop point**:
+A place drawn on the map where a Delivery's Duffel or a loaded Cartel van is handed over, which ends a Job in success: a candidate point of the `cartel_drop` zones (a Runtime zone). A Delivery's carrier hands it over by holding the interact key within the drop radius. A Job claims its point in the Job book (`CartelSpots`): at least a data distance from the Contact and apart from every point another running Job holds (cartel.json `jobs.delivery`, #494).
+_Avoid_: secure zone, delivery spot
+
+**Hit spot**:
+Where a Hit's Rival dealer stands outdoors with his guards: a candidate point of the `cartel_hit` zones (a Runtime zone), drawn on open ground, claimed as a Drop point is (cartel.json `jobs.hit`, #497).
+_Avoid_: target spot, hit zone
+
+**Assault**:
+A van of the Rival crew that comes in to attack a Heist's objective: a Raid van (its road driving, ADR 0021) in from the map's edge to the road stop nearest the objective, which never drives off; its crew (Gunmen and Enforcers, by tier and squad size) gets out, heads for the objective and attacks the Job's players on sight, and fights on by a wrecked van. The first comes a grace time after the Cartel van reaches the objective, then one every interval (machine `Heist.Assaults`), none while the van is away with the minimum loaded (no chase), at most a few in the fight at once; its Job removes what is left at its end. Built (#495).
+_Avoid_: wave, attack, Raid
+
+**Rival crew**:
+The gang that works against the Cartel: it holds Trap houses, guards a Rival dealer and sends the Assaults. Its people are Gang members (Enforcers and Gunmen, numbers in `rival_crew.json`). A crew attacks the players of its Job on sight and anyone who attacks it, and ignores everyone else. Its crews and Gunmen are built (#495); the Jobs that send them are planned (#437).
+_Avoid_: enemy, rival gang, cops
+
+**Gunman**:
+A Gang member of the Rival crew who fights at range with a gun (a pistol, an SMG or a shotgun, by its look), where the Thieves' kinds fight hand to hand. It shoots only a target in its line of sight and range: it stops, aims (a telegraph), then fires a burst of real rounds with an aim error, resolved on server time; out of sight it closes in, or, posted, turns and waits.
+_Avoid_: shooter, bot
+
+**Trap house**:
+A hollow house the Rival crew holds for a Heist: dressed with the gang's props for the Job (by room type, from its floor plan and a seed; tables and crates are solid), its defenders posted in its rooms, a safe inside; stripped again when the Job ends. Built (#496): the dressing (`trap_house.json`, `/traphouse`) and the Trap house heist that takes one (`cartel.json` `jobs.trap_house`).
+_Avoid_: stash house, drug den, hideout
+
+**Rival dealer**:
+The target of a Hit: a Gang member of the Rival crew standing outdoors at a Hit spot with guards (Gunmen and Enforcers, by tier and party size), the crew's Gang boss with the Gang boss's look; he leaves no Gold chain and pays nothing. His death, by anyone's hand, is the Hit's success; the party's marker shows the spot until one of them comes near him, then follows him (machine `Hit.Target`, #497).
+_Avoid_: target (alone), boss (that is the Gang boss)
+
+**Drill**:
+What a Job's player sets on a Trap house's safe to open it: a party player holds the interact key at the safe to set it, it runs a while (by tier) and jams one to three times at random moments, a party player holds the key again to fix each jam, and through, the safe opens and cash Duffels lie by it for the party. Built (#496: machine `Drill.Run`, `trap_house.json` `drill`, `/drill`); the Trap house heist arms it at its start.
+_Avoid_: hack, timer

@@ -1,4 +1,5 @@
 using Drycastle.ShooterCore.Camo;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Companions;
 using Drycastle.ShooterCore.Demon;
@@ -52,7 +53,7 @@ public class GameData
     public WildlifeFile Wildlife { get; init; } = new();
     /// <summary>bigfoot.json (every number of the Bigfoot event, issue #264). The defaults of the file when it is absent.</summary>
     public BigfootFile Bigfoot { get; init; } = new();
-    /// <summary>thieves.json (every number of the Thieves event). Only the version so far; defaults when the file is absent.</summary>
+    /// <summary>thieves.json (every number of the Thieves event), with rival_crew.json (the cartel's Rival crew, Gang members too) attached as <see cref="ThievesFile.RivalCrew"/>. Defaults when either is absent.</summary>
     public ThievesFile Thieves { get; init; } = new();
     /// <summary>holy_mass.json (the citizens of the Holy Mass and, later, the event itself). Defaults when the file is absent.</summary>
     public HolyMassFile HolyMass { get; init; } = new();
@@ -62,8 +63,12 @@ public class GameData
     public ScudFile Scud { get; init; } = ScudFile.Default;
     /// <summary>plantation.json (the marijuana plantation: hold and high times, the nausea and the looks of a high player). The shipped defaults when the file is absent.</summary>
     public PlantationFile Plantation { get; init; } = PlantationFile.Default;
+    /// <summary>duffels.json (the Duffels of the cartel's Jobs: kinds, weights, the throw, the props). The shipped defaults when the file is absent.</summary>
+    public DuffelsFile Duffels { get; init; } = DuffelsFile.Default;
     /// <summary>companions.json (the Companions a player can own). Empty when the file is absent.</summary>
     public CompanionsFile Companions { get; init; } = new();
+    /// <summary>cartel.json (the Cartel: ranks, tiers, each kind of Job's numbers; docs/cartel.md). The shipped defaults when the file is absent.</summary>
+    public CartelFile Cartel { get; init; } = CartelFile.Default;
     /// <summary>turret.json: the sentry turret's tuning (the turret killstreak).</summary>
     public required TurretFile Turret { get; init; }
 
@@ -82,7 +87,7 @@ public class GameData
         """;
 
     /// <summary>For hosts that read files themselves (Godot res:// inside an export).</summary>
-    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string fenceDestructionJson = "")
+    public static GameData Parse(string weaponsJson, string matchJson, string vehiclesJson, string perksJson, string levelsJson, string killstreaksJson, string turretJson, string environmentJson = "", string camoJson = "", string glassJson = "", string animalsJson = "", string itemsJson = "", string holyMassJson = "", string demonJson = "", string bigfootJson = "", string petsJson = "", string wildlifeJson = "", string thievesJson = "", string scudJson = "", string plantationJson = "", string companionsJson = "", string houseDestructionJson = "", string cartelJson = "", string rivalCrewJson = "", string duffelsJson = "", string fenceDestructionJson = "")
     {
         var weapons = WeaponsFile.Parse(weaponsJson);
         var perks = PerksFile.Parse(perksJson);
@@ -105,13 +110,15 @@ public class GameData
             Wildlife = wildlifeJson == "" ? new() : WildlifeFile.Parse(wildlifeJson).CheckAgainst(animals),
             Items = itemsJson == "" ? new() : ItemsFile.Parse(itemsJson),
             Bigfoot = bigfootJson == "" ? new() : BigfootFile.Parse(bigfootJson),
-            Thieves = thievesJson == "" ? new() : ThievesFile.Parse(thievesJson),
+            Thieves = (thievesJson == "" ? new() : ThievesFile.Parse(thievesJson)).WithRivalCrew(rivalCrewJson == "" ? RivalCrewFile.Default : RivalCrewFile.Parse(rivalCrewJson).CheckAgainst(weapons)),
             HolyMass = holyMassJson == "" ? new() : HolyMassFile.Parse(holyMassJson),
             Demon = demonJson == "" ? new() : DemonFile.Parse(demonJson),
             Scud = scudJson == "" ? ScudFile.Default : ScudFile.Parse(scudJson),
             Plantation = plantationJson == "" ? PlantationFile.Default : PlantationFile.Parse(plantationJson),
             Companions = companionsJson == "" ? new() : CompanionsFile.Parse(companionsJson).CheckAgainst(animals),
             HouseDestruction = houseDestructionJson == "" ? DestructionConfig.Default : DestructionConfig.Parse(houseDestructionJson),
+            Cartel = cartelJson == "" ? CartelFile.Default : CartelFile.Parse(cartelJson),
+            Duffels = duffelsJson == "" ? DuffelsFile.Default : DuffelsFile.Parse(duffelsJson),
             FenceDestruction = fenceDestructionJson == "" ? FenceDestructionConfig.Default : FenceDestructionConfig.Parse(fenceDestructionJson),
         };
     }
@@ -140,13 +147,16 @@ public class GameData
             Wildlife = File.Exists(Path.Combine(dir, "wildlife.json")) ? WildlifeFile.Load(Path.Combine(dir, "wildlife.json")).CheckAgainst(animals) : new(),
             Items = File.Exists(Path.Combine(dir, "items.json")) ? ItemsFile.Load(Path.Combine(dir, "items.json")) : new(),
             Bigfoot = File.Exists(Path.Combine(dir, "bigfoot.json")) ? BigfootFile.Load(Path.Combine(dir, "bigfoot.json")) : new(),
-            Thieves = File.Exists(Path.Combine(dir, "thieves.json")) ? ThievesFile.Load(Path.Combine(dir, "thieves.json")) : new(),
+            Thieves = (File.Exists(Path.Combine(dir, "thieves.json")) ? ThievesFile.Load(Path.Combine(dir, "thieves.json")) : new())
+                .WithRivalCrew(File.Exists(Path.Combine(dir, "rival_crew.json")) ? RivalCrewFile.Load(Path.Combine(dir, "rival_crew.json")).CheckAgainst(weapons) : RivalCrewFile.Default),
             HolyMass = File.Exists(Path.Combine(dir, "holy_mass.json")) ? HolyMassFile.Load(Path.Combine(dir, "holy_mass.json")) : new(),
             Demon = File.Exists(Path.Combine(dir, "holy_mass_demon.json")) ? DemonFile.Load(Path.Combine(dir, "holy_mass_demon.json")) : new(),
             Scud = File.Exists(Path.Combine(dir, "scud.json")) ? ScudFile.Load(Path.Combine(dir, "scud.json")) : ScudFile.Default,
             Plantation = File.Exists(Path.Combine(dir, "plantation.json")) ? PlantationFile.Load(Path.Combine(dir, "plantation.json")) : PlantationFile.Default,
             Companions = File.Exists(Path.Combine(dir, "companions.json")) ? CompanionsFile.Load(Path.Combine(dir, "companions.json")).CheckAgainst(animals) : new(),
             HouseDestruction = File.Exists(Path.Combine(dir, "house_destruction.json")) ? DestructionConfig.Load(Path.Combine(dir, "house_destruction.json")) : DestructionConfig.Default,
+            Cartel = File.Exists(Path.Combine(dir, "cartel.json")) ? CartelFile.Load(Path.Combine(dir, "cartel.json")) : CartelFile.Default,
+            Duffels = File.Exists(Path.Combine(dir, "duffels.json")) ? DuffelsFile.Load(Path.Combine(dir, "duffels.json")) : DuffelsFile.Default,
             FenceDestruction = File.Exists(Path.Combine(dir, "fence_destruction.json")) ? FenceDestructionConfig.Load(Path.Combine(dir, "fence_destruction.json")) : FenceDestructionConfig.Default,
         };
     }

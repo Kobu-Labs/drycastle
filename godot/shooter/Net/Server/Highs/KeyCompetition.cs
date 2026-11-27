@@ -13,7 +13,7 @@ namespace Drycastle.Shooter.Net.Server.Highs;
 
 /// <summary>
 /// What else is in reach of the interact key of a player on foot: the things whose own code wins the key over the plantation (corpse, ground item, crate, the garage doors or a house's, a ladder, a vehicle, the Mass
-/// seat, the rozhlas set, lying Loot, a Scud truck's rocket cart). Read only: none of them is touched.
+/// seat, the rozhlas set, lying Loot, a Scud truck's rocket cart, a Duffel, the cartel's Contact). Read only: none of them is touched.
 /// </summary>
 internal sealed class KeyCompetition
 {
@@ -27,13 +27,18 @@ internal sealed class KeyCompetition
     readonly ThievesServer _thieves;
     readonly Func<NVec3, bool> _vehicleInReach;
     readonly Func<ServerClient, bool> _scudCartOffered;
+    readonly Func<ServerClient, bool> _duffelInReach;
+    readonly Func<ServerClient, bool> _contactInReach;
 
     /// <param name="vehicleInReach">A vehicle the key would get a player at the point into (the vehicle step's).</param>
     /// <param name="scudCartOffered">A Scud truck's rocket cart is on offer to the player (the Scud's).</param>
+    /// <param name="duffelInReach">A lying Duffel of the player's party is in reach (the Duffels').</param>
+    /// <param name="contactInReach">The player is in reach of the cartel's Contact, whose panel the key opens (the Cartel's).</param>
     public KeyCompetition(CorpseBook corpses, CrateServer crates, MapAreas areas, GarageServer garage, HouseDoorServer houses, MassServer mass, RozhlasServer rozhlas, ThievesServer thieves,
-        Func<NVec3, bool> vehicleInReach, Func<ServerClient, bool> scudCartOffered)
+        Func<NVec3, bool> vehicleInReach, Func<ServerClient, bool> scudCartOffered, Func<ServerClient, bool> duffelInReach,
+        Func<ServerClient, bool> contactInReach)
     {
-        _corpses = corpses; _crates = crates; _areas = areas; _garage = garage; _houses = houses; _mass = mass; _rozhlas = rozhlas; _thieves = thieves; _vehicleInReach = vehicleInReach; _scudCartOffered = scudCartOffered;
+        _corpses = corpses; _crates = crates; _areas = areas; _garage = garage; _houses = houses; _mass = mass; _rozhlas = rozhlas; _thieves = thieves; _vehicleInReach = vehicleInReach; _scudCartOffered = scudCartOffered; _duffelInReach = duffelInReach; _contactInReach = contactInReach;
     }
 
     public KeyCompetitor Of(ServerClient c)
@@ -51,6 +56,8 @@ internal sealed class KeyCompetition
         if (_rozhlas.CanTakeSetAt(at, c.Car != null)) k |= KeyCompetitor.RozhlasSet;
         if (_thieves.LootInReach(c) != null) k |= KeyCompetitor.Loot;
         if (_scudCartOffered(c)) k |= KeyCompetitor.ScudCart;
+        if (_duffelInReach(c)) k |= KeyCompetitor.Duffel;
+        if (_contactInReach(c)) k |= KeyCompetitor.Contact;
         return k;
     }
 }

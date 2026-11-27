@@ -51,8 +51,11 @@ public sealed class GangModels
     public List<string> Enforcer { get; set; } = new() { "gang_enforcer_01" };
     public List<string> GangBoss { get; set; } = new() { "gang_boss_01" };
     public List<string> Femn { get; set; } = new() { "gang_thief_02" };
+    /// <summary>The Rival crew's Gunman: rival_crew.json <c>view.models</c> (<see cref="ThievesFile.WithRivalCrew"/>).</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public List<string> Gunman { get; set; } = new() { "gang_enforcer_01", "gang_thief_01" };
 
-    public List<string> Of(GangMemberKind kind) => kind switch { GangMemberKind.Enforcer => Enforcer, GangMemberKind.GangBoss => GangBoss, _ => Thief };
+    public List<string> Of(GangMemberKind kind) => kind switch { GangMemberKind.Enforcer => Enforcer, GangMemberKind.GangBoss => GangBoss, GangMemberKind.Gunman => Gunman, _ => Thief };
 }
 
 /// <summary>
