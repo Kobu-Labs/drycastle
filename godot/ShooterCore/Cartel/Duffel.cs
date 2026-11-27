@@ -7,11 +7,11 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <summary>What a Duffel holds (GLOSSARY "Duffel"): weed is light, cash medium, product heavy (duffels.json). The wire carries the number.</summary>
 public enum DuffelKind : byte { Weed = 0, Cash = 1, Product = 2 }
 
-/// <summary>Where a Duffel is: lying on the ground, carried by a player, flying from a throw, or loaded in a cargo volume (the Cartel van's back).</summary>
+/// <summary>Where a Duffel is: lying on the ground (or on the Cartel pallet), carried by a player, flying from a throw, or loaded in a cargo volume (the Cartel van's back).</summary>
 public enum DuffelState : byte { Lying = 0, Carried = 1, Flying = 2, Loaded = 3 }
 
 /// <summary>
-/// A cargo volume that takes Duffels (the Cartel van's rear box; the van is another package's): a Duffel that flies into it, lands in it or is put down in it becomes Loaded and is counted by the
+/// A cargo volume that takes Duffels (the Cartel van's rear box; the van is another package's): a Duffel that flies into it or lands in it becomes Loaded and is counted by the
 /// volume's owner. The volume is asked every flight step, so it answers for where it is now (a van moves).
 /// </summary>
 public interface ICargoVolume
@@ -78,8 +78,8 @@ public sealed class Duffel : IWorldEntity
         .Allow(DuffelState.Lying, DuffelState.Carried)
         .Allow(DuffelState.Carried, DuffelState.Flying, DuffelState.Lying, DuffelState.Loaded)
         .Allow(DuffelState.Flying, DuffelState.Lying, DuffelState.Loaded)
-        .Note(DuffelState.Lying, "On the ground (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.")
-        .Note(DuffelState.Carried, "On a party player's back: no sprint, slower by its weight. The throw key's tap puts it down (Lying, or Loaded in a cargo volume), a charged release throws it (Flying); the carrier's death drops it where they fell.")
+        .Note(DuffelState.Lying, "On the ground, or on a Job's pallet spot (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.")
+        .Note(DuffelState.Carried, "On a party player's back: no sprint, slower by its weight. One press of the throw key throws it at once (Flying); the carrier's death, a seat or leaving the party puts it down where they were (Lying).")
         .Note(DuffelState.Flying, "The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.")
         .Note(DuffelState.Loaded, "In a cargo volume, counted by its owner; it stays there until the Job removes it.")
         .Build();

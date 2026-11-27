@@ -13,7 +13,7 @@ public sealed record ContactJob(string Kind, string Name, IReadOnlyList<ContactT
 /// the rank, the Respect and the bar to the next rank, and the job list by kind and tier (the test kind only for admins; a tier above the rank locked, with the rank it
 /// needs); for anyone else what the Cartel is and Join. Start is the leader's (a solo player, or the Squad's leader) and only with no Job running: <see cref="StartBlock"/> is the
 /// server's refusal the panel can foresee (None: Start is offered; the server's order of checks, worded by <see cref="CartelWords.Start"/>), and nothing is offered until
-/// <see cref="Loaded"/>. Pure: the panel draws it, the server checks every request again and answers a refusal (<see cref="Net.EventKind.CartelRefused"/>).
+/// <see cref="Loaded"/>. Not foreseen: <see cref="JobStartRefusal.PalletFull"/> (the panel does not know what other parties' Deliveries hold; the server's refusal reaches the reason line like any other). Pure: the panel draws it, the server checks every request again and answers a refusal (<see cref="Net.EventKind.CartelRefused"/>).
 /// </summary>
 public sealed record ContactPanelModel(
     bool Loaded, CartelMembership Membership, bool Guest, bool Sandbox,

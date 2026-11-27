@@ -132,7 +132,7 @@ public static class ChatCommands
         new("traphouse", "TEST: dress a hollow house as a Trap house now, for everyone: the nearest to you (no argument, or nearest) or one by building id (w...); off strips every one", new[] { new ChatArg("house", ChatArgKind.Text, false) }),
         new("drill", "TEST: arm the safe of the dressed Trap house nearest you for yourself at a tier (1 by default): hold E at it to set the Drill, again to fix a jam; open, it gives cash Duffels. off disarms every one",
             new[] { new ChatArg("tier", ChatArgKind.IntOrChoice, false, 1, MaxDrillTier) }),
-        new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: hold the throw key to throw it, tap it to put it down", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
+        new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: press the throw key to throw it", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
         new("fences", "TEST: make every broken fence whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };

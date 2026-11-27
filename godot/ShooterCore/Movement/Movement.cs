@@ -74,7 +74,7 @@ public enum MoveButtons
     HeadLook = 2048,
     /// <summary>Grenade throw key (middle mouse by default), held: aims the throw, and the release throws (see <see cref="GrenadeThrower"/>). With <see cref="Aim"/> held at the release the throw is put away.</summary>
     Throw = 4096,
-    /// <summary>The Duffel throw key (<c>duffel_throw</c>, X by default), held: charges a throw while carrying a Duffel; the release throws it, a tap puts it down (see <see cref="Drycastle.ShooterCore.Cartel.DuffelThrowKey"/>).</summary>
+    /// <summary>The Duffel throw key (<c>duffel_throw</c>, X by default), held: a fresh press while carrying a Duffel throws it at once (<c>Cartel/DuffelServer.cs</c>).</summary>
     DuffelThrow = 8192,
 }
 

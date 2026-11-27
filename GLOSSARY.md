@@ -862,8 +862,12 @@ A Job in Payday's style: fill Duffels at the objective, throw them into the Cart
 _Avoid_: raid (that is the Thieves'), robbery
 
 **Duffel**:
-A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. Holding the throw key (X) charges a throw of about 6 to 12 m by weight; a tap puts it down at the feet; the carrier's death drops it where they fell. One that is thrown or put down into a cargo volume (the Cartel van's back) is loaded and counted there. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
+A bag of goods (weed, cash, product) made for a Job's players (its party): only they pick it up (a press of the interact key), one each. Its carrier cannot sprint, walks slower by its weight and can still shoot, but takes no vehicle seat. One press of the throw key (X) throws it 8 m, whatever it weighs (no charge, it is never put down at will); the carrier's death drops it where they fell. One that is thrown into a cargo volume (the Cartel van's back) is loaded and counted there. A Delivery's Duffel starts lying on the Cartel pallet. Not an Item and not in the Bag. Built (#494, duffels.json); the Jobs that make them are planned (#437).
 _Avoid_: bag (that is the Bag), loot (that is the Thieves' Loot), package
+
+**Cartel pallet**:
+The pallet by the Contact (a Placed object, the marker `prim:cartel_pallet`, the first one by id) that a Delivery's Duffel lies on until a party player takes it: four bag spots, one per running Delivery, so a fifth is refused ("The pallet is full."). A map without one has no Delivery.
+_Avoid_: table, crate
 
 **Cartel van**:
 The drivable van of a Heist: the vehicle type `cartel_van` (the Gang Warfare panel van, a driver and a passenger behind glass, high hit points) with a cargo volume, the bay behind the cab, that takes the loaded Duffels and counts them. Never dealt and it never returns once destroyed: the Job puts one down reserved for its players (anyone else is refused a seat, with a notice) and takes it away when it ends; its destruction fails the Heist. `/spawn cartel_van` puts down one anybody may drive. Built, with the Harvest that uses it (#495).

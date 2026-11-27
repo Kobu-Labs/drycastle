@@ -4,7 +4,7 @@ Curated, redistributable 3D assets for placed objects (cars, flowers, bushes, fe
 pavement, pots, walls). Placed objects reference an asset by id (see `pipeline/src/drycastle_pipeline/edits/schema.py`):
 
 - `pack:<pack>/<model>`: a glTF/GLB in `assets/<pack>/`, for example `pack:kenney-car-kit/sedan`.
-- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, `cartel_contact` (the marker of the cartel's Contact: the game hides it and draws him there, docs/cartel.md), `mound` (a terraced, climbable 12 m hill, tiers of boxes with rises <= 0.28 m; its `solids` are one box per tier), the
+- `prim:<name>`: a pipeline primitive with no file (`wall`, `slab`, `pot`, `radio_tower`, `bunker`, `cartel_contact` (the marker of the cartel's Contact: the game hides it and draws him there, docs/cartel.md), `cartel_pallet` (the marker of the Cartel pallet a Delivery's Duffel lies on: solid, the game hides it and draws the Synty pallet there, docs/cartel.md), `mound` (a terraced, climbable 12 m hill, tiers of boxes with rises <= 0.28 m; its `solids` are one box per tier), the
   utility poles `pole_*`, the house connectors `connector_*` and the flood wall pieces `floodwall_*`), built by `pipeline/src/drycastle_pipeline/kits/primitives.py`.
 
 `manifest.json` (format_version 1) is the index: per asset `id`, `category`

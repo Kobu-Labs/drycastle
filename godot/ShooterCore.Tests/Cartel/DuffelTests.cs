@@ -7,7 +7,7 @@ using Drycastle.ShooterCore.Net;
 
 namespace Drycastle.ShooterCore.Tests.Cartel;
 
-/// <summary>The Duffel (#494): the data, the carrier's burden, the throw key, the book (one per player, the party, drop, throw, the world, cargo volumes) and the key's priority.</summary>
+/// <summary>The Duffel (#494): the data, the carrier's burden, the book (one per player, the party, drop, the one-press throw, the world, cargo volumes) and the key's priority.</summary>
 public class DuffelTests
 {
     static readonly DuffelsFile Data = DuffelsFile.Default;
@@ -66,20 +66,20 @@ public class DuffelTests
     // ---- the data ----
 
     [Fact]
-    public void The_shipped_file_parses_and_heavier_kinds_are_slower_and_fly_shorter()
+    public void The_shipped_file_parses_and_heavier_kinds_are_slower_and_one_range_serves_all()
     {
         var shipped = DuffelsFile.Load(Path.Combine(AppContext.BaseDirectory, "data", "duffels.json"));
         var weed = shipped.Of(DuffelKind.Weed); var cash = shipped.Of(DuffelKind.Cash); var product = shipped.Of(DuffelKind.Product);
         Assert.True(weed.WeightKg < cash.WeightKg && cash.WeightKg < product.WeightKg);
         Assert.True(weed.SpeedScale > cash.SpeedScale && cash.SpeedScale > product.SpeedScale);
-        Assert.True(weed.ThrowM > cash.ThrowM && cash.ThrowM > product.ThrowM);
-        Assert.InRange(product.ThrowM, 6, 12); Assert.InRange(weed.ThrowM, 6, 12);
+        Assert.Equal(8, shipped.ThrowM); // one range for every kind: the weight slows the carrier only
+        Assert.Equal(8, DuffelThrow.RangeM(shipped));
     }
 
     [Fact]
     public void A_file_without_a_kind_is_refused_with_the_field_named()
     {
-        var e = Assert.Throws<Drycastle.ShooterCore.Data.DataFileException>(() => DuffelsFile.Parse("""{ "version": 1, "kinds": { "weed": { "weight_kg": 8, "speed_scale": 0.9, "throw_m": 12 } } }"""));
+        var e = Assert.Throws<Drycastle.ShooterCore.Data.DataFileException>(() => DuffelsFile.Parse("""{ "version": 1, "kinds": { "weed": { "weight_kg": 8, "speed_scale": 0.9 } } }"""));
         Assert.Contains("kinds.cash", e.Message);
     }
 
@@ -101,32 +101,6 @@ public class DuffelTests
         Assert.Equal(0.85f * (float)Data.Of(DuffelKind.Cash).SpeedScale, burden.Apply(new MoveInput { SpeedScale = 0.85f }).SpeedScale, 4); // on top of the weapon's
         Assert.Equal(sprint, MoveBurden.None.Apply(sprint));
         Assert.Equal(sprint, default(MoveBurden).Apply(sprint));
-    }
-
-    // ---- the throw key ----
-
-    [Fact]
-    public void A_tap_drops_a_hold_throws_with_its_charge_and_losing_the_right_ends_it()
-    {
-        var key = new DuffelThrowKey();
-        Assert.Equal(DuffelRelease.None, key.Tick(true, true, Dt, Data, out _));
-        Assert.Equal(DuffelRelease.Drop, key.Tick(false, true, Dt, Data, out _));
-
-        key = new DuffelThrowKey();
-        key.Tick(true, true, Dt, Data, out _);
-        for (var i = 0; i < 60; i++) key.Tick(true, true, Dt, Data, out _);
-        Assert.Equal(1f, key.Charge(Data));
-        Assert.Equal(DuffelRelease.Throw, key.Tick(false, true, Dt, Data, out var charge));
-        Assert.Equal(1f, charge);
-
-        key = new DuffelThrowKey();
-        key.Tick(true, true, Dt, Data, out _);
-        Assert.Equal(DuffelRelease.None, key.Tick(true, false, Dt, Data, out _)); // a seat, death: nothing
-        Assert.Equal(DuffelKeyState.Idle, key.State);
-        Assert.Equal(DuffelRelease.None, key.Tick(true, true, Dt, Data, out _)); // still held: a fresh press is needed
-        Assert.Equal(DuffelRelease.None, key.Tick(false, true, Dt, Data, out _));
-        Assert.Equal(DuffelRelease.None, key.Tick(true, false, Dt, Data, out _)); // a press while not carrying does not start one
-        Assert.Equal(DuffelKeyState.Idle, key.State);
     }
 
     // ---- the book ----
@@ -186,7 +160,7 @@ public class DuffelTests
         book.PickUp(2, Vector3.Zero);
         book.Drop(1, Vector3.Zero);
         book.PickUp(1, Vector3.Zero); // the weed it just put down
-        book.Throw(1, Eye, 0, 0, 0);
+        book.Throw(1, Eye, 0, 0);
         Assert.Equal(new (ushort, Duffel?)[] { (1, given), (2, lying), (1, null), (1, given), (1, null) }, told);
         told.Clear();
         book.RemoveParty(party); // a Job's end frees its carriers too
@@ -202,30 +176,19 @@ public class DuffelTests
     [InlineData(DuffelKind.Weed)]
     [InlineData(DuffelKind.Cash)]
     [InlineData(DuffelKind.Product)]
-    public void A_full_throw_from_a_level_look_lands_about_the_kinds_range_away(DuffelKind kind)
+    public void One_throw_from_a_level_look_lands_the_same_fixed_range_away_for_every_kind(DuffelKind kind)
     {
         var (book, entities, _) = NewBook();
         var d = book.Give(kind, new HashSet<ushort> { 1 }, 1, Vector3.Zero)!;
-        Assert.True(book.Throw(1, Eye, 0, 0, 1));
+        Assert.True(book.Throw(1, Eye, 0, 0)); // one press: no charge to give
         Assert.Equal(DuffelState.Flying, d.State);
         Fly(entities);
         Assert.Equal(DuffelState.Lying, d.State);
         Assert.Equal(0, d.Position.Y, 3);
-        var range = (float)Data.Of(kind).ThrowM;
+        var range = (float)Data.ThrowM;
         Assert.InRange(Flat(d.Position), range, range + 0.8f); // from the hands, a little in front of the eye
+        Assert.False(book.Throw(1, Eye, 0, 0)); // nothing left in the hands
         Assert.True(d.Position.Z < 0); // yaw 0 faces -Z
-    }
-
-    [Fact]
-    public void A_short_hold_throws_shorter_than_a_full_one()
-    {
-        var (book, entities, _) = NewBook();
-        var a = book.Give(DuffelKind.Cash, new HashSet<ushort> { 1 }, 1, Vector3.Zero)!;
-        var b = book.Give(DuffelKind.Cash, new HashSet<ushort> { 2 }, 2, Vector3.Zero)!;
-        book.Throw(1, Eye, 0, 0, 0); book.Throw(2, Eye, 0, 0, 1);
-        Fly(entities);
-        Assert.True(Flat(a.Position) < Flat(b.Position) * 0.75f);
-        Assert.Equal(DuffelThrow.RangeM(Data, DuffelKind.Cash, 0), (float)(Data.Of(DuffelKind.Cash).ThrowM * Data.MinThrowShare), 4);
     }
 
     [Fact]
@@ -234,7 +197,7 @@ public class DuffelTests
         var (book, entities, world) = NewBook();
         world.WallX = 3;
         var d = book.Give(DuffelKind.Weed, new HashSet<ushort> { 1 }, 1, Vector3.Zero)!;
-        book.Throw(1, Eye, -MathF.PI / 2, 0, 1); // yaw -90 degrees faces +X
+        book.Throw(1, Eye, -MathF.PI / 2, 0); // yaw -90 degrees faces +X
         Fly(entities);
         Assert.Equal(DuffelState.Lying, d.State);
         Assert.InRange(d.Position.X, 2.5f, 3f);
@@ -249,7 +212,7 @@ public class DuffelTests
         var van = new FakeVolume { Min = new Vector3(-1, 0, -8), Max = new Vector3(1, 1.5f, -4), Party = party };
         book.AddVolume(van);
         var d = book.Give(DuffelKind.Weed, party, 1, Vector3.Zero)!;
-        book.Throw(1, Eye, 0, 0, 0); // about 6 m: into the box
+        book.Throw(1, Eye, 0, 0); // about 8 m: through the box (the volume is met on the way)
         Fly(entities);
         Assert.Equal(DuffelState.Loaded, d.State);
         Assert.Same(van, d.Volume);
@@ -265,14 +228,14 @@ public class DuffelTests
         var van = new FakeVolume { Min = new Vector3(-1, 0, -8), Max = new Vector3(1, 1.5f, -4), Party = new HashSet<ushort> { 9 } };
         book.AddVolume(van);
         var d = book.Give(DuffelKind.Weed, new HashSet<ushort> { 1 }, 1, Vector3.Zero)!;
-        book.Throw(1, Eye, 0, 0, 0);
+        book.Throw(1, Eye, 0, 0);
         Fly(entities);
         Assert.Equal(DuffelState.Lying, d.State);
         Assert.Empty(van.Loaded);
     }
 
     [Fact]
-    public void Put_down_inside_a_volume_it_is_loaded()
+    public void A_drop_inside_a_volume_lies_on_the_ground_only_a_throw_loads()
     {
         var (book, _, _) = NewBook();
         var party = new HashSet<ushort> { 1 };
@@ -280,8 +243,8 @@ public class DuffelTests
         book.AddVolume(van);
         var d = book.Give(DuffelKind.Cash, party, 1, Vector3.Zero)!;
         book.Drop(1, new Vector3(0, 0.2f, 0));
-        Assert.Equal(DuffelState.Loaded, d.State);
-        Assert.Single(van.Loaded);
+        Assert.Equal(DuffelState.Lying, d.State);
+        Assert.Empty(van.Loaded);
     }
 
     [Fact]

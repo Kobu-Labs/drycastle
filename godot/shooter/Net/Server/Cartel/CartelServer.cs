@@ -158,7 +158,8 @@ internal sealed class CartelServer
         var members = _parties.MembersOf(owner);
         var standing = c.Profile?.Cartel;
         var facts = new JobStartFacts(c.IsBot, standing?.IsMember == true, _parties.LeaderOf(owner) == c.Id, kind != null, tier, standing?.Rank(_data) ?? 0,
-            _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin);
+            _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin,
+            PalletFull: kind is DeliveryJobKind delivery && delivery.PalletFull(_book));
         var why = CartelRules.CanStart(_data, facts);
         if (why != JobStartRefusal.None) { Refuse(c, CartelAction.StartJob, (byte)why, CartelRules.Words(why, _data, tier), admin); return; }
         if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, _parties, out var refusal) is not { } job)

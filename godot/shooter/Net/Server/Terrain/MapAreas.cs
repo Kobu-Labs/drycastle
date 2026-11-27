@@ -77,7 +77,7 @@ internal sealed class MapAreas
             if (_cartel != null) return _cartel;
             _cartel = Drycastle.Shooter.Cartel.ContactMarker.Of(_map, ZonePoints);
             GD.Print(_cartel.Contact is { } c
-                ? $"server: cartel: Contact at ({c.Position.X:F1}, {c.Position.Z:F1}), {_cartel.DropPoints.Count} drop points, {_cartel.HitSpots.Count} hit spots"
+                ? $"server: cartel: Contact at ({c.Position.X:F1}, {c.Position.Z:F1}), {_cartel.DropPoints.Count} drop points, {_cartel.HitSpots.Count} hit spots, {(_cartel.Pallet == null ? "no pallet" : "a pallet")}"
                 : "server: cartel: no Contact on this map, no cartel");
             return _cartel;
         }

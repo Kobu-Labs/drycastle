@@ -7,7 +7,7 @@ namespace Drycastle.ShooterCore.Cartel;
 
 /// <summary>
 /// The names the map gives the cartel's data (docs/cartel.md "Contact", "Simple jobs"): the two Runtime zone kinds, baked as candidate
-/// points into zone_points.json (pipeline/config/rules.yaml <c>zones</c>), and the asset of the Contact's marker, a placed object of the map.
+/// points into zone_points.json (pipeline/config/rules.yaml <c>zones</c>), and the assets of the Contact's and the pallet's markers, placed objects of the map.
 /// </summary>
 public static class CartelZones
 {
@@ -20,6 +20,11 @@ public static class CartelZones
     /// cartel. It stops nothing (<see cref="Colliders.ObjectColliders.IsPassThrough(string)"/>), so no weapon is tested against him; the game hides it and draws him.
     /// </summary>
     public const string ContactAsset = "prim:cartel_contact";
+    /// <summary>
+    /// The Cartel pallet's marker (pipeline primitive, kits/primitives.py): the first placed object of it (lowest id) is the pallet a Delivery's Duffel lies on; a map without one has no Delivery.
+    /// Unlike the Contact's it is solid like any placed prop (a low box the size of the pallet); the game hides it and draws the Gang Warfare pallet there.
+    /// </summary>
+    public const string PalletAsset = "prim:cartel_pallet";
 }
 
 /// <summary>
@@ -43,7 +48,7 @@ public readonly record struct ContactPose(Vector3 Position, Vector2 Facing)
 }
 
 /// <summary>
-/// The cartel's map data as the server needs it (static, never sent: a client reads the same map): the Contact's pose and the candidate points of the
+/// The cartel's map data as the server needs it (static, never sent: a client reads the same map): the Contact's and the pallet's pose and the candidate points of the
 /// Drop point and Hit spot zones. Pure, like <see cref="ZonePoints"/>: the server owns the random generator; a Job claims its point with <see cref="CartelSpots.Claim"/>. A map
 /// without a Contact has no cartel (<see cref="HasCartel"/> false, no error); a map without a zone of a kind has no point of it, and a claim refuses (the Job does not start).
 /// <para>
@@ -53,23 +58,25 @@ public readonly record struct ContactPose(Vector3 Position, Vector2 Facing)
 /// </summary>
 public sealed class CartelMap
 {
-    public static readonly CartelMap Empty = new(null, Array.Empty<Vector3>(), Array.Empty<Vector3>());
+    public static readonly CartelMap Empty = new(null, Array.Empty<Vector3>(), Array.Empty<Vector3>(), null);
 
-    CartelMap(ContactPose? contact, IReadOnlyList<Vector3> drops, IReadOnlyList<Vector3> hits)
+    CartelMap(ContactPose? contact, IReadOnlyList<Vector3> drops, IReadOnlyList<Vector3> hits, PalletPose? pallet)
     {
-        Contact = contact; DropPoints = drops; HitSpots = hits;
+        Contact = contact; DropPoints = drops; HitSpots = hits; Pallet = pallet;
     }
 
     /// <summary>The Contact, or null on a map that has none (then there is no cartel).</summary>
     public ContactPose? Contact { get; }
     public bool HasCartel => Contact != null;
+    /// <summary>The Cartel pallet a Delivery's Duffel lies on (the first placed marker, <see cref="CartelZones.PalletAsset"/>), or null on a map without one (then there is no Delivery).</summary>
+    public PalletPose? Pallet { get; }
     /// <summary>The candidate points of the <c>cartel_drop</c> zones, Godot ground axes; empty when none is drawn.</summary>
     public IReadOnlyList<Vector3> DropPoints { get; }
     /// <summary>The candidate points of the <c>cartel_hit</c> zones, Godot ground axes; empty when none is drawn.</summary>
     public IReadOnlyList<Vector3> HitSpots { get; }
 
-    public static CartelMap From(ZonePoints points, ContactPose? contact)
-        => new(contact, points.Points(CartelZones.DropKind), points.Points(CartelZones.HitKind));
+    public static CartelMap From(ZonePoints points, ContactPose? contact, PalletPose? pallet = null)
+        => new(contact, points.Points(CartelZones.DropKind), points.Points(CartelZones.HitKind), pallet);
 
     /// <summary>A uniform pick among the points of <paramref name="pool"/> that <paramref name="allowed"/> accepts; null when none does.</summary>
     public static Vector3? Pick(IReadOnlyList<Vector3> pool, Random rng, Func<Vector3, bool>? allowed = null)

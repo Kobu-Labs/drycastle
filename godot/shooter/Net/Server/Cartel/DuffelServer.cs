@@ -3,6 +3,7 @@ using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Colliders;
+using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 using NVec3 = System.Numerics.Vector3;
@@ -11,7 +12,7 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
 /// The Duffels on the server (GLOSSARY "Duffel"; docs/cartel.md "Duffels"; duffels.json). The pure part is <see cref="DuffelBook"/> (world entity 62); this class feeds it the players: the interact key's
-/// press picks one up (<see cref="TryPickUp"/>), the throw key (<see cref="MoveButtons.DuffelThrow"/>, counted from the inputs by <see cref="DuffelThrowKey"/>) throws or drops it, a carrier's death,
+/// press picks one up (<see cref="TryPickUp"/>), the throw key (<see cref="MoveButtons.DuffelThrow"/>, one fresh press by an <see cref="Edge"/> over the inputs) throws it at once, a carrier's death,
 /// leaving the server or the party or a seat drops it where they were, a carrier is refused a vehicle seat with a notice (<see cref="RefuseSeat"/>), and the body's <see cref="Characters.Player.Burden"/>
 /// follows what it carries: set in one place, from the book's <see cref="DuffelBook.CarrierChanged"/>, whoever changed the carrier.
 /// <para>
@@ -55,8 +56,8 @@ internal sealed class DuffelServer
     }
 
     /// <summary>
-    /// The one place a body's burden follows what it carries: a new carrier is slowed and stands where they took it, one who carries none any more walks free. The throw key starts a fresh
-    /// hold either way, but keeps its last up/down: X held through the pick-up must be let go first, as the client counts it.
+    /// The one place a body's burden follows what it carries: a new carrier is slowed and stands where they took it, one who carries none any more walks free. The throw key's edge keeps its
+    /// last up/down through it: X held through the pick-up must be let go first, as the client counts it.
     /// </summary>
     void OnCarrierChanged(ushort id, Duffel? d)
     {
@@ -64,7 +65,6 @@ internal sealed class DuffelServer
         if (!_ctx.Players.TryGetValue(id, out var c)) return;
         c.Body.Burden = d != null ? _data.BurdenOf(d.Kind) : MoveBurden.None;
         if (d != null) _lastFeet[id] = Feet(c);
-        c.DuffelKey.Reset();
     }
 
     bool OnFoot(ServerClient c) => c.Car == null && _ctx.IsAlive(c.Id) && _ctx.Tick > c.HeldUntilTick;
@@ -91,17 +91,14 @@ internal sealed class DuffelServer
     }
 
     /// <summary>
-    /// Every input of a living player on foot, carrier or not (the key's up/down is followed for all, as the client follows it): the throw key. A tap puts the Duffel down at the feet, a charged
-    /// release throws it from the eye along the look.
+    /// Every input of a living player on foot, carrier or not (the key's up/down is followed for all, as the client follows it): the throw key. A fresh press while carrying throws the Duffel at once from
+    /// the eye along the look. A press with empty hands does nothing yet (it is the place a later press at an open cargo area takes a bag out).
     /// </summary>
     public void OnInput(ServerClient c, NetInput i)
     {
-        var carrying = Book.CarriedBy(c.Id) != null;
-        var release = c.DuffelKey.Tick((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0, carrying && OnFoot(c), 1f / Wire.TickRate, _data, out var charge);
-        if (release == DuffelRelease.None) return;
-        var feet = Feet(c);
-        if (release == DuffelRelease.Drop) Book.Drop(c.Id, feet);
-        else Book.Throw(c.Id, feet + new NVec3(0, MovementStep.EyeHeight(c.Body.State.Stance), 0), Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch), charge);
+        if (!c.DuffelKey.Pressed((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0) || !OnFoot(c)) return;
+        if (Book.CarriedBy(c.Id) == null) return;
+        Book.Throw(c.Id, Feet(c) + new NVec3(0, MovementStep.EyeHeight(c.Body.State.Stance), 0), Quant.Yaw(i.Yaw), Quant.Pitch(i.Pitch));
     }
 
     /// <summary>
@@ -161,9 +158,9 @@ internal sealed class DuffelServer
     public void ChatCommand(ServerClient c, IReadOnlyList<string> args)
     {
         if (DuffelRules.Parse(args[0]) is not { } kind) { _ctx.ChatTo(c, ChatLineKind.Error, "The kinds are weed, cash and product."); return; }
-        if (Book.CarriedBy(c.Id) != null) { _ctx.ChatTo(c, ChatLineKind.Error, "You carry a duffel already: throw it or drop it first."); return; }
+        if (Book.CarriedBy(c.Id) != null) { _ctx.ChatTo(c, ChatLineKind.Error, "You carry a duffel already: throw it first."); return; }
         if (Give(kind, new HashSet<ushort> { c.Id }, c) is not { } d) { _ctx.ChatTo(c, ChatLineKind.Error, "No duffel: you are not alive, or the world is full."); return; }
-        _ctx.ChatTo(c, ChatLineKind.Info, $"A {DuffelRules.NameOf(kind)} duffel is in your hands (id {d.Id}). Hold the throw key to throw it, tap it to put it down.");
+        _ctx.ChatTo(c, ChatLineKind.Info, $"A {DuffelRules.NameOf(kind)} duffel is in your hands (id {d.Id}). Press the throw key to throw it.");
     }
 
     /// <summary>The world a Duffel meets: the Drop row of the World query (ADR 0028: terrain, buildings, trunks, doors; not vehicles, crowns or bodies).</summary>
