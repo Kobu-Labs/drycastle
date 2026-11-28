@@ -11,8 +11,16 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// One Rival chase car on the server (GLOSSARY "Chase car"; docs/cartel.md "Chase cars"): a real vehicle of vehicles.json (a <see cref="ServerCar"/> on the drive model, in its darkest skin) that an NPC drives, and its
-/// crew of Rival Gang members. The vehicle is driven by inputs this class sets (<see cref="ServerCar.NpcInput"/>: <see cref="ChasePilot"/> over the way <see cref="OffRoadRoute"/> found, roads where they bring it closer and
+/// What kind of Rival vehicle a <see cref="ChaseUnit"/> is: a chase car (<see cref="ChaseFleet"/>) or an Assault van (<see cref="AssaultFleet"/>). <see cref="Drive"/> are the numbers it drives, stops, remounts and gives up on
+/// (the chase's own, the Assault's with its vehicle, skin and give-up distance: <see cref="AssaultCarData.Drive"/>); <see cref="Crew"/> the kinds that sit in it, in slot order: the driver first, then the car's other seats, then
+/// (an Assault van) the posts of <see cref="Bay"/>.
+/// </summary>
+internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList<GangMemberKind> Crew, AssaultCarData? Bay = null);
+
+/// <summary>
+/// One Rival vehicle on the server, a chase car or an Assault van (GLOSSARY "Chase car", "Assault"; docs/cartel.md "Chase cars", "Assaults"): a real vehicle of vehicles.json (a <see cref="ServerCar"/> on the drive model, in a dark skin) that an NPC drives, and its
+/// crew of Rival Gang members. The two differ only in their <see cref="RivalProfile"/>: the vehicle, the crew and where it sits (an Assault van's riders after the cab's two seats sit in the cargo bay, drawn seated, never shooting;
+/// they step out behind the van), where it is put down and when it gives up. The vehicle is driven by inputs this class sets (<see cref="ServerCar.NpcInput"/>: <see cref="ChasePilot"/> over the way <see cref="OffRoadRoute"/> found, roads where they bring it closer and
 /// open ground where that is shorter; the vehicle step does the rest), so it is shot, bumped and destroyed like any car. The crew rides it as <see cref="GangMember"/>s posted on its seats (the post moves with the car:
 /// <see cref="PlaceRiders"/>): the driver a Rival Enforcer on seat 0, the Gunmen on the others, drawn seated. While they ride, their sight and rounds start inside the hull and skip it (<see cref="RivalCrewServer.Mount"/>); they
 /// shoot only while the car is within shoot_range_m of the van, with a worse aim while it moves. The machine (<see cref="ChaseCar"/>) decides when the car stops, backs out of a wedge, when the crew gets out, when it walks
@@ -25,6 +33,7 @@ internal sealed class ChaseUnit
 
     readonly ChaseServer _s;
     readonly HeistRun _run;
+    readonly RivalProfile _p;
     readonly ChaseData _d;
     readonly ChaseCar _machine;
     readonly List<(GangMember Member, int Seat)> _seats = new();   // the crew's seats, as it was seated when it spawned
@@ -37,54 +46,88 @@ internal sealed class ChaseUnit
     Countdown _repath;
     readonly ChaseCleanup _cleanup;
 
-    ChaseUnit(ChaseServer s, HeistRun run, ChaseData d, ServerCar car, NVec3 van)
+    ChaseUnit(ChaseServer s, HeistRun run, RivalProfile p, ServerCar car, NVec3 van)
     {
-        _s = s; _run = run; _d = d; _car = car; _machine = new ChaseCar(d); _cleanup = new ChaseCleanup(d);
+        _s = s; _run = run; _p = p; _d = p.Drive; _car = car; _machine = new ChaseCar(_d); _cleanup = new ChaseCleanup(_d);
+        if (p.Bay != null) Stall = new AssaultStall(p.Bay);
         _crew = s.Rivals.NewCrew(van, id => _machine.Shoots && run.Party.Contains(id)); // it attacks the Job's party, only while the machine lets it shoot
         _crew.Mounted += OnMounted;
         car.Exploded += OnExploded;
-        _machine.Changed += (from, to) => GD.Print($"server: {_run.Job}: chase car {car.Id}: {from} -> {to}");
+        _machine.Changed += (from, to) => GD.Print($"server: {_run.Job}: {p.Label} {car.Id}: {from} -> {to}");
     }
 
-    /// <summary>Puts a car down on <paramref name="spot"/> with its crew seated (the driver, then the Gunmen), reserved for nobody: no player may board while the crew rides. Null when the world has no room.</summary>
-    public static ChaseUnit? Spawn(ChaseServer s, HeistRun run, ChaseData d, ChaseSpot spot)
+    /// <summary>Puts a vehicle down on <paramref name="spot"/> with its crew seated (the driver, then the other seats, then the bay's posts), reserved for nobody: no player may board while the crew rides. Null when the world has no room.</summary>
+    public static ChaseUnit? Spawn(ChaseServer s, HeistRun run, RivalProfile p, ChaseSpot spot)
     {
+        var d = p.Drive;
         var at = new NVec3(spot.Ground.X, s.Ground(spot.Ground.X, spot.Ground.Y), spot.Ground.Y);
         if (s.Vehicles.Spawn(d.VehicleType, at, spot.Yaw, Array.Empty<ushort>(), (byte)Math.Clamp(d.Skin, 0, 255)) is not { } car) return null;
-        var unit = new ChaseUnit(s, run, d, car, run.VanFeet);
-        var gunmen = ChaseRules.Gunmen(d, run.Job.Tier, run.Party.Count);
-        var seats = Math.Min(1 + gunmen, car.Def.Seats.Count);
-        var driver = unit.Seat(GangMemberKind.Enforcer, 0);
-        var ok = driver != null;
-        for (var seat = 1; ok && seat < seats; seat++) ok = unit.Seat(GangMemberKind.Gunman, seat) != null;
+        var unit = new ChaseUnit(s, run, p, car, run.VanFeet);
+        var capacity = car.Def.Seats.Count + (p.Bay?.BayPosts.Length ?? 0);
+        var n = Math.Min(p.Crew.Count, capacity);
+        if (n < p.Crew.Count) GD.PrintErr($"server: {run.Job}: {p.Label} {car.Id}: {p.Crew.Count} in the crew, room for {capacity}: {p.Crew.Count - n} left out");
+        var ok = n > 0;
+        for (var slot = 0; ok && slot < n; slot++) ok = unit.Seat(p.Crew[slot], slot) != null;
         if (!ok) { unit.Remove(); return null; }
         s.Rivals.Mount(car);
-        GD.Print($"server: {run.Job}: chase car {car.Id} ({car.Def.Id} skin {d.Skin}) at ({at.X:F0},{at.Z:F0}) on {(spot.Place != null ? "the road" : "open ground")}, {seats - 1} Gunmen, {spot.BackM:F0} m behind the van");
+        run.SealBay(car); // a Rival vehicle's cargo bay takes nobody's Duffels
+        var inBay = Math.Max(0, n - car.Def.Seats.Count);
+        GD.Print($"server: {run.Job}: {p.Label} {car.Id} ({car.Def.Id} skin {d.Skin}) at ({at.X:F0},{at.Z:F0}) on {(spot.Place != null ? "the road" : "open ground")}, crew of {n}{(inBay > 0 ? $" ({inBay} in the bay)" : "")}");
         return unit;
     }
 
-    /// <summary>One member of the crew in a seat of the car (posted there, sitting). Null when the world has no room for it.</summary>
-    GangMember? Seat(GangMemberKind kind, int seat)
+    /// <summary>One member of the crew in a slot of the car (a seat, or a post of the bay: posted there, sitting). Null when the world has no room for it.</summary>
+    GangMember? Seat(GangMemberKind kind, int slot)
     {
-        var m = _crew!.AddPosted(kind, SeatFeet(_car!, seat), _car!.State.Yaw, seat: true);
+        var m = _crew!.AddPosted(kind, SlotFeet(_car!, slot), _car!.State.Yaw, seat: true, shut: InBay(_car, slot));
         if (m == null) return null;
-        _seats.Add((m, seat));
-        _riders.Add((m, seat));
-        if (seat == 0) _driver = m;
+        _seats.Add((m, slot));
+        _riders.Add((m, slot));
+        if (slot == 0) _driver = m;
         return m;
     }
 
-    /// <summary>Where a rider's feet are: the seat's point, lowered seat_drop_m (the seated figure's hips are then on it).</summary>
-    NVec3 SeatFeet(ServerCar car, int seat)
+    /// <summary>The slot is a post of the cargo bay (past the car's seats): its rider shoots from no window.</summary>
+    static bool InBay(ServerCar car, int slot) => slot >= car.Def.Seats.Count;
+
+    /// <summary>The bay's post of a slot past the car's seats, in the car's frame.</summary>
+    float[] BayPost(ServerCar car, int slot) => _p.Bay!.BayPosts[slot - car.Def.Seats.Count];
+
+    /// <summary>Where a rider's feet are: a seat's point lowered seat_drop_m (the seated figure's hips are then on it), or a bay post (a point of the floor: it sits there, the hips seat_pelvis_m above).</summary>
+    NVec3 SlotFeet(ServerCar car, int slot)
     {
-        var p = CarPose.SeatPos(car, seat);
+        if (InBay(car, slot))
+        {
+            var b = CarPose.PointAt(car, BayPost(car, slot));
+            return new NVec3(b.X, b.Y, b.Z);
+        }
+        var p = CarPose.SeatPos(car, slot);
         return new NVec3(p.X, p.Y - _d.SeatDropM, p.Z);
     }
 
     // ---- what the Heist asks ----
 
-    /// <summary>The car counts towards max_alive.</summary>
-    public bool InFight => _machine.InFight(_crew?.AliveCount ?? 0);
+    /// <summary>The car counts towards max_alive (an Assault van: unless it is stalled, <see cref="Counts"/>).</summary>
+    public bool InFight => _machine.InFight(_crew?.AliveCount ?? 0) && Counts;
+
+    /// <summary>The Assault's progress watch (null for a chase car).</summary>
+    public AssaultStall? Stall { get; }
+
+    /// <summary>It counts towards the cap: every unit but a stalled Assault.</summary>
+    public bool Counts => Stall?.Counts ?? true;
+
+    /// <summary>The crew sits in the vehicle (not out on foot) and the vehicle stands in the world.</summary>
+    public bool Riding => _car != null && _machine.CrewInside;
+
+    /// <summary>One tick of the stall watch (an Assault van only): see <see cref="AssaultStall.Step"/>. True once, the tick it becomes stalled.</summary>
+    public bool StepStall(bool newest, NVec3 van, float dt)
+    {
+        if (Stall is not { } stall || _car is not { } car) return false;
+        var gap = NVec2.Distance(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), new NVec2(van.X, van.Z));
+        var stalled = stall.Step(Riding, newest, gap, dt);
+        if (stalled) GD.Print($"server: {_run.Job}: {_p.Label} {car.Id} is stalled ({gap:F0} m from the van, no {_p.Bay!.StallProgressM:F0} m closer in {_p.Bay!.StallSeconds:F0} s)");
+        return stalled;
+    }
 
     /// <summary>Nothing of it is left in the world (car and crew removed): the Heist forgets it.</summary>
     public bool Finished => _car == null && _crew == null;
@@ -214,18 +257,31 @@ internal sealed class ChaseUnit
     public void PlaceRiders()
     {
         if (_car is not { } car || !(_machine.CrewInside || _machine.Remounting)) return;
-        foreach (var (m, seat) in _riders) m.MovePost(SeatFeet(car, seat), car.State.Yaw);
+        foreach (var (m, slot) in _riders) m.MovePost(SlotFeet(car, slot), car.State.Yaw);
     }
 
-    /// <summary>Where a member of seat <paramref name="seat"/> steps out, and walks back to: beside the door on its seat's side (snapped to the navigation mesh).</summary>
-    NVec3 ExitSpot(ServerCar car, int seat)
+    /// <summary>
+    /// Where a member of slot <paramref name="slot"/> steps out, and walks back to: beside the door on its seat's side (snapped to the navigation mesh); a bay rider behind the van, out of the rear doors
+    /// (the post's own x, <see cref="AssaultCarData.BayExitZ"/> along the frame, on the ground).
+    /// </summary>
+    NVec3 ExitSpot(ServerCar car, int slot)
     {
-        var yaw = car.State.Yaw;
-        var right = new NVec3(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
-        var off = car.Def.Seats[seat].Offset;
-        var side = off[0] < 0 ? -1f : 1f;
-        var p = CarPose.SeatPos(car, seat);
-        var raw = new NVec3(p.X, car.GlobalPosition.Y, p.Z) + right * (side * (car.HalfWidth - MathF.Abs(off[0]) + _d.ExitSideM));
+        NVec3 raw;
+        if (InBay(car, slot))
+        {
+            var post = BayPost(car, slot);
+            var b = CarPose.PointAt(car, new[] { post[0], 0f, _p.Bay!.BayExitZ });
+            raw = new NVec3(b.X, car.GlobalPosition.Y, b.Z);
+        }
+        else
+        {
+            var yaw = car.State.Yaw;
+            var right = new NVec3(MathF.Cos(yaw), 0, -MathF.Sin(yaw));
+            var off = car.Def.Seats[slot].Offset;
+            var side = off[0] < 0 ? -1f : 1f;
+            var p = CarPose.SeatPos(car, slot);
+            raw = new NVec3(p.X, car.GlobalPosition.Y, p.Z) + right * (side * (car.HalfWidth - MathF.Abs(off[0]) + _d.ExitSideM));
+        }
         var snapped = _s.Rivals.Snap(raw);
         return NVec3.Distance(snapped, raw) <= SnapM ? snapped : raw;
     }
@@ -271,7 +327,7 @@ internal sealed class ChaseUnit
         foreach (var (member, seat) in _seats)
         {
             if (member != m) continue;
-            m.Post(SeatFeet(car, seat), car.State.Yaw, seat: true);
+            m.Post(SlotFeet(car, seat), car.State.Yaw, seat: true, shut: InBay(car, seat));
             _riders.Add((m, seat));
             return;
         }

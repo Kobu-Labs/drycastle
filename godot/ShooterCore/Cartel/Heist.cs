@@ -9,7 +9,7 @@ namespace Drycastle.ShooterCore.Cartel;
 public enum HeistPhase : byte { ToObjective, AtObjective, ToDrop, AtDrop, Delivered, Lost, ToVan }
 
 /// <summary>The Assault clock of a Heist (machine <c>Heist.Assaults</c>): when the next Rival crew van is due.</summary>
-public enum AssaultClockState : byte { Idle, Grace, Waiting, Paused, DropGrace, DropWaiting, Over }
+public enum AssaultClockState : byte { Idle, Waiting, Paused, DropWaiting, Over }
 
 /// <summary>Where the Cartel van is as far as the Assaults care (<see cref="AssaultClock.Tick(float, AssaultSite)"/>): in the objective's area, in the drop's area, or on the road between.</summary>
 public enum AssaultSite : byte { Away, Objective, Drop }
@@ -37,45 +37,41 @@ public readonly record struct HeistTick(JobStep Step, bool AssaultDue);
 public enum HeistMarker : byte { None, Objective, Van, Drop }
 
 /// <summary>
-/// When the Assaults of a Heist come (docs/cartel.md "Assaults"): nothing before the van first reaches the objective, then one after the grace time and one every interval while the Heist is
-/// at its objective. The clock pauses while the van is away on the road and goes on where it was if the van comes back. At the drop (the van within the Receiver's area) it runs again: the
-/// first Assault comes drop_grace_seconds after the van arrived, then one every interval, until the Heist ends. It is over when the Heist ends.
+/// When the Assaults of a Heist come (docs/cartel.md "Assaults"): nothing before the van first reaches the objective; the first Assault is due the moment it does (no grace: the Assault's drive in is
+/// the warning), then one every interval while the Heist is at its objective. The clock pauses while the van is away on the road and goes on where it was if the van comes back. At the drop (the van within
+/// the Receiver's area) it runs again: the first Assault is due the moment the van arrives, then one every interval, until the Heist ends. It is over when the Heist ends. A stalled Assault (the newest one made no
+/// headway) asks for the next at once: <see cref="Restart"/> starts the interval over from that one.
 /// </summary>
 public sealed class AssaultClock
 {
     public static readonly StateMachineSpec<AssaultClockState> Spec = StateMachineSpec<AssaultClockState>
-        .Define("Heist.Assaults", "When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval while it is there; again at the drop, from the van's arrival there, until the Heist ends.", AssaultClockState.Idle)
-        .Allow(AssaultClockState.Idle, AssaultClockState.Grace)
-        .Allow(AssaultClockState.Grace, AssaultClockState.Waiting, AssaultClockState.Paused)
+        .Define("Heist.Assaults", "When a Heist's next Assault (a Rival crew van) is due: the moment the Cartel van first reaches the objective, then every interval while it is there; again the moment it first reaches the drop, then every interval, until the Heist ends.", AssaultClockState.Idle)
+        .Allow(AssaultClockState.Idle, AssaultClockState.Waiting)
         .Allow(AssaultClockState.Waiting, AssaultClockState.Paused)
-        .Allow(AssaultClockState.Paused, AssaultClockState.Waiting, AssaultClockState.DropGrace, AssaultClockState.DropWaiting)
-        .Allow(AssaultClockState.DropGrace, AssaultClockState.DropWaiting, AssaultClockState.Paused)
+        .Allow(AssaultClockState.Paused, AssaultClockState.Waiting, AssaultClockState.DropWaiting)
         .Allow(AssaultClockState.DropWaiting, AssaultClockState.Paused)
         .FromAnywhere(AssaultClockState.Over)
         .Note(AssaultClockState.Idle, "The van has not reached the objective yet; no clock.")
-        .Note(AssaultClockState.Grace, "The van reached the objective (clock: the grace seconds); at its end the first Assault is due.")
-        .Note(AssaultClockState.Waiting, "Assaults came (clock: the interval); at its end the next is due and the clock starts over.")
-        .Note(AssaultClockState.Paused, "The van is on the road, away from the objective and from the drop: no new Assault. The time left is kept; back at the objective it goes on with it (Waiting), back at the drop it goes on in its own state (DropGrace or DropWaiting), a first arrival at the drop starts DropGrace.")
-        .Note(AssaultClockState.DropGrace, "The van reached the drop's area (clock: the drop grace seconds, about 20); at its end the first Assault comes to the drop.")
-        .Note(AssaultClockState.DropWaiting, "Assaults came to the drop (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.")
+        .Note(AssaultClockState.Waiting, "The van is at the objective: the first Assault came the moment it arrived, then every interval (clock: the interval); at its end the next is due and the clock starts over. A stalled Assault sends the next at once and starts the interval over.")
+        .Note(AssaultClockState.Paused, "The van is on the road, away from the objective and from the drop: no new Assault. The time left is kept; back at the objective it goes on with it (Waiting), back at the drop it goes on in its own state (DropWaiting), a first arrival at the drop makes an Assault due at once.")
+        .Note(AssaultClockState.DropWaiting, "The van is at the drop: the first Assault came the moment it arrived, then every interval (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.")
         .Note(AssaultClockState.Over, "The Heist ended. Never left.")
         .Build();
 
     readonly StateMachine<AssaultClockState> _fsm = new(Spec);
-    readonly float _grace, _interval, _dropGrace;
+    readonly float _interval;
     float _held;
     /// <summary>The state the clock was in when it was paused (what a return to the same place goes on with).</summary>
     AssaultClockState _from;
 
-    public AssaultClock(float graceSeconds, float intervalSeconds, float dropGraceSeconds = 20f)
-    {
-        _grace = graceSeconds; _interval = intervalSeconds; _dropGrace = dropGraceSeconds;
-    }
+    public AssaultClock(float intervalSeconds) { _interval = intervalSeconds; }
 
     public AssaultClockState State => _fsm.Current;
+    /// <summary>The clock runs: the van is at the objective or at the drop (a stalled Assault may send the next now).</summary>
+    public bool Running => _fsm.IsAny(AssaultClockState.Waiting, AssaultClockState.DropWaiting);
     /// <summary>Seconds to the next Assault (infinite while idle, paused or over).</summary>
-    public float Left => _fsm.IsAny(AssaultClockState.Grace, AssaultClockState.Waiting, AssaultClockState.DropGrace, AssaultClockState.DropWaiting) ? _fsm.Left : float.PositiveInfinity;
-    /// <summary>Assaults that fell due so far.</summary>
+    public float Left => Running ? _fsm.Left : float.PositiveInfinity;
+    /// <summary>Assaults that fell due so far (a stalled one's early next not counted: <see cref="Restart"/>).</summary>
     public int Due { get; private set; }
 
     /// <summary>One tick with the van at the objective or not (the template before the drop's Assaults).</summary>
@@ -87,20 +83,20 @@ public sealed class AssaultClock
         switch (_fsm.Current)
         {
             case AssaultClockState.Idle:
-                if (site == AssaultSite.Objective) _fsm.Enter(AssaultClockState.Grace, _grace);
-                return false;
-            case AssaultClockState.Grace:
+                if (site != AssaultSite.Objective) return false;
+                _fsm.Enter(AssaultClockState.Waiting, _interval); // the van's first arrival: an Assault now, the next in an interval
+                Due++;
+                return true;
             case AssaultClockState.Waiting:
-                return Run(dt, site == AssaultSite.Objective, AssaultClockState.Waiting);
-            case AssaultClockState.DropGrace:
+                return Run(dt, site == AssaultSite.Objective);
             case AssaultClockState.DropWaiting:
-                return Run(dt, site == AssaultSite.Drop, AssaultClockState.DropWaiting);
+                return Run(dt, site == AssaultSite.Drop);
             case AssaultClockState.Paused:
-                if (site == AssaultSite.Objective) _fsm.Enter(AssaultClockState.Waiting, _from is AssaultClockState.Grace or AssaultClockState.Waiting ? _held : _interval);
+                if (site == AssaultSite.Objective) _fsm.Enter(AssaultClockState.Waiting, _from == AssaultClockState.Waiting ? _held : _interval);
                 else if (site == AssaultSite.Drop)
                 {
-                    if (_from is AssaultClockState.DropGrace or AssaultClockState.DropWaiting) _fsm.Enter(_from, _held);
-                    else _fsm.Enter(AssaultClockState.DropGrace, _dropGrace);
+                    if (_from == AssaultClockState.DropWaiting) _fsm.Enter(AssaultClockState.DropWaiting, _held);
+                    else { _fsm.Enter(AssaultClockState.DropWaiting, _interval); Due++; return true; } // the first arrival at the drop: an Assault now
                 }
                 return false;
             default:
@@ -108,15 +104,20 @@ public sealed class AssaultClock
         }
     }
 
-    /// <summary>A running state (grace or waiting, at the objective or at the drop): paused when the van left its site, else counted down; at zero an Assault is due and the interval starts.</summary>
-    bool Run(float dt, bool here, AssaultClockState next)
+    /// <summary>A running state (at the objective or at the drop): paused when the van left its site, else counted down; at zero an Assault is due and the interval starts.</summary>
+    bool Run(float dt, bool here)
     {
         if (!here) { _held = _fsm.Left; _from = _fsm.Current; _fsm.Enter(AssaultClockState.Paused); return false; }
         if (!_fsm.Tick(dt)) return false;
-        if (_fsm.Is(AssaultClockState.Grace) || _fsm.Is(AssaultClockState.DropGrace)) _fsm.Enter(next, _interval);
-        else _fsm.Restart(_interval);
+        _fsm.Restart(_interval);
         Due++;
         return true;
+    }
+
+    /// <summary>An Assault was sent out of turn (the newest one stalled): the interval starts over from it. Nothing unless the clock runs.</summary>
+    public void Restart()
+    {
+        if (Running) _fsm.Restart(_interval);
     }
 
     /// <summary>The Heist ended: no Assault ever again.</summary>
@@ -144,7 +145,7 @@ public sealed class Heist
         .Note(HeistPhase.ToObjective, "The party has the Cartel van and it has not reached the objective's area yet; no Assault. Ends when it stands in the area.")
         .Note(HeistPhase.AtObjective, "The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.")
         .Note(HeistPhase.ToDrop, "The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; within the drop's area it is AtDrop.")
-        .Note(HeistPhase.AtDrop, "The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault about 20 s after the arrival). Leaving the area is ToDrop again.")
+        .Note(HeistPhase.AtDrop, "The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault the moment the van arrives). Leaving the area is ToDrop again.")
         .Note(HeistPhase.Delivered, "The Receiver was sent off with at least the minimum on it (it left by itself with every Duffel aboard, the leader told it to, or the buyer took the bags): the Job succeeds; Respect counts what was on the Receiver then. Never left.")
         .Note(HeistPhase.Lost, "The Cartel van was destroyed: the Job fails. Never left.")
         .Build();
@@ -153,11 +154,11 @@ public sealed class Heist
 
     /// <param name="min">The fewest Duffels the drop takes (<see cref="HeistRules.MinDuffels"/>).</param>
     /// <param name="max">The most Duffels the party can fill (<see cref="HeistRules.MaxDuffels"/>).</param>
-    /// <param name="dropGraceSeconds">The first Assault at the drop comes this long after the van arrived there.</param>
-    public Heist(int min, int max, float graceSeconds, float intervalSeconds, float dropGraceSeconds = 20f)
+    /// <param name="intervalSeconds">The Assaults come this far apart, at the objective and at the drop (the first the moment the van arrives).</param>
+    public Heist(int min, int max, float intervalSeconds)
     {
         Min = min; Max = max;
-        Assaults = new AssaultClock(graceSeconds, intervalSeconds, dropGraceSeconds);
+        Assaults = new AssaultClock(intervalSeconds);
     }
 
     public int Min { get; }
@@ -264,15 +265,14 @@ public class HeistData
     public int MaxPerExtraMember { get; set; } = 1;
     /// <summary>Respect for each Duffel loaded above the minimum at the drop, times the tier, on top of the tier's Respect (each earning member).</summary>
     public int BonusRespectPerDuffel { get; set; } = 15;
-    /// <summary>The first Assault comes this long after the van reaches the objective, the next every interval, per tier.</summary>
-    public float[] GraceSeconds { get; set; } = { 60, 55, 50, 45, 40 };
-    public float[] AssaultIntervalSeconds { get; set; } = { 100, 90, 80, 70, 60 };
+    /// <summary>The first Assault comes the moment the van reaches the objective (and again at the drop), the next every interval, per tier: 40% of the first guesses (100 to 60).</summary>
+    public float[] AssaultIntervalSeconds { get; set; } = { 40, 36, 32, 28, 24 };
     /// <summary>One Assault's crew per tier (Gunmen and Enforcers of the Rival crew), plus Gunmen per party member beyond the first; at most max_crew a van, its Enforcers kept first. A van carries 5: 1 melee (an Enforcer) and 4 Gunmen.</summary>
     public int[] AssaultGunmen { get; set; } = { 4, 4, 4, 4, 5 };
     public int[] AssaultEnforcers { get; set; } = { 1, 1, 1, 1, 1 };
     public int GunmenPerExtraMember { get; set; } = 1;
     public int MaxCrew { get; set; } = 6;
-    /// <summary>No new Assault while this many of the Heist's are still in the fight (a crew member alive or still in its van: <see cref="HeistAssaults.InFight"/>); the clock goes on.</summary>
+    /// <summary>No new Assault while this many of the Heist's are still in the fight (a crew member alive, or the crew still riding: <see cref="ChaseCar.InFight"/>; a stalled one does not count); the clock goes on.</summary>
     public int MaxAssaultsAlive { get; set; } = 3;
     /// <summary>The vehicle type the Heist puts down (vehicles.json), on the road spot nearest the Contact at least van_spawn_min_m from him.</summary>
     public string VanType { get; set; } = "cartel_van";
@@ -286,8 +286,6 @@ public class HeistData
     public float DropApartM { get; set; } = 40;
     /// <summary>The Rival chase cars after the van once it leaves the objective with the minimum (docs/cartel.md "Chase cars"): when, how big, where, how they fight and when they give up.</summary>
     public ChaseData Chase { get; set; } = new();
-    /// <summary>The first Assault at the drop comes this long after the van arrives in its area (then every assault_interval_seconds).</summary>
-    public float DropGraceSeconds { get; set; } = 20;
 
     /// <summary>Checks the numbers; <paramref name="what"/> names the section (<c>cartel.json: jobs.harvest</c>).</summary>
     public virtual void Validate(string what, int tiers)
@@ -298,7 +296,6 @@ public class HeistData
         PerTier(MinDuffels, "min_duffels", n => n >= 1, "at least 1");
         PerTier(MaxDuffels, "max_duffels", n => n >= 1, "at least 1");
         for (var t = 0; t < tiers; t++) if (MaxDuffels[t] < MinDuffels[t]) throw Bad($"tier {t + 1}: max_duffels is below min_duffels");
-        PerTier(GraceSeconds, "grace_seconds", s => float.IsFinite(s) && s >= 0, "0 or more");
         PerTier(AssaultIntervalSeconds, "assault_interval_seconds", CartelTiers.Positive, "more than 0");
         PerTier(AssaultGunmen, "assault_gunmen", CartelTiers.Count, "0 or more");
         PerTier(AssaultEnforcers, "assault_enforcers", CartelTiers.Count, "0 or more");
@@ -311,7 +308,6 @@ public class HeistData
         if (!float.IsFinite(LoadedMaxKmh) || LoadedMaxKmh <= 0) throw Bad("loaded_max_kmh must be more than 0");
         foreach (var (v, name) in new[] { (VanSpawnMinM, "van_spawn_min_m"), (VanLoadMarginM, "van_load_margin_m"), (DropMinM, "drop_min_m"), (DropApartM, "drop_apart_m") })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
-        if (!float.IsFinite(DropGraceSeconds) || DropGraceSeconds < 0) throw Bad("drop_grace_seconds must be 0 or more");
         Chase.Validate($"{what}.chase", tiers);
     }
 }
@@ -373,7 +369,6 @@ public static class HeistRules
 
     /// <summary>The Job timer of a tier.</summary>
     public static float Seconds(HeistData d, int tier) => CartelTiers.Of(d.Seconds, tier);
-    public static float GraceSeconds(HeistData d, int tier) => CartelTiers.Of(d.GraceSeconds, tier);
     public static float IntervalSeconds(HeistData d, int tier) => CartelTiers.Of(d.AssaultIntervalSeconds, tier);
 }
 

@@ -5,7 +5,7 @@ using Drycastle.ShooterCore.Thieves;
 namespace Drycastle.ShooterCore.Cartel;
 
 /// <summary>
-/// How the Rival crew's vehicles leave the roads (cartel.json <c>off_road</c>; docs/cartel.md "Assaults", "Chase cars"): an Assault van and a chase car use the roads while they bring them closer and cross open
+/// How the Rival crew's vehicles leave the roads (cartel.json <c>off_road</c>; docs/cartel.md "Assaults", "Chase cars"): an Assault van and a chase car (the same driver) use the roads while they bring them closer and cross open
 /// ground (fields, meadows) when that is shorter, never over a building, a tree trunk, a fence, water or a slope too steep for a car. Lengths metres.
 /// </summary>
 public sealed class OffRoadData
@@ -21,9 +21,6 @@ public sealed class OffRoadData
     public float CloseM { get; set; } = 6;
     /// <summary>The most road points whose way is worked out for one plan (the nearest by a lower bound first).</summary>
     public int MaxChecks { get; set; } = 10;
-    /// <summary>An Assault van drives over open ground only when the way over it is at least this long; it stops this short of its target.</summary>
-    public float MinTailM { get; set; } = 12;
-    public float ParkShortM { get; set; } = 14;
     /// <summary>The open check (the server's): a line is looked at every <see cref="SampleM"/> along it, in three lanes (the vehicle's width), with rays <see cref="RayUpM"/> over the ground, and refused where the ground climbs more than <see cref="MaxGrade"/> between two samples.</summary>
     public float SampleM { get; set; } = 4;
     public float RayUpM { get; set; } = 0.9f;
@@ -34,7 +31,7 @@ public sealed class OffRoadData
 
     public void Validate(string what)
     {
-        foreach (var (v, name) in new[] { (EnterM, "enter_m"), (LeaveM, "leave_m"), (StepM, "step_m"), (OpenCost, "open_cost"), (CloseM, "close_m"), (MinTailM, "min_tail_m"), (ParkShortM, "park_short_m"), (SampleM, "sample_m"), (RayUpM, "ray_up_m"), (MaxGrade, "max_grade"), (MarginM, "margin_m"), (CarHalfWidthM, "car_half_width_m") })
+        foreach (var (v, name) in new[] { (EnterM, "enter_m"), (LeaveM, "leave_m"), (StepM, "step_m"), (OpenCost, "open_cost"), (CloseM, "close_m"), (SampleM, "sample_m"), (RayUpM, "ray_up_m"), (MaxGrade, "max_grade"), (MarginM, "margin_m"), (CarHalfWidthM, "car_half_width_m") })
             if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"{what}: {name} must be more than 0");
         if (OpenCost < 1) throw new DataFileException($"{what}: open_cost must be at least 1 (open ground is never cheaper than road)");
         if (MaxChecks < 1) throw new DataFileException($"{what}: max_checks must be at least 1");

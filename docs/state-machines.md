@@ -109,6 +109,23 @@ stateDiagram-v2
 - **Direct**: No menus; ends with the process, or Failed when loading the data or map threw.
 - **Failed**: Terminal: Quit(2) was requested.
 
+## Assault.Stall
+
+Whether an Assault van makes headway to the Cartel van: only the newest Assault whose crew still rides is watched; no stall_progress_m closer in stall_seconds is stalled (the next Assault is sent right away, this one no longer counts towards the cap and goes once it is far from every player and unseen).
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Watching
+    Watching --> Idle
+    Watching --> Stalled
+    Stalled --> Idle
+```
+
+- **Idle**: Not watched: a newer Assault whose crew rides exists, or the crew is out (on foot), or it just spawned.
+- **Watching**: The newest riding Assault: the window (clock: stall_seconds) starts over each time it gets stall_progress_m closer to the van, or is within stall_near_m of it. Out of time: Stalled.
+- **Stalled**: Made no headway: counts no more towards max_assaults_alive (the next was sent at once); removed with its crew when more than remove_far_m from every player and out of every player's sight. Ends when the crew gets out.
+
 ## Bigfoot.Act
 
 What the Bigfoot is doing this moment: chasing, winding up or landing one attack, or holding a player; it ends dead.
@@ -377,7 +394,7 @@ stateDiagram-v2
 
 ## Chase.Car
 
-One Rival chase car of a Heist: it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
+One Rival car of a Heist, a chase car or an Assault van (the same driver): it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
 
 ```mermaid
 stateDiagram-v2
@@ -403,7 +420,7 @@ stateDiagram-v2
 
 From any state: Gone
 
-- **Spawned**: Just put down on open ground behind the van with its crew seated: nothing driven yet. The next step is Chasing.
+- **Spawned**: Just put down on open ground (a chase car ahead of or behind the van, an Assault van 250 to 400 m of way from it) with its crew seated: nothing driven yet. The next step is Chasing.
 - **Chasing**: Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
 - **Stopping**: Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.
 - **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away (confirmed for remount_confirm_seconds) and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.
@@ -1091,20 +1108,15 @@ stateDiagram-v2
 
 ## Heist.Assaults
 
-When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval while it is there; again at the drop, from the van's arrival there, until the Heist ends.
+When a Heist's next Assault (a Rival crew van) is due: the moment the Cartel van first reaches the objective, then every interval while it is there; again the moment it first reaches the drop, then every interval, until the Heist ends.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Grace
-    Grace --> Waiting
-    Grace --> Paused
+    Idle --> Waiting
     Waiting --> Paused
     Paused --> Waiting
-    Paused --> DropGrace
     Paused --> DropWaiting
-    DropGrace --> DropWaiting
-    DropGrace --> Paused
     DropWaiting --> Paused
     Over --> [*]
 ```
@@ -1112,11 +1124,9 @@ stateDiagram-v2
 From any state: Over
 
 - **Idle**: The van has not reached the objective yet; no clock.
-- **Grace**: The van reached the objective (clock: the grace seconds); at its end the first Assault is due.
-- **Waiting**: Assaults came (clock: the interval); at its end the next is due and the clock starts over.
-- **Paused**: The van is on the road, away from the objective and from the drop: no new Assault. The time left is kept; back at the objective it goes on with it (Waiting), back at the drop it goes on in its own state (DropGrace or DropWaiting), a first arrival at the drop starts DropGrace.
-- **DropGrace**: The van reached the drop's area (clock: the drop grace seconds, about 20); at its end the first Assault comes to the drop.
-- **DropWaiting**: Assaults came to the drop (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.
+- **Waiting**: The van is at the objective: the first Assault came the moment it arrived, then every interval (clock: the interval); at its end the next is due and the clock starts over. A stalled Assault sends the next at once and starts the interval over.
+- **Paused**: The van is on the road, away from the objective and from the drop: no new Assault. The time left is kept; back at the objective it goes on with it (Waiting), back at the drop it goes on in its own state (DropWaiting), a first arrival at the drop makes an Assault due at once.
+- **DropWaiting**: The van is at the drop: the first Assault came the moment it arrived, then every interval (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.
 - **Over**: The Heist ended. Never left.
 
 ## Heist.Chases
@@ -1166,7 +1176,7 @@ From any state: Lost
 - **ToObjective**: The party has the Cartel van and it has not reached the objective's area yet; no Assault. Ends when it stands in the area.
 - **AtObjective**: The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.
 - **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; within the drop's area it is AtDrop.
-- **AtDrop**: The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault about 20 s after the arrival). Leaving the area is ToDrop again.
+- **AtDrop**: The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault the moment the van arrives). Leaving the area is ToDrop again.
 - **Delivered**: The Receiver was sent off with at least the minimum on it (it left by itself with every Duffel aboard, the leader told it to, or the buyer took the bags): the Job succeeds; Respect counts what was on the Receiver then. Never left.
 - **Lost**: The Cartel van was destroyed: the Job fails. Never left.
 - **ToVan**: The Cartel van is put down beside the Contact and the party has not reached it yet (the marker is on the van). Ends when a party player is at the van or sits in it.

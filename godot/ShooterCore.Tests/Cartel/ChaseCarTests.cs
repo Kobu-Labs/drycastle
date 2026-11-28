@@ -31,10 +31,12 @@ public class ChaseCarTests
             section.Validate($"jobs.{kind}.chase", Shipped.Tiers.Count);
             Assert.Equal((d.VehicleType, d.Skin, d.FirstAfterSeconds, d.IntervalSeconds, d.MaxAlive), (section.VehicleType, section.Skin, section.FirstAfterSeconds, section.IntervalSeconds, section.MaxAlive));
             Assert.Equal(d.Gunmen, section.Gunmen);
+            Assert.Equal((d.SpawnAheadMinM, d.SpawnAheadMaxM), (section.SpawnAheadMinM, section.SpawnAheadMaxM));
             Assert.Equal((d.SpawnPlayerMinM, d.ShootRangeM, d.MovingAimErrorDeg, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds), (section.SpawnPlayerMinM, section.ShootRangeM, section.MovingAimErrorDeg, section.StopSpeedMps, section.StopWithinM, section.GiveUpM, section.GiveUpSeconds));
             Assert.Equal((d.FollowM, d.MaxSpeedMps, d.RemountM, d.UnstickAfterSeconds, d.WreckSeconds, d.SeatDropM), (section.FollowM, section.MaxSpeedMps, section.RemountM, section.UnstickAfterSeconds, section.WreckSeconds, section.SeatDropM));
         }
-        Assert.Equal((150f, 40f, 5f, 30f, 250f, 20f, 2, 20f, 45f), (d.SpawnPlayerMinM, d.ShootRangeM, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds, d.MaxAlive, d.FirstAfterSeconds, d.IntervalSeconds)); // the user's numbers
+        Assert.Equal((150f, 40f, 5f, 30f, 250f, 20f, 3, 0f, 22f), (d.SpawnPlayerMinM, d.ShootRangeM, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds, d.MaxAlive, d.FirstAfterSeconds, d.IntervalSeconds)); // the user's numbers: the first the moment the van leaves, every 22 s, 3 alive
+        Assert.Equal((150f, 400f), (d.SpawnAheadMinM, d.SpawnAheadMaxM)); // 150 to 400 m ahead along the way to the drop
     }
 
     [Fact]
@@ -115,34 +117,34 @@ public class ChaseCarTests
     // ---- the clock ----
 
     [Fact]
-    public void TheClockStartsWhenTheVanLeavesTheObjectiveFirstAfterTwentySecondsThenEveryFortyFive()
+    public void TheClockStartsWhenTheVanLeavesTheObjectiveTheFirstAtOnceThenEveryTwentyTwo()
     {
         var c = new ChaseClock(new ChaseData());
         Assert.False(c.Tick(100f, 0)); // idle: nothing, whatever the time
         Assert.True(c.Start());
         Assert.False(c.Start()); // a second leave of the same drive changes nothing
-        Assert.False(c.Tick(19.9f, 0));
-        Assert.True(c.Tick(0.2f, 0)); // 20 s
+        Assert.True(c.Tick(Dt, 0)); // first_after_seconds 0: the first the moment the van left
         c.Sent();
-        Assert.False(c.Tick(44.9f, 0));
-        Assert.True(c.Tick(0.2f, 0)); // 45 s on
+        Assert.False(c.Tick(21.8f, 0));
+        Assert.True(c.Tick(0.4f, 0)); // 22 s on
         c.Sent();
-        Assert.False(c.Tick(30f, 0));
-        Assert.Equal(15f, c.Left, 0.01f);
+        Assert.False(c.Tick(10f, 0));
+        Assert.Equal(12f, c.Left, 0.01f);
     }
 
     [Fact]
-    public void AtMostTwoAreAliveAndTheNextComesTheMomentOneIsOutOfTheFight()
+    public void AtMostThreeAreAliveAndTheNextComesTheMomentOneIsOutOfTheFight()
     {
         var c = new ChaseClock(new ChaseData());
         c.Start();
-        Assert.True(c.Tick(20f, 0)); c.Sent();
-        Assert.True(c.Tick(45f, 1)); c.Sent();
-        Assert.False(c.Tick(45f, 2)); // the interval ran out but two are alive
-        Assert.False(c.Tick(100f, 2));
-        Assert.True(c.Tick(Dt, 1)); // one died: the due car comes at once
+        Assert.True(c.Tick(Dt, 0)); c.Sent();
+        Assert.True(c.Tick(22f, 1)); c.Sent();
+        Assert.True(c.Tick(22f, 2)); c.Sent();
+        Assert.False(c.Tick(22f, 3)); // the interval ran out but three are alive
+        Assert.False(c.Tick(100f, 3));
+        Assert.True(c.Tick(Dt, 2)); // one died: the due car comes at once
         c.Sent();
-        Assert.False(c.Tick(1f, 1)); // and the interval starts over
+        Assert.False(c.Tick(1f, 2)); // and the interval starts over
     }
 
     [Fact]
@@ -150,12 +152,12 @@ public class ChaseCarTests
     {
         var c = new ChaseClock(new ChaseData());
         c.Start();
-        Assert.True(c.Tick(20f, 0));
+        Assert.True(c.Tick(Dt, 0));
         c.NoSpot();
         Assert.False(c.Tick(2.9f, 0));
         Assert.True(c.Tick(0.2f, 0)); // 3 s later again
         c.Sent();
-        Assert.False(c.Tick(44f, 0));
+        Assert.False(c.Tick(21f, 0));
     }
 
     [Fact]
@@ -177,7 +179,7 @@ public class ChaseCarTests
     [Fact]
     public void TheSpawnClockHangsOnTheHeistsPhaseChanges()
     {
-        var h = new Heist(2, 5, 60, 100);
+        var h = new Heist(2, 5, 100);
         var clock = new ChaseClock(new ChaseData());
         h.PhaseChanged += (from, to) =>
         {
@@ -251,6 +253,24 @@ public class ChaseCarTests
             Assert.True(Vector2.Distance(spot.Ground, van) >= 150f);
             Assert.Equal(RoadPath.Yaw(van - spot.Ground), spot.Yaw, 0.01f); // facing along the road towards the van
         }
+    }
+
+    [Fact]
+    public void ASpotAheadOnTheWayToTheDropMeetsTheVanHeadOnAndANearDropOrASightedWayFallsBackBehind()
+    {
+        var van = new Vector2(500, 0);
+        var toDrop = new RoadPath(new[] { van, new Vector2(1500, 0) }); // the van's way to a drop 1000 m on
+        for (var seed = 1; seed <= 20; seed++)
+        {
+            var spot = ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), _ => false, new Random(seed), ahead: toDrop)!.Value;
+            Assert.InRange(spot.BackM, -400f, -150f); // negative: that far ahead of the van
+            Assert.InRange(spot.Ground.X, 650f, 900f); // on its way to the drop
+            Assert.Equal(RoadPath.Yaw(van - spot.Ground), spot.Yaw, 0.01f); // facing the van: head-on
+        }
+        var near = new RoadPath(new[] { van, new Vector2(600, 0) }); // the drop is 100 m on: nothing 150 m ahead
+        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), _ => false, new Random(1), ahead: near)!.Value.BackM > 0);
+        // all of the way ahead is in the party's sight: the old rule behind the van
+        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), p => p.X > 500f, new Random(1), ahead: toDrop)!.Value.BackM > 0);
     }
 
     [Fact]

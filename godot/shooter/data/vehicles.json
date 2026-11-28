@@ -503,7 +503,7 @@
         { "role": "driver", "offset": [-0.431, 0.71, -0.586], "cover": "glass", "eye_height": 1 },
         { "role": "passenger", "offset": [0.431, 0.71, -0.586], "cover": "glass", "eye_height": 1 }
       ],
-      "skins": ["pack:synty-vehicles/cartel_van_white"],
+      "skins": ["pack:synty-vehicles/cartel_van_white", "pack:synty-vehicles/cartel_van_dark"],
       "lights": { "head": [[-0.843, 0.869, -2.457], [0.843, 0.869, -2.457]], "tail": [[-0.925, 0.873, 2.379], [0.925, 0.873, 2.379]], "beam_range": 40, "beam_angle": 26 },
       "glass": [
         { "id": "windscreen", "centre": [0, 1.566, -1.303], "normal": [0, 0.668, -0.745], "size": [1.734, 0.789], "outline": [[-0.867, -0.313], [-0.507, -0.381], [0, -0.395], [0.507, -0.381], [0.867, -0.313], [0.81, 0.039], [0.709, 0.359], [0.553, 0.384], [0, 0.395], [-0.553, 0.384], [-0.709, 0.359], [-0.81, 0.039]] },

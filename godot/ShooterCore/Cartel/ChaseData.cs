@@ -12,10 +12,10 @@ public sealed class ChaseData
     public string VehicleType { get; set; } = "car";
     public int Skin { get; set; } = 3;
 
-    /// <summary>The first chase car comes this long after the van left the objective with the minimum, then one every <see cref="IntervalSeconds"/>, while fewer than <see cref="MaxAlive"/> are in the fight.</summary>
-    public float FirstAfterSeconds { get; set; } = 20;
-    public float IntervalSeconds { get; set; } = 45;
-    public int MaxAlive { get; set; } = 2;
+    /// <summary>The first chase car comes this long after the van left the objective with the minimum (0: the moment it leaves), then one every <see cref="IntervalSeconds"/>, while fewer than <see cref="MaxAlive"/> are in the fight.</summary>
+    public float FirstAfterSeconds { get; set; } = 0;
+    public float IntervalSeconds { get; set; } = 22;
+    public int MaxAlive { get; set; } = 3;
     /// <summary>A due car that found no spot asks again this soon (the interval starts when one is put down).</summary>
     public float SpawnRetrySeconds { get; set; } = 3;
 
@@ -24,8 +24,15 @@ public sealed class ChaseData
     public int GunmenPerExtraMember { get; set; } = 1;
     public int MaxGunmen { get; set; } = 3;
 
-    /// <summary>A car is put down on open drivable ground (a road, a field, a meadow: nothing solid, no water) at least <see cref="SpawnPlayerMinM"/> from every player, out of the party's sight, apart from the other chase cars (<see cref="SpawnApartM"/>), behind the van: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind it, on the nearest road within <see cref="SpawnRoadM"/> of a trail point or on open ground at the point itself or <see cref="SpawnSpreadM"/> to either side of it.</summary>
+    /// <summary>
+    /// A car is put down on open drivable ground (a road, a field, a meadow: nothing solid, no water) at least <see cref="SpawnPlayerMinM"/> from every player, out of the party's sight, apart from the other chase cars
+    /// (<see cref="SpawnApartM"/>), AHEAD of the van first: <see cref="SpawnAheadMinM"/> to <see cref="SpawnAheadMaxM"/> along the van's way to the drop (it meets the van head-on, then turns and follows), and when nothing
+    /// ahead fits (the drop is near) behind it: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind it. Either way on the nearest road within <see cref="SpawnRoadM"/> of a point of that way or
+    /// on open ground at the point itself or <see cref="SpawnSpreadM"/> to either side of it.
+    /// </summary>
     public float SpawnPlayerMinM { get; set; } = 150;
+    public float SpawnAheadMinM { get; set; } = 150;
+    public float SpawnAheadMaxM { get; set; } = 400;
     public float SpawnBackMinM { get; set; } = 150;
     public float SpawnBackMaxM { get; set; } = 500;
     public float SpawnRoadM { get; set; } = 30;
@@ -79,6 +86,9 @@ public sealed class ChaseData
     public float SeatDropM { get; set; } = 0.42f;
     public float ExitSideM { get; set; } = 0.7f;
 
+    /// <summary>A copy to change a few numbers of (the Assault van drives on the chase car's numbers with its own vehicle, skin and give-up distance). The arrays are shared: do not edit them.</summary>
+    public ChaseData Copy() => (ChaseData)MemberwiseClone();
+
     /// <summary>Checks the numbers; <paramref name="what"/> names the section (<c>jobs.harvest.chase</c>).</summary>
     public void Validate(string what, int tiers)
     {
@@ -91,18 +101,19 @@ public sealed class ChaseData
         if (MaxAlive < 1) throw Bad("max_alive must be at least 1");
         foreach (var (v, name) in new[]
         {
-            (FirstAfterSeconds, "first_after_seconds"), (SpawnRetrySeconds, "spawn_retry_seconds"), (SpawnBackMinM, "spawn_back_min_m"), (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (SpawnSpreadM, "spawn_spread_m"),
+            (FirstAfterSeconds, "first_after_seconds"), (SpawnRetrySeconds, "spawn_retry_seconds"), (SpawnAheadMinM, "spawn_ahead_min_m"), (SpawnBackMinM, "spawn_back_min_m"), (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (SpawnSpreadM, "spawn_spread_m"),
             (MovingAimErrorDeg, "moving_aim_error_deg"), (MovingMps, "moving_mps"), (StalledSeconds, "stalled_seconds"), (SeatDropM, "seat_drop_m"), (ExitSideM, "exit_side_m"),
         })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
         foreach (var (v, name) in new[]
         {
-            (IntervalSeconds, "interval_seconds"), (SpawnBackMaxM, "spawn_back_max_m"), (SpawnRoadM, "spawn_road_m"), (ShootRangeM, "shoot_range_m"), (StopSpeedMps, "stop_speed_mps"), (StopWithinM, "stop_within_m"),
+            (IntervalSeconds, "interval_seconds"), (SpawnAheadMaxM, "spawn_ahead_max_m"), (SpawnBackMaxM, "spawn_back_max_m"), (SpawnRoadM, "spawn_road_m"), (ShootRangeM, "shoot_range_m"), (StopSpeedMps, "stop_speed_mps"), (StopWithinM, "stop_within_m"),
             (StopSeconds, "stop_seconds"), (UnstickAfterSeconds, "unstick_after_seconds"), (ReverseSeconds, "reverse_seconds"), (RemountM, "remount_m"), (PullMps, "pull_mps"), (RemountConfirmSeconds, "remount_confirm_seconds"), (RemountSeconds, "remount_seconds"), (RemountRetrySeconds, "remount_retry_seconds"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"),
             (GiveUpM, "give_up_m"), (GiveUpSeconds, "give_up_seconds"), (WreckSeconds, "wreck_seconds"),
         })
             if (!float.IsFinite(v) || v <= 0) throw Bad($"{name} must be more than 0");
         if (SpawnBackMaxM < SpawnBackMinM) throw Bad("spawn_back_max_m is below spawn_back_min_m");
+        if (SpawnAheadMaxM < SpawnAheadMinM) throw Bad("spawn_ahead_max_m is below spawn_ahead_min_m");
         if (MaxUnsticks < 0) throw Bad("max_unsticks must be 0 or more");
         if (GiveUpM <= StopWithinM) throw Bad("give_up_m must be more than stop_within_m");
         if (RemountM >= GiveUpM) throw Bad("remount_m must be less than give_up_m (the crew walks back before it is given up)");
