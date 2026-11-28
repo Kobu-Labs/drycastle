@@ -32,7 +32,7 @@ public interface IJobParties
 public sealed class MatchJobParties(MatchSim match) : IJobParties
 {
     public JobOwner OwnerOf(ushort player) =>
-        match.IsTeamMode && match.Get(player) is { Squad: not 0 } p ? JobOwner.Squad(p.Squad) : JobOwner.Solo(player);
+        match.HasSquads && match.Get(player) is { Squad: not 0 } p ? JobOwner.Squad(p.Squad) : JobOwner.Solo(player);
 
     public ushort LeaderOf(JobOwner owner) => owner.Kind == JobOwnerKind.Solo
         ? (SoloPresent(owner.Id) ? owner.Id : (ushort)0)
@@ -44,11 +44,11 @@ public sealed class MatchJobParties(MatchSim match) : IJobParties
 
     public bool Has(JobOwner owner, ushort player) => owner.Kind == JobOwnerKind.Solo
         ? player == owner.Id && SoloPresent(player)
-        : match.IsTeamMode && match.Get(player) is { Squad: var s } && s != 0 && s == owner.Id;
+        : match.HasSquads && match.Get(player) is { Squad: var s } && s != 0 && s == owner.Id;
 
     /// <summary>The solo player is in the match and in no tdm Squad (one who joined a Squad left the solo Job).</summary>
-    bool SoloPresent(ushort player) => match.Get(player) is { } p && !(match.IsTeamMode && p.Squad != 0);
+    bool SoloPresent(ushort player) => match.Get(player) is { } p && !(match.HasSquads && p.Squad != 0);
 
     /// <summary>The Squad's leader (<see cref="MatchSim.SquadLeader"/>: the creator, then the longest-standing member), 0 when the Squad is gone.</summary>
-    ushort SquadLeader(byte squad) => match.IsTeamMode ? match.SquadLeader(squad) : (ushort)0;
+    ushort SquadLeader(byte squad) => match.HasSquads ? match.SquadLeader(squad) : (ushort)0;
 }

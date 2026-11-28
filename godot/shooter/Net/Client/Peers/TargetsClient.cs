@@ -24,12 +24,12 @@ internal sealed class TargetsClient
         _ctx = ctx; _sandbox = sandbox; _blastDust = blastDust;
     }
 
-    /// <summary>Name tags over players: none in free-for-all, only teammates (in the friend colour) in team deathmatch, a squad mate's with the squad's name after it (#379); target dummies keep their orange tag.</summary>
+    /// <summary>Name tags over players: none in free-for-all, only teammates (in the friend colour) in team deathmatch and squad mates in open world, a squad mate's with the squad's name after it (#379); target dummies keep their orange tag.</summary>
     public void UpdateNameTag(ushort id, RemotePlayer r)
     {
         var match = _ctx.Match;
         var dummy = TargetDummies.IsDummyId(id);
-        var show = (dummy || (match.IsTeamMode && match.AreFriends(_ctx.MyId, id))) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
+        var show = (dummy || match.AreFriends(_ctx.MyId, id)) && !_blastDust.Hides(r.Node.GlobalPosition + Vector3.Up * 1.6f); // not through dust (#345)
         var squad = !dummy && match.AreSquadMates(_ctx.MyId, id) ? match.SquadOf(id) : (byte)0;
         var retag = !dummy && r.TagSquad != squad && _ctx.Names.ContainsKey(id); // only a change rebuilds the text
         if (retag) r.TagSquad = squad;

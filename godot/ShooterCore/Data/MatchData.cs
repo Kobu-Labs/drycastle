@@ -1,6 +1,7 @@
 namespace Drycastle.ShooterCore.Data;
 
-public enum MatchMode : byte { FreeForAll = 0, TeamDeathmatch = 1 }
+/// <summary>OpenWorld: free-for-all with no time limit or score goal, and Squads of any size whose members cannot hurt each other.</summary>
+public enum MatchMode : byte { FreeForAll = 0, TeamDeathmatch = 1, OpenWorld = 2 }
 
 /// <summary>match.json. Values from the FFA match loop ticket (#72).</summary>
 public class MatchConfig : IVersioned
@@ -18,9 +19,9 @@ public class MatchConfig : IVersioned
     /// <summary>Whether a target kill gives the shooter XP (so progression can be tested with dummies).</summary>
     public bool TargetsAwardXp { get; set; } = true;
 
-    /// <summary>Game mode: "ffa" (free-for-all, the default) or "tdm" (team deathmatch, two teams). See <see cref="ParsedMode"/>.</summary>
+    /// <summary>Game mode: "ffa" (free-for-all, the default), "tdm" (team deathmatch, two teams) or "ow" (open world: endless free-for-all with squads). See <see cref="ParsedMode"/>.</summary>
     public string Mode { get; set; } = "ffa";
-    /// <summary>Team deathmatch only: whether a player's shots hurt teammates. Off by default; self damage always applies.</summary>
+    /// <summary>Team deathmatch only: whether a player's shots hurt teammates (open world never lets squad mates hurt each other). Off by default; self damage always applies.</summary>
     public bool FriendlyFire { get; set; } = false;
     /// <summary>Team deathmatch only: the team kill total that ends the round (a team shares the goal, so it is higher than <see cref="ScoreGoal"/>).</summary>
     public int TeamScoreGoal { get; set; } = 75;
@@ -37,7 +38,8 @@ public class MatchConfig : IVersioned
     {
         "ffa" => MatchMode.FreeForAll,
         "tdm" => MatchMode.TeamDeathmatch,
-        _ => throw new DataFileException($"match.json: unknown mode \"{Mode}\" (expected \"ffa\" or \"tdm\")"),
+        "ow" or "openworld" => MatchMode.OpenWorld,
+        _ => throw new DataFileException($"match.json: unknown mode \"{Mode}\" (expected \"ffa\", \"tdm\" or \"ow\")"),
     };
 
     public static MatchConfig Load(string path) => DataFile.Load<MatchConfig>(path);

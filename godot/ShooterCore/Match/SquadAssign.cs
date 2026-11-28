@@ -60,7 +60,7 @@ public static class SquadRules
             case SquadAction.Leave: r = match.LeaveSquad(id); break;
             default: return SquadReply.Fail("Unknown squad request.");
         }
-        if (r != SquadResult.Ok) return SquadReply.Fail(Why(r));
+        if (r != SquadResult.Ok) return SquadReply.Fail(Why(r, match.IsOpenWorld));
         var tell = new List<(ushort, string)>();
         if (old != 0 && old != now) tell.AddRange(match.SquadMembers(old).Select(p => (p.Id, $"{name} left the squad."))); // what is left of the old squad
         if (a.Action == SquadAction.Join) tell.AddRange(match.SquadMembers(now).Where(p => p.Id != id).Select(p => (p.Id, $"{name} joined the squad.")));
@@ -73,15 +73,16 @@ public static class SquadRules
         return new SquadReply(true, text, tell);
     }
 
-    static string Why(SquadResult r) => r switch
+    static string Why(SquadResult r, bool openWorld) => r switch
     {
-        SquadResult.NotTeamMode => "Squads are for team deathmatch.",
+        SquadResult.NotTeamMode => "Squads are for team deathmatch and open world.",
+        SquadResult.Sandbox => "Sandbox players cannot join squads.",
         SquadResult.Bot => "Bots cannot join squads.",
         SquadResult.NoTeam => "Join a team first: a squad is part of a team.",
         SquadResult.UnknownSquad => "That squad is gone.",
         SquadResult.WrongTeam => "That squad is on the other team.",
         SquadResult.Full => $"That squad is full ({Squads.MaxMembers} players).",
-        SquadResult.NameTaken => "Your team already has a squad with that name.",
+        SquadResult.NameTaken => openWorld ? "A squad with that name already exists." : "Your team already has a squad with that name.",
         SquadResult.AlreadyThere => "You are already in that squad.",
         SquadResult.NotInSquad => "You are not in a squad.",
         _ => "That did not work.",
@@ -99,15 +100,16 @@ public static class SquadRules
     /// <summary>The own team's squads, one line each: place, name, count and members. A line saying so when there are none.</summary>
     public static IReadOnlyList<string> List(MatchSim match, ushort id)
     {
-        if (!match.IsTeamMode) return new[] { "Squads are for team deathmatch." };
-        if (match.Get(id) is not { } me || me.Team == Teams.None) return new[] { "Join a team first: a squad is part of a team." };
+        if (!match.HasSquads) return new[] { "Squads are for team deathmatch and open world." };
+        if (match.Get(id) is not { } me || (match.IsTeamMode && me.Team == Teams.None)) return new[] { "Join a team first: a squad is part of a team." };
         var squads = match.SquadsOf(me.Team);
-        if (squads.Count == 0) return new[] { "Your team has no squads. /squad create [name] starts one." };
+        if (squads.Count == 0) return new[] { match.IsOpenWorld ? "There are no squads. /squad create [name] starts one." : "Your team has no squads. /squad create [name] starts one." };
+        var max = Squads.MaxFor(match.Mode);
         return squads.Select((s, i) =>
         {
             var members = match.SquadMembers(s); // the leader first
             var names = members.Select(p => p.Id == match.SquadLeader(s) ? $"{p.Name} (leader)" : p.Name);
-            return $"{i + 1}. {match.SquadNameOf(s)} ({members.Count}/{Squads.MaxMembers}): {string.Join(", ", names)}{(s == me.Squad ? " (yours)" : "")}";
+            return $"{i + 1}. {match.SquadNameOf(s)} ({(max == int.MaxValue ? $"{members.Count}" : $"{members.Count}/{max}")}): {string.Join(", ", names)}{(s == me.Squad ? " (yours)" : "")}";
         }).ToList();
     }
 

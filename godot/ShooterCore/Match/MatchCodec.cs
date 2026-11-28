@@ -108,7 +108,7 @@ public static class MatchCodec
             List<SquadName>? squads = null;
             if (r.BaseStream.Position < r.BaseStream.Length) // the team tail; absent from older servers
             {
-                mode = r.ReadByte() == (byte)MatchMode.TeamDeathmatch ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll;
+                mode = r.ReadByte() is var mb && mb is (byte)MatchMode.TeamDeathmatch or (byte)MatchMode.OpenWorld ? (MatchMode)mb : MatchMode.FreeForAll;
                 scoreA = r.ReadUInt16(); scoreB = r.ReadUInt16();
                 for (var i = 0; i < rows.Count; i++) rows[i] = DecodeTeamByte(rows[i], r.ReadByte());
                 if (r.BaseStream.Position < r.BaseStream.Length) // the squad tail; absent from older servers
@@ -194,6 +194,9 @@ public sealed class ClientMatchState
     public IReadOnlyList<ushort> Winners { get; private set; } = Array.Empty<ushort>();
     public MatchMode Mode { get; private set; } = MatchMode.FreeForAll;
     public bool IsTeamMode => Mode == MatchMode.TeamDeathmatch;
+    public bool IsOpenWorld => Mode == MatchMode.OpenWorld;
+    /// <summary>Squads exist: team deathmatch and open world.</summary>
+    public bool HasSquads => Mode != MatchMode.FreeForAll;
     public int ScoreA { get; private set; }
     public int ScoreB { get; private set; }
     public int TeamScore(byte team) => team == Teams.A ? ScoreA : team == Teams.B ? ScoreB : 0;
@@ -224,10 +227,10 @@ public sealed class ClientMatchState
     }
     /// <summary>The player leads their squad (false in no squad).</summary>
     public bool IsSquadLeader(ushort id) => SquadOf(id) is var s && s != 0 && LeaderOf(s) == id;
-    /// <summary>Two different players in the same squad (a squad is within a team, so they are friends too).</summary>
-    public bool AreSquadMates(ushort a, ushort b) => IsTeamMode && a != b && SquadOf(a) is var s && s != 0 && s == SquadOf(b);
-    /// <summary>Two different players on the same real team (never in free-for-all).</summary>
-    public bool AreFriends(ushort a, ushort b) => IsTeamMode && a != b && TeamOf(a) is var t && t != Teams.None && t == TeamOf(b);
+    /// <summary>Two different players in the same squad (friends too: a squad is within a team, and in open world squad mates are friends).</summary>
+    public bool AreSquadMates(ushort a, ushort b) => HasSquads && a != b && SquadOf(a) is var s && s != 0 && s == SquadOf(b);
+    /// <summary>Two different players on the same real team, or squad mates in open world (never in free-for-all).</summary>
+    public bool AreFriends(ushort a, ushort b) => IsOpenWorld ? AreSquadMates(a, b) : IsTeamMode && a != b && TeamOf(a) is var t && t != Teams.None && t == TeamOf(b);
     public List<KillMsg> KillFeed { get; } = new();
     public Dictionary<ushort, SpawnMsg> LastSpawn { get; } = new();
     public Dictionary<ushort, DeathMsg> LastDeath { get; } = new();

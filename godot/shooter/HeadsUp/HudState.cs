@@ -20,6 +20,8 @@ internal sealed class HudState
     public ClientMatchState? Team { get; set; }
 
     public bool TeamMode => Team is { IsTeamMode: true };
+    /// <summary>Open world: no time limit, so the top bar names the mode instead of a clock.</summary>
+    public bool OpenWorld => Team is { IsOpenWorld: true };
     public byte TeamOf(ushort id) => Team?.TeamOf(id) ?? Teams.None;
     public byte MyTeam => TeamOf(MyId);
 

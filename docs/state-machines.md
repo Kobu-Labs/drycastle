@@ -1683,7 +1683,7 @@ stateDiagram-v2
 ```
 
 - **Waiting**: Fewer than MinPlayers (nobody, in the shipped match.json). Scores and lives are reset; the next join or restart starts a round.
-- **Running**: Time limit counts down from the round start. Left by the time limit or score goal (Ending), too few players (Waiting). An admin restart re-enters it with a fresh round.
+- **Running**: Time limit counts down from the round start (open world: no time limit, no score goal, so it runs until a restart or too few players). Left by the time limit or score goal (Ending), too few players (Waiting). An admin restart re-enters it with a fresh round.
 - **Ending**: End screen for EndScreenTime; hits are ignored. Then a new round starts by itself.
 
 ## Match.PlayerLife

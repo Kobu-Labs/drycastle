@@ -4,7 +4,7 @@ namespace Drycastle.ShooterCore.Match;
 public enum SquadResult : byte
 {
     Ok,
-    /// <summary>Squads exist in team deathmatch only.</summary>
+    /// <summary>Squads exist in team deathmatch and open world only (not free-for-all).</summary>
     NotTeamMode,
     UnknownPlayer,
     /// <summary>Bots never join squads.</summary>
@@ -19,6 +19,8 @@ public enum SquadResult : byte
     NameTaken,
     AlreadyThere,
     NotInSquad,
+    /// <summary>Sandbox players are in no squad (open world, where nobody has a team).</summary>
+    Sandbox,
 }
 
 /// <summary>A squad as the scoreboard lists it: id (never 0), name and leader (#494; 0 from an older server). Members are the rows that carry the id.</summary>
@@ -32,8 +34,8 @@ public sealed record SquadLeaderChanged(byte Squad, ushort From, ushort To) : Ma
 
 /// <summary>
 /// Squads (#379, GLOSSARY "Squad"): an opt-in tag inside a team, kept on <see cref="MatchPlayer.Squad"/>. Up to <see cref="Squads.MaxMembers"/> humans, one squad per player
-/// (joining or creating leaves the old one), a squad with no member is gone. Team deathmatch only; a player sees and joins the own team's squads. Friend logic (<see cref="AreFriends"/>),
-/// scoring and colours do not look at squads. A team change, a mode change and leaving the match clear a membership.
+/// (joining or creating leaves the old one), a squad with no member is gone. Team deathmatch: a player sees and joins the own team's squads; friend logic (<see cref="AreFriends"/>),
+/// scoring and colours do not look at squads. Open world: nobody has a team, every squad is open to everyone, there is no size limit and squad mates are friends (no friendly fire). A team change, a mode change and leaving the match clear a membership.
 /// The leader (#494, ADR 0046 §5) is the longest-standing member (<see cref="MatchPlayer.SquadSince"/>): the creator, then whoever joined first after them.
 /// It is derived, never stored, so every way out of a squad hands it on; <see cref="SquadLeaderChanged"/> says when it moved.
 /// </summary>
@@ -65,9 +67,9 @@ public sealed partial class MatchSim
     /// <summary>The player leads their squad. False for someone in no squad (a solo player is not a leader).</summary>
     public bool IsSquadLeader(ushort id) => _players.TryGetValue(id, out var p) && p.Squad != 0 && SquadLeader(p.Squad) == id;
 
-    /// <summary>The squads of a team, in id order (empty outside team deathmatch).</summary>
+    /// <summary>The squads of a team, in id order (open world: every squad, team <see cref="Teams.None"/>; empty in free-for-all).</summary>
     public IReadOnlyList<byte> SquadsOf(byte team) =>
-        !IsTeamMode || team == Teams.None ? Array.Empty<byte>() : _squadNames.Keys.Where(s => _players.Values.Any(p => p.Squad == s && p.Team == team)).ToList();
+        !HasSquads || (IsTeamMode && team == Teams.None) ? Array.Empty<byte>() : _squadNames.Keys.Where(s => _players.Values.Any(p => p.Squad == s && p.Team == team)).ToList();
 
     /// <summary>Both in the same squad (never 0).</summary>
     public bool AreSquadMates(ushort a, ushort b) => a != b && _players.TryGetValue(a, out var pa) && _players.TryGetValue(b, out var pb) && pa.Squad != 0 && pa.Squad == pb.Squad;
@@ -75,10 +77,11 @@ public sealed partial class MatchSim
     SquadResult CanSquad(ushort id, out MatchPlayer p)
     {
         p = null!;
-        if (!IsTeamMode) return SquadResult.NotTeamMode;
+        if (!HasSquads) return SquadResult.NotTeamMode;
         if (!_players.TryGetValue(id, out var found)) return SquadResult.UnknownPlayer;
         p = found;
         if (p.Bot) return SquadResult.Bot;
+        if (IsOpenWorld) return p.Sandbox ? SquadResult.Sandbox : SquadResult.Ok;
         return p.Team == Teams.None || p.Sandbox ? SquadResult.NoTeam : SquadResult.Ok;
     }
 
@@ -110,7 +113,7 @@ public sealed partial class MatchSim
         if (p.Squad == squad) return SquadResult.AlreadyThere;
         var members = SquadMembers(squad);
         if (members.Count > 0 && members[0].Team != p.Team) return SquadResult.WrongTeam;
-        if (members.Count >= Squads.MaxMembers) return SquadResult.Full;
+        if (members.Count >= Squads.MaxFor(Mode)) return SquadResult.Full;
         DropSquad(p);
         Enter(p, squad); // the newest member: never the leader of a squad that has one
         Emit(new ScoreboardChanged());
@@ -173,6 +176,8 @@ public sealed partial class MatchSim
 public static class Squads
 {
     public const int MaxMembers = 4;
+    /// <summary>Most members of a squad in <paramref name="mode"/>: <see cref="MaxMembers"/> in team deathmatch, no limit in open world.</summary>
+    public static int MaxFor(Data.MatchMode mode) => mode == Data.MatchMode.OpenWorld ? int.MaxValue : MaxMembers;
     /// <summary>Most characters of a typed squad name.</summary>
     public const int MaxNameLength = 16;
     /// <summary>The default name is the player's name with "'s squad", cut to this many characters.</summary>

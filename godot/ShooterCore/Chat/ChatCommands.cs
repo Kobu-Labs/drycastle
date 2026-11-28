@@ -109,7 +109,7 @@ public static class ChatCommands
         new("sandbox", "Turn sandbox mode on or off for a player (name or #id), or flip it", new[] { new ChatArg("player", ChatArgKind.Player), new ChatArg("state", ChatArgKind.Choice, false) }),
         new("give", "Give an item to a player (name or #id), or to yourself. It is worn if the slot is empty, else it goes in the bag", new[] { new ChatArg("item", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
         new("companion", "TEST: give a player (name or #id), or yourself, a Companion for this session, or take it away (off). It is not stored on the profile", new[] { new ChatArg("companion", ChatArgKind.Choice), new ChatArg("player", ChatArgKind.Player, false) }),
-        new("restart", "Restart the round now, optionally in another mode (ffa or tdm)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
+        new("restart", "Restart the round now, optionally in another mode (ffa, tdm or ow)", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
         new("event", "Trigger a village event now", new[] { new ChatArg("event", ChatArgKind.Choice), new ChatArg("action", ChatArgKind.Choice, false) }),
         new("citizens", "Send citizens to the church to sit on its pews (a number), or remove them all (clear)", new[] { new ChatArg("count", ChatArgKind.IntOrChoice, true, 1, MaxCitizens) }),
         new("church", "TEST: open or close the church doors, or show whether they are open", new[] { new ChatArg("action", ChatArgKind.Choice, false) }),
@@ -121,7 +121,7 @@ public static class ChatCommands
             new[] { new ChatArg("action", ChatArgKind.Choice) }),
         new("gunman", "TEST: Gunmen of the Rival crew (3 by default) 12 m in front of you, hostile to you only; posted: they hold their spots, turn and shoot, never walk; clear: remove them",
             new[] { new ChatArg("count", ChatArgKind.IntOrChoice, false, 1, MaxTestGunmen), new ChatArg("mode", ChatArgKind.Choice, false) }),
-        new("squad", "Squads (team deathmatch): create one with a name, join one by name or number, leave yours, or list your team's", new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("name", ChatArgKind.Text, false) }, AdminOnly: false),
+        new("squad", "Squads (team deathmatch, open world): create one with a name, join one by name or number, leave yours, or list your team's", new[] { new ChatArg("action", ChatArgKind.Choice), new ChatArg("name", ChatArgKind.Text, false) }, AdminOnly: false),
         new("night", "TEST (this client only): tune the night lighting, all in percent: moon light (default 8), ambient floor (4), night exposure (90). No arguments shows the values, reset restores them. Use /time midnight to see it",
             new[] { new ChatArg("moon", ChatArgKind.IntOrChoice, false, 0, 100), new ChatArg("ambient", ChatArgKind.Int, false, 0, 100), new ChatArg("exposure", ChatArgKind.Int, false, 10, 200) }, ClientSide: true),
         new("time", "Set the time of day, freeze or resume the clock, or show the time", new[] { new ChatArg("time", ChatArgKind.Time, false) }),
@@ -157,7 +157,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "sandbox" => new[] { ("on", "godmode, unlimited ammo, no score"), ("off", "back to normal play") },
             ChatArgKind.Choice when cmd.Name == "status" => new[] { ("bless", "one lethal hit is negated"), ("curse", "your bullets set victims ablaze"), ("high", "high from the plantation, as after a hold in it"), ("clear", "take every status away") },
             ChatArgKind.Choice when cmd.Name == "squad" => new[] { ("create", "start a squad; the name is optional (up to 16 characters)"), ("join", "join your team's squad by name or number from list (up to 4 players)"), ("leave", "leave your squad"), ("list", "your team's squads and who is in them") },
-            ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams") },
+            ChatArgKind.Choice when cmd.Name == "restart"=> new[] { ("ffa", "free-for-all, everyone alone"), ("tdm", "team deathmatch, two teams"), ("ow", "open world: no time limit, free-for-all, squads of any size that cannot hurt each other") },
             ChatArgKind.Choice when cmd.Name == "event" && argIndex == 0 => new[]
             {
                 ("bigfoot", "start the Bigfoot event: it spawns, hunts the players and drops its head when it falls"),

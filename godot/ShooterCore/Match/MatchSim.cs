@@ -143,7 +143,7 @@ public sealed partial class MatchSim
         .Allow(MatchPhase.Running, MatchPhase.Ending, MatchPhase.Waiting)
         .Allow(MatchPhase.Ending, MatchPhase.Running, MatchPhase.Waiting)
         .Note(MatchPhase.Waiting, "Fewer than MinPlayers (nobody, in the shipped match.json). Scores and lives are reset; the next join or restart starts a round.")
-        .Note(MatchPhase.Running, "Time limit counts down from the round start. Left by the time limit or score goal (Ending), too few players (Waiting). An admin restart re-enters it with a fresh round.")
+        .Note(MatchPhase.Running, "Time limit counts down from the round start (open world: no time limit, no score goal, so it runs until a restart or too few players). Left by the time limit or score goal (Ending), too few players (Waiting). An admin restart re-enters it with a fresh round.")
         .Note(MatchPhase.Ending, "End screen for EndScreenTime; hits are ignored. Then a new round starts by itself.")
         .Build();
     readonly StateMachine<MatchPhase> _phase = new(PhaseSpec);
@@ -161,12 +161,18 @@ public sealed partial class MatchSim
 
     public MatchMode Mode { get; private set; }
     public bool IsTeamMode => Mode == MatchMode.TeamDeathmatch;
+    /// <summary>Open world: free-for-all with no round end, and squads (any size) of friends.</summary>
+    public bool IsOpenWorld => Mode == MatchMode.OpenWorld;
+    /// <summary>Squads exist: team deathmatch (inside a team) and open world (everyone).</summary>
+    public bool HasSquads => Mode != MatchMode.FreeForAll;
+    /// <summary>Friends can hurt each other: the config's switch in team deathmatch; never in open world (squad mates).</summary>
+    public bool FriendlyFireOn => _cfg.FriendlyFire && !IsOpenWorld;
     readonly int[] _teamScore = new int[3];
     /// <summary>Team deathmatch: kills of the team's members this round (team kills and suicides do not count). 0 for no team.</summary>
     public int TeamScore(byte team) => team is Teams.A or Teams.B ? _teamScore[team] : 0;
 
-    /// <summary>Both on the same real team (never in free-for-all, never for the teamless).</summary>
-    public bool AreFriends(ushort a, ushort b) =>
+    /// <summary>Both on the same real team in team deathmatch (never for the teamless), squad mates in open world, never in free-for-all.</summary>
+    public bool AreFriends(ushort a, ushort b) => IsOpenWorld ? AreSquadMates(a, b) :
         IsTeamMode && a != b && _players.TryGetValue(a, out var pa) && _players.TryGetValue(b, out var pb) && pa.Team != Teams.None && pa.Team == pb.Team;
 
     /// <summary>
@@ -175,7 +181,7 @@ public sealed partial class MatchSim
     /// </summary>
     public bool VehicleHitBlocked(ushort attacker, IEnumerable<ushort> occupants)
     {
-        if (attacker == 0 || _cfg.FriendlyFire) return false;
+        if (attacker == 0 || FriendlyFireOn) return false;
         foreach (var o in occupants) if (o != 0 && AreFriends(attacker, o)) return true;
         return false;
     }
@@ -211,9 +217,10 @@ public sealed partial class MatchSim
 
     public MatchPlayer? Get(ushort id) => _players.GetValueOrDefault(id);
 
-    /// <summary>Seconds left: until the time limit while running, until the restart while ending, else 0.</summary>
+    /// <summary>Seconds left: until the time limit while running (0 in open world, which has none), until the restart while ending, else 0.</summary>
     public float TimeRemaining => Phase switch
     {
+        MatchPhase.Running when IsOpenWorld => 0,
         MatchPhase.Running => (float)Math.Max(0, _roundStart + _cfg.TimeLimit - _now()),
         MatchPhase.Ending => (float)Math.Max(0, _endsAt - _now()),
         _ => 0,
@@ -420,7 +427,7 @@ public sealed partial class MatchSim
         return new DamageFacts(Phase == MatchPhase.Running, amount, alive,
             Held: alive && v!.Held,
             Godmode: alive && v!.Sandbox && !v.Vulnerable,
-            FriendlyFireBlocked: alive && !_cfg.FriendlyFire && AreFriends(victim, attacker), // teammates cannot hurt each other (self damage is not friendly fire)
+            FriendlyFireBlocked: alive && !FriendlyFireOn && AreFriends(victim, attacker), // teammates cannot hurt each other (self damage is not friendly fire)
             SpawnProtected: alive && now < v!.ProtectedUntil,
             Invulnerable: alive && now < v!.InvulnerableUntil, // just saved by a blessing
             IgnoreProtection: ignoreProtection);
@@ -468,8 +475,8 @@ public sealed partial class MatchSim
         var killer = credited?.Id ?? victim;
         Emit(new PlayerKilled(killer, victim, weapon, cause));
         Emit(new PlayerDied(victim, killer, _cfg.RespawnDelay));
-        if (IsTeamMode ? credited is { Sandbox: false, Team: not Teams.None } && !teamKill && _teamScore[credited.Team] >= _cfg.TeamScoreGoal
-                       : credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal) End();
+        if (!IsOpenWorld && (IsTeamMode ? credited is { Sandbox: false, Team: not Teams.None } && !teamKill && _teamScore[credited.Team] >= _cfg.TeamScoreGoal
+                       : credited is { Sandbox: false } && credited.Kills >= _cfg.ScoreGoal)) End(); // open world never ends by score
         Emit(new ScoreboardChanged());
     }
 
@@ -519,7 +526,7 @@ public sealed partial class MatchSim
         switch (Phase)
         {
             case MatchPhase.Running:
-                if (now >= _roundStart + _cfg.TimeLimit) { End(); Emit(new ScoreboardChanged()); break; }
+                if (!IsOpenWorld && now >= _roundStart + _cfg.TimeLimit) { End(); Emit(new ScoreboardChanged()); break; }
                 foreach (var p in _players.Values.ToList())
                     if (p.Life == PlayerLife.Dead && now >= p.RespawnAt) Spawn(p);
                 break;
@@ -597,8 +604,8 @@ public sealed partial class MatchSim
     void Spawn(MatchPlayer p)
     {
         if (Benched(p)) return; // out of the round until an admin puts them on a team (#312)
-        // team deathmatch: only enemies count, so a team may spawn together and never next to the other side
-        var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive && (!IsTeamMode || p.Team == Teams.None || o.Team != p.Team)).Select(o => o.Position);
+        // team deathmatch: only enemies count, so a team may spawn together and never next to the other side; open world: squad mates do not count
+        var others = _players.Values.Where(o => o.Id != p.Id && o.Life == PlayerLife.Alive && (IsTeamMode ? p.Team == Teams.None || o.Team != p.Team : !AreFriends(p.Id, o.Id))).Select(o => o.Position);
         p.Position = SpawnChooser.Choose(_spawns, others, _cfg.MinSpawnDistance, _rng);
         p.SetLife(PlayerLife.Alive);
         p.Health = MoveConsts.MaxHealth;
