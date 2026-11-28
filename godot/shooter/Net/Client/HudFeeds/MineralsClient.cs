@@ -121,7 +121,7 @@ public sealed class MineralsClient
         {
             if (!v.Active || _ranks.ContainsKey(v.Node.MineralId)) continue;
             var p = v.Visual.GlobalPosition;
-            if (Mathf.Abs(p.Y - at.Y) > 3f) continue;
+            if (Mathf.Abs(p.Y - at.Y) > MineralRules.ReachUpDownMetres) continue;
             var d = new Vector2(p.X - at.X, p.Z - at.Z).Length();
             if (d <= best) { _near = id; best = d; }
         }

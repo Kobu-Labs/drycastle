@@ -51,7 +51,7 @@ internal sealed class MassServer
     public void MarkWon() => _won = true;
 
     /// <summary>The round is over: the Holy Mass does not outlive it.</summary>
-    public void RoundEnd() => Event?.End();
+    public void RoundEnd() => Event?.Forget();
 
     /// <summary>A sitter stood up: the Mass forgets the seat.</summary>
     public void Stood(ushort id) => Event?.Stand(id);

@@ -374,6 +374,74 @@ public class MassTests
         Assert.Equal(blessed, HolyMassEvent.IsBlessed(seated, sinner, seatedFor, mass, 0.8f));
 
     [Fact]
+    public void APeacefulMassKeepsHolystoneOnlyForHolystoneSeconds()
+    {
+        var cfg = Cfg(); cfg.HolystoneSeconds = 10;
+        var (mass, crowd, entities, _) = Make(cfg);
+        mass.Start();
+        mass.Conclude();
+        Assert.True(mass.Peaceful);
+        Run(mass, crowd, entities, 8); // past the Completed linger: Idle, still peaceful
+        Assert.Equal(MassPhase.Idle, mass.Phase);
+        Assert.True(mass.Peaceful);
+        Run(mass, crowd, entities, 3); // the window is over
+        Assert.False(mass.Peaceful);
+    }
+
+    [Fact]
+    public void ACompletedMassWithNoPastorKilledIsPeacefulUntilTheNextMassOrTheRoundEnds()
+    {
+        var (mass, crowd, entities, _) = Make();
+        Assert.False(mass.Peaceful);
+        mass.Start();
+        Run(mass, crowd, entities, 31); // Gather, then the whole Mass
+        Assert.Equal(MassPhase.Completed, mass.Phase);
+        Assert.True(mass.Peaceful);
+        Run(mass, crowd, entities, 4); // the linger is over: the event is Idle again, the verdict stays
+        Assert.Equal(MassPhase.Idle, mass.Phase);
+        Assert.True(mass.Peaceful);
+        mass.Start();
+        Assert.False(mass.Peaceful); // the next Gather
+        mass.Conclude();
+        Assert.True(mass.Peaceful); // concluded early counts as completed
+        mass.Forget(); // the round ends
+        Assert.Equal(MassPhase.Idle, mass.Phase);
+        Assert.False(mass.Peaceful);
+    }
+
+    [Fact]
+    public void APastorKilledAtAnyTimeOrAVoidMassIsNotPeaceful()
+    {
+        var (mass, crowd, entities, _) = Make();
+        mass.Start();
+        Run(mass, crowd, entities, 25);
+        Kill(mass, crowd); // once is enough: the Mass resumes and completes, but it was not peaceful
+        Run(mass, crowd, entities, 1);
+        mass.Conclude();
+        Assert.Equal(MassPhase.Completed, mass.Phase);
+        Assert.False(mass.Peaceful);
+
+        mass.End();
+        mass.Start();
+        mass.Conclude();
+        Assert.True(mass.Peaceful);
+        Kill(mass, crowd); // killed while the church is clapping: it is over
+        Assert.False(mass.Peaceful);
+
+        mass.End();
+        mass.Start();
+        mass.Conclude();
+        Assert.True(mass.Peaceful);
+        mass.ForceTurn(); // an admin turns the pastor after the Mass
+        Assert.Equal(MassPhase.Void, mass.Phase);
+        Assert.False(mass.Peaceful);
+
+        mass.End();
+        mass.ForceTurn(); // a void Mass
+        Assert.False(mass.Peaceful);
+    }
+
+    [Fact]
     public void TheWireFormatRoundTrips()
     {
         var s = new MassStateMsg(MassPhase.Mass, true, 2, new Vector3(1.5f, 2f, -3.25f), true);

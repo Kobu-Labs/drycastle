@@ -203,6 +203,7 @@ public sealed partial class MapLoader
         var bunkers = Path.Combine(mapDir, "bunkers.json");
         BunkersJson = File.Exists(bunkers) ? File.ReadAllText(bunkers) : ""; // only maps with an enterable bunker have it
         ReadZonePoints(mapDir, manifest); // only maps with a zone that has usable ground have the file
+        ReadMineralNodes(mapDir, manifest); // only maps with a static mineral node have the file
     }
 
     /// <summary>Invisible walls along the rim of the terrain (on by default). The exported terrain is a bounded, ragged patch while spawns, parcels and roads reach past it, so without a rim players walk off the edge and fall into the void.</summary>

@@ -8017,6 +8017,52 @@
    ]
   }
  },
+ "mineral_nodes": {
+  "MN-0001": {
+   "mineral": "smetiskomite",
+   "position": [
+    -588819,
+    -1249483.5
+   ]
+  },
+  "MN-0002": {
+   "mineral": "zombite",
+   "position": [
+    -588997,
+    -1249660
+   ]
+  },
+  "MN-0003": {
+   "mineral": "povodnovite",
+   "position": [
+    -589484,
+    -1249744.8
+   ]
+  },
+  "MN-0004": {
+   "mineral": "holystone",
+   "position": [
+    -589274.47,
+    -1249868.62
+   ],
+   "z": 192.296
+  },
+  "MN-0005": {
+   "mineral": "thundernite",
+   "position": [
+    -589201.22,
+    -1249678.09
+   ],
+   "z": 221.29
+  },
+  "MN-0006": {
+   "mineral": "dubovite",
+   "position": [
+    -587953.926,
+    -1249012.526
+   ]
+  }
+ },
  "objects": [
   {
    "asset": "pack:kenney-city-kit-suburban/driveway-long",
@@ -57110,6 +57156,36 @@
     -1248899.1
    ],
    "rotation_deg": 225.5
+  },
+  {
+   "asset": "pack:synty-arid-desert/SM_Env_Tree_Dead_02",
+   "id": "o-4859",
+   "position": [
+    -587951.086,
+    -1249025.466
+   ],
+   "rotation_deg": 269.3,
+   "scale": 1.4
+  },
+  {
+   "asset": "pack:synty-arid-desert/SM_Env_Tree_Dead_01",
+   "id": "o-4860",
+   "position": [
+    -587953.976,
+    -1249016.566
+   ],
+   "rotation_deg": 270.1,
+   "scale": 1.4
+  },
+  {
+   "asset": "pack:synty-arid-desert/SM_Env_Tree_Dead_01",
+   "id": "o-4861",
+   "position": [
+    -587955.366,
+    -1249013.486
+   ],
+   "rotation_deg": 359.8,
+   "scale": 1.39
   }
  ],
  "parcels": {
