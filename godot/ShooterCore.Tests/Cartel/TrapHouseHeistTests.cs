@@ -70,7 +70,7 @@ public class TrapHouseHeistTests
     [Fact]
     public void TheLineAndTheMarkerFollowTheDrillWhileLoadingAtTheHouse()
     {
-        var heist = new Heist(2, 5, 60, 100);
+        var heist = new Heist(2, 5, 100);
         Assert.Equal("x", TrapHouseHeistRules.Line(heist, "x", DrillState.Armed)); // on the way: the template's
         Assert.False(TrapHouseHeistRules.MarkSafe(heist, DrillState.Running));
         heist.Step(new HeistFacts(false, true, false, 0), Dt);

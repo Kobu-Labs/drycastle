@@ -59,8 +59,8 @@ public sealed class GangGunWeapon
 /// </summary>
 public readonly record struct GangShot(ushort MemberHitId, GangGunWeapon Weapon, Vector3 From, Vector3 Dir, float RangeM, ushort Target, uint Seed);
 
-/// <summary>Where a posted member stands and which way it faces when it has nobody to fight (a trap house defender: <see cref="GangMember.Post"/>). <c>Seat</c>: the spot is a seat of a car (a Rival chase car's rider: sits, <see cref="GangRules.SeatedOf"/>).</summary>
-public readonly record struct GangPost(Vector3 At, float Facing, bool Seat = false);
+/// <summary>Where a posted member stands and which way it faces when it has nobody to fight (a trap house defender: <see cref="GangMember.Post"/>). <c>Seat</c>: the spot is a seat of a car (a Rival chase car's rider: sits, <see cref="GangRules.SeatedOf"/>). <c>Shut</c>: it sits where it cannot shoot out (the bay of an Assault van, no window): it never fights while posted there.</summary>
+public readonly record struct GangPost(Vector3 At, float Facing, bool Seat = false, bool Shut = false);
 
 /// <summary>How a crew notices a player it attacks on sight (<see cref="ThiefGang.HostileTo"/>): within <see cref="RadiusM"/> of a member that has a clear line from its eyes to the player's chest, looked at every <see cref="CheckSeconds"/>. A Gunman's own sight uses the same eyes, chest and clock.</summary>
 public sealed class GangSight

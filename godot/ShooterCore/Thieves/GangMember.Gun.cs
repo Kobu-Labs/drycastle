@@ -38,13 +38,13 @@ public sealed partial class GangMember
 
     /// <summary>
     /// Posts it: it stands at <paramref name="at"/> (a floor point, no navigation mesh needed) facing <paramref name="facing"/> (Godot yaw, 0 faces -Z) from now on, and fights from there. Given right after it is
-    /// added (it guards then), or at the car's door when it was called back (<see cref="Remount"/>). <paramref name="seat"/>: the spot is a seat of a car (it sits). Not for the dead.
+    /// added (it guards then), or at the car's door when it was called back (<see cref="Remount"/>). <paramref name="seat"/>: the spot is a seat of a car (it sits). <paramref name="shut"/>: it sits where it cannot shoot out (an Assault van's bay): it fights no one while posted. Not for the dead.
     /// </summary>
-    public void Post(Vector3 at, float facing, bool seat = false)
+    public void Post(Vector3 at, float facing, bool seat = false, bool shut = false)
     {
         if (!Alive || Ended != null) return;
         ReleaseJob();
-        _post = new GangPost(at, facing, seat);
+        _post = new GangPost(at, facing, seat, shut);
         Position = Home = at;
         Yaw = facing;
         ClearRoute();

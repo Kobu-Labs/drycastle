@@ -6,6 +6,11 @@
    "id": "white",
    "model": "pack:synty-vehicles/cartel_van_white",
    "atlas": "Vehicle_01"
+  },
+  {
+   "id": "dark",
+   "model": "pack:synty-vehicles/cartel_van_dark",
+   "atlas": "Vehicle_05"
   }
  ],
  "bounds": {

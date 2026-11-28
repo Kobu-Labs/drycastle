@@ -8,8 +8,8 @@ using NVec3 = System.Numerics.Vector3;
 namespace Drycastle.Shooter.Net.Server.Cartel;
 
 /// <summary>
-/// The Rival chase cars of the Heists on the server (GLOSSARY "Chase car"; docs/cartel.md "Chase cars"): what each Heist's <see cref="ChaseFleet"/> shares (the roads, the vehicles, the crews, where the players are) and
-/// the re-seating of every rider after the vehicles moved (<see cref="AfterVehicles"/>).
+/// The Rival vehicles of the Heists on the server, chase cars and Assault vans (GLOSSARY "Chase car", "Assault"; docs/cartel.md "Chase cars", "Assaults"): what each Heist's <see cref="ChaseFleet"/> and <see cref="AssaultFleet"/>
+/// share (the roads, the vehicles, the crews, where the players are, what a player can see) and the re-seating of every rider after the vehicles moved (<see cref="AfterVehicles"/>).
 /// </summary>
 internal sealed class ChaseServer
 {
@@ -24,6 +24,7 @@ internal sealed class ChaseServer
     readonly Func<JobVehicles> _vehicles;
     readonly Func<RoadGraph> _roads;
     readonly List<ChaseFleet> _fleets = new();
+    readonly List<AssaultFleet> _assaults = new();
 
     public ChaseServer(ServerContext ctx, Func<JobVehicles> vehicles, RivalCrewServer rivals, Func<RoadGraph> roads, Func<float, float, float> ground, OpenGround open, Random rng)
     {
@@ -49,10 +50,21 @@ internal sealed class ChaseServer
 
     public void Release(ChaseFleet fleet) => _fleets.Remove(fleet);
 
+    /// <summary>The Assault vans of a Heist that has begun.</summary>
+    public AssaultFleet BeginAssaults(HeistRun run, AssaultCarData data)
+    {
+        var fleet = new AssaultFleet(this, run, data);
+        _assaults.Add(fleet);
+        return fleet;
+    }
+
+    public void Release(AssaultFleet fleet) => _assaults.Remove(fleet);
+
     /// <summary>After the vehicles moved: every crew rides on its car's seats of this tick (the figures are drawn where the car is, not one tick behind).</summary>
     public void AfterVehicles()
     {
         foreach (var f in _fleets) f.AfterVehicles();
+        foreach (var f in _assaults) f.AfterVehicles();
     }
 
     /// <summary>Where every living player stands (x, z): a chase car is put down at least spawn_player_min_m from all of them.</summary>
@@ -65,11 +77,19 @@ internal sealed class ChaseServer
     }
 
     /// <summary>The spot (x, z) cannot be used: a human of the party has a clear line to it (the same line a Gunman's sight uses), or a vehicle stands beside it.</summary>
-    public bool Blocked(NVec2 spot, IReadOnlySet<ushort> party)
+    public bool Blocked(NVec2 spot, IReadOnlySet<ushort> party) => VehicleNear(spot) || SeenBy(spot, party);
+
+    /// <summary>A vehicle of the world stands beside the spot (x, z).</summary>
+    public bool VehicleNear(NVec2 spot) => !Vehicles.Clear(spot, VehicleApartM);
+
+    /// <summary>Any human player (a bot is no eye) has a clear line to the spot: it is seen. The Assault van's removal waits for this to be false.</summary>
+    public bool SeenByAnyone(NVec2 spot) => SeenBy(spot, _ctx.Players.Keys);
+
+    /// <summary>A living human among <paramref name="who"/> has a clear line (the same line a Gunman's sight uses) to the spot (x, z), a little over the ground, from their eye.</summary>
+    bool SeenBy(NVec2 spot, IEnumerable<ushort> who)
     {
-        if (!Vehicles.Clear(spot, VehicleApartM)) return true;
         var at = new NVec3(spot.X, Ground(spot.X, spot.Y) + SpotM, spot.Y);
-        foreach (var id in party)
+        foreach (var id in who)
         {
             if (!_ctx.Players.TryGetValue(id, out var c) || c.IsBot || !_ctx.IsAlive(id)) continue;
             var p = c.Body.GlobalPosition;
@@ -151,23 +171,38 @@ internal sealed class ChaseFleet
         return TrySpawn() is { } why ? $"No chase car sent: {why}." : null;
     }
 
-    /// <summary>Puts one car down on a spot behind the van, with its crew seated. Null when it was; else why not.</summary>
+    /// <summary>Where every chase car of this Heist stands (x, z): the Heist's Assault vans keep apart from them.</summary>
+    public IEnumerable<NVec2> CarPositions()
+    {
+        foreach (var u in _units) if (u.Where is { } p) yield return p;
+    }
+
+    /// <summary>
+    /// Puts one car down with its crew seated: on open drivable ground AHEAD of the van, an ambush (<c>ambush_side_m</c> beside the van's way to the drop, <c>spawn_ahead_min_m</c> to <c>spawn_ahead_max_m</c> along it, planned
+    /// as a chase plans a way, facing along it; no sight rule, only no vehicle beside it) that waits for the van to pass and then follows, else (the drop is near) behind it on its trail, out of the party's sight. Null when it was; else why not.
+    /// </summary>
     string? TrySpawn()
     {
         var roads = _s.Roads;
         var van = Flat(_run.VanFeet);
         var off = _s.Open.Numbers;
-        var cars = new List<NVec2>();
-        foreach (var u in _units) if (u.Where is { } p) cars.Add(p);
+        var cars = new List<NVec2>(CarPositions());
         var party = _run.Party;
-        // any open drivable ground behind the van (not only a road), with a way from it to the van
+        // the van's way to the drop: roads where they bring it closer, open ground where that is shorter
+        var ahead = OffRoadRoute.Plan(roads, van, Flat(_run.Receiver.Position), (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off)?.Path;
+        // any open drivable ground (not only a road), with a way from it to the van
         var spot = ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng,
             open: p => _s.Open.Spot(p, off.CarHalfWidthM),
-            reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null);
+            reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null,
+            ahead: ahead, aheadBlocked: p => _s.VehicleNear(p));
         if (spot is not { } fit)
-            return $"no open ground behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
-        if (ChaseUnit.Spawn(_s, _run, _d, fit) is not { } unit) return "the car could not be put down";
+            return $"no open ground ahead of or behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
+        var gunmen = ChaseRules.Gunmen(_d, _run.Job.Tier, _run.Party.Count);
+        var crew = new List<GangMemberKind> { GangMemberKind.Enforcer };
+        for (var i = 0; i < gunmen; i++) crew.Add(GangMemberKind.Gunman);
+        if (ChaseUnit.Spawn(_s, _run, new RivalProfile("chase car", _d, crew), fit) is not { } unit) return "the car could not be put down";
         _units.Add(unit);
+        GD.Print($"server: {_run.Job}: chase car {(fit.BackM < 0 ? $"{-fit.BackM:F0} m ahead of the van on its way to the drop, beside the way (an ambush)" : $"{fit.BackM:F0} m behind the van")}");
         _run.Tell("A Rival car is after the van!");
         return null;
     }

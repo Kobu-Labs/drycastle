@@ -146,10 +146,10 @@ public sealed class ThiefGang : IGangHits, IDisposable
     }
 
     /// <summary>Puts one member in the world posted at <paramref name="at"/>, facing <paramref name="facing"/> (<see cref="GangMember.Post"/>: a trap house defender, no navigation mesh needed). Null when the world has no room.</summary>
-    public GangMember? AddPosted(GangMemberKind kind, Vector3 at, float facing, bool seat = false)
+    public GangMember? AddPosted(GangMemberKind kind, Vector3 at, float facing, bool seat = false, bool shut = false)
     {
         var m = Add(kind, at, facing);
-        m?.Post(at, facing, seat);
+        m?.Post(at, facing, seat, shut);
         return m;
     }
 

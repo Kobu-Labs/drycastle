@@ -113,57 +113,6 @@ public class ChaseOffRoadTests
         Assert.InRange(ahead.RoadM, 290f, 310f);
     }
 
-    // ---- an Assault van's last stretch ----
-
-    static RaidPlan RoadStop(RoadGraph g, float x)
-    {
-        var place = g.Nearest(new Vector2(x, 0), 5)!.Value.Place;
-        return new RaidPlan(null, place, new Vector2(x, 0), true, RoadPath.Yaw(new Vector2(1, 0)), new RoadPath(new[] { new Vector2(0, 0), new Vector2(x, 0) }), 1, 0, false);
-    }
-
-    static readonly RaidPlanner.Accept Anywhere = (at, yaw) => 1;
-
-    [Fact]
-    public void AnAssaultVanDrivesOnAcrossTheFieldAndParksShortOfItsTarget()
-    {
-        var g = Road();
-        var plan = RoadStop(g, 500);
-        var target = new Vector2(500, 120);
-        var vc = Game.Thieves.Van;
-        var longer = AssaultTail.Extend(g, plan, target, Array.Empty<Vector2>(), vc, Off, All, Anywhere);
-        Assert.NotEqual(plan.StopAt, longer.StopAt);
-        Assert.InRange(Vector2.Distance(longer.StopAt, target), Off.ParkShortM - 1f, Off.ParkShortM + 1f); // park_short_m short of it
-        Assert.Equal(longer.StopAt, longer.In.End);
-        Assert.Equal(plan.In.Start, longer.In.Start);
-        Assert.True(longer.In.Length > plan.In.Length + 90f);
-        Assert.Equal(plan.Stop, longer.Stop); // its way out still starts on the road
-        Assert.Equal(1, longer.DoorSide);
-    }
-
-    [Fact]
-    public void AnAssaultVanKeepsItsRoadStopWhenThereIsNothingToCrossOrNoRoomToStep()
-    {
-        var g = Road();
-        var plan = RoadStop(g, 500);
-        var vc = Game.Thieves.Van;
-        Assert.Same(plan, AssaultTail.Extend(g, plan, new Vector2(505, 4), Array.Empty<Vector2>(), vc, Off, All, Anywhere)); // the target is at the road: under min_tail_m
-        Assert.Same(plan, AssaultTail.Extend(g, plan, new Vector2(500, 120), Array.Empty<Vector2>(), vc, Off, None, Anywhere)); // nothing open
-        Assert.Same(plan, AssaultTail.Extend(g, plan, new Vector2(500, 120), Array.Empty<Vector2>(), vc, Off, All, (at, yaw) => null)); // the crew cannot step out anywhere on it
-    }
-
-    [Fact]
-    public void AnAssaultVanStopsFurtherBackWhereAnotherOfTheHeistStoodAlready()
-    {
-        var g = Road();
-        var plan = RoadStop(g, 500);
-        var vc = Game.Thieves.Van;
-        var target = new Vector2(500, 300);
-        var first = AssaultTail.Extend(g, plan, target, Array.Empty<Vector2>(), vc, Off, All, Anywhere);
-        var second = AssaultTail.Extend(g, plan, target, new[] { first.StopAt }, vc, Off, All, Anywhere);
-        Assert.True(Vector2.Distance(second.StopAt, first.StopAt) >= vc.UsedApartM);
-        Assert.True(Vector2.Distance(second.StopAt, target) > Vector2.Distance(first.StopAt, target));
-    }
-
     // ---- a chase car's spot ----
 
     static ChaseTrail TrailTo(float x)
@@ -458,6 +407,29 @@ public class ChaseOffRoadTests
     }
 
     [Fact]
+    public void ABayRiderSitsShutAndNeverFightsWhileItRidesThenFightsOnFootOnceOut()
+    {
+        var shot = new List<GangShot>();
+        var rig = new Rig(shot);
+        var crew = rig.Crew(p => p == 1);
+        var window = crew.AddPosted(GangMemberKind.Gunman, new Vector3(0, 0, 0), 0, seat: true)!; // the cab's passenger seat: a window
+        var bay = crew.AddPosted(GangMemberKind.Gunman, new Vector3(0, 0, 2), 0, seat: true, shut: true)!; // a post of the van's bay: no window
+        Assert.True(bay.Seated && window.Seated);
+        Assert.True(window.CanFight);
+        Assert.False(bay.CanFight);
+        rig.World.List.Add(new GangPlayer(1, new Vector3(10, 0, -8), true)); // a hostile player in sight
+        rig.Run(5f);
+        Assert.NotEmpty(shot);
+        Assert.All(shot, s => Assert.Equal(window.HitId, s.MemberHitId)); // only the window fights
+        Assert.Null(bay.Target);
+        shot.Clear();
+        bay.Unpost(new Vector3(0, 0, 4), 0f); // the van stopped: it steps out behind it
+        Assert.True(bay.CanFight);
+        rig.Run(8f);
+        Assert.Contains(shot, s => s.MemberHitId == bay.HitId);
+    }
+
+    [Fact]
     public void ARiderIsSeatedOnTheWireAndAMemberWalkingBackIsRemountingNotFighting()
     {
         var shot = new List<GangShot>();
@@ -527,9 +499,14 @@ public class ChaseOffRoadTests
         {
             var chase = DataFile.Section<HeistData>(Shipped.JobSection(kind), $"jobs.{kind}").Chase;
             Assert.Equal(VanKmh * 1.4f, chase.MaxSpeedMps * 3.6f, 0.1f);
-            Assert.Equal(chase.MaxSpeedMps, ChaseRules.FollowSpeed(chase, 1000f, 16.7f)); // far behind: the full speed, no more
+            Assert.Equal(chase.FarSpeedMps, ChaseRules.FollowSpeed(chase, 1000f, 16.7f)); // far behind: 120 km/h, no more
+            Assert.Equal(chase.MaxSpeedMps, ChaseRules.FollowSpeed(chase, 60f, 16.7f)); // closer than far_m: 84 km/h
+            Assert.Equal(120f, chase.FarSpeedMps * 3.6f, 1.5f); // 33 m/s is 118.8 km/h
             Assert.True(ChaseRules.FollowSpeed(chase, chase.FollowM, VanKmh / 3.6f) < chase.MaxSpeedMps); // at its gap it keeps the van's own
             var car = Game.Vehicles.Vehicles.Single(v => v.Id == chase.VehicleType);
+            Assert.True(car.TopSpeed >= chase.FarSpeedMps, "the car type reaches the far speed");
+            var cartelVan = Game.Vehicles.Vehicles.Single(v => v.Id == Game.Cartel.AssaultCar.VehicleType);
+            Assert.True(cartelVan.TopSpeed >= chase.FarSpeedMps, "the Assault van's type reaches the far speed");
             Assert.True(car.TopSpeed > chase.MaxSpeedMps, $"the car type's own top speed {car.TopSpeed * 3.6f:F0} km/h is above the NPC's: no allowance on the drive model is needed"); // the players' car is not limited by it
         }
     }
@@ -562,7 +539,7 @@ public class ChaseOffRoadTests
     public void TheShippedOffRoadNumbersCheckOutAndAreTheDefaults()
     {
         var d = new OffRoadData();
-        Assert.Equal((d.EnterM, d.LeaveM, d.StepM, d.OpenCost, d.MinTailM, d.ParkShortM, d.SampleM, d.MaxGrade), (Shipped.OffRoad.EnterM, Shipped.OffRoad.LeaveM, Shipped.OffRoad.StepM, Shipped.OffRoad.OpenCost, Shipped.OffRoad.MinTailM, Shipped.OffRoad.ParkShortM, Shipped.OffRoad.SampleM, Shipped.OffRoad.MaxGrade));
+        Assert.Equal((d.EnterM, d.LeaveM, d.StepM, d.OpenCost, d.SampleM, d.MaxGrade), (Shipped.OffRoad.EnterM, Shipped.OffRoad.LeaveM, Shipped.OffRoad.StepM, Shipped.OffRoad.OpenCost, Shipped.OffRoad.SampleM, Shipped.OffRoad.MaxGrade));
         Assert.Throws<DataFileException>(() => new OffRoadData { OpenCost = 0.9f }.Validate("off_road"));
         Assert.Throws<DataFileException>(() => new OffRoadData { StepM = 0 }.Validate("off_road"));
         Assert.Throws<DataFileException>(() => new OffRoadData { MaxChecks = 0 }.Validate("off_road"));

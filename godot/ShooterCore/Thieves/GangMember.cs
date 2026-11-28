@@ -266,7 +266,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>Hands not free: working or carrying Loot. A busy Thief does not join a fight.</summary>
     public bool Busy => Carried != 0 || Working;
     /// <summary>Enforcers and the Gang boss fight when the Raid does; a Thief with free hands joins.</summary>
-    public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && State != GangMemberState.Remount && (Kind != GangMemberKind.Thief || !Busy);
+    public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && State != GangMemberState.Remount && (Kind != GangMemberKind.Thief || !Busy) && _post is not { Shut: true };
     /// <summary>The player it fights now, or null.</summary>
     public GangPlayer? Target => _target;
     /// <summary>Its place among the members fighting the same player (0 up, kept while the fight lasts; -1 none): the angle of its spot on the ring round them. Set by <see cref="GangRoster"/>.</summary>
