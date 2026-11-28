@@ -21,7 +21,7 @@ public enum CartelJoinRefusal : byte
 public enum NoRespectReason : byte { None, Bot, Guest, Sandbox, NotMember }
 
 /// <summary>
-/// Why a Cartel Job was not started, checked in this order (<see cref="CartelRules.CanStart"/>; <see cref="NoCartel"/> before all, <see cref="CannotBegin"/> after all). The refusal event
+/// Why a Cartel Job was not started, checked in this order (<see cref="CartelRules.CanStart"/>; <see cref="NoCartel"/> before all, <see cref="PalletFull"/> and <see cref="CannotBegin"/> after all). The refusal event
 /// (<see cref="Net.EventKind.CartelRefused"/>) carries the byte: do not renumber.
 /// </summary>
 public enum JobStartRefusal : byte
@@ -46,13 +46,16 @@ public enum JobStartRefusal : byte
     NoCartel,
     /// <summary>The kind could not begin (no drop point free, no house free...): its own words go with it.</summary>
     CannotBegin,
+    /// <summary>A Delivery was asked while the Cartel pallet's four spots all hold a Delivery's Duffel (<see cref="JobStartFacts.PalletFull"/>). Checked after <see cref="MateBusy"/>, though numbered last (added later: do not renumber).</summary>
+    PalletFull,
 }
 
 /// <summary>What <see cref="CartelRules.CanStart"/> needs to know about a start request; the server gathers it.</summary>
 /// <param name="Rank">The leader's Cartel rank (an index of cartel.json).</param>
 /// <param name="IgnoreRank">The admin's <c>/cartel job</c>: any tier, anywhere.</param>
+/// <param name="PalletFull">The kind is the Delivery and every spot of the Cartel pallet is held (the server asks <see cref="DeliveryJobKind.PalletFull"/>).</param>
 public readonly record struct JobStartFacts(bool Bot, bool Member, bool IsLeader, bool KindKnown, int Tier, int Rank, bool RoundRunning, bool Alive, bool AtContact,
-    bool OwnerBusy, bool MateBusy, bool IgnoreRank = false);
+    bool OwnerBusy, bool MateBusy, bool IgnoreRank = false, bool PalletFull = false);
 
 /// <summary>The Cartel's rules for joining, starting a Job and paying for one (docs/cartel.md "Membership and rank", "Who runs a job", "Difficulty and reward").</summary>
 public static class CartelRules
@@ -92,7 +95,8 @@ public static class CartelRules
         if (!f.Alive) return JobStartRefusal.Dead;
         if (!f.IgnoreRank && !f.AtContact) return JobStartRefusal.FarFromContact;
         if (f.OwnerBusy) return JobStartRefusal.OwnerBusy;
-        return f.MateBusy ? JobStartRefusal.MateBusy : JobStartRefusal.None;
+        if (f.MateBusy) return JobStartRefusal.MateBusy;
+        return f.PalletFull ? JobStartRefusal.PalletFull : JobStartRefusal.None;
     }
 
     public static string Words(JobStartRefusal r, CartelFile data, int tier) => r switch

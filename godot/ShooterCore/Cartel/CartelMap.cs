@@ -1,13 +1,14 @@
 using System.Numerics;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Intel;
+using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Scenery;
 
 namespace Drycastle.ShooterCore.Cartel;
 
 /// <summary>
 /// The names the map gives the cartel's data (docs/cartel.md "Contact", "Simple jobs"): the two Runtime zone kinds, baked as candidate
-/// points into zone_points.json (pipeline/config/rules.yaml <c>zones</c>), and the asset of the Contact's marker, a placed object of the map.
+/// points into zone_points.json (pipeline/config/rules.yaml <c>zones</c>), and the assets of the Contact's and the pallet's markers, placed objects of the map.
 /// </summary>
 public static class CartelZones
 {
@@ -16,10 +17,25 @@ public static class CartelZones
     /// <summary>Hit spots: where a Hit's Rival dealer stands outdoors with his guards.</summary>
     public const string HitKind = "cartel_hit";
     /// <summary>
+    /// Helicopter landing spots (runtime zone kind, exported as outlines like the plantation's): a drawn pad. The helicopter stands on the outline's mean point, its nose toward the middle of the outline's first edge
+    /// (the first two points drawn). A Heist's helicopter Receiver lands on one.
+    /// </summary>
+    public const string HeliKind = "cartel_heli";
+    /// <summary>
+    /// Boat moorings (runtime zone kind, exported as outlines): a drawn line, not an area. The first point is where the boat lies (its bow toward the second), the points after it are the route down the river to
+    /// the map's edge, in the order they were drawn (the closing edge of the outline is not part of it). A Heist's boat Receiver is moored at one.
+    /// </summary>
+    public const string BoatKind = "cartel_boat";
+    /// <summary>
     /// The Contact's marker (pipeline primitive, kits/primitives.py): the first placed object of it (lowest id) is the Contact; a map without one has no
     /// cartel. It stops nothing (<see cref="Colliders.ObjectColliders.IsPassThrough(string)"/>), so no weapon is tested against him; the game hides it and draws him.
     /// </summary>
     public const string ContactAsset = "prim:cartel_contact";
+    /// <summary>
+    /// The Cartel pallet's marker (pipeline primitive, kits/primitives.py): the first placed object of it (lowest id) is the pallet a Delivery's Duffel lies on; a map without one has no Delivery.
+    /// Unlike the Contact's it is solid like any placed prop (a low box the size of the pallet); the game hides it and draws the Gang Warfare pallet there.
+    /// </summary>
+    public const string PalletAsset = "prim:cartel_pallet";
 }
 
 /// <summary>
@@ -42,8 +58,34 @@ public readonly record struct ContactPose(Vector3 Position, Vector2 Facing)
     public float GroundDistance(Vector3 p) => Vector2.Distance(new Vector2(Position.X, Position.Z), new Vector2(p.X, p.Z));
 }
 
+/// <summary>A place a Receiver stands: the ground point (x, z, Godot axes), how it faces (a node's Y turn: forward -Z along it) and, for a boat, the route it leaves by (ground points, the first after the mooring).</summary>
+public sealed record ReceiverSpot(Vector2 At, float YawRad, IReadOnlyList<Vector2> Route)
+{
+    /// <summary>The spot of a helicopter pad drawn as <paramref name="ring"/>: its mean point, the nose toward the middle of its first edge.</summary>
+    public static ReceiverSpot? Pad(IReadOnlyList<Vector2> ring)
+    {
+        if (ring.Count < 3) return null;
+        var sum = Vector2.Zero;
+        foreach (var p in ring) sum += p;
+        var at = sum / ring.Count;
+        var front = (ring[0] + ring[1]) / 2 - at;
+        return new ReceiverSpot(at, front.LengthSquared() > 1e-6f ? YawOf(front) : 0f, Array.Empty<Vector2>());
+    }
+
+    /// <summary>The spot of a boat drawn as <paramref name="line"/>: it lies at the first point, bow toward the second, and leaves by the points after the first.</summary>
+    public static ReceiverSpot? Mooring(IReadOnlyList<Vector2> line)
+    {
+        if (line.Count < 3) return null; // a mooring and at least two points of route (a ring has at least three)
+        var bow = line[1] - line[0];
+        return new ReceiverSpot(line[0], bow.LengthSquared() > 1e-6f ? YawOf(bow) : 0f, line.Skip(1).ToArray());
+    }
+
+    /// <summary>The Y turn of a node whose forward (-Z) looks along the ground vector (x, z).</summary>
+    public static float YawOf(Vector2 dir) => MathF.Atan2(-dir.X, -dir.Y);
+}
+
 /// <summary>
-/// The cartel's map data as the server needs it (static, never sent: a client reads the same map): the Contact's pose and the candidate points of the
+/// The cartel's map data as the server needs it (static, never sent: a client reads the same map): the Contact's and the pallet's pose and the candidate points of the
 /// Drop point and Hit spot zones. Pure, like <see cref="ZonePoints"/>: the server owns the random generator; a Job claims its point with <see cref="CartelSpots.Claim"/>. A map
 /// without a Contact has no cartel (<see cref="HasCartel"/> false, no error); a map without a zone of a kind has no point of it, and a claim refuses (the Job does not start).
 /// <para>
@@ -53,23 +95,40 @@ public readonly record struct ContactPose(Vector3 Position, Vector2 Facing)
 /// </summary>
 public sealed class CartelMap
 {
-    public static readonly CartelMap Empty = new(null, Array.Empty<Vector3>(), Array.Empty<Vector3>());
+    public static readonly CartelMap Empty = new(null, Array.Empty<Vector3>(), Array.Empty<Vector3>(), null, Array.Empty<ReceiverSpot>(), Array.Empty<ReceiverSpot>());
 
-    CartelMap(ContactPose? contact, IReadOnlyList<Vector3> drops, IReadOnlyList<Vector3> hits)
+    CartelMap(ContactPose? contact, IReadOnlyList<Vector3> drops, IReadOnlyList<Vector3> hits, PalletPose? pallet, IReadOnlyList<ReceiverSpot> helis, IReadOnlyList<ReceiverSpot> boats)
     {
-        Contact = contact; DropPoints = drops; HitSpots = hits;
+        Contact = contact; DropPoints = drops; HitSpots = hits; Pallet = pallet; Helis = helis; Boats = boats;
+        HeliPoints = helis.Select(s => new Vector3(s.At.X, 0, s.At.Y)).ToArray();
+        BoatPoints = boats.Select(s => new Vector3(s.At.X, 0, s.At.Y)).ToArray();
     }
 
     /// <summary>The Contact, or null on a map that has none (then there is no cartel).</summary>
     public ContactPose? Contact { get; }
     public bool HasCartel => Contact != null;
+    /// <summary>The Cartel pallet a Delivery's Duffel lies on (the first placed marker, <see cref="CartelZones.PalletAsset"/>), or null on a map without one (then there is no Delivery).</summary>
+    public PalletPose? Pallet { get; }
     /// <summary>The candidate points of the <c>cartel_drop</c> zones, Godot ground axes; empty when none is drawn.</summary>
     public IReadOnlyList<Vector3> DropPoints { get; }
     /// <summary>The candidate points of the <c>cartel_hit</c> zones, Godot ground axes; empty when none is drawn.</summary>
     public IReadOnlyList<Vector3> HitSpots { get; }
 
-    public static CartelMap From(ZonePoints points, ContactPose? contact)
-        => new(contact, points.Points(CartelZones.DropKind), points.Points(CartelZones.HitKind));
+    /// <summary>The helicopter landing spots of the map's <c>cartel_heli</c> zones (one each), in file order; empty when none is drawn.</summary>
+    public IReadOnlyList<ReceiverSpot> Helis { get; }
+    /// <summary>The boat moorings of the map's <c>cartel_boat</c> zones (one each) with their routes, in file order; empty when none is drawn.</summary>
+    public IReadOnlyList<ReceiverSpot> Boats { get; }
+    /// <summary>The ground points of <see cref="Helis"/> and <see cref="Boats"/> (y 0), the pools <see cref="CartelSpots"/> claims from.</summary>
+    public IReadOnlyList<Vector3> HeliPoints { get; }
+    public IReadOnlyList<Vector3> BoatPoints { get; }
+
+    public static CartelMap From(ZonePoints points, ContactPose? contact, PalletPose? pallet = null, ZonePolygons? polygons = null)
+    {
+        polygons ??= ZonePolygons.Empty;
+        var helis = polygons.Rings(CartelZones.HeliKind).Select(r => ReceiverSpot.Pad(r.Points)).OfType<ReceiverSpot>().ToArray();
+        var boats = polygons.Rings(CartelZones.BoatKind).Select(r => ReceiverSpot.Mooring(r.Points)).OfType<ReceiverSpot>().ToArray();
+        return new(contact, points.Points(CartelZones.DropKind), points.Points(CartelZones.HitKind), pallet, helis, boats);
+    }
 
     /// <summary>A uniform pick among the points of <paramref name="pool"/> that <paramref name="allowed"/> accepts; null when none does.</summary>
     public static Vector3? Pick(IReadOnlyList<Vector3> pool, Random rng, Func<Vector3, bool>? allowed = null)

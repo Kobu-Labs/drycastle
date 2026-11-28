@@ -5,12 +5,10 @@ using Drycastle.ShooterCore.Jobs;
 
 namespace Drycastle.ShooterCore.Cartel;
 
-/// <summary>What a Delivery needs of the server: the Duffels, a Duffel in a player's hands, and the players' feet and interact key.</summary>
+/// <summary>What a Delivery needs of the server: the Duffels, and the players' feet and interact key.</summary>
 public interface IDeliveryWorld
 {
     DuffelBook Duffels { get; }
-    /// <summary>A Duffel of the party in this player's hands (the server burdens the body and tells a player who carries one already); null when it could not.</summary>
-    Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier);
     /// <summary>Where a living player on foot stands; null otherwise (dead, gone, in a vehicle).</summary>
     Vector3? Feet(ushort player);
     /// <summary>Whether the player holds the interact key now (its last input).</summary>
@@ -18,8 +16,8 @@ public interface IDeliveryWorld
 }
 
 /// <summary>
-/// The Delivery (docs/cartel.md "Simple jobs", #494): the leader gets one Duffel at the Contact for the party; a party player carrying it who stands within <c>radius_m</c> of the Job's Drop point and
-/// holds the interact key <c>hold_seconds</c> (<see cref="InteractHold"/>) hands it over: success. A dropped Duffel lies for any of the party to pick up (the leader's death still fails the Job). The
+/// The Delivery (docs/cartel.md "Simple jobs", #494): its Duffel lies on a free spot of the Cartel pallet by the Contact (<see cref="CartelPallet"/>), for the party to pick up; a party player carrying it who stands within <c>radius_m</c> of the Job's Drop point and
+/// holds the interact key <c>hold_seconds</c> (<see cref="InteractHold"/>) hands it over: success. A dropped Duffel lies for any of the party to pick up; one loaded in a vehicle is taken out at its open cargo area (<see cref="DuffelBook.TakeOut"/>) and handed over the same way (the leader's death still fails the Job; so does the Duffel's loss, whatever made it: <see cref="JobFailReason.Objective"/>). A start needs a pallet on the map and a free spot on it (<see cref="CartelWords.Start"/>: "The pallet is full."); the spot is held until the Job ends. The
 /// drop point is at least <c>min_contact_m</c> from the Contact and <c>apart_m</c> from every point another Job holds (<see cref="CartelSpots"/>). The Duffel belongs to the Job's party
 /// (<see cref="Job.Party"/>). When it ends, whichever way, its Duffel goes (<see cref="DuffelBook.RemoveParty"/>, which unburdens its carrier).
 /// Numbers in cartel.json <c>jobs.delivery</c>.
@@ -42,8 +40,12 @@ public sealed class DeliveryJobKind : IJobKind
         public float HoldSeconds { get; set; } = 2;
     }
 
+    /// <summary>Metres from its spot within which a lying Duffel still counts as on the pallet.</summary>
+    const float OnPalletM = 0.5f;
+
     readonly Data _data;
     readonly DuffelKind _duffel;
+    readonly CartelPalletData _pallet;
     readonly Func<CartelMap> _map;
     readonly Random _rng;
     readonly IDeliveryWorld _world;
@@ -52,6 +54,7 @@ public sealed class DeliveryJobKind : IJobKind
     {
         _data = Read(file);
         _duffel = DuffelRules.Parse(_data.Duffel)!.Value;
+        _pallet = file.Pallet;
         _map = map; _rng = rng; _world = world;
     }
 
@@ -72,15 +75,23 @@ public sealed class DeliveryJobKind : IJobKind
     public Data Numbers => _data;
     public float Seconds(int tier) => CartelTiers.Of(_data.Seconds, tier);
 
+    /// <summary>Every spot of the Cartel pallet is held by a running Job (the server's check before a start; false on a map without a pallet, which <see cref="Begin"/> refuses in its own words).</summary>
+    public bool PalletFull(JobBook book) => _map().Pallet != null && CartelPallet.FreeSpot(book, _pallet) < 0;
+
     public IJobObjective? Begin(Job job, JobBook book, out string? refusal)
     {
+        refusal = null;
         var map = _map();
+        if (map.Pallet is not { } pallet) { refusal = "This map has no pallet."; return null; }
+        var spot = CartelPallet.Claim(job, book, _pallet);
+        if (spot < 0) { refusal = CartelWords.Start.Text(JobStartRefusal.PalletFull); return null; }
         if (CartelSpots.Claim(job, book, map, CartelZones.DropKind, _rng, map.Contact?.Position, "the Contact", _data.MinContactM, _data.ApartM, out refusal) is not { } drop) return null;
-        if (_world.Give(_duffel, job.Party, job.Leader) is not { } duffel) { refusal = "No duffel for you: you carry one already, or the world is full."; return null; }
-        return new Run(this, job.Party, duffel, drop);
+        var at = pallet.SpotAt(_pallet, spot);
+        if (_world.Duffels.Place(_duffel, job.Party, at, pallet.YawRad) is not { } duffel) { refusal = "The world is full: no duffel can be put on the pallet."; return null; }
+        return new Run(this, job.Party, duffel, at, drop);
     }
 
-    /// <summary>One Delivery's state: its Duffel, its drop point and the hold under way there.</summary>
+    /// <summary>One Delivery's state: its Duffel and the pallet spot it lay on, its drop point and the hold under way there.</summary>
     public sealed class Run : IJobObjective
     {
         readonly DeliveryJobKind _k;
@@ -88,15 +99,20 @@ public sealed class DeliveryJobKind : IJobKind
         InteractHold _hold;
         ushort _holder;
 
-        internal Run(DeliveryJobKind kind, JobParty party, Duffel duffel, Vector3 drop)
+        internal Run(DeliveryJobKind kind, JobParty party, Duffel duffel, Vector3 spot, Vector3 drop)
         {
-            _k = kind; _party = party; Duffel = duffel; Drop = drop;
+            _k = kind; _party = party; Duffel = duffel; Spot = spot; Drop = drop;
         }
 
         public Duffel Duffel { get; }
+        /// <summary>Where the Duffel lay on the pallet.</summary>
+        public Vector3 Spot { get; }
         public Vector3 Drop { get; }
 
         bool Present => _k._world.Duffels.Find(Duffel.Id) == Duffel;
+
+        /// <summary>The Duffel still lies on its pallet spot (nobody has picked it up yet, or it was put back).</summary>
+        bool OnPallet => Duffel.State == DuffelState.Lying && Vector3.DistanceSquared(Duffel.Position, Spot) <= OnPalletM * OnPalletM;
 
         /// <summary>The party player who carries the Duffel inside the drop radius, or 0.</summary>
         ushort CarrierAtDrop()
@@ -108,7 +124,7 @@ public sealed class DeliveryJobKind : IJobKind
 
         public JobStep Step(Job job, float dt)
         {
-            if (!Present) return JobStep.Failed; // gone from the world (it never should while the Job runs)
+            if (!Present) return JobStep.Failed; // gone from the world for any reason but the Job's own end (the Job's end removes it after the last Step): JobFailReason.Objective
             var at = CarrierAtDrop();
             if (at != _holder) { _hold.Reset(); _holder = at; }
             if (at == 0) return JobStep.Running;
@@ -118,10 +134,12 @@ public sealed class DeliveryJobKind : IJobKind
         public void End(Job job) => _k._world.Duffels.RemoveParty(_party);
 
         public string Objective(Job job) => !Present ? ""
-            : Duffel.State != DuffelState.Carried ? "Pick the duffel up"
+            : Duffel.State == DuffelState.Loaded ? $"Drive the duffel to the drop point, take it out ({JobText.Throw}) and hand it over"
+            : Duffel.State != DuffelState.Carried ? (OnPallet ? "Take the duffel from the pallet" : "Pick the duffel up")
             : CarrierAtDrop() != 0 ? $"Hold {JobText.Interact} to hand the duffel over"
             : "Take the duffel to the drop point";
 
-        public Vector3? Marker(Job job) => !Present ? null : Duffel.State == DuffelState.Carried ? Drop : Duffel.Position;
+        /// <summary>The pallet spot (the Duffel's own position) until a party player carries it or it is loaded in a vehicle (where it lies then is not where it is), then the drop point.</summary>
+        public Vector3? Marker(Job job) => !Present ? null : Duffel.State is DuffelState.Carried or DuffelState.Loaded ? Drop : Duffel.Position;
     }
 }

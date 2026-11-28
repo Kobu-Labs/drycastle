@@ -514,6 +514,8 @@ public sealed class DrivePrediction
     public bool TrailerLoaded = true;
 
     public DriveState State;
+    /// <summary>The top speed a governor holds the vehicle to (m/s; <see cref="SpeedGovernor"/>), or null: none. The driver's client sets it before every step from what it knows of the vehicle (a Cartel van with a Duffel loaded), as the server does.</summary>
+    public float? SpeedCapMps;
     /// <summary>The driver's own copy of the hitched trailer's body, stepped with the tractor (valid while <see cref="HasTrailer"/>).</summary>
     public TrailerBody TrailerBody;
     /// <summary>Corrections made so far, and the largest position error seen at an acknowledged input.</summary>
@@ -544,8 +546,9 @@ public sealed class DrivePrediction
     public void DetachTrailer() => _rig = null;
 
     /// <summary>One tick of the tractor and, with a trailer, of the trailer after it: a blocked trailer holds the tractor where it was.</summary>
-    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput input, float dt)
+    void StepBoth(ref DriveState s, ref TrailerBody trailer, in DriveInput driven, float dt)
     {
+        var input = SpeedGovernor.Apply(driven, s.Speed, SpeedCapMps);
         if (_rig is not { } rig) { DriveModel.Step(ref s, _def, input, dt, _world); return; }
         var before = s;
         DriveModel.Step(ref s, _def, input, dt, _world, new TowEffect(TowLoad.Of(_def, rig.TrailerDef, TrailerLoaded), TowModel.BlockOf(rig.Geometry, trailer)));

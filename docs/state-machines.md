@@ -285,6 +285,43 @@ stateDiagram-v2
 - **Thrown**: The canister is in the air (ballistic, no crate yet); not openable.
 - **Marking**: The canister lies at the landing point and smokes for the mark time; then the crate starts from above it. Not openable.
 
+## Cargo.Doors
+
+The cargo doors of a vehicle (boot lid, hatch, van rear doors): shut, or open until somebody shuts them.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Closed
+    Closed --> Open
+    Open --> Closed
+```
+
+- **Closed**: The start state, and what a spawn, a reset or a respawn of the vehicle leaves. A throw into the cargo area is refused (it falls beside the vehicle).
+- **Open**: A player on foot at the access point pressed the interact key. Stays open while the vehicle drives; a throw loads, the key at the access point shuts it.
+
+## Cartel.JobDone
+
+The "Job done" cinematic of a succeeded Cartel Job for the party's players: the banner, the flashed camera moves out and the cut back, their own music; about 10 s, or at once on a skip, damage or death.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Playing
+    Playing --> Playing
+    Playing --> Skipped
+    Playing --> Fading
+    Playing --> Idle
+    Skipped --> Idle
+    Skipped --> Playing
+    Fading --> Idle
+    Fading --> Playing
+```
+
+- **Idle**: Nothing plays; the camera and the controls are the player's own.
+- **Playing**: The banner shows the Respect (or why none); the clock runs the timeline: the camera's legs (a flash at each move), the music with its fade; the controls are off. A Job that succeeds while it plays starts it over.
+- **Skipped**: Ended at once by a skip key, damage or death: the camera is the player's again, a flash covers the cut, the music fades out over about 1.5 s, the controls come back after a moment.
+- **Fading**: The camera's part is over (the view is the player's own, the controls are theirs); the music still fades out for the last seconds of its fade.
+
 ## Cartel.Membership
 
 Whether a player works for the Cartel: an outsider until they join at the Contact, a member who runs Jobs and earns Respect, or quit with rank and Respect frozen until they rejoin.
@@ -337,6 +374,43 @@ stateDiagram-v2
 - **Flying**: Ballistic arc, then bounces off the surface normal (up to Bounces, each quieter) and a short slide; on a steep face it slides down instead of settling. Under water it sinks slowly, never bounces, never clinks. Ends lying still, or at once in the void (no floor 8 m below where it started).
 - **Resting**: Lies flat on the floor for Stay seconds (a vehicle's roof: VehicleStay). Counts a clock; no movement, so its instance is not touched.
 - **Fading**: Shrinks to nothing over FadeSeconds, then the slot is free.
+
+## Chase.Car
+
+One Rival chase car of a Heist: it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Spawned
+    Spawned --> Chasing
+    Chasing --> Stopping
+    Chasing --> Reversing
+    Chasing --> GivingUp
+    Reversing --> Chasing
+    Reversing --> Stopping
+    Reversing --> GivingUp
+    Stopping --> Out
+    Stopping --> GivingUp
+    Out --> Remounting
+    Out --> GivingUp
+    Remounting --> Chasing
+    Remounting --> Out
+    Remounting --> GivingUp
+    Out --> Gone
+    GivingUp --> Gone
+    Gone --> [*]
+```
+
+From any state: Gone
+
+- **Spawned**: Just put down on open ground behind the van with its crew seated: nothing driven yet. The next step is Chasing.
+- **Chasing**: Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
+- **Stopping**: Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.
+- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away (confirmed for remount_confirm_seconds) and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.
+- **GivingUp**: Stayed more than give_up_m from the van for give_up_seconds: the server removes the car and its crew at once, then it is Gone.
+- **Gone**: Removed from the world (given up, spent, destroyed and its wreck gone, or its Heist ended). Never left.
+- **Reversing**: Backs out of where it is wedged (clock: reverse_seconds), steering to turn its nose to its way, then Chasing again; the tries are counted (max_unsticks). A dead driver stops it; gives up as Chasing does; a destroyed car is Gone.
+- **Remounting**: The crew walks back to the car's doors over the navigation mesh and sits down in its seats (clock: remount_seconds). Every living member aboard: Chasing. The car wrecked or taken, the driver dead, nobody left, or the clock out: Out (the crew on foot; it tries again after remount_retry_seconds). Gives up as Out does.
 
 ## Church.Door
 
@@ -640,7 +714,7 @@ stateDiagram-v2
 
 ## Duffel.Place
 
-A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a cargo volume (the Cartel van's back).
+A bag of goods of a Job's party: lying, carried by one of the party, flying from a throw, or loaded in a vehicle's cargo volume.
 
 ```mermaid
 stateDiagram-v2
@@ -651,27 +725,13 @@ stateDiagram-v2
     Carried --> Loaded
     Flying --> Lying
     Flying --> Loaded
-    Loaded --> [*]
+    Loaded --> Carried
 ```
 
-- **Lying**: On the ground (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
-- **Carried**: On a party player's back: no sprint, slower by its weight. The throw key's tap puts it down (Lying, or Loaded in a cargo volume), a charged release throws it (Flying); the carrier's death drops it where they fell.
-- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall stops it and it falls straight down.
-- **Loaded**: In a cargo volume, counted by its owner; it stays there until the Job removes it.
-
-## Duffel.ThrowKey
-
-The Duffel throw key: up, or held from a fresh press while carrying (charging); the release puts the Duffel down (a tap) or throws it (a hold).
-
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Charging
-    Charging --> Idle
-```
-
-- **Idle**: Key up, or held since before the player could throw (a held key must be let go first).
-- **Charging**: Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.
+- **Lying**: On the ground, or on a Job's pallet spot (the start state; a Duffel made in a player's hands goes on to Carried at once). A party player's interact key picks it up.
+- **Carried**: On a party player's back: no sprint, slower by its weight. One press of the throw key throws it at once (Flying); the carrier's death, a seat or leaving the party puts it down where they were (Lying).
+- **Flying**: The throw's arc, stepped against the world each tick: it lands (Lying), or passes into a cargo volume that accepts it (Loaded). A wall, or a cargo volume that does not accept it (shut doors, full, not its party's, a bed met from the side), stops it and it falls straight down beside.
+- **Loaded**: In a vehicle's cargo volume, on the first free slot, drawn there and fixed to the vehicle. A party player with empty hands at the open cargo area takes the last loaded one out (Carried); the vehicle's destruction, retirement or reset, or the Job's end, removes it.
 
 ## Editor.Shape
 
@@ -894,6 +954,18 @@ stateDiagram-v2
     Posted --> Windup
     Posted --> Flee
     Posted --> Board
+    Posted --> Guard
+    Idle --> Remount
+    Guard --> Remount
+    Chase --> Remount
+    Windup --> Remount
+    Swing --> Remount
+    Aim --> Remount
+    Fire --> Remount
+    Remount --> Guard
+    Remount --> Idle
+    Remount --> Posted
+    Remount --> Flee
     Windup --> Posted
     Swing --> Posted
     Flee --> [*]
@@ -927,7 +999,8 @@ From any state: Dead
 - **GetUp**: Gets up (clock: the shock's get-up seconds), then goes for the same target again (ClimbUp), or looks for another when it is gone (Seek). All four are Working states: the Thief does not fight.
 - **Aim**: A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.
 - **Fire**: The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.
-- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.
+- **Posted**: Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car, bit 7 of the state byte says it sits); getting out it is Guard.
+- **Remount**: A Rival chase crew on foot called back to its car (the car's machine, Chase.Car Remounting): runs to the car's door on a route of the navigation mesh and never fights on the way; at the door it stands (Guard) and the car seats it. A dead member is Dead, as anywhere.
 
 ## Garage.Door
 
@@ -1018,7 +1091,7 @@ stateDiagram-v2
 
 ## Heist.Assaults
 
-When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval, only while the Heist is at its objective.
+When a Heist's next Assault (a Rival crew van) is due: after a grace time from the van's arrival at the objective, then every interval while it is there; again at the drop, from the van's arrival there, until the Heist ends.
 
 ```mermaid
 stateDiagram-v2
@@ -1028,6 +1101,11 @@ stateDiagram-v2
     Grace --> Paused
     Waiting --> Paused
     Paused --> Waiting
+    Paused --> DropGrace
+    Paused --> DropWaiting
+    DropGrace --> DropWaiting
+    DropGrace --> Paused
+    DropWaiting --> Paused
     Over --> [*]
 ```
 
@@ -1036,31 +1114,62 @@ From any state: Over
 - **Idle**: The van has not reached the objective yet; no clock.
 - **Grace**: The van reached the objective (clock: the grace seconds); at its end the first Assault is due.
 - **Waiting**: Assaults came (clock: the interval); at its end the next is due and the clock starts over.
-- **Paused**: The van left the objective with the minimum loaded: no new Assault. The time left is kept; the van's return goes on with it (Waiting).
+- **Paused**: The van is on the road, away from the objective and from the drop: no new Assault. The time left is kept; back at the objective it goes on with it (Waiting), back at the drop it goes on in its own state (DropGrace or DropWaiting), a first arrival at the drop starts DropGrace.
+- **DropGrace**: The van reached the drop's area (clock: the drop grace seconds, about 20); at its end the first Assault comes to the drop.
+- **DropWaiting**: Assaults came to the drop (clock: the interval); at its end the next is due and the clock starts over, until the Heist ends.
 - **Over**: The Heist ended. Never left.
 
-## Heist.Phase
+## Heist.Chases
 
-One Heist from the Contact to the Drop point: the Cartel van to the objective, filling and loading under Assaults, the van to the drop; the van's destruction loses it.
+When a Heist's next Rival chase car is due: from the van leaving the objective with the minimum loaded (the first after a delay, then every interval, at most max_alive in the fight), until the van reaches the drop.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> ToObjective
+    [*] --> Idle
+    Idle --> Running
+    Running --> [*]
+    Over --> [*]
+```
+
+From any state: Over
+
+- **Idle**: The van has not left the objective with the minimum yet; no chase car.
+- **Running**: The van is on its way to the drop (a clock: the first_after_seconds, then the interval after each car put down, the retry after one that found no spot). At its end a car is due, if fewer than max_alive are in the fight.
+- **Over**: The van reached the drop, or the Heist ended: no new car. The ones out fight on. Never left.
+
+## Heist.Phase
+
+One Heist from the Contact to the drop: the party to the Cartel van, the van to the objective, filling and loading under Assaults, the van to the drop, unloading into its Receiver under Assaults; the van's destruction loses it.
+
+```mermaid
+stateDiagram-v2
+    [*] --> ToVan
+    ToVan --> ToObjective
+    ToVan --> AtObjective
+    ToVan --> Delivered
     ToObjective --> AtObjective
+    ToObjective --> Delivered
     AtObjective --> ToDrop
+    AtObjective --> Delivered
     ToDrop --> AtObjective
+    ToDrop --> AtDrop
     ToDrop --> Delivered
+    AtDrop --> ToDrop
+    AtDrop --> AtObjective
+    AtDrop --> Delivered
     Delivered --> [*]
     Lost --> [*]
 ```
 
 From any state: Lost
 
-- **ToObjective**: The Cartel van, put down beside the Contact, has not reached the objective's area yet; no Assault. Ends when it stands in the area.
+- **ToObjective**: The party has the Cartel van and it has not reached the objective's area yet; no Assault. Ends when it stands in the area.
 - **AtObjective**: The party fills Duffels and loads them in the van; the Assault clock runs. Stays while the van is away with fewer than the minimum loaded.
-- **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; stopped within the drop radius it is Delivered.
-- **Delivered**: The van stopped at the Drop point with at least the minimum loaded: the Job succeeds; Respect counts what was loaded then. Never left.
+- **ToDrop**: The van left the area with at least the minimum loaded: the Assaults stop. Back in the area it is AtObjective again; within the drop's area it is AtDrop.
+- **AtDrop**: The van is in the drop's area: the party carries or throws the Duffels from the van into the Receiver (helicopter, boat, or the pallet of a stash house); the Assault clock runs again (the first Assault about 20 s after the arrival). Leaving the area is ToDrop again.
+- **Delivered**: The Receiver was sent off with at least the minimum on it (it left by itself with every Duffel aboard, the leader told it to, or the buyer took the bags): the Job succeeds; Respect counts what was on the Receiver then. Never left.
 - **Lost**: The Cartel van was destroyed: the Job fails. Never left.
+- **ToVan**: The Cartel van is put down beside the Contact and the party has not reached it yet (the marker is on the van). Ends when a party player is at the van or sits in it.
 
 ## HelicopterGunner.Phase
 
@@ -1719,6 +1828,23 @@ From any state: Destroyed
 - **Leaving**: Drives the way out to the map edge, accelerating; the entity ends at its end (no state follows).
 - **Destroyed**: Hit count taken, from any state: the Raid is over. The wreck lies where it stopped (clock: wreck seconds), then the entity ends. Never left.
 
+## Receiver.Run
+
+A Heist's drop: it receives the party's Duffels, is sent off (or takes them at once, a stash house's buyer) and is gone.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Receiving
+    Receiving --> Leaving
+    Receiving --> Gone
+    Leaving --> Gone
+    Gone --> [*]
+```
+
+- **Receiving**: Stands where the plan put it with its Cartel man. Takes the party's Duffels thrown or put into its cargo volume, none of anyone else's, and never gives one out. Sent off by itself once every Duffel of the Job is on board, or by the leader's press at its Cartel man, with at least the minimum on board.
+- **Leaving**: A helicopter climbs and flies off over the nearest map edge; a boat sails its route to the map's edge (the entity's pose moves each tick, no physics). Takes no more Duffels. Gone at the end of its way; a stash house's buyer takes the bags at once and is Gone on the next tick.
+- **Gone**: Removed from the world with the Duffels still on it. Never left.
+
 ## Rider.View
 
 How the local rider of a vehicle seat sees: chase camera, first person from the seat, or the gun's own sight.
@@ -1996,6 +2122,24 @@ stateDiagram-v2
 - **Idle**: Nothing runs: never started, or a round reset cleared it.
 - **Raiding**: The convoy's vans are launched one after another (no clock of its own: the convoy-gap clock runs beside) and come and go. Left by Finish (won when every van of the wave is gone, or an admin's end or cancel) or by a round reset.
 - **Over**: Won or cancelled; what was stolen stays stolen. A new /event thieves starts it again, a round reset clears it.
+
+## Thieves.Stuck
+
+The progress check of a Gang member trying to get somewhere: watching while it moves, rerouted once it made no stuck_m in stuck_seconds, then moved to the nearest walkable point if it still has not by snap_seconds.
+
+```mermaid
+stateDiagram-v2
+    [*] --> Off
+    Off --> Watching
+    Watching --> Rerouted
+    Watching --> Off
+    Rerouted --> Watching
+    Rerouted --> Off
+```
+
+- **Off**: The member is not trying to get anywhere (standing, fighting, working): no check.
+- **Watching**: Trying to get somewhere (clock: stuck_seconds from where it last made stuck_m of progress). Moving on resets the clock; at its end the member is stuck: Reroute.
+- **Rerouted**: Its route was dropped for another spot or a fresh route (clock: snap_seconds less stuck_seconds). Progress goes back to Watching; at the clock's end it is moved to the nearest walkable point (Snap) and watched again.
 
 ## Trailer.Tow
 

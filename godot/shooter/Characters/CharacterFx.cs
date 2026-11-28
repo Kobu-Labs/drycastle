@@ -28,6 +28,8 @@ public sealed partial class CharacterView : Node3D
     string _modelPath = "";
     Stance _stance;
     bool _swim;
+    /// <summary>A Harvest filler (the status bit Filling): the PickUp clip loops, bent to the plants and reaching, the weapon in the fist instead of aimed.</summary>
+    bool _filling;
     BoneAttachment3D? _hand;
     Node3D? _grip;
     ArmsReadyPose? _arms;
@@ -96,7 +98,7 @@ public sealed partial class CharacterView : Node3D
         AddChild(m);
         _anim = m.FindChildren("*", "AnimationPlayer", true, false).FirstOrDefault() as AnimationPlayer;
         if (_anim != null)
-            foreach (var n in new[] { "Idle", "Walk", "Run", "Walk_Carry", "Run_Carry" })
+            foreach (var n in new[] { "Idle", "Walk", "Run", "Walk_Carry", "Run_Carry", FillClip })
                 if (_anim.HasAnimation(n)) _anim.GetAnimation(n).LoopMode = Animation.LoopModeEnum.Linear;
         _skeleton = m.FindChildren("*", "Skeleton3D", true, false).FirstOrDefault() as Skeleton3D;
         _mesh = m.FindChildren("*", "MeshInstance3D", true, false).OfType<MeshInstance3D>().FirstOrDefault();
@@ -187,6 +189,20 @@ public sealed partial class CharacterView : Node3D
     /// on foot) leaves the clip as it is.
     /// </summary>
     public void SetLook(float torsoYaw, float headYaw, float pitch) => _look?.Set(torsoYaw, headYaw, pitch);
+
+    /// <summary>The clip a Harvest filler plays standing: the rig's bend-down-and-grab (1.25 s), looped.</summary>
+    const string FillClip = "PickUp";
+
+    /// <summary>
+    /// The figure fills a Duffel (Harvest; the status bit Filling): while it stands still the PickUp clip loops (bending to the plants, reaching) and a weapon rests in the fist instead of aimed, so the clip's arms show.
+    /// A swimming, dead or flung figure is unchanged.
+    /// </summary>
+    public void SetFilling(bool filling)
+    {
+        if (filling == _filling) return;
+        _filling = filling;
+        if (HasModel) Apply(_lastSpeed, _lastFiring, _lastDead, _lastWeapon);
+    }
 
     /// <summary>Swimming pose: the body leans forward (<see cref="UnderwaterFx.SwimLeanDegrees"/>) and moves at the slow walk; stands up again when not swimming.</summary>
     public void SetSwim(bool swimming)
@@ -293,7 +309,8 @@ public sealed partial class CharacterView : Node3D
         if (!HasModel) return;
         var knife = weaponId == "knife";
         var swing = firing && knife && !dead && !_ragdoll;
-        var armed = !dead && !_ragdoll && weaponId != "" && !swing; // a ragdoll holds its weapon in the fist, not aimed
+        var fills = _filling && !dead && !_ragdoll && !_swim && !swing;
+        var armed = !dead && !_ragdoll && weaponId != "" && !swing && !fills; // a ragdoll holds its weapon in the fist, not aimed; a filler too
         var twoHanded = weaponId is not ("pistol" or "glock17" or "deagle" or "knife"); // pistols are one-handed, every long gun is two-handed
         if (_arms != null) _arms.TwoHanded = twoHanded;
         SetAimed(armed);
@@ -301,6 +318,7 @@ public sealed partial class CharacterView : Node3D
         Play(_ragdoll ? "Idle" // loose limbs over a neutral clip (a thrown corpse, a player in the Bigfoot's hand)
             : dead ? "Death"
             : swing ? "SwordSlash"
+            : fills && speed <= 0.6f ? FillClip
             : _swim ? (speed > 0.6f ? "Walk" : "Idle") // no swim clip in the rig: the slow walk, see SetSwim
             : speed > 6.2f ? "Run" : speed > 0.6f ? "Walk" : "Idle");
     }

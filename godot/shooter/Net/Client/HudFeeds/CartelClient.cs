@@ -16,7 +16,8 @@ namespace Drycastle.Shooter.Net.Client.HudFeeds;
 /// wants it: the prompt shows and a press opens his panel (the server, for its part, keeps the plantation's hold off the key there: <see cref="KeyCompetitor.Contact"/>). Walking out of
 /// reach closes the panel. The panel's requests go out as <see cref="EventKind.CartelRequest"/>; the server checks each again and answers a refusal (<see cref="EventKind.CartelRefused"/>),
 /// which the panel shows. During a Delivery, carrying a Duffel within <c>jobs.delivery.radius_m</c> of the drop point, the prompt says to hold the key and the hold ring fills over
-/// <c>hold_seconds</c> while it is held (the server counts the same hold and ends the Job).
+/// <c>hold_seconds</c> while it is held (the server counts the same hold and ends the Job). A Job of the party that succeeds raises the "Job done" banner and starts its cinematic (<see cref="Done"/>: the flashed camera moves, the player's own
+/// music); the camera, the music and the controls' lock are <see cref="OwnPlayer.JobDoneClient"/>'s.
 /// </summary>
 public sealed class CartelClient
 {
@@ -41,12 +42,17 @@ public sealed class CartelClient
         _ctx = ctx; _data = data; _admin = admin; _openPanel = openPanel;
         _kindNames = ContactPanelModel.KindsOf(data, admin: true).ToDictionary(k => k.Id, k => k.Name);
         _delivery = DeliveryJobKind.Read(data);
+        Done = new JobDone(data.JobDoneCinematic);
     }
 
     /// <summary>The player's standing; null until the server sent it.</summary>
     public CartelStatusMsg? Status { get; private set; }
     /// <summary>The player's Job as the HUD tracker shows it.</summary>
     public CartelTracker Tracker { get; } = new(ShooterTheme.JobCardSeconds);
+    /// <summary>The "Job done" banner and cinematic of a succeeded Job: its text, its clock, the camera's legs, the flash and the music's level.</summary>
+    public JobDone Done { get; }
+    /// <summary>Whether a Job done that starts now may take the camera and the controls (set by the client: not with reduce motion, only on foot or in a road vehicle).</summary>
+    public Func<bool> CameraAllowed { get; set; } = () => false;
     /// <summary>The standing or the Job changed, or a request was refused (the panel redraws).</summary>
     public event Action? Changed;
     /// <summary>The server's last refusal of a request; null until one came.</summary>
@@ -79,6 +85,7 @@ public sealed class CartelClient
                 break;
             case EventKind.CartelJob when CartelCodec.TryDecodeJob(payload, out var j):
                 Tracker.OnJob(j);
+                Done.OnJob(j, CameraAllowed());
                 Changed?.Invoke();
                 break;
             case EventKind.CartelRefused when CartelCodec.TryDecodeRefusal(payload, out var no):
@@ -104,6 +111,7 @@ public sealed class CartelClient
     public void Render(double delta)
     {
         Tracker.Tick((float)delta);
+        Done.Tick((float)delta);
         if (!ReferenceEquals(_mapSeen, _ctx.Map)) { _mapSeen = _ctx.Map; _contact = ContactMarker.PoseIn(_ctx.Map, ContactMarker.LoadConfig()); }
         var (pressed, _) = _use.Step(_ctx.InteractHeld);
         var reach = InReach();
@@ -150,5 +158,6 @@ public sealed class CartelClient
         Refusal = null;
         _handOver = 0;
         Tracker.Clear();
+        Done.Clear();
     }
 }

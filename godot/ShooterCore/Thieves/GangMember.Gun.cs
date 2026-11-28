@@ -24,22 +24,56 @@ public sealed partial class GangMember
     /// <summary>Fights at range: a kind with a gun.</summary>
     public bool Ranged => Weapon != null;
 
+    /// <summary>
+    /// The aim error of its rounds now, degrees, when something else sets it: a Gunman shooting from a moving car (docs/cartel.md "Chase cars") turns each round off its line by up to this instead of the gun's own
+    /// aim_error_deg. Null: the gun's own.
+    /// </summary>
+    public float? AimErrorDeg { get; set; }
+
     /// <summary>The spot it holds (<see cref="Post"/>), or null when it moves about.</summary>
     public GangPost? PostedAt => _post;
 
+    /// <summary>It sits in a car: posted on a seat (<see cref="GangPost.Seat"/>). Bit 7 of the state byte, so the client draws it seated whatever it does (Posted, Aim, Fire, Windup).</summary>
+    public bool Seated => _post is { Seat: true };
+
     /// <summary>
     /// Posts it: it stands at <paramref name="at"/> (a floor point, no navigation mesh needed) facing <paramref name="facing"/> (Godot yaw, 0 faces -Z) from now on, and fights from there. Given right after it is
-    /// added (it guards then). Not for the dead.
+    /// added (it guards then), or at the car's door when it was called back (<see cref="Remount"/>). <paramref name="seat"/>: the spot is a seat of a car (it sits). Not for the dead.
     /// </summary>
-    public void Post(Vector3 at, float facing)
+    public void Post(Vector3 at, float facing, bool seat = false)
     {
         if (!Alive || Ended != null) return;
         ReleaseJob();
-        _post = new GangPost(at, facing);
+        _post = new GangPost(at, facing, seat);
         Position = Home = at;
         Yaw = facing;
         ClearRoute();
         _fsm.Enter(GangMemberState.Posted);
+    }
+
+    /// <summary>
+    /// Moves a posted member's spot (a rider of a moving car: its post is a seat, GLOSSARY "Chase car"): it stands at <paramref name="at"/> facing <paramref name="facing"/> from now on, in whatever state it is
+    /// in (an Aim or a Fire goes on). Nothing for a member that is not posted, dead or gone.
+    /// </summary>
+    public void MovePost(Vector3 at, float facing)
+    {
+        if (_post is not { } post || !Alive || Ended != null) return;
+        _post = post with { At = at, Facing = facing };
+        Position = Home = at;
+    }
+
+    /// <summary>
+    /// Takes a posted member off its spot: it stands at <paramref name="at"/> facing <paramref name="facing"/> and from now on moves about and fights as any member of its gang does, heading for the gang's post
+    /// (a crew that gets out of its car). Nothing for a member that is not posted, dead or gone.
+    /// </summary>
+    public void Unpost(Vector3 at, float facing)
+    {
+        if (_post == null || !Alive || Ended != null) return;
+        _post = null;
+        Position = at; Yaw = facing;
+        ClearRoute();
+        _stuck.Moved(at);
+        _fsm.Enter(GangMemberState.Guard);
     }
 
     Vector3 Eye => Position + Vector3.UnitY * _d.Sight.EyeM;
@@ -121,7 +155,7 @@ public sealed partial class GangMember
         var from = Position + Vector3.UnitY * gun.MuzzleUpM + ahead * gun.MuzzleAheadM;
         var line = ChestOf(t) - from;
         if (line.LengthSquared() < 1e-6f) return;
-        var dir = AimError(Vector3.Normalize(line), gun.AimErrorDeg, (uint)_rng.Next());
+        var dir = AimError(Vector3.Normalize(line), AimErrorDeg ?? gun.AimErrorDeg, (uint)_rng.Next());
         _world.Shoot(new GangShot(HitId, Weapon!, from, dir, gun.RangeM, t.Id, (uint)_rng.Next()));
     }
 

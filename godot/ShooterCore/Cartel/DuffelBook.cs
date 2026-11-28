@@ -1,5 +1,4 @@
 using System.Numerics;
-using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
 
@@ -11,10 +10,10 @@ namespace Drycastle.ShooterCore.Cartel;
 /// <list type="bullet">
 /// <item>A Job (or <c>/duffel</c>) makes one for a party with <see cref="Give"/> (in a player's hands) or <see cref="Place"/> (on the ground), and takes its own away with <see cref="Remove"/> or <see cref="RemoveParty"/>.</item>
 /// <item>One per player: a party player who carries none picks up the nearest lying one in reach (<see cref="PickUp"/>).</item>
-/// <item>The carrier puts it down at the feet (<see cref="Drop"/>, the throw key's tap and the carrier's death) or throws it (<see cref="Throw"/>, an arc by charge and weight).</item>
-/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>) takes a Duffel that flies or is put down into it: Loaded, and the volume's owner counts it (<see cref="LoadedIn"/>).</item>
+/// <item>The carrier throws it (<see cref="Throw"/>: one press, a fixed range, an arc); it is put down where they stand only when they cannot carry it on (<see cref="Drop"/>: death, a seat, leaving the party or the server).</item>
+/// <item>A cargo volume (<see cref="ICargoVolume"/>, <see cref="AddVolume"/>: every live cargo vehicle's, and every Heist's <see cref="Receiver"/>) takes a Duffel that flies or lands into it, when it accepts it: Loaded, on a slot; one it does not accept stops at it as at a wall. A party player with empty hands takes the last loaded one out (<see cref="TakeOut"/>).</item>
 /// </list>
-/// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
+/// Every change of who carries what raises <see cref="CarrierChanged"/>, whoever made it (a pick-up, a throw, a drop, a Job's removal, the round's reset), so the server burdens and unburdens the body in one place.
 /// </summary>
 public sealed class DuffelBook
 {
@@ -24,6 +23,7 @@ public sealed class DuffelBook
     readonly Dictionary<ushort, Duffel> _byId = new();
     readonly Dictionary<ushort, Duffel> _byCarrier = new();
     readonly List<ICargoVolume> _volumes = new();
+    uint _loadCount;
 
     public DuffelBook(DuffelsFile data, WorldEntityManager entities, IDuffelWorld world)
     {
@@ -51,7 +51,6 @@ public sealed class DuffelBook
 
     public Duffel? Find(ushort id) => _byId.GetValueOrDefault(id);
     public Duffel? CarriedBy(ushort player) => _byCarrier.GetValueOrDefault(player);
-    public int LoadedIn(ICargoVolume volume) => _byId.Values.Count(d => d.State == DuffelState.Loaded && d.Volume == volume);
 
     /// <summary>A Duffel of the party in the hands of <paramref name="carrier"/> (standing at <paramref name="feet"/>). Null when the carrier carries one already or the world is full.</summary>
     public Duffel? Give(DuffelKind kind, IReadOnlySet<ushort> party, ushort carrier, Vector3 feet)
@@ -64,7 +63,7 @@ public sealed class DuffelBook
         return d;
     }
 
-    /// <summary>A Duffel of the party lying at <paramref name="at"/> (a Job's table, a safe). Null when the world is full.</summary>
+    /// <summary>A Duffel of the party lying at <paramref name="at"/> (a Job's table, a safe, the Cartel pallet), its length along <paramref name="yaw"/>. Null when the world is full.</summary>
     public Duffel? Place(DuffelKind kind, IReadOnlySet<ushort> party, Vector3 at, float yaw = 0)
     {
         var d = new Duffel(this, kind, party, at, yaw);
@@ -110,33 +109,72 @@ public sealed class DuffelBook
     }
 
     /// <summary>
-    /// The carrier puts it down at <paramref name="feet"/>: on the ground under them, or Loaded when that is inside a cargo volume that takes it (standing in the van's back). The throw key's tap,
-    /// the carrier's death (where they fell), leaving the party or the server. No ground just below (put down from high up: a roof's edge, a ledge): it falls from the feet and lands as a
-    /// throw does, so it never hangs out of reach in the air. False when they carry none.
+    /// The carrier puts it down at <paramref name="feet"/> on the ground under them: the carrier's death (where they fell), a seat, leaving the party or the server (never the player's own act: the
+    /// throw key throws). No ground just below (put down from high up: a roof's edge, a ledge): it falls from the feet and lands as a throw does, so it never hangs out of reach in the air. False
+    /// when they carry none.
     /// </summary>
     public bool Drop(ushort player, Vector3 feet)
     {
         if (!TakeFrom(player, out var d)) return false;
-        var probe = feet + new Vector3(0, 0.3f, 0);
-        if (VolumeFor(d, probe) is { } v) { Load(d, v, probe); return true; }
         if (_world.GroundY(feet, 0.5f, 3f) is { } ground) d.PutDown(new Vector3(feet.X, ground, feet.Z));
         else d.Launch(feet, Vector3.Zero);
         return true;
     }
 
     /// <summary>
-    /// The carrier throws it from the eye (<paramref name="eye"/>, looking along <paramref name="yaw"/> and <paramref name="pitch"/>) with a charge of 0 to 1 (<see cref="DuffelThrow.Velocity"/>). The flight
+    /// The carrier throws it from the eye (<paramref name="eye"/>, looking along <paramref name="yaw"/> and <paramref name="pitch"/>) at the fixed range (<see cref="DuffelThrow.Velocity"/>). The flight
     /// is stepped by the entity's tick. False when they carry none.
     /// </summary>
-    public bool Throw(ushort player, Vector3 eye, float yaw, float pitch, float charge)
+    public bool Throw(ushort player, Vector3 eye, float yaw, float pitch)
     {
         if (!TakeFrom(player, out var d)) return false;
         var (sin, cos) = MathF.SinCos(yaw);
         var forward = new Vector3(-sin, 0, -cos);
         var from = eye + forward * (float)_data.HandAheadM;
         if (_world.Blocked(eye, from, out var at, out var n)) from = at + n * (float)_data.WallGapM; // a wall right in front: it leaves from the face, not through it
-        d.Launch(from, DuffelThrow.Velocity(_data, d.Kind, yaw, pitch, charge));
+        d.Launch(from, DuffelThrow.Velocity(_data, yaw, pitch));
         return true;
+    }
+
+    /// <summary>
+    /// The Duffel that comes out of a cargo volume into the hands of a party player standing at <paramref name="feet"/> with empty hands: of the nearest volume whose open cargo area they stand at
+    /// (<see cref="ICargoVolume.TakeOutDistance"/>) that holds one of their party's, the last loaded. Null when there is none (not their party's, hands full).
+    /// </summary>
+    public Duffel? Takeable(ushort player, Vector3 feet)
+    {
+        if (_byCarrier.ContainsKey(player)) return null;
+        ICargoVolume? volume = null; var best = float.PositiveInfinity;
+        foreach (var v in _volumes)
+            if (v.TakeOutDistance(feet) is { } dist && dist < best && HasLoaded(v, player)) { volume = v; best = dist; }
+        if (volume == null) return null;
+        Duffel? last = null;
+        foreach (var d in _byId.Values)
+            if (d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, volume) && d.MayTouch(player) && (last == null || d.LoadOrder > last.LoadOrder)) last = d;
+        return last;
+    }
+
+    bool HasLoaded(ICargoVolume v, ushort player)
+    {
+        foreach (var d in _byId.Values) if (d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, v) && d.MayTouch(player)) return true;
+        return false;
+    }
+
+    /// <summary>The player takes the Duffel <see cref="Takeable"/> out into their hands; it leaves its slot. Null when nothing can be taken out.</summary>
+    public Duffel? TakeOut(ushort player, Vector3 feet)
+    {
+        if (Takeable(player, feet) is not { } d) return null;
+        d.Volume!.Unload(d);
+        d.TakeUp(player, feet);
+        SetCarrier(player, d);
+        return d;
+    }
+
+    /// <summary>Takes every Duffel loaded in the volume out of the world (its vehicle was destroyed, retired or reset); the count removed.</summary>
+    public int RemoveLoadedIn(ICargoVolume volume)
+    {
+        var gone = _byId.Values.Where(d => d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, volume)).ToList();
+        foreach (var d in gone) Remove(d);
+        return gone.Count;
     }
 
     /// <summary>One flight step (from the entity's tick): gravity, the world, the volumes, and the landing.</summary>
@@ -147,9 +185,14 @@ public sealed class DuffelBook
         var vel = d.Velocity;
         var next = before + vel * dt - new Vector3(0, 0.5f * g * dt * dt, 0);
         vel -= new Vector3(0, g * dt, 0);
-        // a cargo volume is met before the world: the van's hull does not stop a drop (ADR 0028), its box catches the bag on the way through
-        var mid = (before + next) * 0.5f;
-        if ((VolumeFor(d, mid) ?? VolumeFor(d, next)) is { } v) { Load(d, v, next); return; }
+        // a cargo volume is met before the world: a vehicle's hull does not stop a drop (ADR 0028), its cargo box does: it takes the bag that it accepts, and stops the one it does not as a wall does
+        if (Meet(before, next) is { } hit)
+        {
+            if (hit.Volume.Accepts(d, hit.Meet.FromTop)) { Load(d, hit.Volume, next); return; }
+            var aside = hit.Meet.At + new Vector3(hit.Meet.Normal.X, 0, hit.Meet.Normal.Z) * (float)_data.WallGapM;
+            d.Fly(aside, new Vector3(0, MathF.Min(vel.Y, 0), 0));
+            return;
+        }
         if (_world.Blocked(before, next, out var at, out var normal))
         {
             if (normal.Y >= 0.5f) { Land(d, at); return; }
@@ -164,20 +207,28 @@ public sealed class DuffelBook
 
     void Land(Duffel d, Vector3 at)
     {
-        if (VolumeFor(d, at + new Vector3(0, 0.1f, 0)) is { } v) { Load(d, v, at); return; }
+        var p = at + new Vector3(0, 0.1f, 0);
+        foreach (var v in _volumes) if (v.Contains(p) && v.Accepts(d, false)) { Load(d, v, at); return; } // lands against the doors: it counts (a bed is never loaded from the ground)
         d.PutDown(at);
     }
 
-    ICargoVolume? VolumeFor(Duffel d, Vector3 p)
+    /// <summary>The nearest volume the segment meets, and where.</summary>
+    (ICargoVolume Volume, CargoMeet Meet)? Meet(Vector3 from, Vector3 to)
     {
-        foreach (var v in _volumes) if (v.Contains(p) && v.Accepts(d)) return v;
-        return null;
+        (ICargoVolume, CargoMeet)? best = null; var bd = float.PositiveInfinity;
+        foreach (var v in _volumes)
+        {
+            if (!v.Meets(from, to, out var m)) continue;
+            var dist = Vector3.DistanceSquared(from, m.At);
+            if (dist < bd) { bd = dist; best = (v, m); }
+        }
+        return best;
     }
 
     void Load(Duffel d, ICargoVolume v, Vector3 at)
     {
-        d.LoadInto(v, at);
-        v.Load(d);
+        var slot = v.Load(d);
+        d.LoadInto(v, slot, at, ++_loadCount);
     }
 
     void SetCarrier(ushort player, Duffel d)
@@ -200,10 +251,16 @@ public sealed class DuffelBook
         Forget(d.Id);
     }
 
-    /// <summary>Takes every Duffel of this party out of the world (the Job ended); the count removed.</summary>
-    public int RemoveParty(IReadOnlySet<ushort> party)
+    /// <summary>How many Duffels of this party exist now, wherever they are (lying, carried, flying, loaded).</summary>
+    public int PartyCount(IReadOnlySet<ushort> party) => _byId.Values.Count(d => ReferenceEquals(d.Party, party));
+
+    /// <summary>
+    /// Takes every Duffel of this party out of the world (the Job ended); the count removed. Those loaded in <paramref name="keep"/> stay (a Receiver that is leaving carries its bags off; the server removes them when
+    /// it is gone).
+    /// </summary>
+    public int RemoveParty(IReadOnlySet<ushort> party, ICargoVolume? keep = null)
     {
-        var gone = _byId.Values.Where(d => ReferenceEquals(d.Party, party)).ToList();
+        var gone = _byId.Values.Where(d => ReferenceEquals(d.Party, party) && !(keep != null && d.State == DuffelState.Loaded && ReferenceEquals(d.Volume, keep))).ToList();
         foreach (var d in gone) Remove(d);
         return gone.Count;
     }
@@ -219,29 +276,22 @@ public sealed class DuffelBook
     void Forget(ushort id)
     {
         if (!_byId.Remove(id, out var d)) return;
+        if (d.State == DuffelState.Loaded) d.Volume?.Unload(d);
         if (d.Carrier != 0 && _byCarrier.TryGetValue(d.Carrier, out var c) && c == d) TakeFrom(d.Carrier, out _);
     }
 }
 
-/// <summary>The throw's arc, shared by the server (which flies it) and the tests: how far a charge throws a kind, and the launch velocity for a look.</summary>
+/// <summary>The throw's arc, shared by the server (which flies it) and the tests: the one range, and the launch velocity for a look.</summary>
 public static class DuffelThrow
 {
-    /// <summary>Metres a throw of this charge (0 to 1) reaches on flat ground: from min_throw_share of the kind's throw_m (a short hold) up to all of it (a full charge).</summary>
-    public static float RangeM(DuffelsFile data, DuffelKind kind, float charge)
-    {
-        var k = Math.Clamp(charge, 0f, 1f);
-        var share = (float)data.MinThrowShare + (1f - (float)data.MinThrowShare) * k;
-        return (float)data.Of(kind).ThrowM * share;
-    }
-
     /// <summary>
-    /// The launch velocity: along the look (yaw), at the look's pitch plus lift_deg (held between min and max elevation), with the speed that carries <see cref="RangeM"/> at the lift's elevation from a
+    /// The launch velocity: along the look (yaw), at the look's pitch plus lift_deg (held between min and max elevation), with the speed that carries throw_m (the same range for every kind) at the lift's elevation from a
     /// standing eye's height (<see cref="MoveConsts.EyeHeight"/>) down to flat ground (a level look throws that far, a look up throws higher and about as far).
     /// </summary>
-    public static Vector3 Velocity(DuffelsFile data, DuffelKind kind, float yaw, float pitch, float charge)
+    public static Vector3 Velocity(DuffelsFile data, float yaw, float pitch)
     {
         var lift = (float)(data.LiftDeg * Math.PI / 180);
-        var range = RangeM(data, kind, charge);
+        var range = (float)data.ThrowM;
         // x = v cos(a) t and 0 = h + v sin(a) t - g t^2 / 2 give v^2 = g R^2 / (2 cos^2(a) (h + R tan(a)))
         var (ls, lc) = MathF.SinCos(lift);
         var speed = MathF.Sqrt(MoveConsts.Gravity * range * range / (2 * lc * lc * (MoveConsts.EyeHeight + range * ls / lc)));
@@ -249,65 +299,6 @@ public static class DuffelThrow
         var (sin, cos) = MathF.SinCos(yaw);
         var (es, ec) = MathF.SinCos(elevation);
         return new Vector3(-sin * ec, es, -cos * ec) * speed;
-    }
-}
-
-/// <summary>What the throw key's release does.</summary>
-public enum DuffelRelease : byte { None, Drop, Throw }
-
-/// <summary>Where one hold of the throw key is: up, or held and charging.</summary>
-public enum DuffelKeyState : byte { Idle, Charging }
-
-/// <summary>
-/// The Duffel throw key (<c>duffel_throw</c>, X by default): held from a fresh press while carrying, it charges; released before tap_seconds it puts the Duffel down at the feet, later it throws with
-/// the charge past the tap. Losing the Duffel or the right to throw (a seat, death) mid-hold ends the hold with nothing. The server counts it from the inputs; the client runs the same for its ring.
-/// </summary>
-public struct DuffelThrowKey
-{
-    public static readonly StateMachineSpec<DuffelKeyState> Spec = StateMachineSpec<DuffelKeyState>
-        .Define("Duffel.ThrowKey", "The Duffel throw key: up, or held from a fresh press while carrying (charging); the release puts the Duffel down (a tap) or throws it (a hold).", DuffelKeyState.Idle)
-        .Allow(DuffelKeyState.Idle, DuffelKeyState.Charging)
-        .Allow(DuffelKeyState.Charging, DuffelKeyState.Idle)
-        .Note(DuffelKeyState.Idle, "Key up, or held since before the player could throw (a held key must be let go first).")
-        .Note(DuffelKeyState.Charging, "Held while carrying: Held counts up. The release is a tap (Drop) under tap_seconds, else a Throw with the charge past it; losing the Duffel ends it with nothing.")
-        .Build();
-
-    Edge _key;
-    DuffelKeyState _state;
-
-    /// <summary>Seconds the key has been held in this charge (0 when idle).</summary>
-    public float Held;
-
-    public readonly DuffelKeyState State => _state;
-
-    /// <summary>The charge (0 to 1) a release now would throw with: the time past the tap over charge_seconds.</summary>
-    public readonly float Charge(DuffelsFile data) => _state == DuffelKeyState.Charging ? Math.Clamp((Held - (float)data.TapSeconds) / (float)data.ChargeSeconds, 0f, 1f) : 0f;
-
-    /// <summary>One input tick. <paramref name="canThrow"/>: the player carries a Duffel and is on foot and alive. Returns what the release (if any) does; <paramref name="charge"/> is the throw's.</summary>
-    public DuffelRelease Tick(bool down, bool canThrow, float dt, DuffelsFile data, out float charge)
-    {
-        charge = 0;
-        var rose = _key.Pressed(down);
-        if (_state == DuffelKeyState.Idle)
-        {
-            if (rose && canThrow) { Go(DuffelKeyState.Charging); Held = 0; }
-            return DuffelRelease.None;
-        }
-        if (!canThrow) { Go(DuffelKeyState.Idle); Held = 0; return DuffelRelease.None; }
-        if (down) { Held += dt; return DuffelRelease.None; }
-        charge = Charge(data);
-        var tap = Held < data.TapSeconds;
-        Go(DuffelKeyState.Idle); Held = 0;
-        return tap ? DuffelRelease.Drop : DuffelRelease.Throw;
-    }
-
-    public void Reset() { Go(DuffelKeyState.Idle); Held = 0; }
-
-    void Go(DuffelKeyState next)
-    {
-        if (_state == next) return;
-        if (!Spec.Allows(_state, next)) StateMachineDiagnostics.Illegal(Spec.Name, _state.ToString(), next.ToString());
-        _state = next;
     }
 }
 
@@ -332,6 +323,18 @@ public static class DuffelCodec
         notice = default;
         if (p.Length < 1 || p[0] > (byte)DuffelNotice.VanReserved) return false;
         notice = (DuffelNotice)p[0];
+        return true;
+    }
+
+    /// <summary>The take-out event's payload: u16 vehicle id (0: nothing to take out now), u8 the kind of the Duffel that would come out.</summary>
+    public static byte[] EncodeTake(ushort vehicle, DuffelKind kind) => new[] { (byte)vehicle, (byte)(vehicle >> 8), (byte)kind };
+
+    public static bool TryDecodeTake(ReadOnlySpan<byte> p, out ushort vehicle, out DuffelKind kind)
+    {
+        vehicle = 0; kind = default;
+        if (p.Length < 3 || p[2] >= DuffelRules.AllKinds.Length) return false;
+        vehicle = (ushort)(p[0] | p[1] << 8);
+        kind = (DuffelKind)p[2];
         return true;
     }
 

@@ -16,7 +16,7 @@ public enum GangMemberKind : byte { Thief = 0, Enforcer = 1, GangBoss = 2, Gunma
 
 /// <summary>
 /// What a Gang member is doing: the replicated state byte. 8 is the van's (ticket 03: Board); 9 to 16 are the stealing states (ticket 04: Seek, Approach, Steal, Haul, Load and the three climb
-/// states); 17 and 18 are ticket 05's; 19 to 22 are the electrocution (ticket 07: Shocked, Falling, Down, GetUp); 23 to 25 the Rival crew's (#495, #496: a Gunman's Aim and Fire, a posted member's Posted). A new state goes after the last one. The client treats an unknown value as standing.
+/// states); 17 and 18 are ticket 05's; 19 to 22 are the electrocution (ticket 07: Shocked, Falling, Down, GetUp); 23 to 25 the Rival crew's (#495, #496: a Gunman's Aim and Fire, a posted member's Posted); 26 Remount: a chase crew walking back to its car. Bit 7 of the byte is not a state: the member sits in a car (<see cref="GangRules.SeatedOf"/>). A new state goes after the last one. The client treats an unknown value as standing.
 /// </summary>
 public enum GangMemberState : byte
 {
@@ -25,6 +25,7 @@ public enum GangMemberState : byte
     HopIn = 17, HopOut = 18,
     Shocked = 19, Falling = 20, Down = 21, GetUp = 22,
     Aim = 23, Fire = 24, Posted = 25,
+    Remount = 26,
 }
 
 /// <summary>A living player as the Gang members see them: where their feet are and whether they stand on the ground (a rider in a vehicle cannot be struck).</summary>
@@ -96,7 +97,15 @@ public static class GangRules
     public static bool RivalOf(byte hp) => (hp & RivalBit) != 0;
 
     /// <summary>A state byte as a state; a value this build does not know stands.</summary>
-    public static GangMemberState StateOf(byte state) => state <= (byte)GangMemberState.Posted ? (GangMemberState)state : GangMemberState.Idle;
+    public static GangMemberState StateOf(byte state) => (state & StateMask) <= (byte)GangMemberState.Remount ? (GangMemberState)(state & StateMask) : GangMemberState.Idle;
+
+    // The state byte: bits 0-6 the state, bit 7 the member sits in a car (a Rival chase car's rider: the client draws it seated, whatever it does).
+    const int StateMask = 0x7F, SeatedBit = 0x80;
+
+    /// <summary>The member sits in a car (a Rival chase car's rider), bit 7 of the state byte.</summary>
+    public static bool SeatedOf(byte state) => (state & SeatedBit) != 0;
+
+    public static byte PackState(GangMemberState state, bool seated) => (byte)((byte)state | (seated ? SeatedBit : 0));
 
     public static void Register(WorldEntityRegistry registry)
     {
@@ -161,6 +170,11 @@ public sealed partial class GangMember : IWorldEntity
         .Allow(GangMemberState.Aim, GangMemberState.Fire, GangMemberState.Chase, GangMemberState.Posted, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Fire, GangMemberState.Aim, GangMemberState.Chase, GangMemberState.Posted, GangMemberState.Guard, GangMemberState.Flee, GangMemberState.Board)
         .Allow(GangMemberState.Posted, GangMemberState.Aim, GangMemberState.Windup, GangMemberState.Flee, GangMemberState.Board)
+        .Allow(GangMemberState.Posted, GangMemberState.Guard) // a rider that gets out of its car is no longer posted
+        // a chase crew on foot walks back to its car and gets in again (docs/cartel.md "Chase cars"): never fights on the way
+        .Allow(GangMemberState.Idle, GangMemberState.Remount).Allow(GangMemberState.Guard, GangMemberState.Remount).Allow(GangMemberState.Chase, GangMemberState.Remount)
+        .Allow(GangMemberState.Windup, GangMemberState.Remount).Allow(GangMemberState.Swing, GangMemberState.Remount).Allow(GangMemberState.Aim, GangMemberState.Remount).Allow(GangMemberState.Fire, GangMemberState.Remount)
+        .Allow(GangMemberState.Remount, GangMemberState.Guard, GangMemberState.Idle, GangMemberState.Posted, GangMemberState.Flee)
         .Allow(GangMemberState.Windup, GangMemberState.Posted)
         .Allow(GangMemberState.Swing, GangMemberState.Posted)
         .FromAnywhere(GangMemberState.Dead)
@@ -188,7 +202,8 @@ public sealed partial class GangMember : IWorldEntity
         .Note(GangMemberState.Load, "Tosses the Loot into the van at the door (clock: load_seconds): counted in the van, the Thief seeks again. A van that cannot take it any more gets it dropped at the Thief's feet.")
         .Note(GangMemberState.Aim, "A Gunman with its target in sight (a clear line from its eyes to the target's chest, looked at every sight.check_seconds) and within gun.range_m: stands, turns to it (clock: gun.aim_seconds, the telegraph), then Fire. Sight lost: Chase, or Posted for a posted member.")
         .Note(GangMemberState.Fire, "The burst of its weapon (rival_crew.json gun.weapons): the first round leaves at the start, the rest every round_gap_seconds, each only while the target is in sight; the aim error turns each round off its line. Then Aim again, or Chase / Posted when the target is out of sight.")
-        .Note(GangMemberState.Posted, "Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing.")
+        .Note(GangMemberState.Posted, "Holds a given spot and facing (a trap house defender: no navigation mesh indoors). Never walks or is pushed; turns to a target, shoots it in sight (Aim, Fire) or, melee, strikes it in reach (Windup, Swing); with none it turns back to its facing. A rider of a Rival chase car is posted on its seat (the post moves with the car, bit 7 of the state byte says it sits); getting out it is Guard.")
+        .Note(GangMemberState.Remount, "A Rival chase crew on foot called back to its car (the car's machine, Chase.Car Remounting): runs to the car's door on a route of the navigation mesh and never fights on the way; at the door it stands (Guard) and the car seats it. A dead member is Dead, as anywhere.")
         .Note(GangMemberState.Dead, "Lies for corpse_seconds (the clock's elapsed time), then the entity ends. Reached from any state; never left.")
         .Build();
 
@@ -198,6 +213,7 @@ public sealed partial class GangMember : IWorldEntity
     const float SlotArriveM = 0.3f; // at its spot when this near
     const float SlotStrikeM = 1f;   // it strikes from within this of its spot
     const float SlotRefreshM = 0.75f; // its spot is worked out again when the target moved this far
+    const int SlotTries = 6;        // spots tried round the ring for one that is on the mesh
     const float GoldenAngle = 2.3999632f; // slots spread evenly whatever their number, and a slot's angle never changes when others come and go
 
     readonly GangConfig _d;
@@ -213,12 +229,15 @@ public sealed partial class GangMember : IWorldEntity
     Vector3 _door;
     float _taken;                   // the hit count taken so far, weighted
     WalkGuard _guard;               // the detour round what the navigation mesh does not hold (trunk, closed door, parked vehicle)
+    readonly StuckWatch _stuck;     // the progress check (thieves.json gang.stuck)
+    bool _trying;                   // this tick it tried to get somewhere (GoTo, Follow): what the progress check watches
+    float _slotShift;               // radians added to the spot's angle on the ring: set when it was stuck, so it takes another spot
     Vector3 _slotPoint, _slotFor;   // the spot on the ring round the target, and where the target stood when it was worked out
     bool _slotValid;
 
     public GangMember(GangConfig cfg, GangMemberKind kind, IGangWorld world, Vector3 position, float yaw, ushort look, ushort hitId, int seed)
     {
-        _d = cfg; _k = cfg.Of(kind); _world = world; _rng = new Random(seed);
+        _d = cfg; _k = cfg.Of(kind); _world = world; _rng = new Random(seed); _stuck = new StuckWatch(cfg.Stuck);
         Kind = kind; Position = Home = position; Yaw = yaw; Look = look; HitId = hitId;
         if (kind != GangMemberKind.Thief) _fsm.Enter(GangMemberState.Guard);
         else _fsm.Restart(IdleSeconds());
@@ -247,7 +266,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>Hands not free: working or carrying Loot. A busy Thief does not join a fight.</summary>
     public bool Busy => Carried != 0 || Working;
     /// <summary>Enforcers and the Gang boss fight when the Raid does; a Thief with free hands joins.</summary>
-    public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && (Kind != GangMemberKind.Thief || !Busy);
+    public bool CanFight => Alive && State != GangMemberState.Flee && State != GangMemberState.Board && State != GangMemberState.Remount && (Kind != GangMemberKind.Thief || !Busy);
     /// <summary>The player it fights now, or null.</summary>
     public GangPlayer? Target => _target;
     /// <summary>Its place among the members fighting the same player (0 up, kept while the fight lasts; -1 none): the angle of its spot on the ring round them. Set by <see cref="GangRoster"/>.</summary>
@@ -257,7 +276,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>The spot it heads for when chasing: on the ring round the target (its feet when it has no slot or the spot cannot be used).</summary>
     public Vector3? SlotPoint => _target is { } t && Slot >= 0 && _slotValid ? _slotPoint : _target?.Feet;
     /// <summary>Walking about or fighting (not at work, not down or aloft, alive): a push from a neighbour may move it.</summary>
-    public bool Pushable => _post == null && State is GangMemberState.Idle or GangMemberState.Walk or GangMemberState.Guard or GangMemberState.Chase or GangMemberState.Windup or GangMemberState.Swing or GangMemberState.Seek or GangMemberState.Approach or GangMemberState.Haul or GangMemberState.Board or GangMemberState.Flee or GangMemberState.Aim or GangMemberState.Fire;
+    public bool Pushable => _post == null && State is GangMemberState.Idle or GangMemberState.Walk or GangMemberState.Guard or GangMemberState.Chase or GangMemberState.Windup or GangMemberState.Swing or GangMemberState.Seek or GangMemberState.Approach or GangMemberState.Haul or GangMemberState.Board or GangMemberState.Remount or GangMemberState.Flee or GangMemberState.Aim or GangMemberState.Fire;
     /// <summary>Moves it a little (<see cref="GangRoster"/>'s separation). Only for <see cref="Pushable"/> members.</summary>
     public void Nudge(float dx, float dz) { if (Pushable && Ended == null) Position = new Vector3(Position.X + dx, Position.Y, Position.Z + dz); }
     /// <summary>The weighted hits taken, and the Hit count that kills it (GLOSSARY "Hit count").</summary>
@@ -289,6 +308,8 @@ public sealed partial class GangMember : IWorldEntity
     public event Action<GangMember>? Died;
     /// <summary>Raised once, when it reaches the van's door (the entity ends there).</summary>
     public event Action<GangMember>? Boarded;
+    /// <summary>Raised once, when a member walking back to its car (<see cref="Remount"/>) reaches the door: it stands there, the car seats it.</summary>
+    public event Action<GangMember>? Mounted;
 
     public byte TypeId => GangRules.TypeId;
     public ushort Owner => 0;
@@ -297,7 +318,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>The standing hit volume the shots test against: the player's capsule at the kind's scale (a headshot is a head hit).</summary>
     public HitTarget HitVolume => new(HitId, Position, State == GangMemberState.Down ? Stance.Prone : Stance.Stand, Yaw, HeadGuarded: false, Scale: _k.HitScale);
 
-    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, (byte)State, GangRules.PackHp(Kind, Alive, Carried, Speaker && Alive, Rival));
+    public WorldState Serialize() => WorldState.Make(Position, Yaw, 0, Look, GangRules.PackState(State, Seated), GangRules.PackHp(Kind, Alive, Carried, Speaker && Alive, Rival));
 
     // ---- hits ----
 
@@ -376,6 +397,27 @@ public sealed partial class GangMember : IWorldEntity
         Request(door);
     }
 
+    /// <summary>
+    /// A Rival chase crew's call back to its car (docs/cartel.md "Chase cars"): it drops what it was doing (a fight too), runs to <paramref name="door"/> on a route of the navigation mesh and stands there
+    /// (<see cref="Mounted"/>; the car seats it). Not for the dead, the fleeing, one posted on a seat, or one that already walks back.
+    /// </summary>
+    public void Remount(Vector3 door)
+    {
+        if (!Alive || Ended != null || _post != null || State is GangMemberState.Flee or GangMemberState.Board or GangMemberState.Remount) return;
+        _target = null;
+        ReleaseJob();
+        _door = door;
+        ClearRoute();
+        _fsm.Enter(GangMemberState.Remount);
+        Request(door);
+    }
+
+    /// <summary>Stops a walk back to the car (it was lost, or the car is gone): the member stands and fights on as a crew on foot does.</summary>
+    public void GiveUpRemount()
+    {
+        if (State == GangMemberState.Remount) Settle();
+    }
+
     /// <summary>The route the gang found for the request (empty: none). A route replaces the one being followed.</summary>
     public void SetRoute(IReadOnlyList<Vector3> route)
     {
@@ -401,6 +443,43 @@ public sealed partial class GangMember : IWorldEntity
     public void Tick(float dt)
     {
         if (Ended != null || dt <= 0) return;
+        _trying = false;
+        TickBrain(dt);
+        if (Ended == null && Alive) WatchProgress(dt);
+    }
+
+    /// <summary>
+    /// The progress check (<see cref="StuckWatch"/>): a member that tried to get somewhere this tick and has covered under gang.stuck.stuck_m in stuck_seconds drops its route and takes another spot round its
+    /// target or a fresh route (<see cref="Unstick"/>); still stuck at snap_seconds it is moved to the nearest walkable point of the mesh.
+    /// </summary>
+    void WatchProgress(float dt)
+    {
+        switch (_stuck.Step(dt, Position, _trying))
+        {
+            case StuckAction.Reroute:
+                Unstick();
+                break;
+            case StuckAction.Snap:
+                var on = _world.Snap(Position);
+                if (Flat(on, Position) > 0.05f) Position = on;
+                _stuck.Moved(Position);
+                Unstick();
+                break;
+        }
+    }
+
+    /// <summary>Drops the route (and a request on its way) and the spot it was heading for: a chaser's next spot is at another angle on the ring, the others ask for a fresh route at once.</summary>
+    void Unstick()
+    {
+        _slotShift = (float)(_rng.NextDouble() * MathF.Tau);
+        _slotValid = false;
+        ClearRoute();
+        _repath.Cancel();
+        if (State == GangMemberState.Flee) Request(_edge); // a fleeing member asks nowhere else
+    }
+
+    void TickBrain(float dt)
+    {
         _repath.Tick(dt);
         if (_routeLost.Tick(dt)) RouteTicket = 0; // the worker never answered: ask again
         TickAvoid(dt);
@@ -417,6 +496,9 @@ public sealed partial class GangMember : IWorldEntity
                 return;
             case GangMemberState.Board:
                 TickBoard(dt);
+                return;
+            case GangMemberState.Remount:
+                TickRemount(dt);
                 return;
             case GangMemberState.Windup:
                 if (_target is not { } wt || !CanFight) { Settle(); return; } // the target is gone: no blow
@@ -504,10 +586,17 @@ public sealed partial class GangMember : IWorldEntity
         {
             _slotFor = t.Feet;
             var away = MathF.Atan2(Home.Z - t.Feet.Z, Home.X - t.Feet.X);
-            var a = away + Slot * GoldenAngle;
-            var raw = new Vector3(t.Feet.X + MathF.Cos(a) * reach * SlotRing, t.Feet.Y, t.Feet.Z + MathF.Sin(a) * reach * SlotRing);
-            var snapped = _world.Snap(raw);
-            _slotPoint = Flat(snapped, t.Feet) <= reach * 0.9f && MathF.Abs(snapped.Y - t.Feet.Y) <= ReachDy ? snapped : t.Feet;
+            // its own angle on the ring first, then the ring round: a spot off the mesh (in the crops, under a vehicle) is no use, the next one may be
+            _slotPoint = t.Feet;
+            for (var k = 0; k < SlotTries; k++)
+            {
+                var a = away + Slot * GoldenAngle + _slotShift + k * (MathF.Tau / SlotTries);
+                var raw = new Vector3(t.Feet.X + MathF.Cos(a) * reach * SlotRing, t.Feet.Y, t.Feet.Z + MathF.Sin(a) * reach * SlotRing);
+                var snapped = _world.Snap(raw);
+                if (Flat(snapped, t.Feet) > reach * 0.9f || MathF.Abs(snapped.Y - t.Feet.Y) > ReachDy) continue;
+                _slotPoint = snapped;
+                break;
+            }
             _slotValid = true;
         }
         slotted = Flat(_slotPoint, t.Feet) > 0.01f;
@@ -526,6 +615,20 @@ public sealed partial class GangMember : IWorldEntity
         var reach = _d.BoardReachM;
         if (GoTo(_door, dt, _k.RunSpeed, reach)) { Arrive(); return; }
         if (_route.Count == 0 && RouteRequest == null && Flat(Position, _door) <= DirectM) { Step(_door, dt, _k.RunSpeed); if (Flat(Position, _door) <= reach) Arrive(); } // no route and nearly there: straight in
+    }
+
+    void TickRemount(float dt)
+    {
+        var reach = _d.BoardReachM;
+        if (GoTo(_door, dt, _k.RunSpeed, reach)) { Stand(); return; }
+        if (_route.Count == 0 && RouteRequest == null && Flat(Position, _door) <= DirectM) { Step(_door, dt, _k.RunSpeed); if (Flat(Position, _door) <= reach) Stand(); } // no route and nearly there: straight in
+    }
+
+    /// <summary>At the car's door: it stands, and the car is told.</summary>
+    void Stand()
+    {
+        Settle();
+        Mounted?.Invoke(this);
     }
 
     void Arrive()
@@ -562,6 +665,7 @@ public sealed partial class GangMember : IWorldEntity
     bool GoTo(Vector3 goal, float dt, float speed, float stop)
     {
         if (Flat(Position, goal) <= stop) { ClearRoute(); return true; }
+        _trying = true;
         var routeToGoal = _route.Count > 0 && Flat(_route[^1], goal) <= _d.RepathM;
         if (!routeToGoal && RouteRequest == null && _repath.Ready) { Request(goal); _repath.Start(_d.RepathSeconds); }
         if (_next < _route.Count) Follow(dt, speed);
@@ -575,6 +679,7 @@ public sealed partial class GangMember : IWorldEntity
     /// <summary>Walks the route from the current point, turning towards each leg. True when its end is reached.</summary>
     bool Follow(float dt, float speed)
     {
+        _trying = true;
         var budget = speed * dt;
         var turn = _d.TurnRateDegPerS * MathF.PI / 180f * dt;
         _guard.Tick(dt);

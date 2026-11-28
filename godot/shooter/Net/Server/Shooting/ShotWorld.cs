@@ -8,6 +8,7 @@ using Drycastle.Shooter.Net.Server.Seating;
 using Drycastle.Shooter.Vehicles;
 using Drycastle.ShooterCore.Diagnostics;
 using Drycastle.ShooterCore.Glass;
+using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
 using System.Diagnostics;
@@ -118,11 +119,28 @@ internal sealed class ShotWorld
     /// nearer of <see cref="WorldQuery.Wall"/> and <see cref="NearestHull"/>), and which vehicle if it was one. The shooter's own vehicle
     /// (<paramref name="skip"/>) is not in the way.
     /// </summary>
-    public float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null)
+    public float WorldHit(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip = null) => WorldHitSkipping(from, dir, max, out car, skip, null);
+
+    /// <summary>As <see cref="WorldHit"/> with two vehicles left out (the shooter's own, and the one the target rides in: a line of sight to a rider is not blocked by the vehicle they sit in).</summary>
+    public float WorldHitSkipping(Vector3 from, Vector3 dir, float max, out ServerCar? car, ServerCar? skip, ServerCar? skipToo)
     {
-        var stop = Query.Shot(from, dir, max, skip);
+        var stop = Query.Shot(from, dir, max, skip, skipToo);
         car = stop.Car;
         return stop.Distance;
+    }
+
+    /// <summary>Every living vehicle's hull where it stands for the shot being resolved (<see cref="PoseRewind.PoseOf"/>), added to <paramref name="into"/>: what a Gunman's round meets (<see cref="GangRound"/>).</summary>
+    public void Hulls(List<RoundHull> into)
+    {
+        foreach (var car in _fleet.Cars)
+            if (!car.Destroyed) into.Add(new RoundHull(car.Id, _rewind.PoseOf(car), car.Def));
+    }
+
+    /// <summary>The vehicle of an id, or null.</summary>
+    public ServerCar? CarOf(ushort id)
+    {
+        foreach (var car in _fleet.Cars) if (car.Id == id) return car;
+        return null;
     }
 
     /// <summary>The distance the ray stops at with two vehicles left out (the hull it hit and the shooter's own): a wall or another hull.</summary>

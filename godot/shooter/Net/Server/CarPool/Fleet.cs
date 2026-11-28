@@ -38,7 +38,10 @@ internal sealed class Fleet
     /// <summary>The next vehicle's id: the ids follow the order the vehicles are added in.</summary>
     public ushort NextId => (ushort)(VehicleRecord.FirstId + _cars.Count);
 
-    public void Add(ServerCar car) => _cars.Add(car);
+    /// <summary>A vehicle was made (a new one of the world, a Job's, a cart): the cargo volumes follow it.</summary>
+    public event Action<ServerCar>? Made;
+
+    public void Add(ServerCar car) { _cars.Add(car); Made?.Invoke(car); }
 
     /// <summary>A new vehicle of type <paramref name="kind"/> standing at <paramref name="origin"/> facing <paramref name="yaw"/> (where it returns to), in the world and at the end of the list: its id is the next one.</summary>
     public ServerCar Make(int kind, VehicleDef def, byte colour, Vector3 origin, float yaw)
@@ -51,6 +54,7 @@ internal sealed class Fleet
         };
         _world.AddChild(car);
         _cars.Add(car);
+        Made?.Invoke(car);
         return car;
     }
 

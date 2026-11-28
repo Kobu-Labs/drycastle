@@ -129,6 +129,14 @@
       "download_url": null,
       "licence": "unverified (free sound effect, terms not checked)",
       "downloaded": "2026-11-21"
+    },
+    {
+      "name": "grove-after-dark",
+      "title": "Grove After Dark v4 (the project owner's own track)",
+      "url": "https://github.com/Kobu-Labs/drycastle",
+      "download_url": null,
+      "licence": "own work of the project owner (not CC0; used in the game by the owner's choice, see its LICENSE.txt)",
+      "downloaded": "2026-11-28"
     }
   ],
   "assets": [
@@ -887,6 +895,27 @@
       "tags": [
         "cartel",
         "contact",
+        "marker",
+        "flat-colour",
+        "primitive"
+      ],
+      "licence": "CC0",
+      "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/primitives.py)",
+      "pack": null
+    },
+    {
+      "id": "prim:cartel_pallet",
+      "category": "other",
+      "name": "Cartel pallet (marker: the game draws the Delivery's pallet here, its four bag spots in gold)",
+      "file": null,
+      "size_m": [
+        1.441,
+        0.235,
+        1.418
+      ],
+      "tags": [
+        "cartel",
+        "pallet",
         "marker",
         "flat-colour",
         "primitive"
@@ -5462,6 +5491,18 @@
       "downloaded": "2026-11-21",
       "generated": false,
       "note": "first 3.6 s, +5.3 dB, 0.5 s fade out, converted wav to ogg vorbis"
+    },
+    {
+      "id": "sfx:grove-after-dark/grove-after-dark-v4",
+      "name": "Grove After Dark v4",
+      "file": "grove-after-dark/grove-after-dark-v4.ogg",
+      "used_for": "job.done.music",
+      "licence": "own work of the project owner (not CC0; used in the game by the owner's choice, see its LICENSE.txt)",
+      "source": "the project owner's own track, grove-after-dark-v4.wav (40.8 s, 44.1 kHz stereo)",
+      "pack": "grove-after-dark",
+      "downloaded": "2026-11-28",
+      "generated": false,
+      "note": "converted wav to ogg vorbis (ffmpeg libvorbis, quality 5), 40.9 s, unedited; the Job done cinematic plays its first 12 s and fades it out"
     },
     {
       "id": "sfx:public-domain-weather/rain_heavy",

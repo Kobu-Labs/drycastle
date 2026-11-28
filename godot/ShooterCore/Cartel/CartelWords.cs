@@ -55,7 +55,8 @@ public static class CartelWords
         (JobStartRefusal.FarFromContact, "cartel.refuse.far", "Jobs are started at the Contact."),
         (JobStartRefusal.OwnerBusy, "cartel.refuse.running", "Your job is still running."),
         (JobStartRefusal.MateBusy, "cartel.refuse.matebusy", "Someone in your squad is on another job."),
-        (JobStartRefusal.NoCartel, "cartel.refuse.nocartel", "This map has no Cartel."));
+        (JobStartRefusal.NoCartel, "cartel.refuse.nocartel", "This map has no Cartel."),
+        (JobStartRefusal.PalletFull, "cartel.refuse.palletfull", "The pallet is full."));
 
     public static readonly WordTable<CartelJoinRefusal> Join = new(("cartel.joinrefuse.other", "The Contact does not answer now."),
         (CartelJoinRefusal.Bot, "cartel.joinrefuse.bot", "Bots do not work for the Cartel."),

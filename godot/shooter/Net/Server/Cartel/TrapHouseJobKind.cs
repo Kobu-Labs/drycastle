@@ -18,7 +18,7 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// </summary>
 internal sealed class TrapHouseJobKind : IJobKind
 {
-    public const string KindId = "trap_house";
+    public const string KindId = TrapHouseHeistData.KindId;
     const string Section = "cartel.json: jobs.trap_house";
 
     readonly HeistServer _s;

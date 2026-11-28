@@ -1,9 +1,10 @@
 using Godot;
 using Drycastle.ShooterCore.Cartel;
-using Drycastle.ShooterCore.Chat;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Jobs;
+using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Plantation;
+using Drycastle.ShooterCore.Status;
 using Drycastle.Shooter.Net.Server.Highs;
 using NVec2 = System.Numerics.Vector2;
 using NVec3 = System.Numerics.Vector3;
@@ -13,12 +14,13 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// <summary>
 /// The Harvest heist (#495; GLOSSARY "Heist"; docs/cartel.md "Harvest"), the first Heist on the template (<see cref="HeistServer"/>): the objective is the Contact's own plantation (the plantation zone
 /// nearest him), its area the outline grown by area_margin_m. While it runs, a party member's hold of the interact key in a plantation (fill_hold_seconds) fills a weed Duffel in their hands instead
-/// of High, until the maximum is filled, once the van has reached the plantation (before that the Assault clock has not started: <see cref="Completed"/> fills nothing); a hold that cannot
-/// fill (carrying a Duffel, the maximum filled) does not count (<see cref="Blocks"/>). Outside a Harvest the plantation is unchanged. The Assaults come in from the road side. Numbers in cartel.json <c>jobs.harvest</c>.
+/// of High, until the maximum is filled, once the van has reached the plantation (before that the Assault clock has not started); a hold that cannot
+/// fill (the van not there, carrying a Duffel, the maximum filled) does not count (<see cref="ReachOf"/>) and the player is told why (the prompt: <see cref="EventKind.HarvestFill"/>); a hold that can shows the ring and,
+/// after fill_show_after_seconds, everyone sees the filler bend and reach (<see cref="StatusKind.Filling"/>). Outside a Harvest the plantation is unchanged. The Assaults come in from the road side. Numbers in cartel.json <c>jobs.harvest</c>.
 /// </summary>
 internal sealed class HarvestJobKind : IJobKind, IPlantationFill
 {
-    public const string KindId = "harvest";
+    public const string KindId = HarvestData.KindId;
     const string Section = "cartel.json: jobs.harvest";
 
     readonly HeistServer _s;
@@ -52,15 +54,23 @@ internal sealed class HarvestJobKind : IJobKind, IPlantationFill
 
     public double? HoldSecondsFor(ServerClient c) => RunOf(c) != null ? _data.FillHoldSeconds : null;
 
-    /// <summary>A hold that cannot fill: the player carries a Duffel already (one per player), or the harvest's maximum is filled. It does not count, rather than run its seconds and be refused.</summary>
-    public bool Blocks(ServerClient c) => RunOf(c) is { } run && (run.Filled >= run.Heist.Max || _s.Duffels.Book.CarriedBy(c.Id) != null);
+    public double ShowAfterSeconds => _data.FillShowAfterSeconds;
+
+    /// <summary>
+    /// What the hold does for the player (<see cref="HarvestFillRules.Reach"/>): a hold that cannot fill (the van not at the plantation yet, a Duffel in the hands, the maximum filled) does not count, rather than run its
+    /// seconds and be refused; the player is told which it is (the prompt), no chat line.
+    /// </summary>
+    public FillReach ReachOf(ServerClient c, out int max)
+    {
+        max = 0;
+        if (RunOf(c) is not { } run) return FillReach.Off;
+        max = run.Heist.Max;
+        return HarvestFillRules.Reach(run.Heist.Phase, run.Filled, max, _s.Duffels.Book.CarriedBy(c.Id) != null);
+    }
 
     public void Completed(ServerClient c)
     {
-        if (RunOf(c) is not { } run) return;
-        // the Assault clock starts when the van reaches the area: filling before that would load the most at the edge and drive through with no Assault at all
-        if (run.Heist.Phase == HeistPhase.ToObjective) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"Bring the Cartel van to {Place} first."); return; }
-        if (run.Filled >= run.Heist.Max) { _s.Ctx.ChatTo(c, ChatLineKind.Info, $"All {run.Heist.Max} duffels of the harvest are filled: load them and drive."); return; }
+        if (RunOf(c) is not { } run || ReachOf(c, out _) != FillReach.Ready) return; // the same rules the hold was counted under
         run.Party.Refresh(_s.Parties); // a squad mate who joined since the last tick is in the party the Duffel belongs to
         if (_s.Duffels.Give(DuffelKind.Weed, run.Party, c) == null) return; // carrying one already (told), or not alive
         run.Filled++;

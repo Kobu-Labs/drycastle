@@ -82,6 +82,23 @@ public sealed class RoadPath
         return best;
     }
 
+    /// <summary>How far along the path (metres) its point nearest <paramref name="p"/> lies: where a car that drives it has got to.</summary>
+    public float Project(Vector2 p)
+    {
+        if (Points.Length < 2) return 0;
+        var best = float.PositiveInfinity; var bestS = 0f;
+        for (var i = 0; i + 1 < Points.Length; i++)
+        {
+            var a = Points[i]; var ab = Points[i + 1] - a;
+            var len2 = ab.LengthSquared();
+            var t = len2 > 0 ? Math.Clamp(Vector2.Dot(p - a, ab) / len2, 0f, 1f) : 0f;
+            var d = Vector2.DistanceSquared(p, a + ab * t);
+            if (d >= best) continue;
+            best = d; bestS = _cum[i] + t * MathF.Sqrt(len2);
+        }
+        return bestS;
+    }
+
     /// <summary>The heading at <paramref name="s"/> as a Godot yaw (0 faces -Z), from a point <paramref name="lookAheadM"/> further along (the last leg's heading at the end).</summary>
     public float YawAt(float s, float lookAheadM = 2f)
     {

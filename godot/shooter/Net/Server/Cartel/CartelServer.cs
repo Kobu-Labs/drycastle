@@ -158,7 +158,8 @@ internal sealed class CartelServer
         var members = _parties.MembersOf(owner);
         var standing = c.Profile?.Cartel;
         var facts = new JobStartFacts(c.IsBot, standing?.IsMember == true, _parties.LeaderOf(owner) == c.Id, kind != null, tier, standing?.Rank(_data) ?? 0,
-            _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin);
+            _ctx.Match.Phase == MatchPhase.Running, _ctx.IsAlive(c.Id), AtContact(c), _book.OfOwner(owner) != null, members.Any(m => _book.Involving(m, _parties) != null), admin,
+            PalletFull: kind is DeliveryJobKind delivery && delivery.PalletFull(_book));
         var why = CartelRules.CanStart(_data, facts);
         if (why != JobStartRefusal.None) { Refuse(c, CartelAction.StartJob, (byte)why, CartelRules.Words(why, _data, tier), admin); return; }
         if (_book.Start(CartelRules.Giver, kind!, tier, owner, c.Id, _parties, out var refusal) is not { } job)
@@ -233,7 +234,7 @@ internal sealed class CartelServer
     /// "/cartel join | quit | respect &lt;n&gt; | job &lt;kind&gt; [tier] | status" (admin, for testing, on themselves): join or quit anywhere, add Respect (a rank-up is announced as
     /// after a Job), start a Job of any tier anywhere (the other checks stand), or say the standing and the Jobs that run. On the admin's own running Job (the one involving them), to reach
     /// its late stages: "end win | fail" ends it now (a win pays as a success, a fail reads "Ended by an admin"), "time &lt;seconds&gt;" sets its timer, "assault" sends an Assault on a heist
-    /// (the clock's path and cap), "goto" puts the admin on the ground under its marker.
+    /// (the clock's path and cap), "chase" sends a Rival chase car after its van (the spot rules and the cap), "goto" puts the admin on the ground under its marker.
     /// </summary>
     public void Chat(ServerClient c, IReadOnlyList<string> args)
     {
@@ -263,6 +264,7 @@ internal sealed class CartelServer
             case "end": AdminEnd(c, rest); break;
             case "time": AdminTime(c, rest); break;
             case "assault": AdminAssault(c); break;
+            case "chase": AdminChase(c); break;
             case "goto": AdminGoto(c); break;
         }
     }
@@ -299,6 +301,13 @@ internal sealed class CartelServer
         if (AdminJob(c) is not { } job) return;
         if (job.Objective is not HeistRun run) { _ctx.ChatTo(c, ChatLineKind.Error, $"Your job ({job.Kind.Name}) is no heist: only a heist has Assaults."); return; }
         if (run.SendAssault() is { } why) _ctx.ChatTo(c, ChatLineKind.Error, why);
+    }
+
+    void AdminChase(ServerClient c)
+    {
+        if (AdminJob(c) is not { } job) return;
+        if (job.Objective is not HeistRun run) { _ctx.ChatTo(c, ChatLineKind.Error, $"Your job ({job.Kind.Name}) is no heist: only a heist has chase cars."); return; }
+        if (run.SendChase() is { } why) _ctx.ChatTo(c, ChatLineKind.Error, why);
     }
 
     void AdminGoto(ServerClient c)

@@ -24,6 +24,149 @@
   "contact_reach_m": 3,
   // marker_resend_m: a Job's marker (the HUD's minimap and world marker for its party) is sent again only once its point has moved this many metres (0: every change).
   "marker_resend_m": 2,
+  // pallet (CartelPalletData, ShooterCore/Cartel/CartelPallet.cs): the Cartel pallet a Delivery's Duffel lies on. It stands where the first placed object of the marker prim:cartel_pallet stands (set
+  // by hand in the map editor, Objects tool, category other, a few metres from the Contact); a map without one has no Delivery. The marker is solid like any placed prop (a low box the pallet's
+  // size); the game hides it and draws the Gang Warfare pallet there. spots: one [x, z] per bag spot, metres from the pallet's centre in its own frame (x along its width, z along its depth, before
+  // its turn); a Delivery holds one while it runs, so there are as many Deliveries at once as spots ("The pallet is full" past that). top_m: the deck's height above the base, where a bag lies.
+  // size_m [x, y (up), z] is the model's, read from SM_Prop_Pallet_01.glb (the marker primitive in pipeline kits/primitives.py has the same footprint); it only feeds the box drawn without the
+  // private pack, in colour. model: under assets-private/synty/glb (no .glb), atlas: under synty/.
+  "pallet": {
+    "top_m": 0.235,
+    "spots": [[-0.36, -0.33], [0.36, -0.33], [-0.36, 0.33], [0.36, 0.33]],
+    "model": "gang-warfare/SM_Prop_Pallet_01",
+    "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+    "size_m": [1.441, 0.235, 1.418],
+    "colour": "#8a6a45"
+  },
+
+  // off_road (OffRoadData, ShooterCore/Cartel/OffRoad.cs; docs/cartel.md "Assaults", "Chase cars"): how the Rival crew's vehicles (Assault vans, chase cars) leave the roads. They use the roads while the roads bring them closer
+  // and cross open ground (fields, meadows) when that is shorter, never over a building, a tree trunk, a fence, water or a slope steeper than max_grade. A plan is the cheapest of: straight (cost open_cost per metre; a metre of road
+  // costs 1, so roads win unless the field is clearly shorter), or join the nearest road within enter_m (the line to it open) and leave it at the road point within leave_m of the goal (one every step_m, at most max_checks tried) whose
+  // line to the goal is open. close_m: within this of its end a line is not looked at. An Assault van drives the open way only when it is at least min_tail_m long and parks park_short_m short of its target. The open check (the server's
+  // OpenGround) looks at a line every sample_m in three lanes the vehicle's width wide (its half width plus margin_m) with rays ray_up_m over the ground; car_half_width_m is the car's, for a spot to stand on.
+  "off_road": {
+    "enter_m": 80, "leave_m": 300, "step_m": 15, "open_cost": 1.3, "close_m": 6, "max_checks": 10, "min_tail_m": 12, "park_short_m": 14,
+    "sample_m": 4, "ray_up_m": 0.9, "max_grade": 0.45, "margin_m": 0.3, "car_half_width_m": 1.1
+  },
+
+  // job_done_cinematic (JobDoneCinematicData, ShooterCore/Cartel/JobDoneCinematic.cs; docs/cartel.md "Job done"): what a party player sees and hears when their Job succeeds, on their own client only. A short cinematic of
+  // about 10 s: the banner (banner_seconds), the camera leaving the body in quick eased moves out to a high view (legs; each move starts a soft white flash, then the camera holds and drifts), then a flashed cut back into the player's view, the
+  // player's own music under it. Nothing here was played: first guesses.
+  // stages: where the camera stands. anchor: player (the body, or the vehicle it rides) or party (the centre of the party's living squad mates within party_radius_m of the player, the player alone with none).
+  // back_m behind the view's heading (as it was when the cinematic began) and up_m above the anchor's feet; it looks at look_up_m above the anchor. During its hold it pushes in drift_push_m and turns drift_turn_deg
+  // round the anchor (left positive). clamp: pull_in (a wall in the way brings the camera in along its line: the low view behind the player) or raise (the camera stays on its line: the high views). Either way
+  // the camera is kept clearance_m above the ground and above any roof over it ("raise it, never through a roof").
+  // legs, in order: move to the stage (to, a stage id; "eye" is the player's own view) in move_seconds (fast at first, settling), then hold_seconds there. The last leg cuts back to the eye (a 0.05 s move under its flash: the camera only ever zooms out). Together they set the length
+  // (here 9.6 s). A flash starts with each move, so a move and its hold together are at least a third of a second (at most 3 flashes a second); the check is made on load.
+  // flash_peak: the flash's opacity at its peak (at most 0.6: soft); it rises over flash_rise_seconds and is gone at flash_seconds (at most 0.25). With reduce motion there is no flash at all (see reduced).
+  // Music (assets/grove-after-dark, sounds.json job.done.music): up over music_in_seconds, full until music_fade_start_seconds, out over music_fade_seconds (so it ends 2 s after the camera is back). A skip (jump, fire, interact or
+  // escape pressed) or damage taken ends the camera at once, with a flash back, and fades the music out over skip_fade_seconds; the controls stay off skip_lock_seconds more, so the key that skipped does nothing else.
+  // reduced: reduce motion on, or a seat the camera cannot film (aircraft, turrets): only the banner and the music, over seconds, the music fading from music_fade_start_seconds over music_fade_seconds. No camera, no flash, controls stay the player's.
+  "job_done_cinematic": {
+    "banner_seconds": 4,
+    "flash_peak": 0.5, "flash_rise_seconds": 0.04, "flash_seconds": 0.16,
+    "music_in_seconds": 0.3, "music_fade_start_seconds": 9, "music_fade_seconds": 3,
+    "skip_fade_seconds": 1.5, "skip_lock_seconds": 0.3,
+    "party_radius_m": 30, "clearance_m": 2,
+    "stages": [
+      { "id": "behind", "anchor": "player", "back_m": 6,  "up_m": 3,  "look_up_m": 1.2, "drift_push_m": 0.8, "drift_turn_deg": 5, "clamp": "pull_in" },
+      { "id": "above",  "anchor": "party",  "back_m": 6,  "up_m": 25, "look_up_m": 0,   "drift_push_m": 2,   "drift_turn_deg": 6, "clamp": "raise" },
+      { "id": "high",   "anchor": "party",  "back_m": 12, "up_m": 80, "look_up_m": 0,   "drift_push_m": 5,   "drift_turn_deg": 8, "clamp": "raise" }
+    ],
+    "legs": [
+      { "to": "behind", "move_seconds": 0.35, "hold_seconds": 1.5 },
+      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 2.5 },
+      { "to": "high",   "move_seconds": 0.35, "hold_seconds": 4.5 },
+      { "to": "eye",    "move_seconds": 0.05, "hold_seconds": 0 }
+    ],
+    "reduced": { "seconds": 4, "music_fade_start_seconds": 2.5, "music_fade_seconds": 1.5 }
+  },
+
+  // receivers (ReceiversData, ShooterCore/Cartel/Receiver.cs; docs/cartel.md "Receivers"; GLOSSARY "Receiver"): the drop of a Heist (Harvest and Trap house; a Delivery keeps its cartel_drop points). A Heist's drop is one of three
+  // kinds, drawn at random among the kinds the map has (weights below: a kind with weight 0 is never drawn; a kind with no free place now, or none far enough, falls through to the next): a stash house (a hollow house with
+  // road access that no player is in and no Job holds, at least the heist's drop_min_m from its objective: a Cartel pallet and a buyer at it), a helicopter (the utility helicopter on a landing spot, zone kind cartel_heli, rotors
+  // turning, a pilot in it) or a boat (the Battle Royale SM_Veh_Boat_01 at a mooring, zone kind cartel_boat, with a boatman). A Receiver is not a vehicle of vehicles.json: nothing can enter it, hurt it or push it, its Cartel man
+  // cannot be hurt either; the party's Duffels go into its cargo volume (carried and thrown, as into a van) and are never taken out again. Everything below is in the Receiver's own frame: forward -Z, x right, y up, origin on the
+  // ground under it (the pallet's base centre, the helicopter's rotor mast, the boat's waterline), metres.
+  "receivers": {
+    // weights: how likely each kind is among the kinds the map has.
+    "weights": { "stash_house": 1, "helicopter": 1, "boat": 1 },
+    // reach_m, reach_up_m: a party player is "at the Cartel man" (the interact key is the leader's send-off, the prompt shows) within reach_m on the ground of him and reach_up_m up or down.
+    "reach_m": 3.5,
+    "reach_up_m": 3,
+    // leave: how a helicopter or boat leaves once sent off, scripted with no physics (the server moves its entity, every client interpolates it). A helicopter climbs climb_m at climb_mps over its landing spot (turning to
+    // face the way it flies, turn_deg_per_s), then flies off over the nearest map edge at fly_mps, nose down pitch_deg, and is removed exit_margin_m past the edge. A boat sails the placed route of its mooring at sail_mps and
+    // is removed at the route's last point. The first ramp_seconds ease in (the speed rises from nothing).
+    "leave": { "climb_m": 60, "climb_mps": 9, "fly_mps": 35, "exit_margin_m": 150, "pitch_deg": 10, "turn_deg_per_s": 45, "sail_mps": 12, "ramp_seconds": 4 },
+    // Per kind. model + atlas: the model under assets-private/synty/glb (no .glb) wearing the atlas under synty/ (private pack: a box of size_m, in colour, without it); no atlas: an asset the map library knows (the
+    // helicopter's generated glb). model_yaw_deg: the turn of the model in the frame (the Synty pack faces +Z, the frame's forward is -Z: 180). area_m: the van is "at the drop" within this many ground metres of the
+    // Receiver (the unloading begins and the Assaults come to the drop). figure: where the Cartel man stands (feet, in the frame) and how he looks (a Gang Warfare character as the Contact is, contact.json view; yaw_deg 90
+    // faces -X). cargo_volume: the box the bags go into and 15 slots they lie on (vehicles.json cargo_volume's schema: [x, y, z, yaw_deg] of a bag's base centre; no doors, no access point: nothing is taken out); a run uses
+    // the first as many slots as the heist's maximum. A bag is 0.56 x 0.24 x 0.28 m (duffels.json view box [0.7, 0.3, 0.35] times scale 0.8), lying with its long side along x; the first layer fills first, the next lies on it.
+    "stash_house": {
+      // The Cartel pallet's own model and size (pallet.size_m, read from SM_Prop_Pallet_01.glb): deck at 0.235, 1.441 wide, 1.418 deep. Slots: 2 bags across (x +-0.3) and 4 rows (z every 0.33), then the second layer on them
+      // (y 0.475): 8 + 7. The buyer stands 1.25 m to the pallet's +x side, facing it. The server turns the pallet so that side is away from the house's door (StashPlacement).
+      "model": "gang-warfare/SM_Prop_Pallet_01",
+      "atlas": "gang-warfare/textures/PolygonGangWarfare_01_A.png",
+      "size_m": [1.441, 0.235, 1.418],
+      "colour": "#8a6a45",
+      "area_m": 25,
+      "figure": { "pos": [1.25, 0, 0], "yaw_deg": 90, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "idle_standing_masc_g" } },
+      "cargo_volume": {
+        "centre": [0, 0.735, 0], "size": [1.44, 1, 1.42], "capacity": 15,
+        "slots": [
+          [-0.3, 0.235, -0.495, 0], [0.3, 0.235, -0.495, 0], [-0.3, 0.235, -0.165, 0], [0.3, 0.235, -0.165, 0],
+          [-0.3, 0.235, 0.165, 0], [0.3, 0.235, 0.165, 0], [-0.3, 0.235, 0.495, 0], [0.3, 0.235, 0.495, 0],
+          [-0.3, 0.475, -0.495, 0], [0.3, 0.475, -0.495, 0], [-0.3, 0.475, -0.165, 0], [0.3, 0.475, -0.165, 0],
+          [-0.3, 0.475, 0.165, 0], [0.3, 0.475, 0.165, 0], [-0.3, 0.475, 0.495, 0]
+        ]
+      }
+    },
+    "helicopter": {
+      // drycastle-generated-models/utility_helicopter.glb (scripts/models/make_utility_helicopter_model.py): the game's vehicle frame already (forward -Z, origin on the ground under the rotor mast). Measured from the model's
+      // script and glb: cabin floor top 0.732 (FLOOR 0.72 plus the anti-slip plate), x +-1.2 between the walls, z -1.2 (the cockpit's B post) to 1.3 (the rear wall), roof 2.12; the troop bench lies along the rear wall
+      // (x -1.08..0.3, z 0.86..1.3) and the door gunner's seat at x 0.22..0.56, z -0.07..0.37, so the bags pile on the free floor of the cabin's left half (x -1.1..0.04, z -1.19..0.49): 2 across, 6 rows, then the second layer
+      // on them: 12 + 3. cargo_volume is the whole open cabin (x +-1.15, z -1.25..1.2, 1 m above the floor): a bag thrown in through either open side loads. The pilot sits in the right seat (seat_pilot, 0.55, 0.72, -1.9):
+      // there is no sitting clip in the pack, so the crouch idle is lowered into the seat (a human look is due). area_m 45: the van stops on the field's edge, not under the rotor (13.4 m across).
+      "model": "drycastle-generated-models/utility_helicopter.glb",
+      "size_m": [2.4, 3.7, 12.6],
+      "colour": "#5c6638",
+      "area_m": 45,
+      "figure": { "pos": [0.55, 0.55, -1.9], "yaw_deg": 0, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "crouch_idle_masc" } },
+      "cargo_volume": {
+        "centre": [0, 1.232, -0.025], "size": [2.3, 1, 2.45], "capacity": 15,
+        "slots": [
+          [-0.82, 0.732, -1.05, 0], [-0.24, 0.732, -1.05, 0], [-0.82, 0.732, -0.77, 0], [-0.24, 0.732, -0.77, 0],
+          [-0.82, 0.732, -0.49, 0], [-0.24, 0.732, -0.49, 0], [-0.82, 0.732, -0.21, 0], [-0.24, 0.732, -0.21, 0],
+          [-0.82, 0.732, 0.07, 0], [-0.24, 0.732, 0.07, 0], [-0.82, 0.732, 0.35, 0], [-0.24, 0.732, 0.35, 0],
+          [-0.82, 0.972, -1.05, 0], [-0.24, 0.972, -1.05, 0], [-0.82, 0.972, -0.77, 0]
+        ]
+      }
+    },
+    "boat": {
+      // assets-private/synty/glb/battle-royale/SM_Veh_Boat_01.glb (private pack; a box without it), origin on the waterline (hull bottom -0.565, engine -0.77, hull 3.45 wide, 8.35 long: z -3.9 stern to 4.43 bow in the pack's
+      // frame, bow at +Z), turned 180 degrees into the frame (forward -Z), so every z below is the pack's negated. Measured from the glb (upward faces and obstacles on a 0.1 m grid): the cockpit floor lies at 0.2 to 0.22
+      // between the hull walls at x +-0.9, the bench across the stern (frame z 2.3, 0.27..0.75 high) and the helm console (frame z 0.75..1.45, x +-0.5, 1.6 high). The bags lie on the free floor ahead of the console
+      // (frame z -0.05..0.7), 3 across and 2 rows, in a pile three layers high: 6 + 6 + 3. cargo_volume is the cockpit aft of the bow deck (x +-0.86, z -0.05..2.2, 1 m above the floor). The boatman stands at the helm
+      // behind the console, at the wheel, facing the bow.
+      "model": "battle-royale/SM_Veh_Boat_01",
+      "atlas": "battle-royale/polygon-battle-royale-01/Assets/PolygonBattleRoyale/Textures/PolygonBattleRoyale_Vehicles_01.png",
+      "model_yaw_deg": 180,
+      "size_m": [3.45, 3, 8.35],
+      "colour": "#d8d4c8",
+      "area_m": 45,
+      "figure": { "pos": [0, 0.21, 1.85], "yaw_deg": 0, "look": { "model": "gang_boss_01", "atlas": "gang-warfare/textures/PolygonGangWarfare_02_B.png", "idle": "idle_standing_masc_g" } },
+      "cargo_volume": {
+        "centre": [0, 0.7, 1.075], "size": [1.72, 1, 2.25], "capacity": 15,
+        "slots": [
+          [-0.58, 0.21, 0.14, 0], [0, 0.21, 0.14, 0], [0.58, 0.21, 0.14, 0], [-0.58, 0.21, 0.42, 0],
+          [0, 0.21, 0.42, 0], [0.58, 0.21, 0.42, 0], [-0.58, 0.45, 0.14, 0], [0, 0.45, 0.14, 0],
+          [0.58, 0.45, 0.14, 0], [-0.58, 0.45, 0.42, 0], [0, 0.45, 0.42, 0], [0.58, 0.45, 0.42, 0],
+          [-0.58, 0.69, 0.14, 0], [0, 0.69, 0.14, 0], [0.58, 0.69, 0.14, 0]
+        ]
+      }
+    }
+  },
   // One section per kind of Job, read only by that kind.
   "jobs": {
     // test: the trivial kind for the tests and "/cartel job test [tier]" (TestJobKind). seconds: the job's timer per tier (one number per tier, tier 1 first): it fails when
@@ -33,8 +176,9 @@
       "seconds": [120, 110, 100, 90, 80],
       "succeed_seconds": 20
     },
-    // delivery (DeliveryJobKind, #494): the leader gets one duffel at the Contact; a party player carrying it stands within radius_m of the job's drop point (a cartel_drop zone point)
-    // and holds the interact key hold_seconds: done. seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
+    // delivery (DeliveryJobKind, #494): the job's duffel lies on a free spot of the pallet by the Contact (never in anyone's hands; no pallet on the map, or none of its spots free: the job does not
+    // start); a party player picks it up (the interact key), carries it to within radius_m of the job's drop point (a cartel_drop zone point) and holds the interact key hold_seconds: done. The
+    // duffel's loss, whatever destroys it, fails the job ("The objective was lost"). seconds: the timer per tier (tier 1 first). duffel: what it holds (duffels.json kind: weed light, cash medium, product heavy; the
     // carrier cannot sprint or take a vehicle seat). min_contact_m: the drop point is at least this far (ground metres) from the Contact; apart_m: and this far from every point another
     // running job holds (drop points and hit spots). No drop point left: the job does not start.
     "delivery": {
@@ -78,30 +222,94 @@
       // Respect for each duffel loaded above the minimum at the drop, times the tier, on top of the tier's respect (each earning member).
       "bonus_respect_per_duffel": 15,
       // Assaults (Rival crew vans): the first comes grace_seconds after the Cartel van reaches the plantation's area, the next every assault_interval_seconds while the heist is there. A van
-      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: assault_gunmen and assault_enforcers per tier, plus
-      // gunmen_per_extra_member Gunmen per extra member, at most max_crew (at most 15). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
+      // leaving the area with the minimum loaded stops them (the clock pauses; back in the area it goes on). One van's crew: 5, 1 melee (an Enforcer: assault_enforcers) and 4 Gunmen (assault_gunmen: more at the
+      // top tier) per tier, plus gunmen_per_extra_member Gunmen per extra member in what is left of max_crew (at most 15), the Enforcers kept first: a bigger squad adds Gunmen, never a second melee member. The van
+      // drives the roads in and on across open ground to park off_road.park_short_m short of its target (see off_road). No new Assault while max_assaults_alive of this heist's still fight (a van standing or a member alive).
       "grace_seconds": [60, 55, 50, 45, 40],
       "assault_interval_seconds": [100, 90, 80, 70, 60],
-      "assault_gunmen": [1, 2, 2, 3, 3],
-      "assault_enforcers": [2, 2, 3, 3, 4],
+      "assault_gunmen": [4, 4, 4, 4, 5],
+      "assault_enforcers": [1, 1, 1, 1, 1],
       "gunmen_per_extra_member": 1,
-      "max_crew": 8,
+      "max_crew": 6,
       "max_assaults_alive": 3,
       // The Cartel van: van_type (vehicles.json) on the road spot nearest the Contact at least van_spawn_min_m from him, reserved for the party. Its bay takes a duffel up to
       // van_load_margin_m outside its volume too (the closed rear doors).
       "van_type": "cartel_van",
+      // The van's top speed with any duffel loaded, km/h (empty it drives as vehicles.json says): a governor on the driver's throttle, the same on the server and the predicting client.
+      "loaded_max_kmh": 60,
       "van_spawn_min_m": 8,
       "van_load_margin_m": 0.35,
-      // The Drop point (cartel_drop zones): at least drop_min_m from the plantation's centre and drop_apart_m from another job's; the van must stop (slower than drop_stop_mps) within
-      // drop_radius_m of it, with at least the minimum loaded.
+      // The drop (a Receiver, see "receivers": a stash house, a helicopter or a boat; the heists no longer use cartel_drop points): at least drop_min_m from the plantation's centre and drop_apart_m from another job's.
+      // The van is "at the drop" within the Receiver's area_m: the party unloads it there, and Assaults come to the drop too: the first drop_grace_seconds after the van arrived, then every assault_interval_seconds
+      // until the heist ends. The heist succeeds the moment the Receiver is sent off with at least the minimum on it (the helicopter or boat leaves by itself once every duffel of the job is on board, or the leader presses
+      // the interact key at the pilot, boatman or buyer; the stash house's buyer takes the bags when the leader presses it); the Respect counts the duffels on the Receiver then.
       "drop_min_m": 300,
       "drop_apart_m": 40,
-      "drop_radius_m": 10,
-      "drop_stop_mps": 1,
+      "drop_grace_seconds": 20,
       // fill_hold_seconds: during the heist a party member's hold of the interact key in the plantation fills a weed duffel in their hands (instead of High) until the maximum is filled.
       // area_margin_m: the objective's area is the plantation's outline (the zone nearest the Contact) grown by this: where the van loads and the Assaults go on.
+      // While the hold runs the player sees "Hold E: fill a duffel" and the hold ring; once it has run fill_show_after_seconds everyone sees the figure bend and reach (a tap shows nothing) and hears a
+      // rustle. Blocked (a duffel in the hands, the maximum filled, the van not at the plantation yet) the prompt says why and the hold does not count. Outside a heist the plantation's hold stays silent.
       "fill_hold_seconds": 3,
-      "area_margin_m": 25
+      "fill_show_after_seconds": 0.3,
+      "area_margin_m": 25,
+      // chase (ChaseData, ShooterCore/Cartel/ChaseData.cs; docs/cartel.md "Chase cars"; GLOSSARY "Chase car"): Rival cars after the van from the moment it leaves the objective with the minimum loaded (a Trap house: leaving the house) until it reaches the drop
+      // (the ones out then fight on). A chase car is vehicle_type of vehicles.json in its skin number "skin" (an index of that type's skins: the car's are yellow, blue, green, red, grey; 3, the red one, is the darkest by the mean luminance of the
+      // catalogue renders: 60 against blue 85, green 86, yellow 131, grey 137; an atlas swap, no new skin), driven by an NPC through the drive model, a Rival Enforcer at the wheel (the one melee member) and 3 Gunmen in the other seats: 4 in all
+      // (gunmen per tier, plus gunmen_per_extra_member per party member beyond the first, at most max_gunmen). first_after_seconds: the first car comes this long after the van left; then one every interval_seconds while fewer than max_alive are
+      // in the fight (a car in the fight: its crew inside or walking back to it, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: a point of the van's trail (its way since the objective, the objective first)
+      // that lies spawn_back_min_m to spawn_back_max_m behind it: the nearest road within spawn_road_m of it, or open drivable ground (see off_road: nothing solid, no water) at the point itself or spawn_spread_m (and half of it) to either side of it, at least
+      // spawn_player_min_m from every player, out of the party's sight (a line of sight check, as a Gunman's), spawn_apart_m from the other chase cars, clear of vehicles and with a way from it to the van. FIGHT: the Gunmen shoot from the windows only while the car is within
+      // shoot_range_m of the van; while it moves faster than moving_mps their rounds are turned off their line by up to moving_aim_error_deg (rival_crew.json's gun.aim_error_deg is the standing one). The car stops (brakes, the handbrake once it nearly
+      // stands) and the crew gets out and fights on foot as a Rival crew when the van is slower than stop_speed_mps within stop_within_m, when its driver is dead (it rolls; stop_seconds at most), or when it made no 1 m/s for stalled_seconds while it wants on.
+      // Before that, a car wedged (under 1 m/s with the van beyond follow_m) for unstick_after_seconds backs out for reverse_seconds and drives on, at most max_unsticks times in a row (the count is forgotten after 3 s at 3 m/s).
+      // REMOUNT: a crew on foot whose van is more than remount_m from its nearest living member and pulling away (the gap grows faster than pull_mps, smoothed, for remount_confirm_seconds) walks back to its car over the navigation mesh and gets in (the
+      // seats as when it spawned) when the car is not wrecked, no player sits in it and its driver lives; remount_seconds to do it, then it stays on foot and tries again after remount_retry_seconds. A wrecked or taken car: they stay on foot.
+      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps = 23.33, 84 km/h: 1.4 times the loaded Cartel van's 60 km/h; an NPC's input only,
+      // the car type's own top speed is 44.4 and a player's car is not limited by it); the way (roads where they bring it closer, open ground where that is shorter) is planned again every repath_seconds. A car or crew more
+      // than give_up_m from the van for give_up_seconds gives up and is removed with its crew. A destroyed car's crew inside dies with it; its wreck lies wreck_seconds (keep it under vehicles.json destroyed_return_time) then goes. seat_drop_m: the crew
+      // sits (the seated pose, thieves.json van.view seat_pelvis_m = 0.42 above the feet): the feet this far below the seat's point so the hips are on it; exit_side_m: they step out this far beyond the door side. Killing them pays nothing (Rival crew rules).
+      "chase": {
+        "vehicle_type": "car",
+        "skin": 3,
+        "first_after_seconds": 20,
+        "interval_seconds": 45,
+        "max_alive": 2,
+        "spawn_retry_seconds": 3,
+        "gunmen": [3, 3, 3, 3, 3],
+        "gunmen_per_extra_member": 1,
+        "max_gunmen": 3,
+        "spawn_player_min_m": 150,
+        "spawn_back_min_m": 150,
+        "spawn_back_max_m": 500,
+        "spawn_road_m": 30,
+        "spawn_apart_m": 25,
+        "spawn_spread_m": 40,
+        "shoot_range_m": 40,
+        "moving_aim_error_deg": 9,
+        "moving_mps": 2,
+        "stop_speed_mps": 5,
+        "stop_within_m": 30,
+        "stop_seconds": 12,
+        "stalled_seconds": 6,
+        "unstick_after_seconds": 2.5,
+        "reverse_seconds": 1.5,
+        "max_unsticks": 3,
+        "remount_m": 60,
+        "pull_mps": 1.5,
+        "remount_confirm_seconds": 1,
+        "remount_seconds": 30,
+        "remount_retry_seconds": 10,
+        "follow_m": 14,
+        "catch_up_gain": 1,
+        "max_speed_mps": 23.33,
+        "repath_seconds": 1.5,
+        "give_up_m": 250,
+        "give_up_seconds": 20,
+        "wreck_seconds": 20,
+        "seat_drop_m": 0.42,
+        "exit_side_m": 0.7
+      }
     },
     // trap_house: the Trap house heist (TrapHouseJobKind on the Heist template: ShooterCore/Cartel/TrapHouseHeist.cs TrapHouseHeistData; docs/cartel.md "Trap house", ADR 0047). A random hollow
     // house with road access (trap_house.json choice) is dressed for the job and stripped after; the Rival crew holds it, product and cash duffels lie on its tables, its safe takes the
@@ -125,21 +333,64 @@
       "max_defenders": 10,
       // area_m: the objective's area, where the van loads and the Assaults go on: within this of the house's centre or of the road spot where the van parks (its door's nearest road).
       "area_m": 20,
-      // Assaults, the Cartel van and the Drop point (from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded.
+      // Assaults, the Cartel van and the drop (a Receiver, from the house's centre): as harvest's. The Assaults stay outdoors and stop once the van leaves the area with the minimum loaded; they come again at the drop (harvest's drop_grace_seconds).
       "grace_seconds": [60, 55, 50, 45, 40],
       "assault_interval_seconds": [100, 90, 80, 70, 60],
-      "assault_gunmen": [1, 2, 2, 3, 3],
-      "assault_enforcers": [2, 2, 3, 3, 4],
+      "assault_gunmen": [4, 4, 4, 4, 5],
+      "assault_enforcers": [1, 1, 1, 1, 1],
       "gunmen_per_extra_member": 1,
-      "max_crew": 8,
+      "max_crew": 6,
       "max_assaults_alive": 3,
       "van_type": "cartel_van",
+      // The van's top speed with any duffel loaded, km/h (empty it drives as vehicles.json says): a governor on the driver's throttle, the same on the server and the predicting client.
+      "loaded_max_kmh": 60,
       "van_spawn_min_m": 8,
       "van_load_margin_m": 0.35,
       "drop_min_m": 300,
       "drop_apart_m": 40,
-      "drop_radius_m": 10,
-      "drop_stop_mps": 1
+      "drop_grace_seconds": 20,
+      // chase: as harvest's (the van leaving the house's area with the minimum starts them).
+      "chase": {
+        "vehicle_type": "car",
+        "skin": 3,
+        "first_after_seconds": 20,
+        "interval_seconds": 45,
+        "max_alive": 2,
+        "spawn_retry_seconds": 3,
+        "gunmen": [3, 3, 3, 3, 3],
+        "gunmen_per_extra_member": 1,
+        "max_gunmen": 3,
+        "spawn_player_min_m": 150,
+        "spawn_back_min_m": 150,
+        "spawn_back_max_m": 500,
+        "spawn_road_m": 30,
+        "spawn_apart_m": 25,
+        "spawn_spread_m": 40,
+        "shoot_range_m": 40,
+        "moving_aim_error_deg": 9,
+        "moving_mps": 2,
+        "stop_speed_mps": 5,
+        "stop_within_m": 30,
+        "stop_seconds": 12,
+        "stalled_seconds": 6,
+        "unstick_after_seconds": 2.5,
+        "reverse_seconds": 1.5,
+        "max_unsticks": 3,
+        "remount_m": 60,
+        "pull_mps": 1.5,
+        "remount_confirm_seconds": 1,
+        "remount_seconds": 30,
+        "remount_retry_seconds": 10,
+        "follow_m": 14,
+        "catch_up_gain": 1,
+        "max_speed_mps": 23.33,
+        "repath_seconds": 1.5,
+        "give_up_m": 250,
+        "give_up_seconds": 20,
+        "wreck_seconds": 20,
+        "seat_drop_m": 0.42,
+        "exit_side_m": 0.7
+      }
     }
   }
 }

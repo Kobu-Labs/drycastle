@@ -26,6 +26,8 @@ internal sealed class JobTracker
     /// <summary>The interact key's binding the line was last written with, and its name.</summary>
     Binding? _interactKey;
     string _interactName = "";
+    Binding? _throwKey;
+    string _throwName = "";
 
     public JobTracker(Control root, MapMarkers markers)
     {
@@ -60,6 +62,8 @@ internal sealed class JobTracker
         _markers.Job = t.Marker;
         var key = GameSettings.Current.Keys.Get("interact");
         if (_interactKey != key) { _interactKey = key; _interactName = InputBindings.Name(key); _revision = -1; } // rebound: the line names the new key
+        var throwKey = GameSettings.Current.Keys.Get("duffel_throw");
+        if (_throwKey != throwKey) { _throwKey = throwKey; _throwName = InputBindings.Name(throwKey); _revision = -1; }
         if (t.Revision != _revision) { _revision = t.Revision; _second = -1; Write(t); }
         if (t.Phase != TrackerPhase.Running) return;
         var s = (int)MathF.Ceiling(t.SecondsLeft);
@@ -79,10 +83,10 @@ internal sealed class JobTracker
             HudUi.Tint(_title, null);
             HudUi.Set(_title, kind);
             HudUi.Set(_tier, Strings.F("cartel.track.tier", j.Tier));
-            HudUi.Set(_line, JobText.Fill(t.Line, _interactName));
+            HudUi.Set(_line, JobText.Fill(t.Line, _interactName, _throwName));
             _line.Visible = t.Line.Length > 0; // empty: the kind's name says it all
             _time.Visible = true;
-            HudUi.Set(_note, NoRespect(j.Flags) is { } why and not NoRespectReason.Sandbox ? Strings.T(CartelWords.NoRespect.Key(why)) // sandbox: the panel says it, the leader line stays
+            HudUi.Set(_note, JobDone.WhyNoRespect(j.Flags) is { } why and not NoRespectReason.Sandbox ? Strings.T(CartelWords.NoRespect.Key(why)) // sandbox: the panel says it, the leader line stays
                 : j.Flags.HasFlag(CartelJobFlags.Leader) ? Strings.T("cartel.track.lead") : Strings.F("cartel.track.led", _nameOf(j.Leader)));
             return;
         }
@@ -93,11 +97,6 @@ internal sealed class JobTracker
         HudUi.Set(_line, done ? (j.RespectPaid > 0 ? Strings.F("cartel.end.paid", j.RespectPaid) : Strings.T("cartel.end.unpaid")) : Strings.T(CartelWords.Fail.Key(j.Reason)));
         _line.Visible = true;
         _time.Visible = false;
-        HudUi.Set(_note, done && j.RespectPaid == 0 && NoRespect(j.Flags) is { } unpaid ? Strings.T(CartelWords.NoRespect.Key(unpaid)) : "");
+        HudUi.Set(_note, done && j.RespectPaid == 0 && JobDone.WhyNoRespect(j.Flags) is { } unpaid ? Strings.T(CartelWords.NoRespect.Key(unpaid)) : "");
     }
-
-    /// <summary>Why the receiver earns nothing, from the Job message's flags; null when they earn.</summary>
-    static NoRespectReason? NoRespect(CartelJobFlags f) =>
-        f.HasFlag(CartelJobFlags.Guest) ? NoRespectReason.Guest : f.HasFlag(CartelJobFlags.NotMember) ? NoRespectReason.NotMember
-        : f.HasFlag(CartelJobFlags.Earns) ? null : NoRespectReason.Sandbox;
 }

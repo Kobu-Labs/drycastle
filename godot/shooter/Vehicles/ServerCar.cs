@@ -99,6 +99,14 @@ public partial class ServerCar : CharacterBody3D
     /// </summary>
     public event Action<ServerCar, ushort>? Exploded;
 
+    /// <summary>
+    /// Raised when this vehicle's life ends or starts over: destroyed (blown up, or retired: gone for good) or reset (a spawn, a respawn after destruction, a fall out of the world, a new round). What it carries in
+    /// its cargo volume is gone with it and its cargo doors are shut (CargoServer, docs/cartel.md "Cargo vehicles").
+    /// </summary>
+    public event Action<ServerCar>? LifeEnded;
+
+    void RaiseLifeEnded() => LifeEnded?.Invoke(this);
+
     /// <summary>Tells the listeners of <see cref="Exploded"/>; CarBlast calls it once the vehicle is destroyed.</summary>
     public void RaiseExploded(ushort attacker) => Exploded?.Invoke(this, attacker);
 
@@ -196,6 +204,7 @@ public partial class ServerCar : CharacterBody3D
     {
         DropLinks(); // a destroyed tractor lets its trailer go, a destroyed trailer its tractor
         Life.Destroy(returnAt); Asleep = false; RestCount = 0;
+        LifeEnded?.Invoke(this);
         CollisionLayer = 0;
         Velocity = Vector3.Zero; State.Speed = 0;
         Flight.Velocity = System.Numerics.Vector3.Zero;
@@ -227,6 +236,7 @@ public partial class ServerCar : CharacterBody3D
         TickEndPos = GlobalPosition;
         HitCooldown.Clear();
         Lights = false;
+        LifeEnded?.Invoke(this);
     }
 
     /// <summary>A flying type back on its skids at the origin, rotor stopped. The origin is put on the ground under it when that is within a few metres (a sandbox spawn on a slope).</summary>
@@ -344,7 +354,7 @@ public partial class ServerCar : CharacterBody3D
     public void StepDrive(in DriveInput input, float dt)
     {
         var before = Drive;
-        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : input, dt, DriveWorld!, TowEffectNow());
+        DriveModel.Step(ref Drive, Def, Immobilised ? DriveInput.Held : SpeedGovernor.Apply(input, Drive.Speed, SpeedCap?.Invoke()), dt, DriveWorld!, TowEffectNow());
         if (Towing != null && !StepTowed(dt)) TowModel.Hold(ref Drive, before); // the trailer is blocked: the tractor stops where it was
         if (Drive.Impact > DriveImpact) DriveImpactVelocity = before.Velocity;
         DriveImpact = MathF.Max(DriveImpact, Drive.Impact);
@@ -375,6 +385,14 @@ public partial class ServerCar : CharacterBody3D
         }
         else Velocity = fwd * State.Speed + new Vector3(0, Velocity.Y, 0);
     }
+
+    /// <summary>
+    /// The inputs of an NPC at the wheel (a Rival chase car's driver, docs/cartel.md "Chase cars"): while nobody sits at the wheel and this is set, the vehicle step drives the car by them every tick, as a player's
+    /// inputs would (<see cref="StepDrive"/>), and the car is hurt by what it hits. Null: nobody drives it (it coasts hands off).
+    /// </summary>
+    public DriveInput? NpcInput;
+    /// <summary>The top speed (m/s) its driver's throttle may not push it past right now, or null (none): the Cartel van with a Duffel loaded (<c>CargoServer</c>, cartel.json <c>loaded_max_kmh</c>). Asked at every drive step; the driver's client holds the same cap in its prediction (<see cref="SpeedGovernor"/>).</summary>
+    public Func<float?>? SpeedCap;
 
     /// <summary>The brakes are on and the driver's keys ignored (a Scud truck while its rack moves): every drive step is <see cref="DriveInput.Held"/>. The driver's client does the same from the launcher's state.</summary>
     public bool Immobilised;

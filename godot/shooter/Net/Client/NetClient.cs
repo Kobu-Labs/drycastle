@@ -46,6 +46,7 @@ using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.RozhlasFeed;
 using Drycastle.ShooterCore.Scenery;
 using Drycastle.ShooterCore.Scud;
+using Drycastle.ShooterCore.Status;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using Drycastle.ShooterCore.Weapons;
@@ -145,6 +146,7 @@ public partial class NetClient : Node
     ShotsClient _shots = null!;
     OwnReconcile _reconcile = null!;
     DeathView _death = null!;
+    JobDoneClient _jobDone = null!;
     VehiclesClient _vehicles = null!;
     HudClient _hud = null!;
     EffectEvents _effects = null!;
@@ -183,10 +185,12 @@ public partial class NetClient : Node
     /// <summary>duffels.json (the host sets it from the data directory; the shipped defaults otherwise).</summary>
     public Drycastle.ShooterCore.Cartel.DuffelsFile Duffels = Drycastle.ShooterCore.Cartel.DuffelsFile.Default;
     DuffelsClient _duffels = null!;
+    ReceiversClient _receivers = null!;
     DrillsClient _drills = null!;
     /// <summary>cartel.json (the host sets it from the data directory; the shipped defaults otherwise): the Contact's reach, the ranks, tiers and kinds the panel lists.</summary>
     public Drycastle.ShooterCore.Cartel.CartelFile Cartel = Drycastle.ShooterCore.Cartel.CartelFile.Default;
     CartelClient _cartel = null!;
+    HarvestFillClient _harvestFill = null!;
     SessionLog _session = null!;
     PerfLog _perf = null!;
     /// <summary>The perf harness' client log directory (--perf-out); empty = no log.</summary>
@@ -324,7 +328,7 @@ public partial class NetClient : Node
         _perf = new PerfLog(Ctx, PerfOut, () => _welcomed, () => _server.Peer, Ctx.Snapshots);
         _glass = new GlassClient(Ctx, GlassData);
         _houses.PaneFrameChanged = _glass.OnHousePaneFrame; // a hollow house's pane without a frame shows no shard rim
-        _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id));
+        _driveClient = new DriveClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), id => _scud.Immobilises(id), id => _duffels.SpeedCapOf(id, Cartel));
         _tow = new TowClient(Ctx, _driveClient);
         _crush = new CropCrushClient(Ctx, _driveClient);
         _flight = new FlightClient(Ctx, id => _bigfoot.CarThrown(id), v => _hulls.PlaceSolid(v), _session.FlightCorrection);
@@ -353,9 +357,13 @@ public partial class NetClient : Node
         _screens = new ScreensClient(Ctx, Chat, Sandbox, _loot.Chooser);
         _groundItems = new GroundItemsClient(Ctx, Items, ItemData, _interact, _corpses);
         _duffels = new DuffelsClient(Ctx, Duffels, _interact);
+        _receivers = new ReceiversClient(Ctx, Cartel.Receivers); // the Heists' drops (docs/cartel.md "Receivers"): world entity 59
+        _duffels.Receivers = _receivers; // a Duffel loaded on one is drawn on it
         _drills = new DrillsClient(Ctx, _interact); // the Drills on the Trap houses' safes (#496)
         _cartel = new CartelClient(Ctx, Cartel, () => Chat.Context.IsAdmin, () => _screens.OpenContactPanel());
-        _holdRing = new HoldRing(Ctx, () => _crates.HoldFraction, () => _rozhlas.HoldFraction, () => _thieves.Loot.HoldFraction, () => _minerals.HoldFraction, () => _duffels.ChargeFraction, () => _drills.HoldFraction, () => _cartel.HoldFraction);
+        _harvestFill = new HarvestFillClient(Ctx, _status, Cartel); // the Harvest's fill hold in the plantation: prompt, ring, rustle
+        _holdRing = new HoldRing(Ctx, (() => _crates.HoldFraction, () => "hud.crate.opening"), (() => _rozhlas.HoldFraction, () => "hud.ring.rozhlas"), (() => _thieves.Loot.HoldFraction, () => "hud.ring.loot"), (() => _minerals.HoldFraction, () => "hud.ring.mineral"),
+            (() => _drills.HoldFraction, () => _drills.RingKey), (() => _cartel.HoldFraction, () => "cartel.ring.handover"), (() => _harvestFill.HoldFraction, () => "cartel.ring.fill"));
         _crates = new CarePackagesClient(Ctx, _interact, _holdRing);
         _missile = new MissileClient(Ctx, _blastDust, _markers);
         _turrets = new TurretsClient(Ctx);
@@ -368,6 +376,9 @@ public partial class NetClient : Node
         _binoculars = new BinocularsClient(Ctx, Items, ItemData, _hulls, _animals, () => _pounce.Pinned);
         Ctx.Remotes.Appeared += _binoculars.OnAppeared;
         _death = new DeathView(Ctx, _pounce, _corpses);
+        _jobDone = new JobDoneClient(Ctx, _cartel.Done, Cartel.JobDoneCinematic, () => Ctx.Cars.MySeat() is { } ride && _flight.DefOf(ride.Car) != null);
+        _cartel.CameraAllowed = _jobDone.CameraAllowed; // a Job done: the cinematic takes the camera and the controls for about 10 s, where the view can be filmed
+        _death.Pulled = _jobDone.Camera; // on foot it is the camera composer's last word
         _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, at => _rockets.HomingKillShown(at));
@@ -416,6 +427,7 @@ public partial class NetClient : Node
         _rozhlas.Reset(); // the mic is shut
         _drills.Reset(); // the drills' sounds stop
         _cartel.Clear();
+        _harvestFill.Clear();
         _server.Disconnect();
         Ctx.Remotes.Clear();
         foreach (var r in Ctx.Rockets.Values) if (GodotObject.IsInstanceValid(r.Node)) r.Node.QueueFree();
@@ -452,13 +464,13 @@ public partial class NetClient : Node
 
     /// <summary>
     /// The prompt line of the frame: what the keys do where the player stands, from the ride's own prompt and the other features', in their order of priority (a placing turret owns it). A Duffel in
-    /// reach comes right after: the server's interact key takes it before the Loot, the doors and the seats. While carrying one, the seat in reach is refused, so its "get in" says why instead.
+    /// reach comes right after: the server's interact key takes it before the Loot, the doors and the seats; a cargo vehicle's doors (or the take-out) come after the village doors, before the seat. While carrying one, the seat in reach is refused, so its "get in" says why instead.
     /// </summary>
     string? PromptLine(string? ride)
     {
         ride = _duffels.InsteadOfRide(ride);
-        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
-            ?? _minerals.Prompt() ?? _crates.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _duffels.CarryHint();
+        return _vehicles.LadderPrompt() ?? _turrets.Prompt() ?? _duffels.Prompt() ?? _thieves.Loot.Prompt() ?? _doors.DoorPrompt(Ctx.Driving) ?? _receivers.Prompt() ?? _duffels.CargoPrompt() ?? _scud.LoadPrompt(ride) ?? ride ?? _mass.Prompt() ?? _rozhlas.Prompt()
+            ?? _minerals.Prompt() ?? _crates.Prompt() ?? _drills.Prompt() ?? _groundItems.Prompt() ?? _loot.Prompt() ?? _vehicles.LadderReachPrompt() ?? _cartel.Prompt() ?? _harvestFill.Prompt() ?? _duffels.CarryHint();
     }
 
     void HudWelcome()
@@ -474,6 +486,7 @@ public partial class NetClient : Node
         Ctx.Hud.AttachMineralLog(); // N
         Ctx.Hud.AttachContactPanel(new Drycastle.Shooter.Cartel.ContactPanel(_cartel)); // the interact key at the Contact (#494)
         Ctx.Hud.AttachJobTracker(_cartel.Tracker, _cartel.KindName, id => Ctx.Names.GetValueOrDefault(id, Strings.F("player.unknown", id)));
+        Ctx.Hud.AttachJobDone(_cartel.Done);
         _hunts.Data.RequestLog(0); // learns the player's own id in the log (their own announcements say "you"), and warms My Log
         Ctx.Hud.Minimap.Build(Map); // once per connection; the texture comes from the map's parcels and roads (ticket #119)
         Ctx.Hud.PrewarmTacticalMap(GetViewport().GetVisibleRect().Size); // the full-screen map's picture is made on a worker meanwhile
@@ -561,9 +574,11 @@ public partial class NetClient : Node
         _poseDemo?.Tick();
         _corpses.Render(delta);
         _groundItems.Render();
+        _receivers.Render((float)delta); // the Heists' Receivers (their pose, a helicopter's rotors), before the Duffels that ride on them
         _duffels.Render(); // the Duffels: on backs, on the ground, in flight; the own one burdens the body
         _drills.Render(delta); // the drills on the safes, their sound and sparks, the opened doors, the Drill panel
         _cartel.Render(delta); // the Job tracker's clock, the Contact's key and his panel's reach
+        _harvestFill.Render(); // the rustle of every filler
         _crates.Render();
         _minerals.Render();
         _weather.Render(); // the rain round the camera and its sound
@@ -586,6 +601,7 @@ public partial class NetClient : Node
     void RenderVehicles(double delta)
     {
         _vehicles.Render(delta);
+        _duffels.RenderLoaded(); // the bags on the vehicles and Receivers, from the transforms they were just drawn at
         _harvester.Render((float)delta);
         _aircraftClient.Render(delta);
     }
@@ -614,14 +630,18 @@ public partial class NetClient : Node
     {
         _water.Render();
         _held.ShowViewmodel();
+        _jobDone.Frame((float)delta); // the cinematic's skip keys, music and flash
+        if (_jobDone.Active) Ctx.Viewmodel.Visible = false; // the camera is out from the body: the weapon in the hand would hang in the air
+        _ownFigure.Seen = _jobDone.Active; // ...and the body is drawn instead
         // the own body's shadow on foot (#319); seated, the rider's own figure is the body
-        _ownFigure.Update(Ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && !Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle && _rider.SelfView == null, _held.ShownId);
+        _ownFigure.Update(Ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && !Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle && _rider.SelfView == null, _held.ShownId, _status.Has(Ctx.MyId, StatusKind.Filling));
         _thrower.UpdateArc();
         _demon.UpdateQuake(delta);
         _blastDust.Update(); // before the shake: a blast wave that arrives this frame shakes this frame
         Ctx.Shake.Update(delta);
         High.Update(delta); // a high player's sway, before the roll is composed
         FadeOwnCorrection(delta);
+        _jobDone.ApplyInVehicle(); // last: the cinematic's camera over the chase or seat camera
     }
 
     void OnServerGone()
@@ -763,8 +783,10 @@ public partial class NetClient : Node
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
         _weather.OnEvent(kind, payload); // the thunderstorm: the sky, the flash and the thunder of a strike (#230)
         _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
+        _receivers.OnEvent(kind, payload); // what the interact key does at a Receiver's Cartel man
         _drills.OnEvent(kind, payload); // the Drills on the safes near the player, and what the key's hold would do (#496)
         _cartel.OnEvent(kind, payload); // the Cartel: the own standing, Job and objective, everyone's rank-ups (#494)
+        _harvestFill.OnEvent(kind, payload); // what the plantation's hold does for the player: fill a duffel, or why not (#437)
         _effects.OnEvent(kind, payload); // the ammo, shots, launches, hits, blasts, and the street lamps and sign plates
         _match.OnEvent(kind, payload); // the match: phase, scoreboard, kills, the own spawn and death
         Loadouts.OnEvent(kind, payload);
@@ -835,6 +857,7 @@ public partial class NetClient : Node
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
         if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
+        _jobDone.FilterInput(ref mi); // the Job-done cinematic: the body stands, a driver brakes, the heading is held
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _duffels.TickKey(mi, dt); // the own pick-up, drop and throw of a Duffel, predicted from the keys as sent: this input runs with the burden they leave
@@ -851,6 +874,7 @@ public partial class NetClient : Node
         _crates.Tick(use, dt);
         _rozhlas.TickHold(use, dt);
         _drills.TickHold(use, dt);
+        _harvestFill.TickHold(use, dt);
         _holdRing.Show(dt);
     }
 

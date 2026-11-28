@@ -1,6 +1,8 @@
 using Godot;
 using Drycastle.Shooter.Net.Bots;
+using Drycastle.Shooter.Net.Server.Cartel;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Thieves;
 using Drycastle.ShooterCore.Vehicles;
 using NVec2 = System.Numerics.Vector2;
@@ -24,6 +26,7 @@ internal sealed class RaidLauncher
     readonly Func<FlightBounds> _bounds;
     readonly Func<NVec2?> _parkCentre;
     readonly Random _rng;
+    readonly OpenGround? _open;
     RoadGraph? _roads;
     RoadGraph? _routeRoads;
     List<ResolvedRoute>? _routes;
@@ -32,9 +35,9 @@ internal sealed class RaidLauncher
     ResolvedRoute? _waveRoute;
 
     public RaidLauncher(ServerContext ctx, ThievesFile data, ThievesEvent wave, RaidRoster roster, Drycastle.MapLoader.MapLoader? map, Func<BotNav?> nav, Func<FlightBounds> bounds,
-        Func<NVec2?> churchDoorway, Random rng)
+        Func<NVec2?> churchDoorway, Random rng, OpenGround? open = null)
     {
-        _ctx = ctx; _data = data; _wave = wave; _roster = roster; _map = map; _nav = nav; _bounds = bounds; _rng = rng;
+        _ctx = ctx; _data = data; _wave = wave; _roster = roster; _map = map; _nav = nav; _bounds = bounds; _rng = rng; _open = open;
         _parkCentre = () => data.Raids.ParkCentre is { } c ? new NVec2(c[0], c[1]) : churchDoorway(); // where a van parks near: raids.park_centre, else the church's doorway, else null (the end of its route)
     }
 
@@ -144,8 +147,9 @@ internal sealed class RaidLauncher
 
     /// <summary>
     /// A Heist's Assault (docs/cartel.md "Assaults"): a van of the Rival crew in from the map's edge over the roads, as a Raid's (ADR 0021), to the road stop nearest <paramref name="target"/> that is
-    /// not within used_apart_m of <paramref name="used"/> (the Heist's earlier stops and its Cartel van) and lets the crew step out on the navigation mesh; with no way in, parked on the road spot
-    /// nearest it. The van stays until the Job removes it; <paramref name="gang"/> (the Rival crew's, empty) gets out in <paramref name="order"/> and heads for <paramref name="post"/> (snapped onto the
+    /// not within used_apart_m of <paramref name="used"/> (the Heist's earlier stops and its Cartel van) and lets the crew step out on the navigation mesh, and from there straight across open ground (a field,
+    /// a meadow: never a building, trunk, fence or water, <see cref="AssaultTail"/>) to park off_road.park_short_m short of the target when that brings it closer; with no way in, parked on the road spot
+    /// nearest it (and driving on over open ground from there). The van stays until the Job removes it; <paramref name="gang"/> (the Rival crew's, empty) gets out in <paramref name="order"/> and heads for <paramref name="post"/> (snapped onto the
     /// mesh). Null with no navigation mesh, no road, no stop or no room in the world.
     /// </summary>
     public Raid? LaunchAssault(NVec2 target, IReadOnlyList<NVec2> used, IReadOnlyList<GangMemberKind> order, ThiefGang gang, NVec3 post)
@@ -156,6 +160,9 @@ internal sealed class RaidLauncher
         var plan = RaidPlanner.Plan(Roads, min, max, Array.Empty<NVec2>(), used, new[] { target }, vc, _rng, AcceptStop)
             ?? RaidPlanner.Fallback(Roads, target, vc.HalfLengthM * 4, _rng, AcceptStop);
         if (plan == null) { GD.Print($"server: Assault to ({target.X:F0},{target.Y:F0}): no road stop the crew can step out at"); return null; }
+        var onRoad = plan.StopAt;
+        if (_open is { } open) plan = AssaultTail.Extend(Roads, plan, target, used, vc, open.Numbers, (a, b) => open.Line(a, b, vc.HalfWidthM), AcceptStop);
+        var overOpen = plan.StopAt != onRoad;
         var exit = plan.Out ?? RaidPlanner.Exit(Roads, plan, min, max, vc);
         var start0 = plan.In.IsEmpty ? plan.StopAt : plan.In.Start;
         var start = new NVec3(start0.X, _map?.GroundHeightOrMean(start0.X, start0.Y) ?? 0f, start0.Y);
@@ -163,7 +170,7 @@ internal sealed class RaidLauncher
         stays.StaySeconds = float.PositiveInfinity; // it never drives off: the Job removes it
         var snapped = nav.Snap(new Vector3(post.X, post.Y, post.Z)).ToNumerics();
         var raid = _roster.Launch(plan, exit, start, order, gang, stays, p => nav.Snap(new Vector3(p.X, p.Y, p.Z)).ToNumerics(), FleePoint, Ground, snapped);
-        if (raid != null) GD.Print($"server: Assault van {(plan.Fallback ? "parked (fallback)" : $"in from ({start0.X:F0},{start0.Y:F0}), {plan.In.Length:F0} m of road")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}), crew of {order.Count}");
+        if (raid != null) GD.Print($"server: Assault van {(plan.Fallback && !overOpen ? "parked (fallback)" : $"in from ({start0.X:F0},{start0.Y:F0}), {plan.In.Length:F0} m of way")} to the stop at ({plan.StopAt.X:F0},{plan.StopAt.Y:F0}){(overOpen ? $", the last {NVec2.Distance(onRoad, plan.StopAt):F0} m over open ground from the road at ({onRoad.X:F0},{onRoad.Y:F0})" : "")}, crew of {order.Count}");
         return raid;
     }
 

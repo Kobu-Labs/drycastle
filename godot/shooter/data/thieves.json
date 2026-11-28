@@ -27,6 +27,9 @@
     // A player who hit any member of a Raid (bullet, headshot, explosive, vehicle weapon or ramming) is fought by the whole Raid for forget_seconds after their LAST hit (each hit starts it again), or until they die or are
     // give_up_m from every living member. Then the members go back to what they did: Thieves steal, Enforcers and the boss guard.
     "aggro": { "forget_seconds": 8, "give_up_m": 30 },
+    // The progress check of a member that is trying to get somewhere (shared with the Rival crew): under stuck_m covered in stuck_seconds it drops its route and takes another spot round its target or a fresh
+    // route; still stuck at snap_seconds (from the first stand-still) it is moved to the nearest walkable point of the navigation mesh.
+    "stuck": { "stuck_m": 1, "stuck_seconds": 3, "snap_seconds": 6 },
     "corpse_seconds": 10,
     // XP for killing a member (no kill feed, streak or assist).
     "kill_xp": 5,

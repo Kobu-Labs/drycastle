@@ -95,7 +95,8 @@ public class RivalCrewTests
         var hp = GangRules.PackHp(GangMemberKind.Gunman, true, 0);
         Assert.Equal((GangMemberKind.Gunman, true), (GangRules.KindOf(hp), GangRules.AliveOf(hp)));
         Assert.Equal(GangMemberState.Posted, GangRules.StateOf(25));
-        Assert.Equal(GangMemberState.Idle, GangRules.StateOf(26));
+        Assert.Equal(GangMemberState.Remount, GangRules.StateOf(26));
+        Assert.Equal(GangMemberState.Idle, GangRules.StateOf(27)); // a state this build does not know stands
         var rig = new Rig();
         var crew = rig.Crew(_ => false);
         var looks = new HashSet<string>();

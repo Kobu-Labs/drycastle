@@ -1,21 +1,28 @@
 using Godot;
 using Drycastle.Shooter.Menu;
+using Drycastle.Shooter.Net.Client.CarPool;
 using Drycastle.Shooter.Net.Client.Gear;
+using Drycastle.Shooter.Net.Client.Seating;
 using Drycastle.ShooterCore.Cartel;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Menu;
 using Drycastle.ShooterCore.Movement;
 using Drycastle.ShooterCore.Net;
+using Drycastle.ShooterCore.Vehicles;
+using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Client.Incidents;
 
 /// <summary>
 /// The Duffels on the client (GLOSSARY "Duffel"; world entity <see cref="DuffelRules.TypeId"/>; duffels.json <c>view</c>). Everyone sees a carried Duffel on its carrier's back and a lying or flying one
-/// where it is (interpolated); a loaded one is the cargo volume's to show and is hidden here. The own carried Duffel is not drawn (the eye is inside the body), but it burdens the predicted body
+/// where it is (interpolated); a loaded one is drawn on its slot of its vehicle or of a Heist's Receiver (the owner field says which, the state byte's high bits the slot), fixed to it. The own carried Duffel is not drawn (the eye is inside the body), but it burdens the predicted body
 /// (<see cref="Characters.Player.Burden"/>, the server's numbers) from the very input that takes it or lets it go, as the server does: the client predicts its own pick-up (the interact key's press
-/// on the Duffel in reach), drop and throw (the throw key's release), and each predicted input keeps the burden it ran with for the replay (<see cref="OwnPlayer.OwnPrediction"/>), so carrying
-/// corrects nothing. Only the server knows a Duffel's party, so the key's owner and the prompt follow its <see cref="EventKind.DuffelReach"/>; the throw key's charge fills the hold ring, counted as
-/// the server counts it (<see cref="DuffelThrowKey"/>). A refusal (<see cref="EventKind.DuffelNotice"/>) is a toast.
+/// on the Duffel in reach) and throw (the throw key's fresh press), and each predicted input keeps the burden it ran with for the replay (<see cref="OwnPlayer.OwnPrediction"/>), so carrying
+/// corrects nothing. Only the server knows a Duffel's party, so the key's owner and the prompt follow its <see cref="EventKind.DuffelReach"/>. A refusal (<see cref="EventKind.DuffelNotice"/>) is a toast.
+/// <para>
+/// The cargo vehicles' side (docs/cartel.md "Cargo vehicles"): the doors' state (<see cref="EventKind.CargoDoors"/>) is kept in <see cref="ClientCars.CargoOpen"/> for the renderer; the prompts "open / close the boot" (the interact key, within the
+/// access radius of the access point of a type with doors) and "take a duffel out" (the throw key, as the server says: <see cref="EventKind.DuffelTake"/>), and the own take-out is predicted like the pick-up.
+/// </para>
 /// </summary>
 public sealed class DuffelsClient
 {
@@ -28,7 +35,7 @@ public sealed class DuffelsClient
     /// <summary>The Duffel the server last said this player's key would pick up (0 none).</summary>
     ushort _reach;
     /// <summary>
-    /// The kind this player carries at the newest input, as predicted (null none): taken at the press that picks one up, gone at the throw key's release. The replica wins when it still
+    /// The kind this player carries at the newest input, as predicted (null none): taken at the press that picks one up, gone at the throw key's press. The replica wins when it still
     /// disagrees after <see cref="ConfirmSeconds"/> (a pick-up the server refused, or a change only the server made: a Job's gift, a drop on death).
     /// </summary>
     DuffelKind? _carried;
@@ -36,12 +43,25 @@ public sealed class DuffelsClient
     DuffelKind? _replicated;
     /// <summary>Runs while a prediction waits for the replica to agree.</summary>
     Countdown _unconfirmed;
-    Edge _use;
-    DuffelThrowKey _key;
-    CachedLine _take, _carry, _noSeat;
+    Edge _use, _throw;
+    CachedLine _take, _carry, _noSeat, _takeOut;
+    /// <summary>The vehicle the server last said the throw key would take a Duffel out of (0 none) and the kind that would come out.</summary>
+    ushort _takeVehicle;
+    DuffelKind _takeKind;
+    /// <summary>The door prompt as last built: rebuilt only when the vehicle's label, the doors' state or the key changes.</summary>
+    string? _doorsText;
+    /// <summary>The take-out and doors prompts as one line: rebuilt only when either of them is a different string.</summary>
+    string? _bothText, _bothFirst, _bothSecond;
+    string _doorsLabel = "";
+    bool _doorsOpen;
+    Binding _doorsKey;
 
     /// <summary>Longer than a round trip takes: a prediction the replica has not confirmed by then was wrong.</summary>
     const float ConfirmSeconds = 1.5f;
+
+    /// <summary>The Receivers' view: where a Duffel loaded on one is drawn (set by the host, which builds both).</summary>
+    internal ReceiversClient? Receivers { set => _receivers = value; }
+    ReceiversClient? _receivers;
 
     internal DuffelsClient(ClientContext ctx, DuffelsFile data, InteractTargets targets)
     {
@@ -51,12 +71,11 @@ public sealed class DuffelsClient
         ctx.WorldEntities.Despawned += OnDespawned;
     }
 
-    /// <summary>How full the hold ring is for the throw key's charge (0 when not charging).</summary>
-    public float ChargeFraction => _key.State == DuffelKeyState.Charging && _key.Held >= _data.TapSeconds ? MathF.Max(0.05f, _key.Charge(_data)) : 0f;
-
     public void OnEvent(EventKind kind, byte[] payload)
     {
         if (kind == EventKind.DuffelReach && DuffelCodec.TryDecodeReach(payload, out var id)) _reach = id;
+        else if (kind == EventKind.DuffelTake && DuffelCodec.TryDecodeTake(payload, out var vehicle, out var takeKind)) { _takeVehicle = vehicle; _takeKind = takeKind; }
+        else if (kind == EventKind.CargoDoors && CargoDoorsCodec.TryDecode(payload, out var car, out var open)) { if (open) _ctx.Cars.CargoOpen.Add(car); else _ctx.Cars.CargoOpen.Remove(car); }
         else if (kind == EventKind.DuffelNotice && DuffelCodec.TryDecodeNotice(payload, out var notice))
             UiShell.Instance?.Toast(notice switch
             {
@@ -117,12 +136,56 @@ public sealed class DuffelsClient
             if (!_ctx.WorldEntities.Entities.TryGetValue(id, out var e)) { v.Node.Visible = false; continue; }
             var state = DuffelRules.StateOf(e.State.State);
             if (state == DuffelState.Carried) { PlaceCarried(v, e.State.Owner); continue; }
-            if (state == DuffelState.Loaded || e.Buf.At(rt) is not { } s) { v.Node.Visible = false; continue; }
+            if (state == DuffelState.Loaded) continue; // placed by RenderLoaded, after the vehicles are drawn
+            if (e.Buf.At(rt) is not { } s) { v.Node.Visible = false; continue; }
             v.Node.GlobalPosition = new Vector3(s.Pos.X, s.Pos.Y, s.Pos.Z);
             v.Node.Rotation = new Vector3(0, s.Yaw, 0);
             v.Node.Visible = true;
         }
         _targets.Duffel = _reach != 0 && _carried == null && !_ctx.Dead && !_ctx.Driving && _views.ContainsKey(_reach) ? _reach : null;
+    }
+
+    /// <summary>
+    /// Every frame, after the vehicles and the Receivers are drawn (the same frame, so a bag never trails its vehicle by the frame's motion): places every loaded Duffel on its vehicle or Receiver from the drawn transform.
+    /// </summary>
+    public void RenderLoaded()
+    {
+        foreach (var (id, v) in _views)
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && DuffelRules.StateOf(e.State.State) == DuffelState.Loaded)
+                PlaceLoaded(v, e.State.Owner, DuffelRules.SlotOf(e.State.State));
+    }
+
+    /// <summary>
+    /// The top speed (m/s) the throttle of a vehicle is governed to, or null: it is a Cartel van (<see cref="CartelFile.LoadedCapMps"/>) with a Duffel loaded on it, as the replica says. The server holds the same cap from the
+    /// same fact (<c>CargoServer</c>), so the driver's prediction and the server step alike; a bag loaded or taken out reaches this client a round trip later than the server, and the prediction is corrected for that moment only.
+    /// </summary>
+    internal float? SpeedCapOf(ushort vehicle, CartelFile cartel)
+    {
+        if (!_ctx.Cars.TryGet(vehicle, out var car) || _ctx.Vehicles == null || car.Kind >= _ctx.Vehicles.Vehicles.Count || cartel.LoadedCapMps(_ctx.Vehicles.Vehicles[car.Kind].Id) is not { } cap) return null;
+        foreach (var (id, _) in _views)
+            if (_ctx.WorldEntities.Entities.TryGetValue(id, out var e) && DuffelRules.StateOf(e.State.State) == DuffelState.Loaded && e.State.Owner == vehicle) return cap;
+        return null;
+    }
+
+    /// <summary>
+    /// Loaded: on its slot of its vehicle (vehicles.json cargo_volume slots, the vehicle's frame), fixed to the body as the vehicle is drawn this frame (it leans over its wheels with the hull), no physics, no animation.
+    /// Seen through the open doors and the windows. Hidden while the vehicle is not known here yet (the Duffel's spawn can arrive before the vehicle's first record) or has a type without that slot.
+    /// </summary>
+    void PlaceLoaded(View v, ushort vehicle, int slot)
+    {
+        if (ReceiverRules.IsReceiver(vehicle, out var receiver)) // the owner field of a Duffel on a Heist's Receiver: its entity id with the Receiver bit
+        {
+            if (_receivers?.SlotTransform(receiver, slot) is { } onReceiver) { v.Node.GlobalTransform = onReceiver; v.Node.Visible = true; }
+            else v.Node.Visible = false;
+            return;
+        }
+        if (!_ctx.Cars.TryGet(vehicle, out var car) || car.Destroyed || _ctx.Vehicles == null || car.Kind >= _ctx.Vehicles.Vehicles.Count
+            || _ctx.Vehicles.Vehicles[car.Kind].CargoVolume?.Slot(slot) is not { } place || !GodotObject.IsInstanceValid(car.SeatAnchor)) { v.Node.Visible = false; return; }
+        var body = car.SeatAnchor.GlobalTransform;
+        body.Basis = body.Basis.Orthonormalized();
+        var at = new Transform3D(new Basis(Vector3.Up, Mathf.DegToRad(place.YawDeg)), new Vector3(place.Position.X, place.Position.Y, place.Position.Z));
+        v.Node.GlobalTransform = body * at;
+        v.Node.Visible = car.Node.Visible;
     }
 
     /// <summary>On the carrier's back, turned with the figure; the own one is not drawn.</summary>
@@ -137,8 +200,8 @@ public sealed class DuffelsClient
     }
 
     /// <summary>
-    /// Runs on the input tick with the input about to be predicted and sent: predicts the own pick-up (the interact key's press on the Duffel in reach), drop and throw (the throw key, followed as
-    /// the server follows it; it fills the ring), and sets the body's burden for this input. The server takes the Duffel before it moves the body on that input, so this runs before the step.
+    /// Runs on the input tick with the input about to be predicted and sent: predicts the own pick-up (the interact key's press on the Duffel in reach) and throw (the throw key's fresh press,
+    /// followed as the server follows it), and sets the body's burden for this input. The server takes the Duffel before it moves the body on that input, so this runs before the step.
     /// </summary>
     public void TickKey(in MoveInput mi, float dt)
     {
@@ -147,7 +210,11 @@ public sealed class DuffelsClient
         else if (_unconfirmed.Ready) _carried = _replicated;
         var onFoot = !_ctx.Dead && !_ctx.Driving;
         if (_use.Pressed(mi.Has(MoveButtons.Use)) && onFoot && _carried == null && _targets.Duffel is { } id && _views.TryGetValue(id, out var v)) Predict(v.Kind);
-        if (_key.Tick(mi.Has(MoveButtons.DuffelThrow), _carried != null && onFoot, dt, _data, out _) != DuffelRelease.None) Predict(null);
+        if (_throw.Pressed(mi.Has(MoveButtons.DuffelThrow)) && onFoot)
+        {
+            if (_carried != null) Predict(null);
+            else if (_takeVehicle != 0) Predict(_takeKind); // at an open cargo area with one of the party's in it: the take-out, as the server will do it
+        }
         if (_ctx.Me != null) _ctx.Me.Burden = _carried is { } kind && !_ctx.Dead ? _data.BurdenOf(kind) : MoveBurden.None;
     }
 
@@ -161,11 +228,48 @@ public sealed class DuffelsClient
     public string? Prompt() =>
         _targets.Duffel is { } id && _views.TryGetValue(id, out var v) ? _take.Get(v.Kind, "interact", "hud.duffel.take") : null;
 
-    /// <summary>While carrying (and not charging): how to throw or put it down; the last line of the prompt chain.</summary>
-    public string? CarryHint() =>
-        _carried is { } kind && _key.State == DuffelKeyState.Idle ? _carry.Get(kind, "duffel_throw", "hud.duffel.carry") : null;
+    /// <summary>
+    /// At a cargo vehicle: "take a duffel out" while the server says the throw key would (empty hands, the party's Duffel loaded in the open cargo area within reach), and the doors' prompt ("open / close the boot")
+    /// while the interact key would work them: both keys do something at an open boot with a bag in it, so both show, in one line ("X  Take a duffel out  ·  E  Close the boot"). Null elsewhere. The doors' key is not predicted: the state comes back as the event.
+    /// </summary>
+    public string? CargoPrompt()
+    {
+        if (_ctx.Dead || _ctx.Driving) return null;
+        var doors = DoorsPrompt();
+        if (_takeVehicle == 0 || _carried != null) return doors;
+        var take = _takeOut.Get(_takeKind, "duffel_throw", "hud.duffel.takeout");
+        if (doors == null) return take;
+        if (_bothText == null || !ReferenceEquals(_bothFirst, take) || !ReferenceEquals(_bothSecond, doors)) { _bothFirst = take; _bothSecond = doors; _bothText = Strings.F("hud.prompt.join", take, doors); }
+        return _bothText;
+    }
 
-    /// <summary>The ride's prompt, or while carrying on foot (the server refuses a carrier every seat) why there is no seat and how to put the Duffel down, in place of its "get in".</summary>
+    /// <summary>The prompt of the nearest cargo vehicle with doors whose access point the own body stands at (the server's rule, from the drawn pose, its slope too), or null.</summary>
+    string? DoorsPrompt()
+    {
+        if (_ctx.Me == null || _ctx.Vehicles == null) return null;
+        var feet = _ctx.Me.GlobalPosition;
+        var at = new NVec3(feet.X, feet.Y, feet.Z);
+        CarView? best = null; VehicleCargoVolumeDef? bestDef = null; var bd = float.PositiveInfinity;
+        foreach (var car in _ctx.Cars.Values)
+        {
+            if (car.Destroyed || car.Kind >= _ctx.Vehicles.Vehicles.Count || _ctx.Vehicles.Vehicles[car.Kind].CargoVolume is not { Doors.Count: > 0 } def) continue;
+            var p = car.Node.GlobalPosition;
+            var rot = car.Node.Rotation; // Godot's order, as the server's attitude is (FlightMath.Rotate): x pitch, y yaw, z roll; a car on a slope has them
+            if (CargoVolume.AccessDistance(def, new NVec3(p.X, p.Y, p.Z), rot.Y, rot.X, rot.Z, at) is { } d && d < bd) { best = car; bestDef = def; bd = d; }
+        }
+        if (best == null || bestDef == null) return null;
+        var open = _ctx.Cars.CargoOpen.Contains(best.Id);
+        var label = bestDef.Label.Length > 0 ? bestDef.Label : Strings.T("hud.cargo.area");
+        var key = GameSettings.Current.Keys.Get("interact");
+        if (_doorsText != null && _doorsOpen == open && _doorsLabel == label && _doorsKey == key) return _doorsText;
+        _doorsOpen = open; _doorsLabel = label; _doorsKey = key;
+        return _doorsText = Strings.F(open ? "hud.cargo.close" : "hud.cargo.open", InputBindings.Name(key), label);
+    }
+
+    /// <summary>While carrying: how to throw it; the last line of the prompt chain.</summary>
+    public string? CarryHint() => _carried is { } kind ? _carry.Get(kind, "duffel_throw", "hud.duffel.carry") : null;
+
+    /// <summary>The ride's prompt, or while carrying on foot (the server refuses a carrier every seat) why there is no seat and how to get rid of the Duffel, in place of its "get in".</summary>
     public string? InsteadOfRide(string? ride) =>
         ride != null && _carried is { } kind && !_ctx.Driving ? _noSeat.Get(kind, "duffel_throw", "hud.duffel.noseat") : ride;
 

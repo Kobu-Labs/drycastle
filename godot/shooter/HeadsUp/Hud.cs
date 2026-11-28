@@ -66,6 +66,7 @@ public partial class Hud : CanvasLayer
     DustVeil _dust = null!;
     SpawnProtection _protection = null!;
     PounceWash _pounce = null!;
+    FlashVeil _flash = null!;
     ScopeView _scope = null!;
     Crosshair _crosshair = null!;
     HitMarker _hit = null!;
@@ -83,6 +84,7 @@ public partial class Hud : CanvasLayer
     SeatPanel _seats = null!;
     TopBar _top = null!;
     JobTracker _job = null!;
+    JobDoneBanner _jobDone = null!;
     KillFeed _feed = null!;
     FpsCounter _fps = null!;
     RespawnScreen _respawn = null!;
@@ -103,6 +105,7 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         _dust = new DustVeil(_root); // first: the dust is behind every HUD element
+        _flash = new FlashVeil(_root); // the Job-done cinematic's flash: behind every widget, over the world
         _protection = new SpawnProtection(_root);
         _pounce = new PounceWash(_root);
         _scope = new ScopeView(_root);
@@ -122,6 +125,7 @@ public partial class Hud : CanvasLayer
         _seats = new SeatPanel(_root); // the vehicle seat schematic above the vehicle readout
         _top = new TopBar(_root, _state);
         _job = new JobTracker(_root, _mapMarkers); // the cartel Job's tracker and end card at the right edge, under the kill feed (#494)
+        _jobDone = new JobDoneBanner(_root); // the "Job done" banner of a succeeded Job, upper middle
         _feed = new KillFeed(this, _root.Theme, _state, id => KillWeaponName?.Invoke(id)); // beside the panels root, not under it: a control session hides the panels and keeps the feed (ticket #154)
         _fps = new FpsCounter(_root, _feed, _state); // after the feed: it moves the feed clear of the chip
         _protection.AddChip(_root);
@@ -177,6 +181,7 @@ public partial class Hud : CanvasLayer
         var now = HudUi.Now;
         _top.Tick();
         _job.Tick();
+        _jobDone.Tick();
         _respawn.Tick();
         _protection.Tick(now);
         _hit.Tick(now);
@@ -251,8 +256,8 @@ public partial class Hud : CanvasLayer
     /// <summary>Context prompt under the crosshair, e.g. "E  Enter car"; null hides it.</summary>
     public void SetPrompt(string? text) => _prompt.SetPrompt(text);
 
-    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set): a fill from 0 to 1, or null to hide it.</summary>
-    public void SetRadial(float? fraction) => _prompt.SetRing(fraction);
+    /// <summary>The hold ring above the prompt (care package open, #151; taking the rozhlas set; the Harvest's fill): a fill from 0 to 1, or null to hide it, with the string key of its label.</summary>
+    public void SetRadial(float? fraction, string? labelKey = null) => _prompt.SetRing(fraction, labelKey);
 
     /// <summary>The Drill on the safe a party player is near (#496); null hides the panel.</summary>
     public void SetDrill(DrillHudInfo? info) => _drill.Set(info);
@@ -315,6 +320,12 @@ public partial class Hud : CanvasLayer
 
     /// <summary>The red wash of the demon's pounce: its opacity (0 off).</summary>
     public void SetPounceWash(float alpha) => _pounce.Set(alpha);
+
+    /// <summary>The white flash of the "Job done" cinematic: its opacity (0 off).</summary>
+    public void SetFlash(float alpha) => _flash?.Set(alpha);
+
+    /// <summary>The crosshair is hidden while the "Job done" cinematic's camera is out from the body.</summary>
+    public void SetCinematicHidesCrosshair(bool hide) => _crosshair?.SetCinematic(hide);
 
     /// <summary>The blood's intensity, 0 (off) to 1 (the death screen's full spatter); <paramref name="seed"/> picks the pattern.</summary>
     public void SetBlood(float intensity, int seed = 0) => _blood?.Set(intensity, seed);
@@ -425,6 +436,9 @@ public partial class Hud : CanvasLayer
     // ---- the cartel (#494) ----
     /// <summary>The player's Job tracker: its panel and its marker on the maps and in the world follow it every frame.</summary>
     public void AttachJobTracker(CartelTracker tracker, Func<string, string> kindName, Func<ushort, string> nameOf) => _job.Attach(tracker, kindName, nameOf);
+
+    /// <summary>The "Job done" banner follows this (the Cartel client's).</summary>
+    public void AttachJobDone(JobDone done) => _jobDone.Attach(done);
 
     public bool ContactPanelOpen => _screens?.ContactPanelOpen ?? false;
     public void AttachContactPanel(ContactPanel panel) => _screens.AttachContactPanel(panel);

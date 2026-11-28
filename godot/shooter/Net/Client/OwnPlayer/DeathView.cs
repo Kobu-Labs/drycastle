@@ -74,14 +74,18 @@ internal sealed class DeathView
         if (_deathHidesCorpse.Update(hide) || hide) _corpses.ShowOwn(!hide);
     }
 
+    /// <summary>The Job-done pull-back (<see cref="JobDoneCamera.Camera"/>): composed after the pounce and the death, which come first.</summary>
+    public Func<Transform3D, Transform3D?>? Pulled { get; set; }
+
     /// <summary>
     /// The one <see cref="Player.CutCamera"/>: the pounce camera's pose (null when not pounced), and a death's fall on top of it. The fall starts from whatever pose the camera had in its first frame,
-    /// so a death during a pounce continues from the pinned view and never snaps back to the eye.
+    /// so a death during a pounce continues from the pinned view and never snaps back to the eye. With neither, the Job-done pull-back (null when it is not out).
     /// </summary>
     Transform3D? ComposedCamera(Transform3D eye)
     {
         var pounce = _pounce.Camera(eye);
-        return _death.OwnsCamera ? DeathCamera(pounce ?? eye) : pounce;
+        if (_death.OwnsCamera) return DeathCamera(pounce ?? eye);
+        return pounce ?? Pulled?.Invoke(eye);
     }
 
     Transform3D DeathCamera(Transform3D pose)

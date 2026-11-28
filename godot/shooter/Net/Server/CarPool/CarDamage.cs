@@ -41,6 +41,12 @@ internal sealed class CarDamage
     }
 
     /// <summary>
+    /// A bullet or pellets that stopped on the hull (vehicles.json bullet_damage_multiplier): <paramref name="amount"/> is what the round does to a player at that distance. A Rival Gunman's round comes here too
+    /// (attacker 0: nobody is credited; the Cartel van it destroys fails its Heist).
+    /// </summary>
+    public void Bullet(ServerCar car, float amount, ushort attacker, byte weapon) => Damage(car, amount * _vehicles.BulletDamageMultiplier, attacker, weapon, 0);
+
+    /// <summary>
     /// The one crash rule (#417, #431): a collision that took <paramref name="speedLoss"/> m/s from <paramref name="car"/> in one tick, whatever it
     /// met (a wall, a tree, a ledge, the ground under a helicopter, another vehicle, a Raid van). Up to crash_min_speed_loss the hull takes
     /// nothing; the panes crack and shatter by their own two speeds (<see cref="GlassServer.Crash"/>). A type with crash_damage off takes neither.

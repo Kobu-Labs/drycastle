@@ -27,6 +27,8 @@ internal sealed class ClientCars
 
     public IReadOnlyDictionary<ushort, CarView> ById => _byId;
     public IEnumerable<CarView> All => _byId.Values;
+    /// <summary>The same as <see cref="All"/>, as the concrete collection: a <c>foreach</c> over it allocates nothing (the per-frame prompts walk it).</summary>
+    public Dictionary<ushort, CarView>.ValueCollection Values => _byId.Values;
     public int Count => _byId.Count;
 
     /// <summary>The vehicles' one-shots and long sounds, heard from inside by their riders.</summary>
@@ -37,6 +39,9 @@ internal sealed class ClientCars
 
     /// <summary>Who sits in the other seats of each vehicle (seat 1 on), from the snapshot's seat records: an enemy on any seat keeps a vehicle off the map (#313).</summary>
     public readonly Dictionary<ushort, ushort[]> SeatOccupants = new();
+
+    /// <summary>The cargo vehicles whose doors the server says are open (event CargoDoors, also a joiner's catch-up); every other vehicle's are shut. The renderer swings each model's doors to it.</summary>
+    public readonly HashSet<ushort> CargoOpen = new();
 
     public bool TryGet(ushort id, out CarView car) => _byId.TryGetValue(id, out car!);
     public bool Has(ushort id) => _byId.ContainsKey(id);
@@ -56,6 +61,7 @@ internal sealed class ClientCars
     {
         foreach (var v in _byId.Values) if (GodotObject.IsInstanceValid(v.Node)) v.Node.QueueFree();
         _byId.Clear();
+        CargoOpen.Clear();
     }
 
     public void ReleaseSounds()

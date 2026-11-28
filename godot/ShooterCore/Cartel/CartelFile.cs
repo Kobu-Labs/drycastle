@@ -38,6 +38,18 @@ public sealed class CartelFile : IVersioned
     /// <summary>How far (metres) a Job's marker must move before its party is sent the new point (a marker on something that moves is not sent every tick).</summary>
     public float MarkerResendM { get; set; } = 2f;
 
+    /// <summary>The Cartel pallet's bag spots and look (<c>pallet</c>); every Delivery's Duffel lies on one of its spots.</summary>
+    public CartelPalletData Pallet { get; set; } = new();
+
+    /// <summary>The Heists' drops (<c>receivers</c>): which Receiver a Heist hands its Duffels to, and how each looks, holds bags and leaves (docs/cartel.md "Receivers").</summary>
+    public ReceiversData Receivers { get; set; } = new();
+
+    /// <summary>How the Rival crew's vehicles (Assault vans, chase cars) cross open ground when the roads do not bring them closer (<c>off_road</c>; docs/cartel.md "Assaults").</summary>
+    public OffRoadData OffRoad { get; set; } = new();
+
+    /// <summary>The "Job done" cinematic (<c>job_done_cinematic</c>; docs/cartel.md "Job done"): the camera's stages and legs, the flash, the music's fade, the skip.</summary>
+    public JobDoneCinematicData JobDoneCinematic { get; set; } = new();
+
     /// <summary>One section per kind of Job, by the kind's id (<c>test</c>, later <c>delivery</c>, the heists): only that kind reads it.</summary>
     public Dictionary<string, JsonElement> Jobs { get; set; } = new();
 
@@ -79,6 +91,26 @@ public sealed class CartelFile : IVersioned
     /// <summary>A kind's own section, or an undefined element when the file has none (the kind's defaults).</summary>
     public JsonElement JobSection(string kind) => Jobs.TryGetValue(kind, out var s) ? s : default;
 
+    /// <summary>
+    /// The top speed (m/s) of a Cartel van that has a Duffel loaded: <c>loaded_max_kmh</c> of the Heist whose <c>van_type</c> is this vehicle type (the slowest, should two name it), or null for a type no Heist
+    /// uses as its van. The server and the driver's client both ask this, so they hold the same cap (<see cref="Vehicles.SpeedGovernor"/>).
+    /// </summary>
+    public float? LoadedCapMps(string vehicleType)
+    {
+        if (_caps.TryGetValue(vehicleType, out var known)) return known;
+        float? cap = null;
+        foreach (var kind in new[] { HarvestData.KindId, TrapHouseHeistData.KindId }) // the Heists; a section the file lacks is the kind's defaults
+        {
+            var data = DataFile.Section<HeistData>(JobSection(kind), $"cartel.json: jobs.{kind}");
+            if (data.VanType != vehicleType) continue;
+            var mps = data.LoadedMaxKmh / 3.6f;
+            cap = cap is { } c ? MathF.Min(c, mps) : mps;
+        }
+        return _caps[vehicleType] = cap;
+    }
+
+    readonly Dictionary<string, float?> _caps = new(); // the loaded cap by vehicle type, read from the sections once
+
     CartelFile Validate()
     {
         static DataFileException Bad(string text) => new($"cartel.json: {text}");
@@ -94,6 +126,10 @@ public sealed class CartelFile : IVersioned
             if (!ids.Add(r.Id)) throw Bad($"ranks[{i}]: the id '{r.Id}' is used twice");
             if (i > 0 && r.Respect <= Ranks[i - 1].Respect) throw Bad($"ranks[{i}] ({r.Id}): respect must be more than the rank before's");
         }
+        Pallet.Validate();
+        Receivers.Validate();
+        OffRoad.Validate("cartel.json: off_road");
+        JobDoneCinematic.Validate();
         if (Tiers.Count == 0) throw Bad("tiers must list at least one tier");
         if (Tiers.Count > byte.MaxValue) throw Bad("at most 255 tiers");
         for (var i = 0; i < Tiers.Count; i++)

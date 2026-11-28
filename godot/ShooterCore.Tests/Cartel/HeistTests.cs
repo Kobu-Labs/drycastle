@@ -34,7 +34,7 @@ public class HeistTests
         Assert.Equal(d.AssaultGunmen, shipped.AssaultGunmen);
         Assert.Equal(d.AssaultEnforcers, shipped.AssaultEnforcers);
         Assert.Equal((d.BonusRespectPerDuffel, d.MaxCrew, d.MaxAssaultsAlive, d.VanType), (shipped.BonusRespectPerDuffel, shipped.MaxCrew, shipped.MaxAssaultsAlive, shipped.VanType));
-        Assert.Equal((d.FillHoldSeconds, d.AreaMarginM, d.DropMinM, d.DropRadiusM), (shipped.FillHoldSeconds, shipped.AreaMarginM, shipped.DropMinM, shipped.DropRadiusM));
+        Assert.Equal((d.FillHoldSeconds, d.AreaMarginM, d.DropMinM, d.DropGraceSeconds), (shipped.FillHoldSeconds, shipped.AreaMarginM, shipped.DropMinM, shipped.DropGraceSeconds));
     }
 
     [Fact]
@@ -75,12 +75,12 @@ public class HeistTests
     }
 
     [Fact]
-    public void AnAssaultsCrewHasGunmenPerExtraMemberWithinTheMostAVanTakes()
+    public void AnAssaultsCrewHasGunmenPerExtraMemberWithinTheMostAVanTakesTheEnforcersKeptFirst()
     {
         var d = new HarvestData { AssaultGunmen = new[] { 1, 2, 2, 3, 3 }, AssaultEnforcers = new[] { 2, 2, 3, 3, 4 }, GunmenPerExtraMember = 1, MaxCrew = 8 };
         Assert.Equal((1, 2), HeistRules.AssaultCrew(d, 1, 1));
         Assert.Equal((5, 3), HeistRules.AssaultCrew(d, 4, 3));
-        Assert.Equal((6, 2), HeistRules.AssaultCrew(d, 5, 4)); // 6 Gunmen, room for 2 of the 4 Enforcers
+        Assert.Equal((4, 4), HeistRules.AssaultCrew(d, 5, 4)); // the Enforcers (the melee) are kept first: the 6 Gunmen make room for them
         var order = CrewRules.Order(2, 3);
         Assert.Equal(new[] { GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Gunman, GangMemberKind.Enforcer, GangMemberKind.Enforcer }, order);
     }
@@ -144,13 +144,21 @@ public class HeistTests
         Assert.Equal(3, c.Due);
     }
 
-    static HeistTick Step(Heist h, bool inArea, bool atDrop, int loaded, bool destroyed = false) => h.Step(new HeistFacts(destroyed, inArea, atDrop, loaded), Dt);
+    static HeistTick Step(Heist h, bool inArea, bool inDrop, int loaded, bool destroyed = false, int received = 0, bool sent = false)
+        => h.Step(new HeistFacts(destroyed, inArea, inDrop, loaded, received, sent), Dt);
+
+    static HeistTick StepWithParty(Heist h, bool partyAtVan, bool inArea = false, int loaded = 0)
+        => h.Step(new HeistFacts(false, inArea, false, loaded, PartyAtVan: partyAtVan), Dt);
 
     [Fact]
-    public void AHeistGoesToTheObjectiveLoadsLeavesWithTheMinimumAndIsDeliveredAtTheDrop()
+    public void AHeistGoesToTheObjectiveLoadsLeavesWithTheMinimumUnloadsAtTheDropAndIsDeliveredWhenTheReceiverIsSentOff()
     {
-        var h = new Heist(min: 3, max: 6, graceSeconds: 1, intervalSeconds: 2);
+        var h = new Heist(min: 3, max: 6, graceSeconds: 1, intervalSeconds: 2, dropGraceSeconds: 1.5f) { Drop = ReceiverRules.Text(ReceiverKind.Helicopter) };
         Assert.Equal(JobStep.Running, Step(h, false, false, 0).Step);
+        Assert.Equal(HeistPhase.ToVan, h.Phase); // nobody reached the van yet: the marker is on it
+        Assert.Equal(HeistMarker.Van, h.Marker);
+        Assert.Equal("Go to the Cartel van, then drive it to the plantation", h.Line("the plantation", "Fill"));
+        StepWithParty(h, partyAtVan: true);
         Assert.Equal(HeistPhase.ToObjective, h.Phase);
         Assert.Equal(HeistMarker.Objective, h.Marker);
         Assert.Equal("Drive the Cartel van to the plantation", h.Line("the plantation", "Fill"));
@@ -166,21 +174,163 @@ public class HeistTests
         Assert.Equal(HeistMarker.Objective, h.Marker);
         Assert.StartsWith("Bring the van back", h.Line("the plantation", "Fill"));
         Assert.Equal(JobStep.Running, Step(h, false, true, 2).Step); // at the drop short of the minimum: nothing
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
         Step(h, true, false, 3);
         Step(h, false, false, 4);
         Assert.Equal(HeistPhase.ToDrop, h.Phase);
         Assert.Equal(HeistMarker.Drop, h.Marker);
+        Assert.Equal("Drive the van to the helicopter: 4 loaded", h.Line("the plantation", "Fill"));
         Assert.Equal(AssaultClockState.Paused, h.Assaults.State);
-        for (var i = 0; i < 300; i++) Assert.False(Step(h, false, false, 4).AssaultDue); // no chase
+        for (var i = 0; i < 300; i++) Assert.False(Step(h, false, false, 4).AssaultDue); // no chase on the road
         Step(h, true, false, 4); // back at the objective: Assaults again
         Assert.Equal(HeistPhase.AtObjective, h.Phase);
         Step(h, false, false, 5);
-        Assert.Equal(JobStep.Succeeded, Step(h, false, true, 5).Step);
+        Assert.Equal(HeistPhase.ToDrop, h.Phase);
+
+        Step(h, false, true, 5); // the van is in the drop's area
+        Assert.Equal(HeistPhase.AtDrop, h.Phase);
+        Assert.Equal(HeistMarker.Drop, h.Marker);
+        Assert.Equal("Unload the duffels into the helicopter: 0/3", h.Line("the plantation", "Fill"));
+        due = 0;
+        for (var i = 0; i < 156; i++) if (Step(h, false, true, 5).AssaultDue) due++; // 5.2 s at the drop: 1.5 s grace, then every 2 s: 1.5 and 3.5
+        Assert.Equal(2, due);
+        Assert.Equal(AssaultClockState.DropWaiting, h.Assaults.State);
+        Step(h, false, true, 2, received: 3);
+        Assert.Equal("3 on board (up to 6): unload the rest, then tell the pilot to leave", h.Line("the plantation", "Fill"));
+        Assert.Equal(JobStep.Running, Step(h, false, true, 1, received: 4).Step); // received, but not sent off yet: the heist goes on
+        Assert.Equal(HeistPhase.AtDrop, h.Phase);
+        Assert.Equal(JobStep.Succeeded, Step(h, false, true, 1, received: 4, sent: true).Step);
         Assert.Equal(HeistPhase.Delivered, h.Phase);
-        Assert.Equal(5, h.Loaded);
-        Assert.Equal(JobStep.Succeeded, Step(h, false, true, 0).Step); // stays delivered, the count frozen
-        Assert.Equal(5, h.Loaded);
+        Assert.Equal(4, h.Received); // what Respect counts
+        Assert.Equal(JobStep.Succeeded, Step(h, false, false, 0, received: 0, sent: true).Step); // stays delivered, the count frozen
+        Assert.Equal(4, h.Received);
+        Assert.Equal("Delivered: 4 duffels", h.Line("the plantation", "Fill"));
         Assert.Equal(AssaultClockState.Over, h.Assaults.State);
+    }
+
+    [Fact]
+    public void TheMarkerIsOnTheVanUntilThePartyReachesItAndStaysOffItAfterwardsEvenIfTheyLeaveIt()
+    {
+        var h = new Heist(2, 4, 1, 2);
+        StepWithParty(h, partyAtVan: false);
+        StepWithParty(h, partyAtVan: false);
+        Assert.Equal((HeistPhase.ToVan, HeistMarker.Van), (h.Phase, h.Marker));
+        StepWithParty(h, partyAtVan: true);
+        Assert.Equal((HeistPhase.ToObjective, HeistMarker.Objective), (h.Phase, h.Marker));
+        StepWithParty(h, partyAtVan: false); // got out to look around: the objective stays
+        Assert.Equal((HeistPhase.ToObjective, HeistMarker.Objective), (h.Phase, h.Marker));
+    }
+
+    [Fact]
+    public void AVanAlreadyInTheAreaSkipsTheWalkToIt()
+    {
+        var h = new Heist(2, 4, 1, 2);
+        StepWithParty(h, partyAtVan: false, inArea: true);
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+    }
+
+    [Fact]
+    public void WithTheMinimumLoadedInTheAreaTheLineSaysLeaveAndNothingIsMarkedUntilTheVanIsOutThenTheDropIs()
+    {
+        var h = new Heist(min: 2, max: 5, graceSeconds: 1, intervalSeconds: 2) { Drop = ReceiverRules.Text(ReceiverKind.Boat) };
+        Step(h, true, false, 1);
+        Assert.Equal(HeistMarker.Van, h.Marker); // loading: the van's bay
+        Assert.Equal("Fill: 1/2 loaded", h.Line("the plantation", "Fill"));
+        Step(h, true, false, 2);
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+        Assert.Equal(HeistMarker.None, h.Marker); // no drop waypoint yet
+        Assert.Equal("Leave the area: 2 loaded (up to 5)", h.Line("the plantation", "Fill"));
+        Step(h, true, false, 3);
+        Assert.Equal("Leave the area: 3 loaded (up to 5)", h.Line("the plantation", "Fill"));
+        Step(h, false, false, 3); // out of the area
+        Assert.Equal(HeistPhase.ToDrop, h.Phase);
+        Assert.Equal(HeistMarker.Drop, h.Marker);
+        Assert.Equal("Drive the van to the boat: 3 loaded", h.Line("the plantation", "Fill"));
+    }
+
+    [Fact]
+    public void ASendOffWithFewerThanTheMinimumDoesNotDeliverAndOneAwayFromTheDropStillDoes()
+    {
+        var h = new Heist(3, 6, 1, 2);
+        Step(h, true, false, 0);
+        Assert.Equal(JobStep.Running, Step(h, true, false, 0, received: 2, sent: true).Step); // sent with 2 of 3: the Receiver never lets that happen, and the template does not believe it
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+        // the leader walks the bags to the receiver while the van is still at the objective: the Receiver left with enough, the heist is done wherever the van is
+        Assert.Equal(JobStep.Succeeded, Step(h, true, false, 0, received: 3, sent: true).Step);
+        Assert.Equal(HeistPhase.Delivered, h.Phase);
+        Assert.Equal(3, h.Received);
+    }
+
+    [Fact]
+    public void TheVanLeavingTheDropAreaIsToDropAgainAndItsAssaultsPauseAndGoOnWhereTheyWere()
+    {
+        var h = new Heist(1, 4, 1, 2, dropGraceSeconds: 10);
+        Step(h, true, false, 1); Step(h, false, false, 1); Step(h, false, true, 1);
+        Assert.Equal(HeistPhase.AtDrop, h.Phase);
+        for (var i = 0; i < 150; i++) Step(h, false, true, 1); // 5 s of the 10 s grace
+        Assert.Equal(AssaultClockState.DropGrace, h.Assaults.State);
+        var left = h.Assaults.Left;
+        Step(h, false, false, 1);
+        Assert.Equal(HeistPhase.ToDrop, h.Phase);
+        Assert.Equal(AssaultClockState.Paused, h.Assaults.State);
+        for (var i = 0; i < 300; i++) Assert.False(Step(h, false, false, 1).AssaultDue);
+        Step(h, false, true, 1); // back
+        Assert.Equal((HeistPhase.AtDrop, AssaultClockState.DropGrace), (h.Phase, h.Assaults.State));
+        Assert.Equal(left, h.Assaults.Left, 0.1f); // the grace goes on with what it had
+        var due = 0;
+        for (var i = 0; i < 180; i++) if (Step(h, false, true, 1).AssaultDue) due++;
+        Assert.Equal(1, due); // 6 s: the 5 left of the grace, then one more second of the interval
+        Step(h, true, false, 1); // the van is back at the objective (the areas overlap, or it drove back): the objective's clock
+        Assert.Equal(HeistPhase.AtObjective, h.Phase);
+    }
+
+    [Fact]
+    public void ThePhaseChangedEventIsTheSeamForTheVanLeavingTheObjectiveAndReachingTheDrop()
+    {
+        var h = new Heist(2, 4, 1, 2);
+        var seen = new List<(HeistPhase From, HeistPhase To)>();
+        h.PhaseChanged += (a, b) => seen.Add((a, b));
+        Step(h, true, false, 0);
+        Step(h, false, false, 2);
+        Step(h, false, true, 2);
+        Step(h, false, true, 2, received: 2, sent: true);
+        Assert.Equal(new[]
+        {
+            (HeistPhase.ToVan, HeistPhase.AtObjective), (HeistPhase.AtObjective, HeistPhase.ToDrop), (HeistPhase.ToDrop, HeistPhase.AtDrop), (HeistPhase.AtDrop, HeistPhase.Delivered),
+        }, seen);
+        Assert.Equal(HeistPhase.AtDrop, h.Previous);
+    }
+
+    [Fact]
+    public void TheAssaultClockComesToTheDropAfterTheDropGraceThenEveryIntervalPausesAwayAndStops()
+    {
+        var c = new AssaultClock(10, 20, dropGraceSeconds: 5);
+        for (var i = 0; i < 60; i++) Assert.False(c.Tick(Dt, AssaultSite.Away)); // nothing before the van has come
+        Assert.Equal(AssaultClockState.Idle, c.State);
+        var t = 0f;
+        for (; t < 12; t += Dt) c.Tick(Dt, AssaultSite.Objective); // the first at the objective, 10 s in
+        Assert.Equal(1, c.Due);
+        Assert.Equal(AssaultClockState.Waiting, c.State);
+        c.Tick(Dt, AssaultSite.Away);
+        Assert.Equal(AssaultClockState.Paused, c.State);
+        c.Tick(Dt, AssaultSite.Drop); // from the road to the drop: its own clock, from the start
+        Assert.Equal(AssaultClockState.DropGrace, c.State);
+        Assert.Equal(5, c.Left, 0.1f);
+        var due = new List<float>();
+        for (t = 0; t < 52; t += Dt) if (c.Tick(Dt, AssaultSite.Drop)) due.Add(t);
+        Assert.Equal(new[] { 5f, 25f, 45f }, due.Select(x => MathF.Round(x)).ToArray()); // 5 s grace, then every 20 s
+        Assert.Equal(AssaultClockState.DropWaiting, c.State);
+        var left = c.Left;
+        for (var i = 0; i < 3000; i++) Assert.False(c.Tick(Dt, AssaultSite.Away));
+        c.Tick(Dt, AssaultSite.Drop);
+        Assert.Equal((AssaultClockState.DropWaiting, left), (c.State, c.Left));
+        c.Tick(Dt, AssaultSite.Away);
+        c.Tick(Dt, AssaultSite.Objective); // from the drop back to the objective: the interval, fresh
+        Assert.Equal((AssaultClockState.Waiting, 20f), (c.State, MathF.Round(c.Left)));
+        c.Stop();
+        for (var i = 0; i < 3000; i++) Assert.False(c.Tick(Dt, AssaultSite.Drop));
+        Assert.Equal(AssaultClockState.Over, c.State);
+        Assert.Equal(4, c.Due); // one at the objective, three at the drop
     }
 
     [Fact]

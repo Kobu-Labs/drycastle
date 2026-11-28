@@ -110,10 +110,14 @@ internal sealed class ServerClient
     public Edge UseKey, StreakKey;
     /// <summary>The grenade throw key (G): held to aim, released to throw (<see cref="GrenadeThrower"/>).</summary>
     public readonly GrenadeThrower Throw = new();
-    /// <summary>The Duffel throw key (X, <see cref="DuffelThrowKey"/>): its hold, and its last up/down, fed every input on foot so a key held through a pick-up is not a fresh press (<c>Cartel/DuffelServer.cs</c>).</summary>
-    public DuffelThrowKey DuffelKey;
+    /// <summary>The Duffel throw key's edge (X): fed every input on foot, so a key held through a pick-up is not a fresh press (<c>Cartel/DuffelServer.cs</c>).</summary>
+    public Edge DuffelKey;
     /// <summary>The Duffel this player was last told is in reach (<see cref="EventKind.DuffelReach"/>; 0 none).</summary>
     public ushort DuffelReach;
+    /// <summary>What this player was last told their throw key would take out of a cargo vehicle (<see cref="EventKind.DuffelTake"/>): the vehicle's id in bits 8 up, the kind plus one in the low byte; 0 none.</summary>
+    public uint DuffelTake;
+    /// <summary>What this player was last told their interact key would do at a Receiver's Cartel man (<see cref="EventKind.ReceiverReach"/>): the Receiver's entity id in bits 16 up, the ask in bits 8-15, how many are on board in the low byte; 0 none.</summary>
+    public uint ReceiverReach;
     /// <summary>The interact key beside a Scud truck with an empty rack and a loaded rocket cart: a tap gets in or out, a hold loads the rocket (<c>Scuds/ScudLoading.cs</c>).</summary>
     public readonly ScudReloadKey ReloadKey = new();
     /// <summary>The interact key's hold at the rozhlas dictation table (RozhlasSetServer.cs).</summary>
@@ -121,6 +125,8 @@ internal sealed class ServerClient
     /// <summary>The high of the plantation (Net/Server/Highs/PlantationServer.cs) and the interact key's hold inside one; the replicated bit is <see cref="StatusKind.High"/> of <see cref="Status"/>.</summary>
     public readonly PlayerHigh High = new();
     public InteractHold PlantHold;
+    /// <summary>What this player was last told their plantation hold does (<see cref="EventKind.HarvestFill"/>): the reach in the low byte, the harvest's maximum above it.</summary>
+    public ushort FillTold;
     /// <summary>The use key's hold on lying Loot (Thieves/LootServer.cs) and the health it was last seen at (a drop is a hit taken).</summary>
     public LootReturnHold LootHold;
     public float LootHealth;

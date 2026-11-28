@@ -97,6 +97,7 @@
     { "id": "death","files": ["oga-combat-sound-effects-150/death.ogg"], "bus": "SFX", "volume_db": -2, "pitch": 0.75, "pitch_variance": 0.05, "max_distance": 30, "priority": 2 },
     { "id": "round.start", "files": ["kenney-music-jingles/jingles_STEEL07.ogg"], "bus": "Music", "volume_db": -4, "max_distance": 0 },
     { "id": "round.end", "files": ["kenney-music-jingles/jingles_STEEL03.ogg"], "bus": "Music", "volume_db": -4, "max_distance": 0 },
+    { "_note": "The Cartel's Job done cinematic (docs/cartel.md): the project owner's own track, started with it and faded out by the client (volume driven per frame, so volume_db is its full level; non-positional)", "id": "job.done.music", "files": ["grove-after-dark/grove-after-dark-v4.ogg"], "bus": "Music", "volume_db": 0, "max_distance": 0 },
     { "id": "ui.click", "files": ["kenney-interface-sounds/click_003.ogg"], "bus": "UI", "volume_db": -6, "max_distance": 0 },
     { "id": "uav.ping", "files": ["kenney-interface-sounds/tick_001.ogg"], "bus": "UI", "volume_db": -12, "max_distance": 0 },
     { "id": "ui.hover", "files": ["kenney-interface-sounds/tick_002.ogg"], "bus": "UI", "volume_db": -12, "max_distance": 0 },

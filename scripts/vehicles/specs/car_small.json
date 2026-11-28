@@ -30,6 +30,15 @@
     { "name": "light_tail_l", "kind": "tail", "pos": [0.657, 0.735, -1.868], "lens": [0.07, 0.17], "face": "-z" },
     { "name": "light_tail_r", "kind": "tail", "pos": [-0.657, 0.735, -1.868], "lens": [0.07, 0.17], "face": "-z" }
   ],
+  "cuts": [
+    {
+      "_comment": "The tailgate the pack lacks (docs/research/vehicle-models-facts.md, SM_Veh_Car_Small_01: boot): the outer rear panel below the rear window (x +-0.566, y 0.639..1.05, z -1.88..-1.77: 2 big triangles per side + the lip under the glass), its number plate and handle, and the cabin's inner rear wall behind them (z -1.75..-1.70, normal +z): box centroids, x +-0.6 keeps the tail lamps (x 0.602..0.709) and the wedge corners, y from 0.64 keeps the boot floor (0.651) and the bumper, z from -2.0 to -1.66. Hinge: the glass's lower edge (y 1.045, z -1.76). Lining: the cavity behind the rear bench (floor 0.651 lifted 6 mm, x +-0.6, z -1.88 (the lid's bottom edge) .. -1.47 (the bench's rearmost point), to y 1.1) on the cabin's interior swatch (uv 0.081, 0.925: grey 65,69,73 in every atlas).",
+      "name": "cargo_door",
+      "box": { "min": [-0.6, 0.64, -2.0], "max": [0.6, 1.055, -1.66] },
+      "hinge": [0, 1.045, -1.76],
+      "lining": { "min": [-0.6, 0.657, -1.88], "max": [0.6, 1.1, -1.47], "faces": ["floor", "side_lo", "side_hi", "front"], "uv": [0.081, 0.925] }
+    }
+  ],
   "atlas_material": "Land_Vehicles_03_mat",
   "atlas_dir": "synty/glb/military/tex",
   "skins": [

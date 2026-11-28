@@ -45,16 +45,19 @@ internal sealed class InputServer
     readonly Action<ServerClient, bool> _plantationUse;
     readonly Func<ServerClient, bool, bool, float, bool> _scudUseKey;
     readonly DuffelServer _duffels;
+    readonly CargoServer _cargo;
+    readonly ReceiverServer _receivers;
     readonly float _killY;
 
     /// <param name="plantationUse">The use key is fed to the plantation's key competition (the high a player is getting).</param>
     /// <param name="duffels">The cartel's Duffels: the use key's press picks one up, a carrier is refused a seat, the throw key throws or drops it.</param>
+    /// <param name="receivers">The Heists' Receivers: the leader's press at the pilot, boatman or buyer sends it off.</param>
     /// <param name="scudUseKey">Beside a Scud truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket); true when the key's usual action runs now.</param>
     public InputServer(ServerContext ctx, StreakServer streaks, RozhlasServer rozhlas, ThievesServer thieves, ItemsServer gear, Sitters sitters, PounceServer pounce, SandboxServer sandbox, MassServer mass,
-        GarageServer garage, HouseDoorServer houses, CarSeats seats, VehicleGuns guns, ShotServer shots, SmokeStats smoke, Action<ServerClient, bool> plantationUse, Func<ServerClient, bool, bool, float, bool> scudUseKey, DuffelServer duffels, float killY)
+        GarageServer garage, HouseDoorServer houses, CarSeats seats, VehicleGuns guns, ShotServer shots, SmokeStats smoke, Action<ServerClient, bool> plantationUse, Func<ServerClient, bool, bool, float, bool> scudUseKey, DuffelServer duffels, CargoServer cargo, ReceiverServer receivers, float killY)
     {
         _ctx = ctx; _streaks = streaks; _rozhlas = rozhlas; _thieves = thieves; _gear = gear; _sitters = sitters; _pounce = pounce; _sandbox = sandbox; _mass = mass; _garage = garage; _houses = houses; _seats = seats; _guns = guns;
-        _shots = shots; _smoke = smoke; _plantationUse = plantationUse; _scudUseKey = scudUseKey; _duffels = duffels; _killY = killY;
+        _shots = shots; _smoke = smoke; _plantationUse = plantationUse; _scudUseKey = scudUseKey; _duffels = duffels; _cargo = cargo; _receivers = receivers; _killY = killY;
     }
 
     public void Simulate(ServerClient c, float dt)
@@ -94,6 +97,7 @@ internal sealed class InputServer
         var canThrow = c.Car == null && !controlled && _ctx.Match.Get(c.Id)?.Life == PlayerLife.Alive && _ctx.Tick > c.HeldUntilTick && !_sitters.IsSeated(c.Id) && !_pounce.IsPinned(c.Id)
             && !c.Body.State.OnLadder && _ctx.Now >= c.LaunchGraceUntil;
         var throwStep = c.Throw.Tick((i.Buttons & (ushort)MoveButtons.Throw) != 0, (i.Buttons & (ushort)MoveButtons.Aim) != 0, canThrow);
+        var duffelEdge = c.DuffelKey.Pressed((i.Buttons & (ushort)MoveButtons.DuffelThrow) != 0); // fed on every input, held or not, as the client feeds it: a press during a hold is not fresh after it
         if (_ctx.Match.Get(c.Id)?.Life != PlayerLife.Alive) return; // dead or waiting: inputs are acked but ignored
         if (c.Car == null && _ctx.Tick <= c.HeldUntilTick) return; // in the Bigfoot's hand: the input is acked, the body is where the Bigfoot puts it (issue #264)
         if (c.Car == null && _sitters.Input(c, i, useEdge)) return; // seated in the church: no walking, no weapon
@@ -105,8 +109,8 @@ internal sealed class InputServer
         var useAct = _scudUseKey(c, useDown, useEdge, dt); // beside a truck with an empty rack and a loaded cart a press waits to be a tap (it gets in) or a hold (it loads the rocket)
         // a Duffel of the player's party in reach: the press takes it (it outranks Loot, doors and seats); the body walks on this input, slowed already, as the client predicts it
         var tookDuffel = useAct && _duffels.TryPickUp(c);
-        _duffels.OnInput(c, i); // the Duffel throw key, followed on every input on foot: a tap puts it down, a charged release throws it
-        if (useAct && !tookDuffel && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _duffels.RefuseSeat(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat; a Duffel carrier takes none
+        _duffels.OnInput(c, i, duffelEdge); // the Duffel throw key's press (its edge is followed above, on every input): a fresh press while carrying throws it
+        if (useAct && !tookDuffel && _thieves.LootInReach(c) == null && (_mass.Sit(c) || _garage.Use(c) || _houses.Use(c) || _receivers.Use(c) || _cargo.Use(c) || _duffels.RefuseSeat(c) || _seats.TryEnter(c))) return; // the use key on lying Loot sends it back, it does not take a seat; a Duffel carrier takes none; at a cargo vehicle's access point the key works its doors before the seat is taken or refused
         WalkAndFire(c, i, dt, throwStep);
     }
 

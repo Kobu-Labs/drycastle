@@ -70,7 +70,7 @@ def inside(points: list, geom) -> bool:
 
 
 def test_the_catalog_is_the_event_kinds_the_player_kinds_and_every_species() -> None:
-    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", "plantation", "cartel_drop", "cartel_hit", *WILDLIFE, *FLOCKS)
+    assert KIND_NAMES == ("bigfoot", "scud", "player_spawn", "plantation", "cartel_drop", "cartel_hit", "cartel_heli", "cartel_boat", *WILDLIFE, *FLOCKS)
     assert {k.group for k in KINDS} == {"event", "player", "cartel", "wildlife"}
     assert all(k.label and k.tint.startswith("#") for k in KINDS)
 
@@ -100,6 +100,7 @@ def test_the_shipped_rules_cover_the_catalog_with_rule_zones() -> None:
     for cartel in ("cartel_drop", "cartel_hit"):  # drawn only, exported as points (the Job picks one)
         assert "where_ground" not in section[cartel] and set(section[cartel]) == set(RULE_KEYS)
     assert section["cartel_drop"]["building_clearance_m"] >= 2.4 / 2  # the Cartel van stops at a drop point
+    assert section["cartel_heli"] == section["cartel_boat"] == {}  # outlines like the plantation: no points, no numbers
     assert set(section["player_spawn"]["where_ground"]) == {"allotments", "orchard", "meadow", "village", "field"}
     assert section["stag"]["where_ground"] == ["forest"]
     assert set(section["deer"]["where_ground"]) == {"forest", "meadow", "field"}
@@ -524,6 +525,22 @@ def test_a_plantation_has_no_points_but_its_polygons_in_game_axes() -> None:
     (ring,) = entry["rings"]
     # x stays, z = -north: the box 30..150 east, 120..180 north is x 30..150, z -180..-120
     assert sorted({tuple(p) for p in ring}) == [(30, -180), (30, -120), (150, -180), (150, -120)]
+
+
+def test_the_helicopter_pads_and_boat_routes_are_exported_as_outlines_in_the_order_drawn() -> None:
+    """The Receivers' kinds are runtime outlines: no points; a boat's outline is a line (its points in drawn order: the mooring first, then the route), a pad's first edge is its nose (CartelMap.cs)."""
+    from shapely.geometry import Polygon
+
+    pad = Polygon([(30, 120), (50, 120), (50, 140), (30, 140)])
+    line = Polygon([(10, 100), (14, 110), (20, 118), (12, 120)])  # a mooring, then the route; the closing edge is no part of it
+    d = drawn(zone("Z-0001", "cartel_heli", pad), zone("Z-0002", "cartel_boat", line), zone("Z-0003", "deer", box(0, 0, 10, 10)))
+    section = rules({"cartel_heli": {}, "cartel_boat": {}, "bigfoot": RULE})
+    assert build_zone_points({}, d, [], make_terrain(), {"bodies": []}, section)[0] is None  # not points
+    doc = build_zone_polygons({}, d, section)
+    by = {e["kind"]: e for e in doc["zones"]}
+    assert list(by) == ["cartel_heli", "cartel_boat"]
+    assert by["cartel_heli"]["rings"] == [[[30.0, -120.0], [50.0, -120.0], [50.0, -140.0], [30.0, -140.0]]]  # game axes: z = -north
+    assert by["cartel_boat"]["rings"] == [[[10.0, -100.0], [14.0, -110.0], [20.0, -118.0], [12.0, -120.0]]]
 
 
 def test_no_plantation_zone_means_no_polygons() -> None:
