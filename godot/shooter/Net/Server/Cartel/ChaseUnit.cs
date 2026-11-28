@@ -15,7 +15,10 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// (the chase's own, the Assault's with its vehicle, skin and give-up distance: <see cref="AssaultCarData.Drive"/>); <see cref="Crew"/> the kinds that sit in it, in slot order: the driver first, then the car's other seats, then
 /// (an Assault van) the posts of <see cref="Bay"/>. <see cref="Post"/> says where the crew on foot heads for, given the Cartel van's feet (null: the Cartel van; an Assault van's: the objective while the Heist is at it).
 /// </summary>
-internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList<GangMemberKind> Crew, AssaultCarData? Bay = null, Func<NVec3, NVec3>? Post = null);
+/// <see cref="Fresh"/> is where the unit is moved when it is lost or stalled (its kind's spawn rules, the unit's own spot not counted as another vehicle), null when none fits; <see cref="Trail"/> the van's trail
+/// (the fallback of a way when the van itself cannot be reached).
+internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList<GangMemberKind> Crew, AssaultCarData? Bay = null, Func<NVec3, NVec3>? Post = null,
+    Func<ChaseUnit, ChaseSpot?>? Fresh = null, Func<IReadOnlyList<NVec2>>? Trail = null);
 
 /// <summary>
 /// One Rival vehicle on the server, a chase car or an Assault van (GLOSSARY "Chase car", "Assault"; docs/cartel.md "Chase cars", "Assaults"): a real vehicle of vehicles.json (a <see cref="ServerCar"/> on the drive model, in a dark skin) that an NPC drives, and its
@@ -28,6 +31,15 @@ internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList
 /// </summary>
 internal sealed class ChaseUnit
 {
+    /// <summary>A way that ends at a point short of the van (it cannot be reached) is arrived at within this of its end.</summary>
+    const float ArriveM = 4f;
+    /// <summary>The road nearest the van is looked for this far (the van stands off the roads, in woods).</summary>
+    const float FallbackRoadM = 600f;
+    /// <summary>At most this many of the trail's points nearest the van are tried when no road point has a way.</summary>
+    const int FallbackTrailTries = 4;
+    /// <summary>The target of a way short of the van is kept for this many replans before it is looked for again.</summary>
+    const int FallbackKeep = 5;
+
     /// <summary>A member's step-out point snapped to the navigation mesh is used when it moved no more than this.</summary>
     const float SnapM = 3f;
 
@@ -43,17 +55,22 @@ internal sealed class ChaseUnit
     ThiefGang? _crew;
     RoadPath _path = RoadPath.Empty;
     float _noWay;      // seconds the way has been missing (the old one is kept a little)
+    bool _toVan = true; // the path leads to the van itself (not to the nearest point it can reach)
+    NVec2? _fallback;   // where the path went when the van could not be reached
+    int _fallbackAge;   // replans since that target was chosen
     Countdown _repath;
+    readonly RelocateGate _gate;
     readonly ChaseCleanup _cleanup;
 
     ChaseUnit(ChaseServer s, HeistRun run, RivalProfile p, ServerCar car, NVec3 van, bool ambush)
     {
         _s = s; _run = run; _p = p; _d = p.Drive; _car = car; _machine = new ChaseCar(_d, ambush); _cleanup = new ChaseCleanup(_d);
-        if (p.Bay != null) Stall = new AssaultStall(p.Bay);
+        Stall = new AssaultStall(_d.StallProgressM, _d.StallSeconds, _d.StallNearM);
+        _gate = new RelocateGate(_d.RelocateRetrySeconds, _d.RelocateMaxTries);
         _crew = s.Rivals.NewCrew(van, id => _machine.Shoots && run.Party.Contains(id)); // it attacks the Job's party, only while the machine lets it shoot
         _crew.Mounted += OnMounted;
         car.Exploded += OnExploded;
-        _machine.Changed += (from, to) => GD.Print($"server: {_run.Job}: {p.Label} {car.Id}: {from} -> {to}");
+        _machine.Changed += (from, to) => GD.Print($"server: {_run.Job}: {p.Label} {car.Id}: {from} -> {to}{(to is ChaseState.Stopping or ChaseState.Lost ? $" ({_machine.Why})" : "")}");
     }
 
     /// <summary>Puts a vehicle down on <paramref name="spot"/> with its crew seated (the driver, then the other seats, then the bay's posts), reserved for nobody: no player may board while the crew rides. Null when the world has no room.</summary>
@@ -72,7 +89,7 @@ internal sealed class ChaseUnit
         s.Rivals.Mount(car);
         run.SealBay(car); // a Rival vehicle's cargo bay takes nobody's Duffels
         var inBay = Math.Max(0, n - car.Def.Seats.Count);
-        GD.Print($"server: {run.Job}: {p.Label} {car.Id} ({car.Def.Id} skin {d.Skin}) at ({at.X:F0},{at.Z:F0}) on {(spot.Place != null ? "the road" : "open ground")}, crew of {n}{(inBay > 0 ? $" ({inBay} in the bay)" : "")}");
+        GD.Print($"server: {run.Job}: {p.Label} {car.Id} ({car.Def.Id} skin {d.Skin}) at ({at.X:F0},{at.Z:F0}) on {(spot.Place is { } rp ? $"a {(s.Roads.WidthAt(rp) < s.Open.Numbers.TrackWidthM ? "track" : "road")} ({s.Roads.WidthAt(rp):F1} m wide)" : "open ground")}, crew of {n}{(inBay > 0 ? $" ({inBay} in the bay)" : "")}");
         return unit;
     }
 
@@ -107,27 +124,23 @@ internal sealed class ChaseUnit
 
     // ---- what the Heist asks ----
 
-    /// <summary>The car counts towards max_alive (an Assault van: unless it is stalled, <see cref="Counts"/>).</summary>
-    public bool InFight => _machine.InFight(_crew?.AliveCount ?? 0) && Counts;
+    /// <summary>The car counts towards max_alive (an Assault van: unless it is stalled and could not be relocated, <see cref="Counts"/>).</summary>
+    public bool InFight => Exists && Counts;
 
-    /// <summary>The Assault's progress watch (null for a chase car).</summary>
-    public AssaultStall? Stall { get; }
+    /// <summary>The vehicle is in the fight whether it is stalled or not: its crew rides, walks back or lives (the hard cap of an Assault's vans counts these).</summary>
+    public bool Exists => _machine.InFight(_crew?.AliveCount ?? 0);
 
-    /// <summary>It counts towards the cap: every unit but a stalled Assault.</summary>
-    public bool Counts => Stall?.Counts ?? true;
+    /// <summary>The progress watch (the Assault's numbers for a van, the chase's for a car: one machine).</summary>
+    public AssaultStall Stall { get; }
+
+    /// <summary>It counts towards the cap: every unit but a stalled Assault (a stalled chase car counts: it is relocated or removed).</summary>
+    public bool Counts => _p.Bay == null || Stall.Counts;
+
+    /// <summary>The unit became stalled this tick and it stands stalled still (it could not be relocated): the Assault fleet sends the next one at once.</summary>
+    public bool NewlyStalled { get; private set; }
 
     /// <summary>The crew sits in the vehicle (not out on foot) and the vehicle stands in the world.</summary>
     public bool Riding => _car != null && _machine.CrewInside;
-
-    /// <summary>One tick of the stall watch (an Assault van only): see <see cref="AssaultStall.Step"/>. True once, the tick it becomes stalled.</summary>
-    public bool StepStall(bool newest, NVec3 van, float dt)
-    {
-        if (Stall is not { } stall || _car is not { } car) return false;
-        var gap = NVec2.Distance(new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z), new NVec2(van.X, van.Z));
-        var stalled = stall.Step(Riding, newest, gap, dt);
-        if (stalled) GD.Print($"server: {_run.Job}: {_p.Label} {car.Id} is stalled ({gap:F0} m from the van, no {_p.Bay!.StallProgressM:F0} m closer in {_p.Bay!.StallSeconds:F0} s)");
-        return stalled;
-    }
 
     /// <summary>Nothing of it is left in the world (car and crew removed): the Heist forgets it.</summary>
     public bool Finished => _car == null && _crew == null;
@@ -142,19 +155,25 @@ internal sealed class ChaseUnit
     /// <summary>One tick of the Heist (before the vehicles step): the machine, then what its state asks of the car and the crew.</summary>
     public void Tick(float dt, NVec3 van, float vanSpeed)
     {
+        TickMachine(dt, van, vanSpeed);
+        Watch(dt, van);
+    }
+
+    void TickMachine(float dt, NVec3 van, float vanSpeed)
+    {
         if (_cleanup.WreckOver(_car is { Destroyed: true }, dt)) RemoveCar(); // the wreck lies its time, then goes (before the type's return time brings it back)
         var car = _car;
         var van2 = new NVec2(van.X, van.Z);
         var pos = car != null ? new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z) : van2;
         var speed = car?.State.Speed ?? 0f;
         _repath.Tick(dt);
-        if (car != null && _repath.Ready && _machine.State is ChaseState.Chasing or ChaseState.Reversing or ChaseState.Spawned or ChaseState.Waiting) { Replan(car, pos, van2); _repath.Start(_d.RepathSeconds); }
+        if (car != null && _repath.Ready && _machine.State is ChaseState.Chasing or ChaseState.Reversing or ChaseState.Spawned or ChaseState.Waiting or ChaseState.Lost) { Replan(car, pos, van2); _repath.Start(_d.RepathSeconds); }
         var crewAlive = _crew?.AliveCount ?? 0;
         var vanDir = _run.VanDir;
         var meeting = car != null && !car.Destroyed;
         var facts = new ChaseFacts(car != null ? NVec2.Distance(pos, van2) : float.PositiveInfinity, vanSpeed, MathF.Abs(speed), DriverAlive, car == null || car.Destroyed, !_path.IsEmpty,
             CrewGap(van2), crewAlive, car is { Destroyed: false } && !car.Seat.Occupied, _machine.Remounting && AllAboard(crewAlive),
-            Passed: meeting && ChaseRules.Passed(pos, van2, vanDir), HeadOn: meeting && ChaseRules.HeadOn(_d, pos, car!.State.Yaw, van2, vanDir, vanSpeed));
+            Passed: meeting && ChaseRules.Passed(pos, van2, vanDir), HeadOn: meeting && ChaseRules.HeadOn(_d, pos, car!.State.Yaw, van2, vanDir, vanSpeed), ToVan: _toVan);
         var step = _machine.Step(facts, dt);
         if (step.Remove) { Apply(ChaseCleanup.Due(ChaseState.GivingUp, Left())); _machine.End(); return; }
         if (car != null)
@@ -167,8 +186,13 @@ internal sealed class ChaseUnit
         switch (_machine.State)
         {
             case ChaseState.Chasing when car != null:
+                if (!_toVan && _path.Length - _path.Project(pos) < ArriveM) { car.NpcInput = ChasePilot.Stop(speed); break; } // it stands where it can get nearest to the van
                 var want = ChaseRules.FollowSpeed(_d, facts.GapM, vanSpeed);
-                car.NpcInput = ChasePilot.Follow(_path, pos, car.State.Yaw, speed, DriveModel.TurnRadiusAt(car.Def, MathF.Abs(speed)), want);
+                car.NpcInput = ChasePilot.Follow(_path, pos, car.State.Yaw, speed, DriveModel.TurnRadiusAt(car.Def, MathF.Abs(speed)), want,
+                    new ChasePilot.CornerNumbers(car.Def.MaxLateralAccel, car.Def.Brake, _d.CornerGrip), WayCap(pos));
+                break;
+            case ChaseState.Lost when car != null:
+                car.NpcInput = ChasePilot.Stop(speed); // the crew stays seated; the car holds and plans again
                 break;
             case ChaseState.Waiting when car != null:
                 car.NpcInput = ChasePilot.Wait(speed); // aside, and standing while the van drives up and past
@@ -253,9 +277,85 @@ internal sealed class ChaseUnit
     {
         var half = car.HalfWidth;
         var plan = OffRoadRoute.Plan(_s.Roads, from, van, (a, b) => _s.Open.Line(a, b, half), _s.Open.Numbers);
-        if (plan != null) { _path = plan.Path; _noWay = 0; return; }
+        if (plan != null) { _path = plan.Path; _noWay = 0; _toVan = true; return; }
+        _toVan = false;
+        if (Fallback(half, from, van) is { } near) { _path = near; _noWay = 0; return; }
         _noWay += _d.RepathSeconds;
         if (_noWay > 4f) _path = RoadPath.Empty;
+    }
+
+    /// <summary>
+    /// No way to the van itself (it stands off every open line, in woods): a way to the nearest point the car can reach close to it, the road point nearest the van (wide radius) or else the van's trail point nearest it that has a
+    /// way. The target is kept a few replans. Null when none has a way.
+    /// </summary>
+    RoadPath? Fallback(float half, NVec2 from, NVec2 van)
+    {
+        RoadPath? To(NVec2 goal) => OffRoadRoute.Plan(_s.Roads, from, goal, (a, b) => _s.Open.Line(a, b, half), _s.Open.Numbers)?.Path;
+        if (_fallback is { } old && _fallbackAge++ < FallbackKeep && To(old) is { } kept) return kept;
+        _fallbackAge = 0;
+        _fallback = null;
+        if (!_s.Roads.IsEmpty && _s.Roads.Nearest(van, FallbackRoadM) is { } road)
+        {
+            var at = _s.Roads.PointAt(road.Place);
+            if (To(at) is { } p) { _fallback = at; return p; }
+        }
+        if (_p.Trail?.Invoke() is { } trail)
+            foreach (var pt in trail.OrderBy(t => NVec2.DistanceSquared(t, van)).Take(FallbackTrailTries))
+                if (To(pt) is { } p) { _fallback = pt; return p; }
+        return null;
+    }
+
+    /// <summary>The speed cap of where the car is: a narrow road edge (under track_width_m) track_speed_mps, open ground (no road edge within track_width_m) open_speed_mps, a wide road none.</summary>
+    float WayCap(NVec2 pos)
+    {
+        var track = _s.Open.Numbers.TrackWidthM;
+        if (_s.Roads.IsEmpty || _s.Roads.Nearest(pos, track) is not { } near) return _d.OpenSpeedMps;
+        return _s.Roads.WidthAt(near.Place) < track ? _d.TrackSpeedMps : float.PositiveInfinity;
+    }
+
+    // ---- lost, stalled: relocation ----
+
+    /// <summary>
+    /// After the machine: the progress watch (a riding car farther than out_within_m from the van that gets no stall_progress_m closer in stall_seconds is stalled), then the relocation of a Lost or stalled car
+    /// (<see cref="RelocateGate"/>): to a fresh spot by its kind's spawn rules when no human sees it and every player is at least spawn_player_min_m from it; no fresh spot counts a failure, relocate_max_tries in a row remove it.
+    /// </summary>
+    void Watch(float dt, NVec3 van)
+    {
+        NewlyStalled = false;
+        if (_car is not { Destroyed: false } car) return;
+        var pos = new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z);
+        var gap = NVec2.Distance(pos, new NVec2(van.X, van.Z));
+        var became = Stall.Step(_machine.Watchable && gap > _d.OutWithinM, true, gap, dt);
+        if (became) GD.Print($"server: {_run.Job}: {_p.Label} {car.Id} is stalled ({gap:F0} m from the van, no {_d.StallProgressM:F0} m closer in {_d.StallSeconds:F0} s)");
+        var lost = _machine.State == ChaseState.Lost;
+        var wants = lost || Stall.State == AssaultStallState.Stalled;
+        if (_gate.Due(wants, dt)) TryRelocate(car, pos, lost ? $"lost: {_machine.Why}" : "stalled");
+        NewlyStalled = became && Stall.State == AssaultStallState.Stalled;
+    }
+
+    void TryRelocate(ServerCar car, NVec2 pos, string why)
+    {
+        var minM = _p.Bay?.SpawnPlayerMinM ?? _d.SpawnPlayerMinM;
+        var near = false;
+        foreach (var pl in _s.PlayerPositions()) if (NVec2.DistanceSquared(pl, pos) < minM * minM) { near = true; break; }
+        if (near || _s.SeenByAnyone(pos)) { _gate.Deferred(); return; } // it keeps trying where it is
+        if (_p.Fresh?.Invoke(this) is not { } spot)
+        {
+            var verdict = _gate.Failed();
+            GD.Print($"server: {_run.Job}: {_p.Label} {car.Id} ({why}) at ({pos.X:F0},{pos.Y:F0}): no fresh spot ({_gate.Failures} of {_d.RelocateMaxTries})");
+            if (verdict == RelocateVerdict.Remove) { GD.Print($"server: {_run.Job}: {_p.Label} {car.Id}: no fresh spot {_d.RelocateMaxTries} times in a row: removed with its crew"); Remove(); }
+            return;
+        }
+        var to = new NVec3(spot.Ground.X, _s.Ground(spot.Ground.X, spot.Ground.Y), spot.Ground.Y);
+        _s.Vehicles.Place(car, to, spot.Yaw);
+        car.NpcInput = null;
+        _path = RoadPath.Empty; _noWay = 0; _toVan = true; _fallback = null;
+        _repath.Cancel(); // planned again this tick's end
+        _machine.Relocated(spot.BackM < 0f);
+        Stall.Relocated();
+        _gate.Moved();
+        PlaceRiders();
+        GD.Print($"server: {_run.Job}: {_p.Label} {car.Id} relocated from ({pos.X:F0},{pos.Y:F0}) to ({to.X:F0},{to.Z:F0}) ({why})");
     }
 
     // ---- the crew ----
