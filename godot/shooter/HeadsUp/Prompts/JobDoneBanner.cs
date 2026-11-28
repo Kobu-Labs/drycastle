@@ -5,7 +5,7 @@ using Drycastle.ShooterCore.Cartel;
 namespace Drycastle.Shooter.HeadsUp.Prompts;
 
 /// <summary>
-/// The "Job done" banner (docs/cartel.md "Job done"): when a Cartel Job the player's party ran succeeds, big words in the upper middle of the screen for about <see cref="JobDone.Seconds"/>:
+/// The "Job done" banner (docs/cartel.md "Job done"): when a Cartel Job the player's party ran succeeds, big words in the upper middle of the screen for about <see cref="JobDone.BannerSeconds"/> at the start of the cinematic:
 /// "Job done" and under it the Respect this player earned ("+N Respect"), or why they earned none (a guest, not in the Cartel, sandbox) or no second line. On a plate, so it reads over any scene;
 /// the title is green and says it in words too. It fades in and out over a fraction of a second (not with reduce motion: it just shows and hides). The text is rewritten only when a new banner starts.
 /// </summary>
@@ -50,6 +50,6 @@ internal sealed class JobDoneBanner
         }
         _panel.Visible = true;
         var t = d.Elapsed;
-        HudUi.Fade(_panel, GameSettings.Current.ReduceMotion ? 1f : Mathf.Clamp(Mathf.Min(t, JobDone.Seconds - t) / FadeSeconds, 0f, 1f));
+        HudUi.Fade(_panel, GameSettings.Current.ReduceMotion ? 1f : Mathf.Clamp(Mathf.Min(t, d.BannerSeconds - t) / FadeSeconds, 0f, 1f));
     }
 }

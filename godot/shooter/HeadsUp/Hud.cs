@@ -66,6 +66,7 @@ public partial class Hud : CanvasLayer
     DustVeil _dust = null!;
     SpawnProtection _protection = null!;
     PounceWash _pounce = null!;
+    FlashVeil _flash = null!;
     ScopeView _scope = null!;
     Crosshair _crosshair = null!;
     HitMarker _hit = null!;
@@ -104,6 +105,7 @@ public partial class Hud : CanvasLayer
         _root = new Control { Theme = ShooterTheme.Build(), MouseFilter = Control.MouseFilterEnum.Ignore };
         AddChild(_root);
         _dust = new DustVeil(_root); // first: the dust is behind every HUD element
+        _flash = new FlashVeil(_root); // the Job-done cinematic's flash: behind every widget, over the world
         _protection = new SpawnProtection(_root);
         _pounce = new PounceWash(_root);
         _scope = new ScopeView(_root);
@@ -318,6 +320,12 @@ public partial class Hud : CanvasLayer
 
     /// <summary>The red wash of the demon's pounce: its opacity (0 off).</summary>
     public void SetPounceWash(float alpha) => _pounce.Set(alpha);
+
+    /// <summary>The white flash of the "Job done" cinematic: its opacity (0 off).</summary>
+    public void SetFlash(float alpha) => _flash?.Set(alpha);
+
+    /// <summary>The crosshair is hidden while the "Job done" cinematic's camera is out from the body.</summary>
+    public void SetCinematicHidesCrosshair(bool hide) => _crosshair?.SetCinematic(hide);
 
     /// <summary>The blood's intensity, 0 (off) to 1 (the death screen's full spatter); <paramref name="seed"/> picks the pattern.</summary>
     public void SetBlood(float intensity, int seed = 0) => _blood?.Set(intensity, seed);

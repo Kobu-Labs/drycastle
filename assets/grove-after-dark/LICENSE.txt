@@ -1,0 +1,4 @@
+grove-after-dark-v4.ogg: "Grove After Dark" v4, a track made by the project owner (source file grove-after-dark-v4.wav, 40.8 s, 44.1 kHz stereo), converted to Ogg Vorbis
+(ffmpeg libvorbis, quality 5), otherwise unedited. Used for the Cartel's Job done cinematic (sounds.json job.done.music; docs/cartel.md "Job done"): the first 12 s play and fade out.
+Licence: the project owner's own work. It is NOT dedicated to the public domain and is not CC0: no licence is granted here beyond its use in this game. The owner decides before any public release whether it ships.
+The cinematic works without the file only if sounds.json stops naming it (the table check fails on a missing file).

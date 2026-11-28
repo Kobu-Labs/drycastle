@@ -49,6 +49,41 @@
     "sample_m": 4, "ray_up_m": 0.9, "max_grade": 0.45, "margin_m": 0.3, "car_half_width_m": 1.1
   },
 
+  // job_done_cinematic (JobDoneCinematicData, ShooterCore/Cartel/JobDoneCinematic.cs; docs/cartel.md "Job done"): what a party player sees and hears when their Job succeeds, on their own client only. A short cinematic of
+  // about 10 s: the banner (banner_seconds), the camera leaving the body in quick eased moves to a high view and back (legs; each move starts a soft white flash and a whoosh, then the camera holds and drifts), the
+  // player's own music under it. Nothing here was played: first guesses.
+  // stages: where the camera stands. anchor: player (the body, or the vehicle it rides) or party (the centre of the party's living squad mates within party_radius_m of the player, the player alone with none).
+  // back_m behind the view's heading (as it was when the cinematic began) and up_m above the anchor's feet; it looks at look_up_m above the anchor. During its hold it pushes in drift_push_m and turns drift_turn_deg
+  // round the anchor (left positive). clamp: pull_in (a wall in the way brings the camera in along its line: the low view behind the player) or raise (the camera stays on its line: the high views). Either way
+  // the camera is kept clearance_m above the ground and above any roof over it ("raise it, never through a roof").
+  // legs, in order: move to the stage (to, a stage id; "eye" is the player's own view) in move_seconds (fast at first, settling), then hold_seconds there. The last leg goes back to the eye. Together they set the length
+  // (here 10.0 s). A flash starts with each move, so a move and its hold together are at least a third of a second (at most 3 flashes a second); the check is made on load.
+  // flash_peak: the flash's opacity at its peak (at most 0.6: soft); it rises over flash_rise_seconds and is gone at flash_seconds (at most 0.25). With reduce motion there is no flash at all (see reduced).
+  // Music (assets/grove-after-dark, sounds.json job.done.music): up over music_in_seconds, full until music_fade_start_seconds, out over music_fade_seconds (so it ends 2 s after the camera is back). A skip (jump, fire, interact or
+  // escape pressed) or damage taken ends the camera at once, with a flash back, and fades the music out over skip_fade_seconds; the controls stay off skip_lock_seconds more, so the key that skipped does nothing else.
+  // reduced: reduce motion on, or a seat the camera cannot film (aircraft, turrets): only the banner and the music, over seconds, the music fading from music_fade_start_seconds over music_fade_seconds. No camera, no flash, controls stay the player's.
+  "job_done_cinematic": {
+    "banner_seconds": 4,
+    "flash_peak": 0.5, "flash_rise_seconds": 0.04, "flash_seconds": 0.16,
+    "music_in_seconds": 0.3, "music_fade_start_seconds": 9, "music_fade_seconds": 3,
+    "skip_fade_seconds": 1.5, "skip_lock_seconds": 0.3,
+    "party_radius_m": 30, "clearance_m": 2,
+    "stages": [
+      { "id": "behind", "anchor": "player", "back_m": 6,  "up_m": 3,  "look_up_m": 1.2, "drift_push_m": 0.8, "drift_turn_deg": 5, "clamp": "pull_in" },
+      { "id": "above",  "anchor": "party",  "back_m": 6,  "up_m": 25, "look_up_m": 0,   "drift_push_m": 2,   "drift_turn_deg": 6, "clamp": "raise" },
+      { "id": "high",   "anchor": "party",  "back_m": 12, "up_m": 80, "look_up_m": 0,   "drift_push_m": 5,   "drift_turn_deg": 8, "clamp": "raise" }
+    ],
+    "legs": [
+      { "to": "behind", "move_seconds": 0.35, "hold_seconds": 1.5 },
+      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 2.0 },
+      { "to": "high",   "move_seconds": 0.35, "hold_seconds": 2.5 },
+      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 0.6 },
+      { "to": "behind", "move_seconds": 0.35, "hold_seconds": 1.3 },
+      { "to": "eye",    "move_seconds": 0.35, "hold_seconds": 0 }
+    ],
+    "reduced": { "seconds": 4, "music_fade_start_seconds": 2.5, "music_fade_seconds": 1.5 }
+  },
+
   // receivers (ReceiversData, ShooterCore/Cartel/Receiver.cs; docs/cartel.md "Receivers"; GLOSSARY "Receiver"): the drop of a Heist (Harvest and Trap house; a Delivery keeps its cartel_drop points). A Heist's drop is one of three
   // kinds, drawn at random among the kinds the map has (weights below: a kind with weight 0 is never drawn; a kind with no free place now, or none far enough, falls through to the next): a stash house (a hollow house with
   // road access that no player is in and no Job holds, at least the heist's drop_min_m from its objective: a Cartel pallet and a buyer at it), a helicopter (the utility helicopter on a landing spot, zone kind cartel_heli, rotors

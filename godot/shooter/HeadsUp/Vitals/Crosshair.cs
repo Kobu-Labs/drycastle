@@ -16,7 +16,7 @@ internal sealed class Crosshair
     readonly ColorRect[] _arms = new ColorRect[4], _armsBack = new ColorRect[4];
     readonly Func<bool> _scopeUp, _binocularsUp;
     float _gap = -1, _alpha = 1;
-    bool _covered, _launcher, _unarmed, _pounce, _flung;
+    bool _covered, _launcher, _unarmed, _pounce, _flung, _cinematic;
 
     public Crosshair(Control root, Func<bool> scopeUp, Func<bool> binocularsUp)
     {
@@ -47,7 +47,10 @@ internal sealed class Crosshair
 
     public void SetFlung(bool hide) { if (_flung == hide) return; _flung = hide; Apply(); }
 
-    public void Apply() => _node.Visible = CrosshairRules.Visible(GameSettings.Current.ShowCrosshair, _covered || _launcher, _scopeUp(), _binocularsUp(), Pinned, _unarmed);
+    /// <summary>The "Job done" cinematic's camera is out from the body: no crosshair (and nothing to aim with).</summary>
+    public void SetCinematic(bool hide) { if (_cinematic == hide) return; _cinematic = hide; Apply(); }
+
+    public void Apply() => _node.Visible = CrosshairRules.Visible(GameSettings.Current.ShowCrosshair, _covered || _launcher || _cinematic, _scopeUp(), _binocularsUp(), Pinned, _unarmed);
 
     /// <summary>The next frame lays the arms out again (the screen or the settings changed).</summary>
     public void ResetGap() => _gap = -1;

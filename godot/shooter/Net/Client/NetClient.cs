@@ -146,7 +146,7 @@ public partial class NetClient : Node
     ShotsClient _shots = null!;
     OwnReconcile _reconcile = null!;
     DeathView _death = null!;
-    JobDoneCamera _jobDoneCamera = null!;
+    JobDoneClient _jobDone = null!;
     VehiclesClient _vehicles = null!;
     HudClient _hud = null!;
     EffectEvents _effects = null!;
@@ -372,8 +372,9 @@ public partial class NetClient : Node
         _binoculars = new BinocularsClient(Ctx, Items, ItemData, _hulls, _animals, () => _pounce.Pinned);
         Ctx.Remotes.Appeared += _binoculars.OnAppeared;
         _death = new DeathView(Ctx, _pounce, _corpses);
-        _jobDoneCamera = new JobDoneCamera(Ctx, _cartel.Done);
-        _death.Pulled = _jobDoneCamera.Camera; // a Job done: the camera backs off from the player for a few seconds
+        _jobDone = new JobDoneClient(Ctx, _cartel.Done, Cartel.JobDoneCinematic, () => Ctx.Cars.MySeat() is { } ride && _flight.DefOf(ride.Car) != null);
+        _cartel.CameraAllowed = _jobDone.CameraAllowed; // a Job done: the cinematic takes the camera and the controls for about 10 s, where the view can be filmed
+        _death.Pulled = _jobDone.Camera; // on foot it is the camera composer's last word
         _remotes = new RemotesClient(Ctx, _flings, _animals, _pounce, _targets) { BodyReplaced = (id, dead) => _corpses.CorpseOf(id) || _harvester.VictimHidden(id, dead) };
         _demon = new DemonClient(Ctx, DemonData, HolyMassData, _mass, _blastDust, _pounce);
         _aircraftClient = new AircraftClient(Ctx, _streaks, _blastDust, _markers, at => _rockets.HomingKillShown(at));
@@ -624,8 +625,9 @@ public partial class NetClient : Node
     {
         _water.Render();
         _held.ShowViewmodel();
-        if (_jobDoneCamera.Active) Ctx.Viewmodel.Visible = false; // the camera is out from the body: the weapon in the hand would hang in the air
-        _ownFigure.Seen = _jobDoneCamera.Active; // ...and the body is drawn instead
+        _jobDone.Frame((float)delta); // the cinematic's skip keys, whoosh, music and flash
+        if (_jobDone.Active) Ctx.Viewmodel.Visible = false; // the camera is out from the body: the weapon in the hand would hang in the air
+        _ownFigure.Seen = _jobDone.Active; // ...and the body is drawn instead
         // the own body's shadow on foot (#319); seated, the rider's own figure is the body
         _ownFigure.Update(Ctx.View.Mode.ShowsViewmodel && !_flings.OwnFlung && !Ctx.Driving && Ctx.View.MyState != EntityState.InVehicle && _rider.SelfView == null, _held.ShownId, _status.Has(Ctx.MyId, StatusKind.Filling));
         _thrower.UpdateArc();
@@ -634,6 +636,7 @@ public partial class NetClient : Node
         Ctx.Shake.Update(delta);
         High.Update(delta); // a high player's sway, before the roll is composed
         FadeOwnCorrection(delta);
+        _jobDone.ApplyInVehicle(); // last: the cinematic's camera over the chase or seat camera
     }
 
     void OnServerGone()
@@ -848,6 +851,7 @@ public partial class NetClient : Node
         var mi = _bot != null ? _bot.Step() : Dead ? new MoveInput { SpeedScale = 1, Yaw = Ctx.Me!.Yaw } : Report.PerfPlay ? Report.PlayStep() : Ctx.Me!.Sample();
         if (!Bot) { _held.ReadSlotKeys(); _held.ApplyScope(); _groundItems.Tick(); _loot.Tick(dt); TickCrates(dt); _thieves.Loot.TickReturn(dt); _minerals.Tick(dt); }
         _fxDemo.Input(ref mi);
+        _jobDone.FilterInput(ref mi); // the Job-done cinematic: the body stands, a driver brakes, the heading is held
         _scud.FilterInput(ref mi); // a Scud screen's keys are the screen's: no driving, no weapon
         _thrower.FilterInput(ref mi); // G throws a grenade only where it is not the Scud screen's key (#420)
         _duffels.TickKey(mi, dt); // the own pick-up, drop and throw of a Duffel, predicted from the keys as sent: this input runs with the burden they leave
