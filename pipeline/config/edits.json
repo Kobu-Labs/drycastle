@@ -8058,8 +8058,8 @@
   "MN-0006": {
    "mineral": "dubovite",
    "position": [
-    -587953.926,
-    -1249012.526
+    -587951.046,
+    -1249010.606
    ]
   }
  },
@@ -57261,7 +57261,7 @@
     -1249025.466
    ],
    "rotation_deg": 269.3,
-   "scale": 1.4
+   "scale": 4.2
   },
   {
    "asset": "pack:synty-arid-desert/SM_Env_Tree_Dead_01",
@@ -57271,7 +57271,7 @@
     -1249016.566
    ],
    "rotation_deg": 270.1,
-   "scale": 1.4
+   "scale": 4.2
   },
   {
    "asset": "pack:synty-arid-desert/SM_Env_Tree_Dead_01",
@@ -57281,7 +57281,7 @@
     -1249013.486
    ],
    "rotation_deg": 359.8,
-   "scale": 1.39
+   "scale": 4.17
   },
   {
    "asset": "prim:cartel_pallet",
