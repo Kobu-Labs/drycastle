@@ -25,6 +25,7 @@ internal sealed class MineralsServer
     readonly Func<IReadOnlyList<MineralDrop>> _drops;
     readonly Func<IReadOnlyList<MineralNodeSpec>> _statics;
     readonly Func<bool> _holyMassPeaceful;
+    readonly Func<bool> _storm;
 
     MineralBook? _book;
     Task<IReadOnlyList<MineralFind>>? _load;
@@ -35,10 +36,11 @@ internal sealed class MineralsServer
 
     /// <param name="drops">The drops that already lie in the world (a drop cannot come before the nodes, but never lose one).</param>
     /// <param name="statics">The static nodes of the map (mineral_nodes.json, set in the editor's edits).</param>
+    /// <param name="storm">A thunderstorm is on (<see cref="Drycastle.Shooter.Net.Server.Weather.WeatherServer.Storm"/>): Thundernite's rule.</param>
     /// <param name="holyMassPeaceful">A Holy Mass was completed with no pastor killed, within holystone_seconds (60 min), and this round has not ended nor a new Mass begun (Holystone's rule, <see cref="HolyMassEvent.Peaceful"/>).</param>
-    public MineralsServer(ServerContext ctx, IProgressionStore? store, Func<IReadOnlyList<MineralDrop>> drops, Func<IReadOnlyList<MineralNodeSpec>> statics, Func<bool> holyMassPeaceful)
+    public MineralsServer(ServerContext ctx, IProgressionStore? store, Func<IReadOnlyList<MineralDrop>> drops, Func<IReadOnlyList<MineralNodeSpec>> statics, Func<bool> holyMassPeaceful, Func<bool> storm)
     {
-        _ctx = ctx; _store = store; _drops = drops; _statics = statics; _holyMassPeaceful = holyMassPeaceful;
+        _ctx = ctx; _store = store; _drops = drops; _statics = statics; _holyMassPeaceful = holyMassPeaceful; _storm = storm;
     }
 
     /// <summary>Once a tick: builds the nodes (once the spawns are known), loads the book, sends the finds to joiners and the nodes when an activity changed.</summary>
@@ -68,7 +70,7 @@ internal sealed class MineralsServer
     }
 
     /// <summary>What the activity rules look at, read from the server's other parts.</summary>
-    MineralWorld World() => new(HolyMassPeaceful: _holyMassPeaceful());
+    MineralWorld World() => new(HolyMassPeaceful: _holyMassPeaceful(), Storm: _storm());
 
     bool[] ActiveNow() { var world = World(); return _nodes!.Nodes.Select(n => MineralActivity.IsActive(n.MineralId, world)).ToArray(); }
 

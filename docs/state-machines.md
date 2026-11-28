@@ -2101,6 +2101,20 @@ stateDiagram-v2
 - **Confirmed**: The server shows the throw, later than the guess: the guessed arc is kept, and the body lies where it lands, until the server's body has landed too (clock: LandSeconds, a guard). Then Settling, the difference of the two landing spots the offset.
 - **Settling**: Drawn at the server's position plus the fading offset (clock: SettleSeconds); no new guess, as the server throws one body once in that time.
 
+## Weather.Phase
+
+The village's sky: clear, or a thunderstorm that comes and goes by itself
+
+```mermaid
+stateDiagram-v2
+    [*] --> Clear
+    Clear --> Storm
+    Storm --> Clear
+```
+
+- **Clear**: Counts down every_minutes to the next storm.
+- **Storm**: Lasts lasting_minutes; a lightning strike every strike_seconds; Thundernite can be taken; the client's sky darkens.
+
 ## WorldInterest.Relevance
 
 One filtered world entity as one client's encoder sees it: keyframed until the client has it, then delta, then dormant (hidden) until it is acknowledged, then silent. Ticks are acknowledgements, not seconds.

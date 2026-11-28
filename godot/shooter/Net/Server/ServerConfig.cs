@@ -104,6 +104,8 @@ public sealed class ServerConfig
     /// <summary>environment.json "lamp" and "sign_plate"; the defaults when the host sets none.</summary>
     public LampLook LampData = new();
     public SignPlateLook SignPlateData = new();
+    /// <summary>environment.json "storm" (Weather, #230); the defaults when the host sets none.</summary>
+    public StormLook WeatherData = new();
     /// <summary>holy_mass.json (set by the host): the citizens, the Mass.</summary>
     public HolyMassFile HolyMass = new();
     /// <summary>holy_mass_demon.json (set by the host). Without it (zero hits) the demon does not appear.</summary>

@@ -65,9 +65,10 @@ public class RadioTowerTests
     }
 
     [Fact]
-    public void ThundernitFollowsNoStormRuleYet()
+    public void ThundernitCanBeTakenOnlyInAStorm()
     {
-        // #397: Thundernite is meant for a thunderstorm, but there is no weather (#230): its node counts as always active until MineralWorld learns thunder.
-        Assert.True(MineralActivity.IsActive("thundernite", new MineralWorld()));
+        // #397, #230: Thundernite is for a thunderstorm.
+        Assert.False(MineralActivity.IsActive("thundernite", new MineralWorld()));
+        Assert.True(MineralActivity.IsActive("thundernite", new MineralWorld(Storm: true)));
     }
 }

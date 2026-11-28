@@ -69,6 +69,19 @@ public partial class DayNightCycle : Node3D
     public float Gloom { get; set; }
     const float GloomFloor = 0.03f;
 
+    /// <summary>0..1: how far the sky has darkened for a thunderstorm (Weather, #230): ramps toward the server's phase over <see cref="StormFadeSeconds"/>; 0 offline. <see cref="StormSky"/> turns it into light.</summary>
+    public float Storm { get; private set; }
+    /// <summary>Seconds the sky takes to go from clear to a full storm and back (environment.json storm.fade_seconds).</summary>
+    public float StormFadeSeconds { get; set; } = 20f;
+    bool _stormOn;
+    float _flashAge = StormSky.FlashSeconds, _flashStrength;
+
+    /// <summary>The server's weather phase: the sky fades toward it.</summary>
+    public void SetStorm(bool on) => _stormOn = on;
+
+    /// <summary>A lightning strike: the sky and the ambient light flash for a moment, <paramref name="strength"/> 0..1 (stronger when near).</summary>
+    public void Flash(float strength) { _flashAge = 0f; _flashStrength = Mathf.Clamp(strength, 0f, 1f); }
+
     /// <summary>Ambient energy a normal shooting star adds at its peak (a fireball adds 2.5x).</summary>
     const float MeteorAmbient = 0.03f;
 
@@ -135,6 +148,8 @@ public partial class DayNightCycle : Node3D
 
     public override void _Process(double delta)
     {
+        Storm = Drycastle.ShooterCore.Fsm.Ramp.MoveToward(Storm, _stormOn ? 1f : 0f, (float)delta / Mathf.Max(StormFadeSeconds, 0.1f));
+        if (_flashAge < StormSky.FlashSeconds) _flashAge += (float)delta;
         if (_serverClock == null) _elapsed += delta;
         else
         {
@@ -148,7 +163,7 @@ public partial class DayNightCycle : Node3D
 
     void Apply(double hour)
     {
-        var l = DayCurve.Sample(hour, MinAmbient, MoonPeak, NightExposure);
+        var l = StormSky.Apply(DayCurve.Sample(hour, MinAmbient, MoonPeak, NightExposure), Storm, StormSky.FlashAt(_flashAge) * _flashStrength);
         Lighting = l;
         NightFactor = l.NightFactor;
 

@@ -7,7 +7,8 @@ namespace Drycastle.Shooter.Crystals;
 /// <summary>
 /// Thundernite (crystals.md): pale storm-glass that glows only faintly until a mini lightning strike zips between its tips; the strike itself is the light (arc ribbons + a short pulse of the OmniLight and of the
 /// crystal's emission, a quiet crackle, rarely a big strike up into the sky with a delayed thunder). Now and then a small dark cloud forms just over the crystals and rains on them; while it hangs the strikes come
-/// faster. The cloud stays (cloud_permanent) or follows a pure function of time (<see cref="NaturalCloud"/>), not a state machine, so a weather system can later just set <see cref="CloudForce"/> (1 on, 0 off, -1 by itself).
+/// faster. The cloud stays (cloud_permanent) or follows a pure function of time (<see cref="NaturalCloud"/>), not a state machine; the weather (MineralsClient) sets <see cref="CloudForce"/> (1 on, 0 off, -1 by itself)
+/// and <see cref="Present"/> (the crystal only exists while a storm is on).
 /// Tunables: data/crystals.json "thundernite".
 /// </summary>
 public sealed partial class ThundernitFx : CrystalFx
@@ -27,6 +28,22 @@ public sealed partial class ThundernitFx : CrystalFx
 
     /// <summary>1 = the cloud is up, 0 = it is not, -1 = it comes and goes by itself.</summary>
     public int CloudForce { get; set; } = -1;
+
+    bool _present = true;
+    /// <summary>False: the crystal is gone (no storm, so nobody can take it): hidden, silent and not striking. The lab leaves it true.</summary>
+    public bool Present
+    {
+        get => _present;
+        set
+        {
+            if (_present == value) return;
+            _present = value;
+            Visible = value;
+            if (value) return;
+            SetLoop("", 0f);
+            if (_rain != null) ParticleFx.Run(_rain, false);
+        }
+    }
 
     StandardMaterial3D _rock = null!, _outerMat = null!, _coreMat = null!, _cloudMat = null!;
     ShaderMaterial _crystal = null!;
@@ -118,6 +135,7 @@ public sealed partial class ThundernitFx : CrystalFx
 
     protected override void Tick(double dt)
     {
+        if (!_present) return;
         var d = (float)dt;
         _pulse = Math.Max(0f, _pulse - d / Math.Max(P.F("light_pulse_time", 0.09f), 0.01f));
         if (_pulse <= 0f && _lightMoved)

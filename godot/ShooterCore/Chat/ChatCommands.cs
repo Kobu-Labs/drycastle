@@ -134,6 +134,7 @@ public static class ChatCommands
             new[] { new ChatArg("tier", ChatArgKind.IntOrChoice, false, 1, MaxDrillTier) }),
         new("duffel", "TEST: a Duffel of that kind (weed, cash or product) in your hands, you its party of one: hold the throw key to throw it, tap it to put it down", new[] { new ChatArg("kind", ChatArgKind.Choice) }),
         new("fences", "TEST: make every broken fence whole again, for everyone", new[] { new ChatArg("action", ChatArgKind.Choice) }),
+        new("weather", "Show the weather, or force a thunderstorm (Thundernite can be taken in one) or clear skies, for everyone", new[] { new ChatArg("weather", ChatArgKind.Choice, false) }),
         new("rubble", "What the pieces of a fallen house part do for the rest of the round: fade (sink away) or stay (piles until the round ends). No argument shows it", new[] { new ChatArg("mode", ChatArgKind.Choice, false) }),
     };
 
@@ -181,6 +182,7 @@ public static class ChatCommands
             ChatArgKind.Choice when cmd.Name == "houses" => new[] { ("restore", "every hollow house whole, as at the round's start") },
             ChatArgKind.Text when cmd.Name == "traphouse" => new[] { ("nearest", "the hollow house nearest to you"), ("off", "strip every Trap house") },
             ChatArgKind.Choice when cmd.Name == "fences" => new[] { ("restore", "every fence whole, as at the round's start") },
+            ChatArgKind.Choice when cmd.Name == "weather" => new[] { ("storm", "a thunderstorm now: it darkens the sky, lightning strikes, and it lasts a normal storm's time"), ("clear", "clear skies now, the next storm after its normal wait") },
             ChatArgKind.Choice when cmd.Name == "rubble" => new[] { ("fade", "the pieces sink away after a while"), ("stay", "the pieces stay as piles for the round") },
             ChatArgKind.Choice when cmd.Name == "church" => new[] { ("open", "swing the doors open"), ("close", "shut the doors (nobody is crushed: a body in the doorway is moved to the nearer side)") },
             ChatArgKind.Choice when cmd.Name == "rozhlas" => new[] { ("hijack", "the announcement cuts and the mic stays live for 3 minutes (only while a detour broadcast is on air)"), ("take", "TEST: hold the set yourself (stands in for holding E at the dictation table; only while hijacked)"), ("release", "TEST: let the set holder go"), ("goto", "TEST: stand at the dictation table (where E takes the set during a hijack)"), ("feedtest", "TEST: push a few seconds of test voice and a shot through the live feed (ffmpeg voice chain, 2 s delay) to every megaphone"), ("combattest", "TEST: push a shot, a blast and a death sound through the live feed, wherever you stand") },

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_note": "Tunables of the fantasy crystals (godot/shooter/Crystals). Polled about twice a second by `--crystal-lab`: save the file and the lab updates, no rebuild. Colours are #rrggbb, lengths are metres, times seconds; the crystal rock is about 0.73 x 1.15 x 0.88 m. *_at are fractions of the crystal's bounding box [x, y, z] (0..1); *_seed pick a face of the model for a prop (change it to move the prop), *_island / web_a / web_b number the crystals of the rock (0..9). tint0..7 tint the crystals one by one. *_sound are ids of sounds.json ('' = silent), *_db the offset from that sound's own level: PLACEHOLDERS (existing sounds), no real flies / fire / thunder / rain files yet.",
+  "_note": "Tunables of the fantasy crystals (godot/shooter/Crystals). Polled about twice a second by `--crystal-lab`: save the file and the lab updates, no rebuild. Colours are #rrggbb, lengths are metres, times seconds; the crystal rock is about 0.73 x 1.15 x 0.88 m. *_at are fractions of the crystal's bounding box [x, y, z] (0..1); *_seed pick a face of the model for a prop (change it to move the prop), *_island / web_a / web_b number the crystals of the rock (0..9). tint0..7 tint the crystals one by one. *_sound are ids of sounds.json ('' = silent), *_db the offset from that sound's own level: PLACEHOLDERS (existing sounds), no real flies / fire files yet (Thundernite has real rain, thunder and crackle recordings, assets/public-domain-weather).",
   "lab": {
     "spacing": 1.6,
     "glow_enabled": true,
@@ -88,10 +88,10 @@
     "light_range": 2.5,
     "light_at": [0.5, 0.8, 0.5],
     "emission_pulse": 6.0,
-    "crackle_sound": "shock.crackle",
-    "crackle_db": -14.0,
-    "thunder_sound": "explosion.grenade",
-    "thunder_db": -20.0,
+    "crackle_sound": "thundernite.crackle",
+    "crackle_db": -8.0,
+    "thunder_sound": "thundernite.thunder",
+    "thunder_db": -6.0,
     "cloud_enabled": true,
     "cloud_permanent": true,
     "cloud_height": 0.4,
@@ -106,7 +106,8 @@
     "rain_speed": 1.6,
     "rain_length": 0.04,
     "rain_color": "#9fb4cc",
-    "rain_sound": ""
+    "rain_sound": "thundernite.rain",
+    "rain_db": -3.0
   },
 
   "smetiskomite": {
