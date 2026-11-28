@@ -173,7 +173,7 @@ public static class ObjectEdits
     {
         var errs = new List<string>();
         if (!(root.GetValueOrDefault("version") is EditsFile.Num v && v.Text == "1")) errs.Add("version: must be 1");
-        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "paths")) errs.Add($"{k}: unknown key");
+        foreach (var k in root.Keys) if (k is not ("version" or "parcels" or "objects" or "groups" or "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "paths" or "mineral_nodes")) errs.Add($"{k}: unknown key");
         var seen = new Dictionary<string, string>(); // object id -> where it first appears, unique across the whole file
         if (root.TryGetValue("objects", out var top)) errs.AddRange(CheckObjects(top, "objects", seen));
         errs.AddRange(CheckParcels(root, seen));

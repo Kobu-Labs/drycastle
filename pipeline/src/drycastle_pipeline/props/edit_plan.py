@@ -77,7 +77,8 @@ def plan_edits(
         if "fence" in entry or group_fence is not None:
             spec = resolve_fence(entry.get("fence"), group_fence)
             gaps = tuple((*_local_xy(x, y, origin), w) for x, y, w in spec.gaps)
-            plan.specs[pid] = replace(spec, gaps=gaps)
+            sides = tuple((*_local_xy(x, y, origin), side) for x, y, side in spec.sides)
+            plan.specs[pid] = replace(spec, gaps=gaps, sides=sides)
     ids = list(polys)
     index = shapely.STRtree([polys[q] for q in ids])
     for obj in edits.objects:

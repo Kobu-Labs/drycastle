@@ -233,7 +233,10 @@ public partial class NetClient : Node
     CropCrushClient _crush = null!;
     /// <summary>glass.json (set by the host); the defaults when it sets none.</summary>
     public GlassConfig GlassData = new();
+    /// <summary>environment.json <c>storm</c> (set by the host): the rain's amount and level on the client.</summary>
+    public StormLook StormData = new();
     MineralsClient _minerals = null!;
+    WeatherClient _weather = null!;
     HuntsClient _hunts = null!;
     ScreensClient _screens = null!;
     /// <summary>The sandbox mode's state and requests (the panel and the host reach them here).</summary>
@@ -314,6 +317,7 @@ public partial class NetClient : Node
         Chat = new ChatClient(Ctx, ItemData, CompanionData, Squads);
         TeamAdmin = new TeamsClient(Ctx, Chat);
         _minerals = new MineralsClient(Ctx);
+        _weather = new WeatherClient(Ctx, StormData);
         Loadouts = new LoadoutClient(Ctx, PerkData, Chat);
         _streaks = new KillstreaksClient(Ctx, Loadouts);
         _streaks.Used += id => _missile.OnStreakUsed(id);
@@ -577,6 +581,7 @@ public partial class NetClient : Node
         _harvestFill.Render(); // the rustle of every filler
         _crates.Render();
         _minerals.Render();
+        _weather.Render(); // the rain round the camera and its sound
         _turrets.Render();
     }
 
@@ -776,6 +781,7 @@ public partial class NetClient : Node
         _hunts.OnEvent(kind, payload); // the Hunter's Log: answers and announcements (#336)
         _animals.OnPhoenixEvent(kind, payload); // the Phoenix's fall: a flash and the crash site's warning light
         _minerals.OnEvent(kind, payload); // the mineral nodes and the player's finds (#401)
+        _weather.OnEvent(kind, payload); // the thunderstorm: the sky, the flash and the thunder of a strike (#230)
         _duffels.OnEvent(kind, payload); // the Duffel in reach, a refused seat (#494)
         _receivers.OnEvent(kind, payload); // what the interact key does at a Receiver's Cartel man
         _drills.OnEvent(kind, payload); // the Drills on the safes near the player, and what the key's hold would do (#496)

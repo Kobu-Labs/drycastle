@@ -2,6 +2,7 @@ using Godot;
 using Drycastle.Shooter.Bunkers;
 using Drycastle.ShooterCore.Bunkers;
 using Drycastle.ShooterCore.Cartel;
+using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Churches;
 using Drycastle.ShooterCore.Plantation;
 using Drycastle.ShooterCore.Scenery;
@@ -21,6 +22,7 @@ internal sealed class MapAreas
     Shelters? _shelters;
     ZonePoints? _points;
     ZonePolygons? _polygons;
+    IReadOnlyList<MineralNodeSpec>? _mineralNodes;
     CartelMap? _cartel;
 
     public MapAreas(Drycastle.MapLoader.MapLoader? map, Func<ChurchShell?> church, Random rng) { _map = map; _church = church; _rng = rng; }
@@ -53,6 +55,10 @@ internal sealed class MapAreas
             return _points;
         }
     }
+
+    /// <summary>The static mineral nodes of the map (mineral_nodes.json), in Godot ground axes. None without a map or the file; a broken file counts as none.</summary>
+    public IReadOnlyList<MineralNodeSpec> MineralNodes =>
+        _mineralNodes ??= MineralNodeFile.FromJsonOrEmpty(_map?.MineralNodesJson, m => GD.PrintErr($"server: {m}; there are no static mineral nodes"));
 
     /// <summary>The map's zone polygons. Empty without a map or the file; a broken or other-version file counts as none.</summary>
     public ZonePolygons ZonePolygons

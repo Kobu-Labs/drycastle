@@ -18,6 +18,8 @@ TREES_FORMAT_VERSION = 1
 GROUND_OBJECTS_FORMAT_VERSION = 1
 TREES_AXES = "map metres: x east, y north, z up (ground height at the trunk foot)"
 GROUPS_FILE = "groups.json"
+MINERAL_NODES_FILE = "mineral_nodes.json"
+MINERAL_NODES_FORMAT_VERSION = 1
 
 
 def write_clutter_meshes(path: Path) -> str:
@@ -157,6 +159,28 @@ def write_optional(out_dir: Path, name: str, doc: dict | None, files: dict, key:
         return
     dump_doc(path, doc)
     files[key] = name
+
+
+def build_mineral_nodes(mineral_nodes: dict[str, dict], origin, terrain) -> dict | None:
+    """The ``mineral_nodes.json`` document, or None when there are no static mineral nodes.
+
+    ``mineral_nodes`` is the ``mineral_nodes`` section of the edits (absolute S-JTSK), ``origin`` the map origin of parcels.json
+    and ``terrain`` a ``Terrain`` (or None: a node without ``z`` then has none and is left out). Points are local metres (x east, y north, z the
+    height: the node's own ``z``, else the terrain height there), like zone_points.json; sorted by id, which is the order the game numbers them."""
+    if not mineral_nodes or origin is None:
+        return None
+    nodes = []
+    for nid in sorted(mineral_nodes):
+        e = mineral_nodes[nid]
+        x, y = float(e["position"][0]) - origin[0], float(e["position"][1]) - origin[1]
+        if "z" in e:
+            z = float(e["z"])
+        elif terrain is not None:
+            z = float(terrain.surface([x], [y])[0])
+        else:
+            continue
+        nodes.append({"id": nid, "mineral": e["mineral"], "x": round(x, 3), "y": round(y, 3), "z": round(z, 3)})
+    return {"version": MINERAL_NODES_FORMAT_VERSION, "axes": "local metres, x east, y north, z up (elevation)", "nodes": nodes} if nodes else None
 
 
 def build_groups(edits_path: Path, parcel_ids) -> dict | None:

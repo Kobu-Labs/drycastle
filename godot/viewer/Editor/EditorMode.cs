@@ -133,7 +133,7 @@ public partial class EditorMode : Node, IEditorHost
             Camera.LeaveEditor();
             Input.MouseMode = Input.MouseModeEnum.Captured;
             Shapes.CancelShapeGesture();
-            if (Fence.Gates.Armed) Fence.Gates.Cancel();
+            Fence.CancelPicks();
             HoverId = null;
             Chrome.HideHoverText();
         }
@@ -246,6 +246,9 @@ public partial class EditorMode : Node, IEditorHost
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Fence.Gates.Armed:
                 Fence.Gates.LeftPress(mb.Position);
                 break;
+            case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Fence.Sides.Armed:
+                Fence.Sides.LeftPress(mb.Position);
+                break;
             case InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Left } mb when !_looking && Objects.PlacementAsset != null:
                 Objects.PlaceClick(mb.Position, mb.CtrlPressed);
                 break;
@@ -286,6 +289,8 @@ public partial class EditorMode : Node, IEditorHost
                         else if (Poles.Plan.Planning) Poles.Plan.Stop();
                         else if (Poles.Connecting) Poles.StopConnecting();
                         else if (Fence.Gates.Armed) Fence.Gates.Cancel();
+                        else if (Fence.Sides.Armed) Fence.Sides.Cancel();
+                        else if (Tool == EditorTool.Fence && Fence.Sides.Selected >= 0) Fence.Sides.Select(-1);
                         else if (Poles.SelectedCableId != null) Poles.SelectCable(null);
                         else if (Objects.SelectedObjectId != null) Objects.SelectObject(null);
                         else if (Tool == EditorTool.Ground && Ground.Escape()) { }

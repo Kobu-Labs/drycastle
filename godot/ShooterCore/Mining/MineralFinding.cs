@@ -13,8 +13,8 @@ public sealed record MineralFind(long PlayerId, string MineralId, DateTime AtUtc
 /// </summary>
 public sealed record MineralNode(byte Id, string MineralId, Vector3 Position);
 
-/// <summary>What the world is like for the rules of <see cref="MineralActivity"/>. Grows with the minerals that need it (a storm for Thundernite, a living phoenix for Pheonixite).</summary>
-public readonly record struct MineralWorld();
+/// <summary>What the world is like for the rules of <see cref="MineralActivity"/>. Grows with the minerals that need it (a living phoenix for Pheonixite). <paramref name="HolyMassPeaceful"/>: a Holy Mass was completed with no pastor killed (<see cref="Citizens.HolyMassEvent.Peaceful"/>), for Holystone. <paramref name="Storm"/>: a thunderstorm is on (<see cref="Scenery.WeatherMachine.Storm"/>), for Thundernite.</summary>
+public readonly record struct MineralWorld(bool HolyMassPeaceful = false, bool Storm = false);
 
 /// <summary>
 /// When a mineral can be taken: every mineral brings its own criteria (Thundernite only in a storm, Pheonixite once a phoenix drops it), so there is no global respawn rule.
@@ -22,7 +22,11 @@ public readonly record struct MineralWorld();
 /// </summary>
 public static class MineralActivity
 {
-    static readonly Dictionary<string, Func<MineralWorld, bool>> Rules = new();
+    static readonly Dictionary<string, Func<MineralWorld, bool>> Rules = new()
+    {
+        ["holystone"] = w => w.HolyMassPeaceful,
+        ["thundernite"] = w => w.Storm,
+    };
 
     /// <summary>Whether a node of this mineral can be taken now.</summary>
     public static bool IsActive(string mineralId, MineralWorld world) => !Rules.TryGetValue(mineralId, out var rule) || rule(world);
@@ -40,6 +44,8 @@ public static class MineralRules
     public const float ReachMetres = 2.5f;
     /// <summary>The server accepts a take this much farther than <see cref="ReachMetres"/>, for lag.</summary>
     public const float LatencySlackMetres = 1.5f;
+    /// <summary>How far (metres, up or down, feet to node) a player may be from a node: every node sits at foot level (ground, deck, gallery floor), so a floor below never reaches it.</summary>
+    public const float ReachUpDownMetres = 2f;
 
     public static int IndexOf(string mineralId) => Minerals.All.ToList().FindIndex(m => m.Id == mineralId);
 
@@ -160,7 +166,7 @@ public sealed class MineralBook
         if (node == null) return MineralPickResult.UnknownNode;
         var dx = node.Position.X - player.X;
         var dz = node.Position.Z - player.Z;
-        if (MathF.Sqrt(dx * dx + dz * dz) > MineralRules.ReachMetres + slack || MathF.Abs(node.Position.Y - player.Y) > 3f) return MineralPickResult.TooFar;
+        if (MathF.Sqrt(dx * dx + dz * dz) > MineralRules.ReachMetres + slack || MathF.Abs(node.Position.Y - player.Y) > MineralRules.ReachUpDownMetres) return MineralPickResult.TooFar;
         if (!active) return MineralPickResult.Inactive;
         return Has(playerId, node.MineralId) ? MineralPickResult.AlreadyFound : MineralPickResult.Ok;
     }

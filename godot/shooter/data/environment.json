@@ -6,5 +6,7 @@
   // A street lamp at full night: a spot beam straight down (range_m, angle_deg = half angle of the cone, energy) and a lit lens that blooms (lens_energy above 2 on purpose). Pole lamps are shootable (ADR 0037): a round within hit_radius_m of the head breaks it, it stays dark respawn_seconds, then flickers flicker_seconds and is lit again. Nothing here was seen in the game: nudge freely.
   "lamp": { "range_m": 12, "angle_deg": 55, "energy": 10, "colour": "#ffc773", "lens_energy": 6, "hit_radius_m": 0.25, "respawn_seconds": 120, "flicker_seconds": 3 },
   // The shootable plate of a road sign (ADR 0039): a round within hit_radius_m of the plate's centre bends it (visual only), it hangs bent respawn_seconds and is whole again. Nothing here was seen in the game: nudge freely.
-  "sign_plate": { "hit_radius_m": 0.3, "respawn_seconds": 120 }
+  "sign_plate": { "hit_radius_m": 0.3, "respawn_seconds": 120 },
+  // Weather (#230): a thunderstorm comes by itself. Clear for a random every_minutes, then a storm for a random lasting_minutes, and again; during it a lightning strike lands every strike_seconds (random), at a random bearing and a distance of strike_distance_m from every player (a flash and a thunder delayed by distance). The client's sky takes fade_seconds to darken or clear; during a storm rain falls round the camera (rain_amount drops in a box 40 m wide) with a loop whose level offset is rain_db dB, rain_indoor_db dB more (and muffled) in a bunker or garage. /weather storm|clear forces it. Nothing here was seen in the game: nudge freely.
+  "storm": { "every_minutes": [20, 40], "lasting_minutes": [4, 7], "strike_seconds": [5, 18], "strike_distance_m": [150, 1500], "fade_seconds": 20, "rain_amount": 4000, "rain_db": 0, "rain_indoor_db": -14 }
 }

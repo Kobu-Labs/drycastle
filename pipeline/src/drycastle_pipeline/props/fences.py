@@ -3,13 +3,13 @@
 import math
 
 import numpy as np
-from shapely.geometry import Point, Polygon, shape
+from shapely.geometry import LineString, Point, Polygon, shape
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import nearest_points, unary_union
 
 from drycastle_pipeline.buildings.footprint import footprint_polygon
 from drycastle_pipeline.core.geometry import r3
-from drycastle_pipeline.edits.schema import FenceSpec
+from drycastle_pipeline.edits.schema import SIDE_CORNER_DEG, FenceSpec
 from drycastle_pipeline.props.helpers import merged_lines, road_zone, seeded
 from drycastle_pipeline.terrain.terrain import Terrain
 
@@ -26,6 +26,71 @@ def _owned_edge(poly: Polygon, others: BaseGeometry | None, outer: BaseGeometry)
     if others is not None and not others.is_empty:
         own = own.difference(others)
     return own.intersection(outer)
+
+
+def _ring_sides(rings: list) -> tuple[list[LineString], set[tuple[float, float]]]:
+    """The sides of closed rings (split at every vertex turning more than SIDE_CORNER_DEG) and their corner points (rounded)."""
+    sides: list[LineString] = []
+    corners: set[tuple[float, float]] = set()
+    cos_max = math.cos(math.radians(SIDE_CORNER_DEG))
+    for ring in rings:
+        pts = [tuple(c) for c in ring.coords[:-1]]
+        n = len(pts)
+        cut = []
+        for i in range(n):
+            a, b, c = np.array(pts[i - 1]), np.array(pts[i]), np.array(pts[(i + 1) % n])
+            u, v = b - a, c - b
+            nu, nv = np.linalg.norm(u), np.linalg.norm(v)
+            if nu > 1e-9 and nv > 1e-9 and float(u @ v) / (nu * nv) < cos_max:
+                cut.append(i)
+        if not cut:
+            sides.append(LineString([*pts, pts[0]]))
+            continue
+        for k, i in enumerate(cut):
+            j = cut[(k + 1) % len(cut)]
+            idx = list(range(i, j + 1)) if j > i else [*range(i, n), *range(0, j + 1)]
+            sides.append(LineString([pts[q] for q in idx]))
+            corners.add(_key(pts[i]))
+    return sides, corners
+
+
+def _key(p) -> tuple[float, float]:
+    return (round(float(p[0]), 3), round(float(p[1]), 3))
+
+
+def _split_at(ln: LineString, corners: set[tuple[float, float]]) -> list[LineString]:
+    """The line cut at its vertices that are corners."""
+    coords = list(ln.coords)
+    out, cur = [], [coords[0]]
+    for c in coords[1:]:
+        cur.append(c)
+        if _key(c) in corners and len(cur) >= 2:
+            out.append(LineString(cur))
+            cur = [c]
+    if len(cur) >= 2:
+        out.append(LineString(cur))
+    return [x for x in out if x.length > 0.05]
+
+
+def _outer_rings(geom) -> list:
+    return [g.exterior for g in getattr(geom, "geoms", [geom])]
+
+
+def _house_colours(buildings: list[dict], groups: dict[str, list[str]]) -> dict[str, str]:
+    """The house colour of each parcel (and group ID): the wall colour of its largest building; a group's is its members' largest."""
+    best: dict[str, tuple[float, str]] = {}
+    for b in buildings:
+        pid, rgb = b.get("parcel"), b.get("wall_colour")
+        if pid is None or rgb is None:
+            continue
+        area = footprint_polygon(b["footprint"]).area
+        if area > best.get(pid, (-1.0, ""))[0]:
+            best[pid] = (area, "#{:02x}{:02x}{:02x}".format(*(int(c) for c in rgb[:3])))
+    for gid, pids in groups.items():
+        have = [best[p] for p in pids if p in best]
+        if have:
+            best[gid] = max(have)
+    return {k: v[1] for k, v in best.items()}
 
 
 def _gap_zone(base: BaseGeometry, x: float, y: float, width: float) -> BaseGeometry:
@@ -49,7 +114,9 @@ def make_fences(
     parcel without a spec gets the rules' ``auto`` fence. ``groups`` maps a group ID to its member
     parcel IDs: the members' outer edge is fenced as one property, each piece with its owner's
     settings and the seeded roll keyed by the group ID. Custom sections carry their own
-    ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one).
+    ``type``, ``height_m``, ``thickness_m`` and ``colour`` (and ``column`` when the edit names one). A spec with
+    ``house_colour`` takes the colour of the parcel's house in ``buildings`` (else its group's), when there is one. A spec with
+    ``sides`` cuts its pieces at the corners and draws (or, mode none, leaves out) each side with an entry in that entry's style.
 
     The gate gap of a rule fence is on the boundary that faces a road: within ``gate_road_within_m`` of a
     carriageway of ``graph``.
@@ -59,8 +126,10 @@ def make_fences(
     member_of: dict[str, str] = {}
     others: dict[str, BaseGeometry | None] = {}
     outer: dict[str, BaseGeometry] = {}
+    group_rings: dict[str, list] = {}
     for gid, pids in (groups or {}).items():
         union = unary_union([polys[q] for q in pids])
+        group_rings[gid] = _outer_rings(union)
         outer[gid] = unary_union(
             [Polygon(g.exterior).boundary for g in getattr(union, "geoms", [union])]
         )
@@ -68,6 +137,7 @@ def make_fences(
             member_of[pid] = gid
             rest = [polys[q] for q in pids if q != pid]
             others[pid] = unary_union(rest) if rest else None
+    houses = _house_colours(buildings, groups or {})
     bpolys = [footprint_polygon(b["footprint"]) for b in buildings]
     bunion = unary_union(bpolys) if bpolys else None
     near = float(cfg["garden_near_building_m"])
@@ -113,19 +183,31 @@ def make_fences(
         if done is not None and not boundary.is_empty:
             boundary = boundary.difference(done)
         pieces = [ln for ln in merged_lines(boundary) if ln.length >= _MIN_PIECE_M]
-        style = (
-            {
-                "type": spec.type,
-                "height_m": spec.height_m,
-                "thickness_m": spec.thickness_m,
-                "colour": spec.colour,
-                **({"column": spec.column} if spec.column is not None else {}),
-            }
-            if custom and spec is not None
-            else {}
-        )
+
+        def style_of(sp: FenceSpec) -> dict:
+            colour = houses.get(pid) or houses.get(gid or "", sp.colour) if sp.house_colour else sp.colour
+            return {"type": sp.type, "height_m": sp.height_m, "thickness_m": sp.thickness_m, "colour": colour,
+                    **({"column": sp.column} if sp.column is not None else {})}
+
+        style = style_of(spec) if custom and spec is not None else {}
+        styled = [(ln, style) for ln in pieces]
+        if custom and spec is not None and spec.sides:
+            rings = group_rings[gid] if gid is not None else [poly.exterior, *poly.interiors]
+            side_lines, corners = _ring_sides(rings)
+            own: dict[int, FenceSpec] = {}
+            for x, y, sub in spec.sides:  # a later entry for the same side wins
+                p = Point(x, y)
+                own[min(range(len(side_lines)), key=lambda i: side_lines[i].distance(p))] = sub
+            styled = []
+            for ln in pieces:
+                for part in _split_at(ln, corners):
+                    mid = part.interpolate(0.5, normalized=True)
+                    sub = own.get(min(range(len(side_lines)), key=lambda i: side_lines[i].distance(mid)))
+                    if sub is not None and sub.mode == "none":
+                        continue
+                    styled.append((part, style if sub is None else style_of(sub)))
         fenced = []
-        for ln in pieces:
+        for ln, style in styled:
             fenced.append(ln)
             k = max(1, math.ceil(ln.length / float(cfg["section_m"])))
             pts = np.array([ln.interpolate(ln.length * i / k).coords[0] for i in range(k + 1)])

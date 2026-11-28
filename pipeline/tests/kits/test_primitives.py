@@ -1,3 +1,6 @@
+import json
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -16,6 +19,9 @@ from drycastle_pipeline.kits.primitives import (
     mound_entry,
     mound_solids,
     mound_tiers,
+    radio_tower_entry,
+    radio_tower_layout,
+    radio_tower_solids,
 )
 
 MANIFEST = load_manifest(private=False)  # the public library: the private packs have their own rules
@@ -167,11 +173,60 @@ def test_props_warns_for_unknown_assets_only() -> None:
 def test_radio_tower_is_a_tall_lattice_on_a_cabin() -> None:
     mesh = build_primitive("radio_tower")
     lo, hi = bbox(mesh)
-    assert (hi - lo) == pytest.approx([3.0, 2.6, 36.0])
-    assert hi[2] == pytest.approx(36.0)
+    assert hi[2] == pytest.approx(36.0) and lo[2] == pytest.approx(0.0)
     assert mesh.face_count > 1000  # lattice members, not a solid block
     taller = bbox(build_primitive("radio_tower", {"height_m": 50}))[1]
     assert taller[2] == pytest.approx(50.0)
+
+
+LADDERS_JSON = Path(__file__).resolve().parents[3] / "godot" / "shooter" / "data" / "object_ladders.json"
+
+
+def _inside(s, x, y, z) -> bool:
+    return all(lo <= v <= hi for lo, v, hi in zip(s["min"], (x, y, z), s["max"], strict=True))
+
+
+def test_radio_tower_deck_is_solid_with_an_open_hatch_where_the_ladder_comes_through() -> None:
+    g = radio_tower_layout()
+    solids = radio_tower_solids()
+    ladder = g["ladder"]
+    top = ladder["top"]
+    # the ladder climbs through the hatch: no box in its way, from the ground to the deck
+    for z in (0.5, 2.0, 10.0, 33.0, top - 0.05):
+        assert not any(_inside(s, ladder["x"], ladder["y"], z) for s in solids)
+    # where a climber is put at the top (and the bottom) is on a solid deck, standing room clear above it
+    sx, sy = ladder["step_off"]
+    assert any(_inside(s, sx, sy, top - 0.01) and s["max"][2] == pytest.approx(top) for s in solids)
+    assert not any(s["min"][2] < top + 1.0 and _inside(s, sx, sy, top + 0.5) for s in solids)
+    # the deck is bigger than the old 2 m x 2 m and a railing wall runs all round its edge
+    (x0, y0), (x1, y1) = g["deck"]
+    assert x1 - x0 >= 4.0 and y1 - y0 >= 4.0
+    for x, y in ((x0 + 0.05, 0.0), (x1 - 0.05, 0.0), (0.0, y0 + 0.05), (0.0, y1 - 0.05), (x0 + 0.05, y0 + 0.05), (x1 - 0.05, y1 - 0.05)):
+        assert any(_inside(s, x, y, top + g["rail_h"] - 0.05) for s in solids), (x, y)
+    # the cabin is solid to its roof; the hatch is the only hole in the deck floor
+    assert any(_inside(s, 0.0, 0.0, 1.0) and s["max"][2] == pytest.approx(2.5) for s in solids)
+    (hx0, hy0), (hx1, hy1) = g["hatch"]
+    assert not any(_inside(s, (hx0 + hx1) / 2, (hy0 + hy1) / 2, top - 0.05) for s in solids)
+    assert any(_inside(s, hx1 + 0.1, (hy0 + hy1) / 2, top - 0.05) for s in solids)
+    # the ladder stands clear of the cabin wall and its step-off is not inside the hatch
+    assert ladder["y"] < g["cabin"][0][1] and not (hy0 <= sy <= hy1)
+
+
+def test_radio_tower_ladder_in_object_ladders_json_matches_the_model() -> None:
+    entries = [e for e in json.loads(LADDERS_JSON.read_text())["ladders"] if e["asset"] == "prim:radio_tower"]
+    assert len(entries) == 1
+    e, ladder = entries[0], radio_tower_layout()["ladder"]
+    # the file is in the object's Godot frame ([x, z], z = -y of the mesh)
+    assert e["at"] == pytest.approx([ladder["x"], -ladder["y"]])
+    assert e["facing"] == pytest.approx([ladder["facing"][0], -ladder["facing"][1]])
+    assert e["bottom_m"] == ladder["bottom"] and e["top_m"] == pytest.approx(ladder["top"])
+    assert bbox(build_primitive("radio_tower"))[1][2] > e["top_m"]  # the mast stands above the deck the ladder ends at
+
+
+def test_radio_tower_manifest_entry_in_sync_and_ref_valid() -> None:
+    assert validate_asset_ref("prim:radio_tower", MANIFEST) is None
+    entry = next(a for a in MANIFEST["assets"] if a["id"] == "prim:radio_tower")
+    assert entry == radio_tower_entry()  # regenerate with radio_tower_entry() (preview.poles.replace_entries) when the primitive changes
 
 
 def test_bunker_is_a_low_dome_with_door_facing_front() -> None:

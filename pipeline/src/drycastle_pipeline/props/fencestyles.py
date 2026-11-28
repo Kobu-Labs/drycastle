@@ -421,9 +421,10 @@ def _build(sections: list[dict], cfg: dict, apart: bool) -> tuple[dict[int | Non
     def column_at(owner, xy, ground, top, d, name, tint, panel_tex, pieces=None, thin=False) -> None:
         key = (round(float(xy[0]), 2), round(float(xy[1]), 2))
         have = columns.get(key)
-        if have is None:
+        if have is None or (have.thin and not thin and have.owner == owner):  # where a wall meets a thin fence its pier wins over the post
             breaks = None if pieces is None else (pieces.index, min(max(math.floor(pieces(xy)[1]), 0), pieces.count - 1))
-            columns[key] = _Column(float(xy[0]), float(xy[1]), ground, top, d, name, tint, panel_tex, owner, thin, breaks)
+            low, high = (ground, top) if have is None else (min(have.ground, ground), max(have.top, top))
+            columns[key] = _Column(float(xy[0]), float(xy[1]), low, high, d, name, tint, panel_tex, owner, thin, breaks)
         else:
             have.ground, have.top = min(have.ground, ground), max(have.top, top)
 

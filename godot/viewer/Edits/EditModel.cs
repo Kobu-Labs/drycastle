@@ -18,18 +18,22 @@ public static class EditSchema
     public static readonly string[] FenceModes = { "auto", "none", "custom" };
     public const string DefaultFenceType = "picket";
 
-    public readonly record struct FenceTypeInfo(string Name, double Height, double Thickness, string Colour);
+    /// <summary>A type's defaults and its panel texture (fencestyles.FENCE_STYLES, assets/drycastle-generated-textures/), for the dropdown icon.</summary>
+    public readonly record struct FenceTypeInfo(string Name, double Height, double Thickness, string Colour, string Texture);
 
     public static readonly FenceTypeInfo[] FenceTypes =
     {
-        new("picket", 1.0, 0.06, "#9a8064"),
-        new("wire", 1.1, 0.03, "#5c5f66"),
-        new("brick_red", 1.8, 0.3, "#ffffff"),
-        new("brick_white", 1.8, 0.3, "#ffffff"),
-        new("stone_wall", 1.4, 0.45, "#ffffff"),
-        new("concrete", 1.8, 0.15, "#cfcac0"),
-        new("brick_wall", 1.8, 0.3, "#ffffff"),  // the old name of brick_red
+        new("picket", 1.0, 0.06, "#9a8064", "picket"),
+        new("wire", 1.1, 0.03, "#5c5f66", "wire"),
+        new("brick_red", 1.8, 0.3, "#ffffff", "brick_red"),
+        new("brick_white", 1.8, 0.3, "#ffffff", "brick_white"),
+        new("stone_wall", 1.4, 0.45, "#ffffff", "stone"),
+        new("concrete", 1.8, 0.15, "#cfcac0", "concrete"),
+        new("brick_wall", 1.8, 0.3, "#ffffff", "brick_red"),  // the old name of brick_red
     };
+
+    /// <summary>Types whose fence can take the house's wall colour (schema.py HOUSE_COLOUR_TYPES).</summary>
+    public static readonly string[] HouseColourTypes = { "brick_red", "brick_white", "concrete", "brick_wall" };
 
     public static IEnumerable<string> FenceTypeNames => FenceTypes.Select(t => t.Name);
 
@@ -65,20 +69,24 @@ public sealed class FenceDraft
     public string? Column;
     public double? Height, Thickness;
     public string? Colour;
+    /// <summary>The `house_colour` key: true = the colour is the house's wall colour (only for HouseColourTypes); null = not set.</summary>
+    public bool? HouseColour;
     public List<Gap> Gaps = new();
+    /// <summary>The `sides` key: sides of the boundary (between corners) with a look of their own, or no fence.</summary>
+    public List<SideDraft> Sides = new();
     /// <summary>Remove the fence entry altogether (inherit the group's / use the rules), whatever the mode shows.</summary>
     public bool Remove;
 
-    public bool HasCustomKeys => Type != null || Column != null || Height != null || Thickness != null || Colour != null || Gaps.Count > 0;
+    public bool HasCustomKeys => Type != null || Column != null || Height != null || Thickness != null || Colour != null || HouseColour != null || Gaps.Count > 0 || Sides.Count > 0;
     /// <summary>The mode the pipeline would use: the explicit one, else custom when custom keys are present, else auto.</summary>
     public string EffectiveMode => Mode ?? (HasCustomKeys ? "custom" : "auto");
 
     public FenceDraft Clone() => new()
     {
-        Mode = Mode, Type = Type, Column = Column, Height = Height, Thickness = Thickness, Colour = Colour, Gaps = new List<Gap>(Gaps), Remove = Remove,
+        Mode = Mode, Type = Type, Column = Column, Height = Height, Thickness = Thickness, Colour = Colour, HouseColour = HouseColour, Gaps = new List<Gap>(Gaps), Sides = Sides.Select(s => s.Clone()).ToList(), Remove = Remove,
     };
 
-    public void ClearCustom() { Type = null; Column = null; Height = null; Thickness = null; Colour = null; Gaps.Clear(); }
+    public void ClearCustom() { Type = null; Column = null; Height = null; Thickness = null; Colour = null; HouseColour = null; Gaps.Clear(); Sides.Clear(); }
 
     /// <summary>Choose the mode; leaving custom drops the custom-only keys.</summary>
     public void SetMode(string mode)
@@ -101,11 +109,15 @@ public sealed class FenceDraft
         d.Height = Number(o.GetValueOrDefault("height_m"));
         d.Thickness = Number(o.GetValueOrDefault("thickness_m"));
         d.Colour = o.GetValueOrDefault("colour") as string;
+        d.HouseColour = o.GetValueOrDefault("house_colour") as bool?;
         if (o.GetValueOrDefault("gaps") is List<object?> gaps)
             foreach (var g in gaps)
                 if (g is Obj go && go.GetValueOrDefault("at") is List<object?> at && at.Count == 2
                     && Number(at[0]) is { } x && Number(at[1]) is { } y && Number(go.GetValueOrDefault("width_m")) is { } w)
                     d.Gaps.Add(new Gap(x, y, w));
+        if (o.GetValueOrDefault("sides") is List<object?> sides)
+            foreach (var s in sides)
+                if (SideDraft.FromEntry(s) is { } sd) d.Sides.Add(sd);
         return d;
     }
 
@@ -136,6 +148,7 @@ public sealed class FenceDraft
         if (Height != null) o["height_m"] = Num(Height.Value);
         if (Thickness != null) o["thickness_m"] = Num(Thickness.Value);
         if (Colour != null) o["colour"] = Colour.ToLowerInvariant();
+        if (HouseColour != null) o["house_colour"] = HouseColour.Value;
         if (Gaps.Count > 0)
             o["gaps"] = Gaps.Select(g =>
             {
@@ -144,8 +157,24 @@ public sealed class FenceDraft
                 go["width_m"] = Num(g.Width);
                 return (object?)go;
             }).ToList();
+        if (Sides.Count > 0) o["sides"] = Sides.Select(s => (object?)s.ToEntry()).ToList();
         return o;
     }
+
+    /// <summary>True when the pipeline colours this fence with its house (own key over the group's; the type must allow it).</summary>
+    public bool EffectiveHouseColour(FenceDraft? group)
+        => (HouseColour ?? group?.HouseColour ?? false) && EditSchema.HouseColourTypes.Contains(EffectiveCustom(group).type);
+
+    /// <summary>A side's values as the pipeline uses them: the side's own over the fence's over the group's over its type's table.</summary>
+    public (string type, double height, double thickness, string colour) EffectiveSide(SideDraft s, FenceDraft? group)
+    {
+        var type = s.Type ?? Type ?? group?.Type ?? EditSchema.DefaultFenceType;
+        var t = EditSchema.TypeInfo(type);
+        return (type, s.Height ?? Height ?? group?.Height ?? t.Height, s.Thickness ?? Thickness ?? group?.Thickness ?? t.Thickness, s.Colour ?? Colour ?? group?.Colour ?? t.Colour);
+    }
+
+    public bool EffectiveSideHouseColour(SideDraft s, FenceDraft? group)
+        => (s.HouseColour ?? HouseColour ?? group?.HouseColour ?? false) && EditSchema.HouseColourTypes.Contains(EffectiveSide(s, group).type);
 
     /// <summary>The values the pipeline would use for a custom fence: own values over the group's over the type table.</summary>
     public (string type, double height, double thickness, string colour) EffectiveCustom(FenceDraft? group)
@@ -153,6 +182,54 @@ public sealed class FenceDraft
         var type = Type ?? group?.Type ?? EditSchema.DefaultFenceType;
         var t = EditSchema.TypeInfo(type);
         return (type, Height ?? group?.Height ?? t.Height, Thickness ?? group?.Thickness ?? t.Thickness, Colour ?? group?.Colour ?? t.Colour);
+    }
+}
+
+/// <summary>
+/// One entry of a fence's `sides`: the side of the boundary nearest to (X, Y) (absolute S-JTSK metres, as gaps) and its
+/// own look; null fields take the fence's. Mode "none": no fence on that side (then the look keys are not written).
+/// </summary>
+public sealed class SideDraft
+{
+    public double X, Y;
+    public string? Mode, Type, Column, Colour;
+    public double? Height, Thickness;
+    public bool? HouseColour;
+
+    public bool Unfenced => Mode == "none";
+    public SideDraft Clone() => (SideDraft)MemberwiseClone();
+
+    public void ClearLook() { Type = null; Column = null; Colour = null; Height = null; Thickness = null; HouseColour = null; }
+
+    public static SideDraft? FromEntry(object? entry)
+    {
+        if (entry is not Obj o || o.GetValueOrDefault("at") is not List<object?> { Count: 2 } at
+            || FenceDraft.Number(at[0]) is not { } x || FenceDraft.Number(at[1]) is not { } y) return null;
+        return new SideDraft
+        {
+            X = x, Y = y,
+            Mode = o.GetValueOrDefault("mode") as string,
+            Type = o.GetValueOrDefault("type") as string,
+            Column = o.GetValueOrDefault("column") as string,
+            Colour = o.GetValueOrDefault("colour") as string,
+            Height = FenceDraft.Number(o.GetValueOrDefault("height_m")),
+            Thickness = FenceDraft.Number(o.GetValueOrDefault("thickness_m")),
+            HouseColour = o.GetValueOrDefault("house_colour") as bool?,
+        };
+    }
+
+    public Obj ToEntry()
+    {
+        var o = EditsFile.NewObject();
+        o["at"] = new List<object?> { FenceDraft.Num(X), FenceDraft.Num(Y) };
+        if (Unfenced) { o["mode"] = "none"; return o; }
+        if (Type != null) o["type"] = Type;
+        if (Column != null) o["column"] = Column;
+        if (Height != null) o["height_m"] = FenceDraft.Num(Height.Value);
+        if (Thickness != null) o["thickness_m"] = FenceDraft.Num(Thickness.Value);
+        if (Colour != null) o["colour"] = Colour.ToLowerInvariant();
+        if (HouseColour != null) o["house_colour"] = HouseColour.Value;
+        return o;
     }
 }
 
@@ -276,13 +353,25 @@ public static class EditModel
         if (f == null) return errs;
         var mode = f.GetValueOrDefault("mode") as string;
         if (mode != null && !EditSchema.FenceModes.Contains(mode)) errs.Add($"{path}.mode: bad mode");
-        string[] custom = { "type", "height_m", "thickness_m", "colour", "gaps" };
+        string[] custom = { "type", "height_m", "thickness_m", "colour", "house_colour", "gaps", "sides" };
         if (mode is "auto" or "none")
             foreach (var k in custom) if (f.ContainsKey(k)) errs.Add($"{path}.{k}: not used with mode '{mode}'");
         if (f.GetValueOrDefault("type") is { } ty && !(ty is string s && EditSchema.FenceTypeNames.Contains(s))) errs.Add($"{path}.type: unknown type");
         foreach (var k in new[] { "height_m", "thickness_m" })
             if (f.ContainsKey(k) && !Positive(f[k])) errs.Add($"{path}.{k}: must be a number > 0");
         if (f.GetValueOrDefault("colour") is { } c && !(c is string cs && EditSchema.ColourRx.IsMatch(cs))) errs.Add($"{path}.colour: must be #rrggbb");
+        if (f.ContainsKey("house_colour") && f["house_colour"] is not bool) errs.Add($"{path}.house_colour: must be true or false");
+        else if (f.GetValueOrDefault("house_colour") is true && f.GetValueOrDefault("type") is string ht && !EditSchema.HouseColourTypes.Contains(ht))
+            errs.Add($"{path}.house_colour: only with type brick_red, brick_white, concrete");
+        if (f.GetValueOrDefault("sides") is List<object?> sides)
+            for (var i = 0; i < sides.Count; i++)
+            {
+                if (SideDraft.FromEntry(sides[i]) is not { } sd) { errs.Add($"{path}.sides.{i}: needs at [x, y]"); continue; }
+                if (sd.Mode != null && sd.Mode is not ("custom" or "none")) errs.Add($"{path}.sides.{i}.mode: custom or none");
+                if (sd.Type != null && !EditSchema.FenceTypeNames.Contains(sd.Type)) errs.Add($"{path}.sides.{i}.type: unknown type");
+                if (sd.Colour != null && !EditSchema.ColourRx.IsMatch(sd.Colour)) errs.Add($"{path}.sides.{i}.colour: must be #rrggbb");
+                if (sd.HouseColour == true && sd.Type != null && !EditSchema.HouseColourTypes.Contains(sd.Type)) errs.Add($"{path}.sides.{i}.house_colour: only with type brick_red, brick_white, concrete");
+            }
         if (f.GetValueOrDefault("gaps") is List<object?> gaps)
             for (var i = 0; i < gaps.Count; i++)
             {

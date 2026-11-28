@@ -15,9 +15,9 @@ public partial class EditorMode
         if (Shapes.ShapeTool && (tool != Tool)) Shapes.CancelShapeGesture();
         if (Tool == EditorTool.Sketch && tool != EditorTool.Sketch) Sketches.CancelGesture();
         if (Objects.Dragging && tool != Tool) Objects.CancelDrag(); // an object drag must not outlive its tool (the release would still save it)
-        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); if (Fence.Gates.Armed) Fence.Gates.Cancel(); }
+        if (tool is EditorTool.Ground or EditorTool.Zones or EditorTool.Sketch) { Objects.DisarmPlacement(false); Fence.CancelPicks(); }
         if (Tool == EditorTool.Poles && tool != EditorTool.Poles) { Poles.StopConnecting(false); Poles.Plan.Stop(false); Poles.SelectCable(null); }
-        if (tool == EditorTool.Poles && Fence.Gates.Armed) Fence.Gates.Cancel();
+        if (tool == EditorTool.Poles) Fence.CancelPicks();
         Tool = tool;
         Shapes.ShapeRest(); // Selected or Idle depends on which kind of shape the tool selects
         Chrome.ShowTool(tool);

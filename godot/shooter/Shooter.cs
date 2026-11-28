@@ -454,7 +454,7 @@ public partial class Shooter : Node3D
             var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
             var client = _client = new NetClient
             {
-                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), Report = { PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080") }, Sandbox = { Requested = SandboxAsked(_cfg) }, KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
+                World = this, Host = host, Port = port, PlayerName = name, Token = GameSettings.PlayerToken(_cfg.Str("profile")), Report = { PerfPlay = _cfg.Flag("perf-play"), PerfSeconds = PerfSecondsOf(_cfg), PerfRes = _cfg.Str("perf-res", "1920x1080") }, Sandbox = { Requested = SandboxAsked(_cfg) }, KillY = killY, Water = _water, Weapons = _data.Weapons, BlipConfig = _data.Match, PerkData = _data.Perks, CamoData = _data.Camo, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, AnimalData = _data.Animals, CompanionData = _data.Companions, AnimalShapes = _data.Shapes, WildlifeData = _data.Wildlife, ThievesData = _data.Thieves, ItemData = _data.Items, BigfootData = _data.Bigfoot, HolyMassData = _data.HolyMass, DemonData = _data.Demon, StormData = _data.Environment.Storm, Map = _map, Vehicles = _data.Vehicles, Scud = _data.Scud, Plantation = _data.Plantation, FxDemo = _cfg.Str("fx-demo"), PoseDemo = _cfg.Flag("pose-demo"), Sim = NetSim.Parse(_cfg.Str("net-sim")),
                 OnWelcomed = () => done.TrySetResult(JoinResult.Welcomed),
             };
             client.Duffels = _data.Duffels;
@@ -667,7 +667,7 @@ public partial class Shooter : Node3D
         var killY = _map.SpawnPoints.Count > 0 ? _map.SpawnPoints.Min(p => p.Position.Y) - 100f : -1000f;
         var config = new ServerConfig
         {
-            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, FenceDestruction = _data.FenceDestruction, LampData = _data.Environment.Lamp, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
+            World = this, KillY = killY, Water = _water, Map = _map, Progression = _progression, Perks = _data.Perks, Levels = _data.Levels, Killstreaks = _data.Killstreaks, GlassData = _data.Glass, HouseDestruction = _data.HouseDestruction, FenceDestruction = _data.FenceDestruction, LampData = _data.Environment.Lamp, WeatherData = _data.Environment.Storm, SignPlateData = _data.Environment.SignPlate, CamoData = _data.Camo, Turret = _data.Turret,
             Spawns = _map.SpawnPoints.Select(sp => new System.Numerics.Vector3(sp.Position.X, sp.Position.Y, sp.Position.Z)).ToList(),
             MatchConfig = WithTargets(ApplyOverrides(_data.Match, cfg.Str("match-set")), cfg.Str("targets")),
             Vehicles = ApplyVehicleOverrides(_data.Vehicles, cfg.Str("vehicle-set")), Scud = _data.Scud, Plantation = _data.Plantation, Cartel = _data.Cartel,
@@ -798,7 +798,7 @@ public partial class Shooter : Node3D
     /// <summary>Sun, moon, sky and fog for the world (the day/night cycle; the server clock drives it when networked).</summary>
     void AddLightAndSky()
     {
-        AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient });
+        AddChild(new DayNightCycle { LocalClock = _data.Environment.ToClock(), MinAmbient = _data.Environment.MinAmbient, StormFadeSeconds = _data.Environment.Storm.FadeSeconds });
     }
 
     /// <summary>Client view: light, sky and the first-person player at a random spawn point.</summary>

@@ -18,11 +18,13 @@ public sealed class FenceTool : EditorPart
     readonly Dictionary<string, Pending> _pending = new(StringComparer.Ordinal);
 
     public FenceGates Gates { get; }
+    public FenceSides Sides { get; }
     public FencePanel Panel { get; }
 
     public FenceTool(IEditorHost host) : base(host)
     {
         Gates = new FenceGates(host, this);
+        Sides = new FenceSides(host, this);
         Panel = new FencePanel(host, this);
     }
 
@@ -38,6 +40,7 @@ public sealed class FenceTool : EditorPart
     {
         Panel.BuildFooter(outer);
         Gates.BuildWorld();
+        Sides.BuildWorld();
     }
 
     /// <summary>Bring the target, every control and the gate markers in line with the selection (called when the panel is dirty).</summary>
@@ -46,7 +49,15 @@ public sealed class FenceTool : EditorPart
         UpdateTarget();
         Panel.Refresh();
         Gates.RebuildMarkers();
+        Sides.RebuildMarkers();
         Host.Outlines.MarkAll();
+    }
+
+    /// <summary>Cancel an armed gate or side pick (tool switch, leaving the editor).</summary>
+    public void CancelPicks()
+    {
+        if (Gates.Armed) Gates.Cancel();
+        if (Sides.Armed) Sides.Cancel();
     }
 
     // ---- target and pending state ----
@@ -78,8 +89,9 @@ public sealed class FenceTool : EditorPart
         var t = ComputeTarget();
         if (t?.Key != _target?.Key)
         {
-            if (Gates.Armed) Gates.Cancel();
+            CancelPicks();
             Gates.Deselect();
+            Sides.Deselect();
         }
         _target = t;
     }
@@ -121,6 +133,7 @@ public sealed class FenceTool : EditorPart
     public bool Reset()
     {
         Gates.Deselect();
+        Sides.Deselect();
         return Edit(d => d.Reset());
     }
 
@@ -128,23 +141,81 @@ public sealed class FenceTool : EditorPart
     {
         if (!EditSchema.FenceModes.Contains(mode)) { Host.Say($"unknown fence mode {mode}", true); return false; }
         Gates.Deselect();
+        Sides.Deselect();
         return Edit(d => d.SetMode(mode));
     }
 
-    /// <summary>Set the type (null = default); only in mode custom.</summary>
+    /// <summary>A look change: to the selected side (<see cref="FenceSides.Selected"/>), else to the whole fence.</summary>
+    bool EditLook(Action<FenceDraft> whole, Action<FenceDraft, SideDraft> side)
+    {
+        var i = Sides.Selected;
+        if (i < 0) return Edit(whole, true);
+        return Edit(d =>
+        {
+            if (i >= d.Sides.Count) return;
+            if (d.Sides[i].Unfenced) d.Sides[i].Mode = null; // changing its look fences the side again
+            side(d, d.Sides[i]);
+        }, true);
+    }
+
+    /// <summary>The type the house-colour check sees: the selected side's effective type, else the fence's.</summary>
+    string LookType(FenceDraft d)
+        => Sides.Selected is var i and >= 0 && i < d.Sides.Count ? d.EffectiveSide(d.Sides[i], InheritedGroupFence()).type : d.EffectiveCustom(InheritedGroupFence()).type;
+
+    /// <summary>Set the type (null = default: the fence's for a side); only in mode custom.</summary>
     public bool SetType(string? type)
     {
         if (type != null && !EditSchema.FenceTypeNames.Contains(type)) { Host.Say($"unknown fence type {type}", true); return false; }
-        return Edit(d => d.Type = type, true);
+        return EditLook(d =>
+        {
+            d.Type = type;
+            if (!EditSchema.HouseColourTypes.Contains(d.EffectiveCustom(InheritedGroupFence()).type)) d.HouseColour = null; // the key is only valid on brick and concrete
+        }, (d, s) =>
+        {
+            s.Type = type;
+            if (!EditSchema.HouseColourTypes.Contains(d.EffectiveSide(s, InheritedGroupFence()).type)) s.HouseColour = null;
+        });
     }
 
-    public bool SetHeight(double? metres) => Edit(d => d.Height = metres is { } v ? Math.Max(0.05, v) : null, true);
-    public bool SetThickness(double? metres) => Edit(d => d.Thickness = metres is { } v ? Math.Max(0.01, v) : null, true);
+    /// <summary>Colour the fence (or the selected side) with its house's wall colour (brick and concrete types only); off clears the key, or writes false over an inherited true.</summary>
+    public bool SetHouseColour(bool on)
+    {
+        if (on && !EditSchema.HouseColourTypes.Contains(LookType(Current))) { Host.Say("house colour works on brick and concrete fences only", true); return false; }
+        var group = InheritedGroupFence();
+        return EditLook(d => d.HouseColour = on ? true : group?.HouseColour == true ? false : null,
+            (d, s) => s.HouseColour = on ? true : (d.HouseColour ?? group?.HouseColour) == true ? false : null);
+    }
+
+    public bool SetHeight(double? metres)
+    {
+        var v = metres is { } m ? Math.Max(0.05, m) : (double?)null;
+        return EditLook(d => d.Height = v, (_, s) => s.Height = v);
+    }
+
+    public bool SetThickness(double? metres)
+    {
+        var v = metres is { } m ? Math.Max(0.01, m) : (double?)null;
+        return EditLook(d => d.Thickness = v, (_, s) => s.Thickness = v);
+    }
 
     public bool SetColour(string? colour)
     {
         if (colour != null && !EditSchema.ColourRx.IsMatch(colour)) { Host.Say($"colour must look like #rrggbb, got {colour}", true); return false; }
-        return Edit(d => d.Colour = colour?.ToLowerInvariant(), true);
+        var c = colour?.ToLowerInvariant();
+        return EditLook(d => d.Colour = c, (_, s) => s.Colour = c);
+    }
+
+    /// <summary>Fence the selected side (its own look, or the fence's) or leave it without a fence.</summary>
+    public bool SetSideFenced(bool fenced)
+    {
+        var i = Sides.Selected;
+        if (i < 0) return false;
+        return Edit(d =>
+        {
+            if (i >= d.Sides.Count) return;
+            d.Sides[i].Mode = fenced ? null : "none";
+            if (!fenced) d.Sides[i].ClearLook();
+        }, true);
     }
 
     public void SetGroupScope(bool group)

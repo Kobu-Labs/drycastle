@@ -29,7 +29,9 @@ from drycastle_pipeline.edits.zones import (
 from drycastle_pipeline.edits.zones import rules as zone_rules
 from drycastle_pipeline.export.docs import (
     GROUPS_FILE,
+    MINERAL_NODES_FILE,
     build_groups,
+    build_mineral_nodes,
     dump_doc,
     ground_objects_doc,
     trees_doc,
@@ -114,6 +116,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "out" / "map"
 # patch_<ID> nodes of the chunk files are the water patches only (the other patches are ground, baked into terrain and detail).
 # (no bump) groups.json (files.groups): the property groups of the edits (group id -> parcel ids), for the game server's pets.
 # Only maps with a group have it; a loader that does not know it, or a map without it, means "no groups".
+# (no bump) mineral_nodes.json (files.mineral_nodes): the static mineral nodes of the edits (a crystal at a fixed spot): id, mineral id, x, y, z in
+# local metres (as zone_points.json). Only maps with such a node have it; a loader that does not know it, or a map without it, means "no static nodes".
 # (no bump) fences.json (files.fences): every fence section (two end points with ground z, height_m, type, parcel, property group),
 # for the game server's pets (the fence hop). A loader that does not know it, or a map without it, means "no fence data".
 # (0.16.0 adds its destruction keys, see there.)
@@ -490,6 +494,8 @@ def run_export(
     _write_zone_docs(scene, parcels_doc, buildings, zrules, out_dir, rules_path, edits_path, files)
     groups_doc = build_groups(edits_path, (p["id"] for p in parcels_doc["parcels"]))
     write_optional(out_dir, GROUPS_FILE, groups_doc, files, "groups")  # no property group (any more): no file, "no pets"
+    minerals_doc = build_mineral_nodes(load_edits(edits_path).mineral_nodes, parcels_doc.get("origin_epsg5514"), scene.terrain)
+    write_optional(out_dir, MINERAL_NODES_FILE, minerals_doc, files, "mineral_nodes")  # no static mineral node (any more): no file
     _write_patches(scene, out_dir, files)
 
     generated, terrain_info = _generated_parts(scene, files, rules_path)
