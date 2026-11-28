@@ -2,7 +2,6 @@
 # Wall top 3.06 m, roof top 5.27 m. Walls seen: edges [10]. Not modelled: downpipe, mailbox, antenna mast on roof.
 id: w378900208
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.22
 frame_colour: '#f2f0ea'
 trim_colour: '#d8d2c4'
@@ -17,6 +16,7 @@ downpipes:
 - {edge: 1, at_m: 0.16, colour: '#656461', bends: true}
 - {edge: 4, at_m: 7.82, colour: '#656461', bends: true}
 - {edge: 10, at_m: 7.57, colour: '#656461', bends: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.41, width_m: 1.23, height_m: 1.24, sill_m: 1.34, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 1, at_m: 1.78, width_m: 1.23, height_m: 1.24, sill_m: 1.34, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

@@ -5,9 +5,10 @@ source: Street View captures, measured by facade_pipeline; walls no capture saw,
 overhang_m: 0.25
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'
+bands:
+- {top_m: 4.03, height_m: 0.1}
 ridge_caps: true
-plinth: {height_m: 0.27, colour: '#888981'}
-apron: {width_m: 0.2, colour: '#888981'}
+apron: {width_m: 0.2, colour: '#7b7e74'}
 roof_tiles: true
 eaves: {colour: '#4e5447', fascia_m: 0.18, gutter: true, rafters: true}
 bargeboard_colour: '#5a4030'
@@ -20,8 +21,9 @@ chimneys:
 interior: true
 openings:
   - {id: w1, kind: window, edge: 1, at_m: 3.05, width_m: 1.05, height_m: 1.7, sill_m: 1.33, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.13, 0.77], rails: [0.75], sill: true}
-  - {id: w2, kind: window, edge: 2, at_m: 1.92, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 2, at_m: 1.95, width_m: 1.0, height_m: 1.0, sill_m: 4.43, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.27, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
-  - {id: w4, kind: window, edge: 3, at_m: 2.05, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 3, at_m: 5.15, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 6.45, width_m: 1.05, height_m: 1.7, sill_m: 1.33, recess_m: 0.12, confidence: low, frame_m: 0.06, posts: [0.13, 0.77], rails: [0.75], sill: true}
+  - {id: w3, kind: window, edge: 2, at_m: 1.92, width_m: 1.05, height_m: 1.7, sill_m: 1.33, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 2, at_m: 1.95, width_m: 1.0, height_m: 1.0, sill_m: 4.43, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w5, kind: window, edge: 3, at_m: 2.05, width_m: 1.05, height_m: 1.7, sill_m: 0.35, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 3, at_m: 5.15, width_m: 1.05, height_m: 1.7, sill_m: 0.35, rails: [0.75], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

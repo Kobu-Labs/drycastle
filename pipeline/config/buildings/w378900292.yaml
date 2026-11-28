@@ -1,5 +1,5 @@
 # P-0951: small single-storey house, turquoise render, dark gabled roof. Measured by facade_pipeline from 2 Street View capture(s).
-# Wall top 4.21 m, roof top 8.15 m. Walls seen: edges [2, 3]. Not modelled: utility meter box cabinet in front of the wall, satellite dish, chimney.
+# Wall top 3.62 m, roof top 6.88 m. Walls seen: edges [2, 3]. Not modelled: utility meter box cabinet in front of the wall, satellite dish, chimney.
 id: w378900292
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
 overhang_m: 0.33
@@ -10,29 +10,24 @@ ridge_caps: true
 plinth: {height_m: 0.41, colour: '#6b7260'}
 apron: {width_m: 0.5, colour: '#8b8e8a'}
 roof_tiles: true
-eaves: {colour: '#6c6a6c', fascia_m: 0.23, gutter: true, rafters: true}
-bargeboard_colour: '#5a4030'
+eaves: {colour: '#6c6a6c', fascia_m: 0.23, gutter: true}
 downpipes:
-- {edge: 0, at_m: 21.69, colour: '#6c6a6c', bends: true}
-- {edge: 0, at_m: 0.16, colour: '#6c6a6c', bends: true}
 - {edge: 2, at_m: 22.37, colour: '#6c6a6c', bends: true}
 - {edge: 2, at_m: 0.16, colour: '#6c6a6c', bends: true}
+- {edge: 0, at_m: 21.69, colour: '#6c6a6c', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#6c6a6c', bends: true}
 chimneys:
-- {x: -128.13, y: 362.68, top_m: 8.65, width_m: 0.5, depth_m: 0.5, cap: true}
-skylights:
-- {edge: 0, at_m: 7.31, up_m: 1.01}
-- {edge: 0, at_m: 14.63, up_m: 1.01}
+- {x: -130.1, y: 363.41, top_m: 7.38, width_m: 0.5, depth_m: 0.5, cap: true}
 interior: true
 openings:
   - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.41, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 0, at_m: 2.18, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w2, kind: window, edge: 0, at_m: 5.48, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w3, kind: window, edge: 0, at_m: 8.77, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w4, kind: window, edge: 0, at_m: 12.06, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w5, kind: window, edge: 0, at_m: 15.35, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w6, kind: window, edge: 0, at_m: 18.65, width_m: 1.11, height_m: 1.51, sill_m: 0.54, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w1, kind: window, edge: 0, at_m: 2.18, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 0, at_m: 5.48, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 0, at_m: 8.77, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 0, at_m: 12.06, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 0, at_m: 15.35, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w6, kind: window, edge: 0, at_m: 18.65, width_m: 1.11, height_m: 1.51, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w7, kind: window, edge: 1, at_m: 1.97, width_m: 1.11, height_m: 1.51, sill_m: 1.34, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w8, kind: window, edge: 1, at_m: 2.03, width_m: 1.0, height_m: 1.0, sill_m: 4.61, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w9, kind: window, edge: 3, at_m: 0.87, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
-  - {id: w10, kind: window, edge: 3, at_m: 3.14, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
-  - {id: w11, kind: window, edge: 3, at_m: 4.79, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
+  - {id: w8, kind: window, edge: 3, at_m: 0.87, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}
+  - {id: w9, kind: window, edge: 3, at_m: 3.14, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
+  - {id: w10, kind: window, edge: 3, at_m: 4.79, width_m: 1.11, height_m: 1.51, sill_m: 1.34, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}

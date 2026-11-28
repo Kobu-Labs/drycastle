@@ -14,8 +14,11 @@ roof_tiles: true
 eaves: {colour: '#8e8983', fascia_m: 0.18, gutter: true}
 bargeboard_colour: '#f2f0ea'
 downpipes:
-- {edge: 1, at_m: 5.66, colour: '#8e8983', bends: true}
-- {edge: 4, at_m: 5.4, colour: '#8e8983', bends: true}
+- {edge: 0, at_m: 15.41, colour: '#8e8983', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#8e8983', bends: true}
+- {edge: 2, at_m: 4.9, colour: '#8e8983', bends: true}
+- {edge: 3, at_m: 10.33, colour: '#8e8983', bends: true}
+- {edge: 3, at_m: 0.16, colour: '#8e8983', bends: true}
 interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.36, width_m: 2.22, height_m: 1.7, sill_m: 1.4, posts: [0.38, 0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

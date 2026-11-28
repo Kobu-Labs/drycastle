@@ -35,10 +35,10 @@ openings:
   - {id: w9, kind: window, edge: 1, at_m: 8.17, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w10, kind: window, edge: 2, at_m: 0.65, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w11, kind: window, edge: 3, at_m: 2.01, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w12, kind: window, edge: 4, at_m: 1.17, width_m: 3.79, height_m: 1.81, sill_m: 0.83, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w12, kind: window, edge: 4, at_m: 1.17, width_m: 3.79, height_m: 1.55, sill_m: 0.55, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: d1, kind: door, edge: 4, at_m: 5.34, width_m: 0.85, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
-  - {id: w13, kind: window, edge: 4, at_m: 6.91, width_m: 3.79, height_m: 1.81, sill_m: 0.83, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: g1, kind: garage_door, edge: 4, at_m: 12.03, width_m: 3.54, height_m: 2.48, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: w13, kind: window, edge: 4, at_m: 6.91, width_m: 3.79, height_m: 1.55, sill_m: 0.55, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: g1, kind: garage_door, edge: 4, at_m: 12.03, width_m: 3.54, height_m: 2.26, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
   - {id: w14, kind: window, edge: 5, at_m: 2.13, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w15, kind: window, edge: 6, at_m: 0.97, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w16, kind: window, edge: 6, at_m: 4.34, width_m: 2.4, height_m: 1.7, sill_m: 0.66, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

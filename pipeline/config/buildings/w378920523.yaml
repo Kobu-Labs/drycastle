@@ -31,5 +31,4 @@ openings:
   - {id: w7, kind: window, edge: 7, at_m: 2.22, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w8, kind: window, edge: 7, at_m: 2.22, width_m: 0.58, height_m: 1.0, sill_m: 2.83, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w9, kind: window, edge: 9, at_m: 1.74, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w10, kind: window, edge: 10, at_m: 1.73, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w11, kind: window, edge: 10, at_m: 2.76, width_m: 0.58, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w10, kind: window, edge: 10, at_m: 1.73, width_m: 1.61, height_m: 0.9, sill_m: 1.23, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], surround_m: 0.12}

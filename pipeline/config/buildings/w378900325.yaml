@@ -2,7 +2,6 @@
 # Wall top 2.91 m, roof top 5.17 m. Walls seen: edges [0, 1]. Not modelled: dormer on the roof, chimney, ladder leaning on the wall.
 id: w378900325
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.35
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'
@@ -27,11 +26,12 @@ dormers:
   rise_m: 0.37
   window_m: [0.83, 0.39]
   colour: '#fbe9e4'
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.16, width_m: 0.5, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: w2, kind: window, edge: 0, at_m: 2.09, width_m: 1.69, height_m: 1.44, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: w3, kind: window, edge: 0, at_m: 4.67, width_m: 0.5, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.44, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3}
-  - {id: w4, kind: window, edge: 2, at_m: 4.18, width_m: 0.5, height_m: 1.16, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 2, at_m: 4.18, width_m: 0.5, height_m: 1.16, sill_m: 1.33, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 3, at_m: 2.6, width_m: 0.5, height_m: 1.16, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 3, at_m: 5.69, width_m: 0.5, height_m: 1.16, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

@@ -17,7 +17,6 @@ downpipes:
 - {edge: 2, at_m: 12.15, colour: '#5b5a59', bends: true}
 - {edge: 2, at_m: 0.16, colour: '#5b5a59', bends: true}
 - {edge: 6, at_m: 4.51, colour: '#5b5a59', bends: true}
-- {edge: 9, at_m: 3.39, colour: '#5b5a59', bends: true}
 - {edge: 10, at_m: 5.82, colour: '#5b5a59', bends: true}
 chimneys:
 - {x: -443.08, y: 208.15, top_m: 6.21, width_m: 0.5, depth_m: 0.5, cap: true}
@@ -34,4 +33,5 @@ openings:
   - {id: w9, kind: window, edge: 7, at_m: 2.05, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: g1, kind: garage_door, edge: 9, at_m: 0.74, width_m: 2.16, height_m: 2.09, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
   - {id: w10, kind: window, edge: 10, at_m: 1.2, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 10, at_m: 3.64, width_m: 1.23, height_m: 1.68, sill_m: 0.88, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 11, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.44, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}

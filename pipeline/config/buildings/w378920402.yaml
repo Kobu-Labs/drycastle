@@ -29,7 +29,7 @@ openings:
   - {id: w1, kind: window, edge: 0, at_m: 2.14, width_m: 0.65, height_m: 1.46, sill_m: 1.07, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 0, at_m: 4.93, width_m: 0.65, height_m: 1.46, sill_m: 1.07, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w3, kind: window, edge: 0, at_m: 7.72, width_m: 0.65, height_m: 1.46, sill_m: 1.07, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w4, kind: window, edge: 1, at_m: 0.75, width_m: 0.65, height_m: 1.46, sill_m: 1.07, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 1, at_m: 0.75, width_m: 0.65, height_m: 1.05, sill_m: 1.07, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
   - {id: w5, kind: window, edge: 1, at_m: 2.56, width_m: 0.45, height_m: 0.85, sill_m: 4.36, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: d1, kind: door, edge: 1, at_m: 2.92, width_m: 0.85, height_m: 2.12, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
   - {id: w6, kind: window, edge: 1, at_m: 4.78, width_m: 0.65, height_m: 1.46, sill_m: 4.42, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.65], surround_m: 0.12}

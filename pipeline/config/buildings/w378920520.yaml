@@ -24,7 +24,7 @@ skylights:
 interior: true
 openings:
   - {id: d1, kind: door, edge: 1, at_m: 0.84, width_m: 1.0, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 3, at_m: 1.26, width_m: 1.04, height_m: 0.97, sill_m: 1.44, recess_m: 0.12, confidence: medium, frame_m: 0.06, rails: [0.21, 0.65], sill: true}
+  - {id: w1, kind: window, edge: 3, at_m: 1.26, width_m: 1.04, height_m: 0.97, sill_m: 2.01, recess_m: 0.12, confidence: medium, frame_m: 0.06, rails: [0.21, 0.65], sill: true}
   - {id: w2, kind: window, edge: 3, at_m: 4.09, width_m: 1.66, height_m: 1.58, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], rails: [0.21, 0.65]}
   - {id: w3, kind: window, edge: 4, at_m: 1.26, width_m: 1.66, height_m: 1.58, sill_m: 1.4, posts: [0.5], rails: [0.21, 0.65], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 4, at_m: 3.01, width_m: 1.0, height_m: 1.0, sill_m: 3.75, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

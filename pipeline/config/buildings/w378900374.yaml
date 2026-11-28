@@ -2,7 +2,6 @@
 # Wall top 2.85 m, roof top 4.31 m. Walls seen: edges [7]. Not modelled: brick chimney, brick plinth.
 id: w378900374
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.32
 frame_colour: '#5a4030'
 trim_colour: '#d8d2c4'
@@ -17,6 +16,7 @@ downpipes:
 - {edge: 7, at_m: 8.67, colour: '#97938d', bends: true}
 chimneys:
 - {x: -359.91, y: 302.01, top_m: 4.81, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.55, width_m: 1.73, height_m: 1.5, sill_m: 1.05, posts: [0.46, 0.58], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 4.83, width_m: 1.73, height_m: 1.5, sill_m: 1.05, posts: [0.46, 0.58], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

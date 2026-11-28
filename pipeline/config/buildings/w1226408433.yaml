@@ -19,7 +19,7 @@ skylights:
 - {edge: 5, at_m: 6.22, up_m: 1.4}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 3, at_m: 0.99, width_m: 1.54, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w1, kind: window, edge: 3, at_m: 0.99, width_m: 1.54, height_m: 1.69, sill_m: 1.44, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 3, at_m: 3.72, width_m: 0.87, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
   - {id: w2, kind: window, edge: 3, at_m: 5.24, width_m: 0.82, height_m: 0.58, sill_m: 2.55, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: w3, kind: window, edge: 3, at_m: 6.85, width_m: 0.82, height_m: 0.58, sill_m: 2.55, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}

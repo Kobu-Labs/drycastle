@@ -21,7 +21,7 @@ openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.08, width_m: 1.13, height_m: 1.02, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 3.29, width_m: 1.13, height_m: 1.02, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.22, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2}
-  - {id: g1, kind: garage_door, edge: 4, at_m: 0.31, width_m: 1.31, height_m: 2.56, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: g1, kind: garage_door, edge: 4, at_m: 0.31, width_m: 1.31, height_m: 2.4, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
   - {id: w3, kind: window, edge: 4, at_m: 2.78, width_m: 1.13, height_m: 1.02, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: w4, kind: window, edge: 5, at_m: 1.08, width_m: 1.13, height_m: 1.02, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 5, at_m: 3.29, width_m: 1.13, height_m: 1.02, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

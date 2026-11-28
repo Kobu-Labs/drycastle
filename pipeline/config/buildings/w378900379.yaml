@@ -2,7 +2,6 @@
 # Wall top 3.12 m, roof top 6.30 m. Walls seen: edges [0, 5]. Not modelled: two chimneys, garage door with wide white surround, downpipes.
 id: w378900379
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.2
 frame_colour: '#f2f0ea'
 surround_colour: '#f2f0ea'
@@ -19,12 +18,13 @@ downpipes:
 - {edge: 5, at_m: 0.16, colour: '#787a7d', bends: true}
 chimneys:
 - {x: -353.53, y: 353.41, top_m: 6.8, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.23, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
   - {id: w1, kind: window, edge: 2, at_m: 0.61, width_m: 1.75, height_m: 1.7, sill_m: 1.01, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 3, at_m: 1.35, width_m: 1.75, height_m: 1.7, sill_m: 1.01, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w3, kind: window, edge: 4, at_m: 1.44, width_m: 1.75, height_m: 1.7, sill_m: 1.01, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: g1, kind: garage_door, edge: 5, at_m: 0.84, width_m: 3.82, height_m: 2.75, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: g1, kind: garage_door, edge: 5, at_m: 0.84, width_m: 3.82, height_m: 2.4, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
   - {id: w4, kind: window, edge: 5, at_m: 6.27, width_m: 1.75, height_m: 1.7, sill_m: 1.01, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
   - {id: w5, kind: window, edge: 5, at_m: 9.77, width_m: 1.75, height_m: 1.7, sill_m: 1.01, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}
   - {id: w6, kind: window, edge: 5, at_m: 12.91, width_m: 1.75, height_m: 1.7, sill_m: 1.01, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, surround_m: 0.12}

@@ -29,6 +29,6 @@ openings:
   - {id: w4, kind: window, edge: 2, at_m: 4.11, width_m: 0.97, height_m: 1.67, sill_m: 0.6, posts: [0.5], rails: [0.38, 0.73], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 2, at_m: 5.49, width_m: 0.97, height_m: 1.0, sill_m: 3.06, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 2, at_m: 6.65, width_m: 0.97, height_m: 1.67, sill_m: 0.6, posts: [0.5], rails: [0.38, 0.73], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w7, kind: window, edge: 3, at_m: 1.29, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}
-  - {id: w8, kind: window, edge: 3, at_m: 3.56, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}
-  - {id: w9, kind: window, edge: 3, at_m: 6.02, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}
+  - {id: w7, kind: window, edge: 3, at_m: 0.69, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}
+  - {id: w8, kind: window, edge: 3, at_m: 2.96, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}
+  - {id: w9, kind: window, edge: 3, at_m: 5.42, width_m: 0.97, height_m: 1.67, sill_m: 0.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.38, 0.73], sill: true}

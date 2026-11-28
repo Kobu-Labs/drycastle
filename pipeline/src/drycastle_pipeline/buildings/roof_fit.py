@@ -29,6 +29,7 @@ _LEAN_TO_M = 4.5  # a part standing no further than this out of an eave wall of 
 _LEAN_LOW_M = 2.4  # whose low edge is no lower than this
 _GABLE_WING_M = 2.0  # a wing standing this far out of an eave wall gets a gable end, a shallower one a hipped end
 _BIG = 500.0
+_WIDE_WING_M = 8.0  # a lower part's gable wider than this, and half as wide again as the part is long, is not believed
 _WIDE_GABLE_M = 12.0  # a gable wall longer than this, and half as long again as the house is deep behind it, is not believed
 _WEDGE_M = 5.5  # how far a wall may run away from a rectangle's side it touches and still be that side's wall
 _FOLLOW_M = 0.8  # how far from a rectangle's side the wall may run that a hipped part's side is laid on
@@ -330,13 +331,21 @@ def choose(shape: Polygon, roof: str, ridge_dir: float | None, lead=None) -> lis
         return out  # what is left is one piece that is no rectangle (a tapering end): a hipped end on its own walls (bumps)
     main_angle = math.atan2(main.u[1], main.u[0])
     askew = lambda r: not _aligned(r, main_angle, 5.0)
-    for r in cands:
-        if r is main:
-            continue
-        added = Polygon(r.corners).intersection(shape).difference(covered.buffer(0.05))
-        if added.is_empty or added.buffer(-_WING_M / 2).is_empty or (askew(r) and added.area < _WING_SHARE * r.w * r.d):
-            continue
-        out.append(core(r))
+    # the rectangle that roofs most of what is still bare goes next (not merely the largest: a long one that only
+    # crosses the corner of an L adds a roof over the junction that comes up between the L's own two roofs)
+    rest_c = [r for r in cands if r is not main]
+    while rest_c:
+        best, best_area = None, 0.0
+        for r in rest_c:
+            added = Polygon(r.corners).intersection(shape).difference(covered.buffer(0.05))
+            if added.is_empty or added.buffer(-_WING_M / 2).is_empty or (askew(r) and added.area < _WING_SHARE * r.w * r.d):
+                continue
+            if added.area > best_area + 1e-6:
+                best, best_area = r, added.area
+        if best is None:
+            break
+        rest_c = [r for r in rest_c if r is not best]
+        out.append(core(best))
         covered = unary_union([covered, out[-1][1]])
     return out
 
@@ -521,6 +530,13 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
             ru = main.n if abs(float(along @ main.u)) > 0.7 else main.u  # the main rectangle's own side nearest the ridge direction
         rv = np.array([-ru[1], ru[0]])
         half = (main.d if ru is main.u else main.w) / 2
+        along_m = main.w if ru is main.u else main.d
+        if not gable_believable(2 * half, along_m):
+            # the ridge would run across the house's short way under gables far wider than it is long (a wall misread as
+            # a gable, or an eave read on an end wall): it runs along the house
+            ru = main.n if ru is main.u else main.u
+            rv = np.array([-ru[1], ru[0]])
+            half = along_m / 2
         angle = math.atan2(ru[1], ru[0]) % math.pi
     else:
         ru = main.u if main.w >= main.d else main.n
@@ -530,6 +546,7 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
     slope = rise / max(half, 0.3)
     mid = main.middle
     v_main = (float(rv @ mid) - half, float(rv @ mid) + half)
+    u_main = (min(float(ru @ np.asarray(c)) for c in main.corners), max(float(ru @ np.asarray(c)) for c in main.corners))
     parts: list[Part] = []
     for k, (r, core) in enumerate(chosen):
         cut = None
@@ -542,7 +559,14 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
             else:
                 vs = [float(rv @ np.asarray(c)) for c in r.corners]
                 beyond = (v_main[0] - min(vs), max(vs) - v_main[1])
+                us = [float(ru @ np.asarray(c)) for c in r.corners]
+                past = max(u_main[0] - min(us), max(us) - u_main[1])
                 if max(beyond) <= 0.5:  # in line with the house: its roof carried on, lower
+                    form, ridge = "gabled", (r.u if abs(float(ru @ r.u)) > 0.7 else r.n)
+                elif min(beyond) <= 0.5 and max(beyond) <= _LEAN_TO_M and past > 0.5:
+                    # a narrow part beside the house that runs on past its gable end: a single slope from the house's eave
+                    # would leave the house's gable standing up over it there. Its own gabled roof, ridge along the house's
+                    # (two gables side by side, a valley between them)
                     form, ridge = "gabled", (r.u if abs(float(ru @ r.u)) > 0.7 else r.n)
                 elif min(beyond) <= 0.5 and max(beyond) <= _LEAN_TO_M and min(slope, (eave - _LEAN_LOW_M) / max(beyond)) >= 0.12:
                     # a narrow part beside an eave wall: a single slope falling away from it, from the eave down
@@ -556,6 +580,12 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
                     if min(beyond) <= 0.5:  # it stops at the house's ridge
                         side = 1.0 if beyond[1] > beyond[0] else -1.0
                         cut = _half_plane((side * rv[0], side * rv[1], -side * float(rv @ mid)), tuple(mid))
+        if k > 0 and form == "gabled" and ridge is not None:
+            along_w, across_w = (r.w, r.d) if abs(float(ridge @ r.u)) > 0.7 else (r.d, r.w)
+            if across_w > _WIDE_WING_M and across_w > 1.5 * along_w:
+                # a part far wider across the ridge it was given than it is long (a block along the house, not a wing
+                # standing out of it): its ridge runs along its own length, as the house's does
+                ridge, cut = (r.n if abs(float(ridge @ r.u)) > 0.7 else r.u), None
         if form == "hipped" and roof == "gabled":
             core = Polygon(r.corners)
         core = _ccw(core)
@@ -587,6 +617,7 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
             continue
         parts.append(Part(core, domain, planes, r, form, None if ridge is None else math.atan2(ridge[1], ridge[0]) % math.pi, h, _halves(core), _halves(domain)))
     _stop_at_ridges(parts)
+    _stop_inside(parts)
     for g in bumps(shape, chosen):
         g = _ccw(g)
         inradius = _inradius(g)
@@ -601,6 +632,7 @@ def fit(poly: Polygon, roof: str, ridge_dir: float | None, rise: float, eave: fl
             s = min(s, max(max(over), 0.0) + 0.35) / peak if s * peak > max(max(over), 0.0) + 0.35 else s
         domain = g.buffer(overhang, join_style=2, mitre_limit=3.0) if overhang else g
         parts.append(Part(g, domain, _polygon_planes(g, s), main, "hipped", None, float(inradius), _halves(g), _halves(domain)))
+    _stop_inside(parts)  # (the bumps too)
     grown = poly.buffer(overhang, join_style=2, mitre_limit=3.0) if overhang else poly
     if overhang:
         # the rim runs along the parts' own edges (level eaves) wherever those lie within 0.3 m of the footprint's
@@ -653,6 +685,47 @@ def _stop_at_ridges(parts: list[Part]) -> None:
             cut = _half_plane((side * g[0], side * g[1], side * g[2]), (at.x, at.y))
             if own.difference(cut).buffer(-0.3, join_style=2).area > 0.5:  # it runs on out of the far side too (a cross): it passes through
                 continue
+            core, domain = p.core.intersection(cut), p.domain.intersection(cut)
+            if core.geom_type != "Polygon" or domain.geom_type != "Polygon" or core.area < 0.3 * p.core.area:
+                continue
+            p.core, p.domain = _ccw(core), _ccw(domain)
+            p._core_h, p._domain_h = _halves(p.core), _halves(p.domain)
+
+
+def _stop_inside(parts: list[Part]) -> None:
+    """A part that stands out of a higher part on one side only (a wing out of a hipped house, a lower block in line with
+    the house and only partly beside it) stops at that part's middle: its roof dies into the near slopes and does not
+    come up again inside the higher part's far half (where the higher roof falls toward its far wall, or its hip). In
+    place; a part that runs out on both sides (a cross) is left whole."""
+    tops = [_top_of(p) for p in parts]
+    for k, p in enumerate(parts):
+        if k == 0 or p.form not in ("gabled", "hipped"):
+            continue
+        for j, q in enumerate(parts):
+            if j == k or q.form not in ("gabled", "hipped"):
+                continue
+            if tops[j] < tops[k] - 0.05 or (abs(tops[j] - tops[k]) <= 0.05 and j > k):
+                continue
+            both = p.core.intersection(q.core)
+            own = p.core.difference(q.core.buffer(0.05, join_style=2)).buffer(-0.3, join_style=2).buffer(0.3, join_style=2)
+            if both.area < 0.5 or own.area < 0.5:
+                continue
+            mid = q.rect.middle
+            at = max(_polys(own), key=lambda s: s.area).representative_point()
+            way = np.array([at.x, at.y]) - mid
+            best, gone = None, 0.5  # of q's two middle lines, the one that leaves all of the part's own area on its near side and takes most of it off inside q
+            for axis in (q.rect.u, q.rect.n):
+                axis = axis if float(axis @ way) > 0 else -axis
+                cut = _half_plane((axis[0], axis[1], -float(axis @ mid)), (at.x, at.y))
+                if cut is None or cut.is_empty or own.difference(cut).buffer(-0.3, join_style=2).area > 0.5:
+                    continue
+                if p.core.difference(cut).difference(q.core.buffer(0.1, join_style=2)).area > 0.25:  # it takes off only what lies inside q
+                    continue
+                if both.difference(cut).area > gone:
+                    best, gone = cut, both.difference(cut).area
+            if best is None:
+                continue
+            cut = best
             core, domain = p.core.intersection(cut), p.domain.intersection(cut)
             if core.geom_type != "Polygon" or domain.geom_type != "Polygon" or core.area < 0.3 * p.core.area:
                 continue

@@ -23,12 +23,30 @@ def wall_top(path: Path, fallback: float) -> float:
     return float(m.group(1)) if m else fallback
 
 
-def opening_checks(openings: list[dict], lengths: dict[int, float], eave: float) -> tuple[list[dict], list[tuple[str, str]]]:
+def gable_walls(b: dict) -> set[int] | None:
+    """The walls of a gabled house that run across its ridge (a gable over them); None when not known."""
+    ring = b["footprint"]["exterior"]
+    if b.get("roof") == "hipped" or b.get("roof") == "flat":
+        return set()
+    if b.get("roof") != "gabled" or b.get("ridge_dir") is None:
+        return None
+    a = float(b["ridge_dir"])
+    out = set()
+    for i in range(len(ring)):
+        (px, py), (qx, qy) = ring[i], ring[(i + 1) % len(ring)]
+        n = math.hypot(qx - px, qy - py) or 1.0
+        if abs((qx - px) / n * math.cos(a) + (qy - py) / n * math.sin(a)) <= 0.7:
+            out.add(i)
+    return out
+
+
+def opening_checks(openings: list[dict], lengths: dict[int, float], eave: float, gables: set[int] | None = None) -> tuple[list[dict], list[tuple[str, str]]]:
     """(the openings as house_rules.regularise sets them, (check, what) for each change it makes): every change is an
     anomaly of the file as written."""
     from drycastle_pipeline.buildings import house_rules as hr
 
-    fixed, said = hr.regularise(openings, lengths, eave)
+    measured = {o["edge"] for o in openings if o.get("confidence") != "low"}  # the walls a capture saw, as apply mirrors only those
+    fixed, said = hr.regularise(openings, lengths, eave, measured, gables)
     return fixed, [("openings", s) for s in said]
 
 
@@ -38,15 +56,9 @@ def write_openings(path: Path, openings: list[dict]) -> None:
     at = text.rfind("\nopenings:")
     if at < 0 or re.search(r"^\S", text[at + 1 :].split("\n", 1)[1] if "\n" in text[at + 1 :] else "", re.M):
         raise SystemExit(f"{path}: openings is not the file's last block, not rewritten")
-    used = {o["id"] for o in openings if o.get("id")}
-    for o in openings:
-        if not o.get("id"):
-            p = {"glass_door": "gd", "garage_door": "g"}.get(o["kind"], o["kind"][0])
-            n = 1
-            while f"{p}{n}" in used:
-                n += 1
-            o["id"] = f"{p}{n}"
-            used.add(o["id"])
+    from drycastle_pipeline.buildings.house_rules import give_ids
+
+    give_ids(openings)
     ordered = sorted(openings, key=lambda o: (o["edge"], o["at_m"]))
 
     def flow(v) -> str:
@@ -69,7 +81,7 @@ def lint(bid: str, world, geometry: bool = True, fix: bool = False) -> list[tupl
     if "facade_pipeline" not in str(raw.get("source", "")):  # modelled by hand: its openings are as meant
         fixed, out = raw.get("openings") or [], []
     else:
-        fixed, out = opening_checks(raw.get("openings") or [], lengths, wall_top(path, float(b["eave_height_m"])))
+        fixed, out = opening_checks(raw.get("openings") or [], lengths, wall_top(path, float(b["eave_height_m"])))  # (gables: apply knows them from the fitted roof; one ridge here would be wrong on a roof of parts)
     if fix and out:
         write_openings(path, fixed)
     if geometry:
@@ -89,6 +101,7 @@ def lint(bid: str, world, geometry: bool = True, fix: bool = False) -> list[tupl
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
+    from drycastle_pipeline.buildings.openings import DetailError
     from drycastle_pipeline.edits.building_run import BuildingWorld, TargetError
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
@@ -102,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
     for bid in ids:
         try:
             found = lint(bid, world, not args.no_geometry, args.fix)
-        except (TargetError, KeyError) as e:
+        except (TargetError, KeyError, DetailError) as e:
             print(f"{bid}  skipped: {e}")
             continue
         for check, what in found:

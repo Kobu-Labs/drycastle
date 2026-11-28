@@ -1,0 +1,41 @@
+# P-0172: bungalow, peach render, dark tiled hipped roof, attached garage on left. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.34 m, roof top 6.92 m. Walls seen: edges [0]. Not modelled: attached garage with its own roof on the left, chimney.
+id: w378920491
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.54
+frame_colour: '#5a4030'
+trim_colour: '#f2f0ea'
+ridge_caps: true
+plinth: {height_m: 0.4, colour: '#7b6c5b'}
+apron: {width_m: 0.42, colour: '#bab7a6'}
+roof_tiles: true
+eaves: {colour: '#60524d', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#5a4030'
+downpipes:
+- {edge: 0, at_m: 10.76, colour: '#60524d', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#60524d', bends: true}
+- {edge: 2, at_m: 11.22, colour: '#60524d', bends: true}
+- {edge: 2, at_m: 0.16, colour: '#60524d', bends: true}
+chimneys:
+- {x: 125.39, y: -64.57, top_m: 7.42, width_m: 0.5, depth_m: 0.5, cap: true}
+skylights:
+- {edge: 2, at_m: 3.82, up_m: 1.72}
+- {edge: 2, at_m: 7.65, up_m: 1.72}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 1.92, width_m: 1.99, height_m: 1.57, sill_m: 1.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w2, kind: window, edge: 0, at_m: 7.09, width_m: 1.99, height_m: 1.57, sill_m: 1.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 1.56, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 5.02, width_m: 1.0, height_m: 1.0, sill_m: 3.74, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 5.11, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 1, at_m: 8.66, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 1, at_m: 9.74, width_m: 1.0, height_m: 1.0, sill_m: 3.74, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 1, at_m: 12.21, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.4, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3}
+  - {id: w9, kind: window, edge: 2, at_m: 4.74, width_m: 1.99, height_m: 1.05, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w10, kind: window, edge: 2, at_m: 8.1, width_m: 1.99, height_m: 1.05, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 3, at_m: 0.97, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 3, at_m: 2.94, width_m: 1.0, height_m: 1.0, sill_m: 3.74, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 3, at_m: 3.92, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 3, at_m: 5.89, width_m: 1.0, height_m: 1.0, sill_m: 3.74, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w15, kind: window, edge: 3, at_m: 6.88, width_m: 1.99, height_m: 1.57, sill_m: 1.0, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

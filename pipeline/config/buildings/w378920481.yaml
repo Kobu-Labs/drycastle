@@ -5,6 +5,8 @@ source: Street View captures, measured by facade_pipeline; walls no capture saw,
 overhang_m: 1.7
 frame_colour: '#a87f55'
 trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.39, height_m: 0.18}
 ridge_caps: true
 plinth: {height_m: 0.6, colour: '#b4a99e'}
 apron: {width_m: 0.2, colour: '#b4a99e'}
@@ -23,9 +25,10 @@ skylights:
 - {edge: 4, at_m: 2.69, up_m: 1.83}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 0, at_m: 3.24, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: w2, kind: window, edge: 0, at_m: 5.75, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
-  - {id: w3, kind: window, edge: 0, at_m: 9.25, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w1, kind: window, edge: 0, at_m: 1.42, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 3.93, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w3, kind: window, edge: 0, at_m: 7.43, width_m: 0.92, height_m: 1.69, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: gd1, kind: window, edge: 0, at_m: 8.5, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06}
   - {id: w4, kind: window, edge: 1, at_m: 2.25, width_m: 0.92, height_m: 1.69, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 1, at_m: 3.66, width_m: 0.92, height_m: 1.0, sill_m: 3.79, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 5.42, width_m: 0.92, height_m: 1.69, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

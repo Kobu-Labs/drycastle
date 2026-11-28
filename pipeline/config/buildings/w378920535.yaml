@@ -19,7 +19,7 @@ downpipes:
 chimneys:
 - {x: 245.01, y: 416.24, top_m: 9.02, width_m: 0.5, depth_m: 0.5, cap: true}
 balconies:
-- {edge: 7, at_m: 0.5, width_m: 7.44, floor_m: 3.35}
+- {edge: 7, at_m: 2.78, width_m: 5.36, floor_m: 3.35}
 skylights:
 - {edge: 4, at_m: 2.89, up_m: 1.27}
 interior: true
@@ -31,8 +31,8 @@ openings:
   - {id: w4, kind: window, edge: 4, at_m: 0.79, width_m: 1.71, height_m: 1.7, sill_m: 1.4, posts: [0.5], rails: [0.52], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 4, at_m: 3.28, width_m: 1.71, height_m: 1.7, sill_m: 1.4, posts: [0.5], rails: [0.52], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 6, at_m: 0.85, width_m: 1.71, height_m: 1.7, sill_m: 1.4, posts: [0.5], rails: [0.52], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: g1, kind: garage_door, edge: 7, at_m: 0.57, width_m: 0.78, height_m: 2.64, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
-  - {id: w7, kind: window, edge: 7, at_m: 3.38, width_m: 1.04, height_m: 2.65, sill_m: 3.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.26], sill: false}
+  - {id: g1, kind: garage_door, edge: 7, at_m: 0.57, width_m: 0.78, height_m: 2.4, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
+  - {id: w7, kind: window, edge: 7, at_m: 3.38, width_m: 1.04, height_m: 2.62, sill_m: 3.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.26], sill: false}
   - {id: w8, kind: window, edge: 7, at_m: 3.39, width_m: 1.71, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5], rails: [0.52]}
   - {id: w9, kind: window, edge: 7, at_m: 6.09, width_m: 1.71, height_m: 2.62, sill_m: 3.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: false, posts: [0.5]}
   - {id: w10, kind: window, edge: 7, at_m: 6.16, width_m: 1.71, height_m: 1.7, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true, rails: [0.52]}

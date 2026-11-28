@@ -531,7 +531,11 @@ def split_tall(openings: list[dict], eave: float) -> tuple[list[dict], list[str]
             continue
         head = o["sill_m"] + o["height_m"]
         if levels_of(eave) == 1:
-            out.append({**o, "height_m": round(min(head, eave - 0.3) - o["sill_m"], 2)})
+            top = min(head, eave - 0.3, o["sill_m"] + (2.4 if o["sill_m"] < 0.3 else TALL_M))
+            if top >= head - 0.01 or top - o["sill_m"] < 0.6:  # (no room under the eave to cut it to: as it is)
+                out.append(o)
+                continue
+            out.append({**o, "height_m": round(top - o["sill_m"], 2)})
             said.append(f"{o['kind']} on edge {o['edge']} at {o['at_m']} m cut down under the eave (it was {o['height_m']} m high)")
             continue
         row = [k for k in openings if k is not o and k["kind"] == "window" and k["height_m"] <= TALL_M]
@@ -604,6 +608,12 @@ def fix_rows(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
             groups = [[k for k in row if abs(k["width_m"] - o["width_m"]) <= 0.25 * o["width_m"] and abs(k["height_m"] - o["height_m"]) <= 0.25 * o["height_m"]] for o in row]
             kind = max(groups, key=lambda g: (len(g), float(np.median([k["width_m"] * k["height_m"] for k in g]))))
             head = float(np.median([o["sill_m"] + o["height_m"] for o in kind]))
+            door = next((d["sill_m"] + d["height_m"] for d in out if level == 0 and d["kind"] == "door" and d["edge"] == edge and d["sill_m"] < 0.6
+                         and 1.9 <= d["sill_m"] + d["height_m"] <= 2.6 and abs(d["sill_m"] + d["height_m"] - head) <= ROW_ALIGN_M), None)  # fmt: skip
+            if door is not None:  # the ground floor's row stands on the door's head line (door_heads)
+                head = door
+            if head > eave - 0.15:  # not up to the eave (under_eave)
+                head = eave - 0.3
             w, h = (float(np.median([o[k] for o in kind])) for k in ("width_m", "height_m"))
             # (only the smaller: a window is read smaller than it is, behind a bush or a pole, not larger)
             odd = [o for o in row if (o["width_m"] < 0.75 * w or o["height_m"] < 0.75 * h) and o["width_m"] <= w * 1.05 and o["height_m"] <= h * 1.05]
@@ -702,13 +712,15 @@ def mirror_lone(openings: list[dict], lengths: dict[int, float], eave: float, wa
 OFF_MIDDLE_M = 0.5
 
 
-def under_eave(openings: list[dict], eave: float) -> tuple[list[dict], list[str]]:
-    """A window that reaches up to the eave but is no gable window (its sill under the eave) was read too high: its
-    head is put on the head line of its floor's other windows, else 0.3 m under the eave."""
+def under_eave(openings: list[dict], eave: float, gables: set[int] | None = None) -> tuple[list[dict], list[str]]:
+    """A window that reaches up to the eave but is no gable window (its sill under the eave, or on a wall with no gable
+    over it, ``gables`` when known) was read too high: its head is put on the head line of its floor's other windows,
+    else 0.3 m under the eave."""
     out = [dict(o) for o in openings]
     said = []
     for o in out:
-        if o["kind"] != "window" or o["sill_m"] >= eave - 0.1 or o["sill_m"] + o["height_m"] <= eave - 0.15:
+        gable_window = o["sill_m"] >= eave - 0.1 and (gables is None or o["edge"] in gables)
+        if o["kind"] != "window" or gable_window or o["sill_m"] + o["height_m"] <= eave - 0.15:
             continue
         level = levels_of(eave) - 1
         like = [k for k in out if k is not o and k["kind"] == "window" and storey(k, eave) == level and k["sill_m"] + k["height_m"] <= eave - 0.15]
@@ -783,13 +795,14 @@ def drop_overlaps(openings: list[dict]) -> tuple[list[dict], list[str]]:
     return [o for o in openings if any(o is k for k in kept)], said
 
 
-def regularise(openings: list[dict], lengths: dict[int, float], eave: float, walls: set[int] | None = None) -> tuple[list[dict], list[str]]:
+def regularise(openings: list[dict], lengths: dict[int, float], eave: float, walls: set[int] | None = None, gables: set[int] | None = None) -> tuple[list[dict], list[str]]:
     """All of the above, in order: tall openings split, windows at the eave moved under it, sashes joined, garage doors
     sized, rows evened, ground windows on the door's head line, lone windows mirrored. Returns
-    (openings, one line per change). ``walls``: the walls the mirroring may touch (None: all)."""
+    (openings, one line per change). ``walls``: the walls the mirroring may touch (None: all); ``gables``: the walls with a
+    gable over them, where a window may stand above the eave (None: not known)."""
     said: list[str] = []
     out = [dict(o) for o in openings]
-    for step in (lambda x: split_tall(x, eave), lambda x: under_eave(x, eave), join_sashes, lambda x: fix_garages(x, lengths, eave),
+    for step in (lambda x: split_tall(x, eave), lambda x: under_eave(x, eave, gables), join_sashes, lambda x: fix_garages(x, lengths, eave),
                  lambda x: fix_rows(x, eave), lambda x: door_heads(x, eave), lambda x: mirror_lone(x, lengths, eave, walls), drop_overlaps):
         out, more = step(out)
         said += more
@@ -822,3 +835,16 @@ def missed_items(missed) -> list[dict]:
             out.append({"kind": MISSED_KINDS[m["what"].lower().replace("_", " ")], "s0": a, "s1": float(m["b"]) if m["b"] else a,
                         "floor": "upper" if re.search(r"\b(upper|top|first floor|second floor|attic)\b", before) else "ground", "small": "small" in before})  # fmt: skip
     return out
+
+
+def give_ids(openings: list[dict]) -> None:
+    """An id for every opening that has none (w3, d1, gd2, g1, ...), not one taken."""
+    used = {o["id"] for o in openings if o.get("id")}
+    for o in openings:
+        if not o.get("id"):
+            p = {"glass_door": "gd", "garage_door": "g"}.get(o["kind"], o["kind"][0])
+            n = 1
+            while f"{p}{n}" in used:
+                n += 1
+            o["id"] = f"{p}{n}"
+            used.add(o["id"])

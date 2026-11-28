@@ -2,7 +2,6 @@
 # Wall top 5.15 m, roof top 7.53 m. Walls seen: edges [0]. Not modelled: downpipes, small gable window.
 id: w378920537
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
@@ -21,6 +20,7 @@ downpipes:
 - {edge: 1, at_m: 0.16, colour: '#6d5e64', bends: true}
 - {edge: 7, at_m: 9.85, colour: '#6d5e64', bends: true}
 - {edge: 7, at_m: 0.16, colour: '#6d5e64', bends: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.59, width_m: 1.31, height_m: 1.1, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
   - {id: w2, kind: window, edge: 0, at_m: 1.7, width_m: 1.31, height_m: 0.91, sill_m: 3.89, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}

@@ -6,8 +6,9 @@
 - **wall above the roof**: a wall (wall-coloured, or lying in a footprint wall) that shows above the eave with no roof
   over it on either side: a gable poking out beside a roof or up through it.
 - **roofs through each other**: a roof face that passes through another roof face (not along a shared crease).
-- **roof not believable**: a roof that rises far more than the walls stand, or steeper than 60 degrees across the
-  house's narrow side.
+- **roof not believable**: a steep roof (over 50 degrees) that rises far more than the walls stand, a roof that climbs
+  more than 8 m from its eave (one ridge across a house too deep for it), steeper than 62 degrees, or steeper than 60
+  degrees across the house's narrow side.
 - **faces at the ground**: an upward face at ground level (the flattened terrain is at z = 0: the two flicker), or two
   upward faces of different colours in one plane near the ground.
 
@@ -32,6 +33,9 @@ _CROSS_M = 0.15  # a roof face must reach this far each side of another's plane 
 _CROSS_LEN_M = 0.3  # and cross it along this much
 _GROUND_M = 0.02  # an upward face lower than this lies on the ground
 _NEAR_GROUND_M = 1.0  # faces wholly below this are checked for fighting each other (core/zfight.py)
+_STEEP_DEG = 50.0  # a roof this steep may not rise much above its walls
+_STEEPEST_DEG = 62.0
+_RUN_M = 8.0  # no roof climbs further than this from its eave to its top (a house 16 m deep under one ridge)
 
 
 def _normals(tris: np.ndarray) -> np.ndarray:
@@ -251,7 +255,8 @@ def roof_parts_through(b: dict, overhang: float = 0.0) -> list[str]:
             continue
         own = p.core.difference(unary_union([q.core for q in others]).buffer(0.05, join_style=2)).buffer(-0.3, join_style=2).buffer(0.3, join_style=2)
         for g in getattr(region, "geoms", [region]):
-            if g.is_empty or g.area < 0.25 or g.distance(own) < 0.05 or not g.buffer(-0.05).intersects(inner):
+            # (own stops 5 cm short of the other parts: a piece that runs on from it across their wall is 5 cm away)
+            if g.is_empty or g.area < 0.25 or g.distance(own) < 0.1 or not g.buffer(-0.05).intersects(inner):
                 continue
             c = g.representative_point()
             out.append(f"roofs through each other: a part's roof comes up through another's ({g.area:.2f} m2 near ({c.x:.1f}, {c.y:.1f}))")
@@ -275,23 +280,34 @@ def through_roof(b: dict, mesh) -> tuple[int, np.ndarray | None]:
     cand = np.flatnonzero((np.abs(n[:, 2]) < _VERTICAL) & ~np.all(cols == wall_c, axis=1) & ~roofish & (area > 1e-4))
     lo_z = float(roofs[:, :, 2].min()) - 0.3
     cand = cand[tris[cand, :, 2].max(axis=1) > lo_z]
+    # the roof in its planes: a piece is above one plane and below it at one place to pass through it. (Above a lower
+    # roof and under the overhang of a higher one, as a ridge cap or a gutter that runs in under the eave of a higher
+    # part, it passes through neither.)
+    rn, _ = _normals(roofs)
+    keys = np.round(np.column_stack([rn, np.einsum("ij,ij->i", rn, roofs[:, 0])]), 2)
+    planes = [roofs[np.all(keys == key, axis=1)] for key in np.unique(keys, axis=0)]
     hits, at = 0, None
     for k in cand:
         s = _samples(tris[k], 0.1)
         if len(s) == 0:
             continue
-        zs = []
-        for dx, dy in ((0, 0), (0.06, 0), (-0.06, 0), (0, 0.06), (0, -0.06)):
-            z = _z_at(s + np.array([dx, dy, 0.0]), roofs)
-            zs.append(np.where(np.isnan(z), -np.inf, z).max(axis=1))
-        zs = np.array(zs)
-        inside = np.all(np.isfinite(zs), axis=0)  # well inside the roof's plan, not at its rim
-        if inside.sum() < 2:
-            continue
-        dz = s[inside, 2] - zs[0][inside]
-        if dz.max() > 0.05 and dz.min() < -0.2:
-            hits += 1
-            at = at if at is not None else s[inside][np.argmin(np.abs(dz))]
+        lo, hi = s.min(axis=0), s.max(axis=0)
+        for plane in planes:
+            if np.any(plane.min(axis=(0, 1))[:2] > hi[:2] + 0.1) or np.any(plane.max(axis=(0, 1))[:2] < lo[:2] - 0.1):
+                continue
+            zs = []
+            for dx, dy in ((0, 0), (0.06, 0), (-0.06, 0), (0, 0.06), (0, -0.06)):
+                z = _z_at(s + np.array([dx, dy, 0.0]), plane)
+                zs.append(np.where(np.isnan(z), -np.inf, z).max(axis=1))
+            zs = np.array(zs)
+            inside = np.all(np.isfinite(zs), axis=0)  # well inside the plane's plan, not at its rim
+            if inside.sum() < 2:
+                continue
+            dz = s[inside, 2] - zs[0][inside]
+            if dz.max() > 0.05 and dz.min() < -0.2:
+                hits += 1
+                at = at if at is not None else s[inside][np.argmin(np.abs(dz))]
+                break
     return hits, at
 
 
@@ -307,8 +323,22 @@ def roof_rise(b: dict, mesh) -> str | None:
     rect = _footprint(b).minimum_rotated_rectangle
     sides = sorted(math.dist(*pq) for pq in zip(rect.exterior.coords[:-1], rect.exterior.coords[1:]))
     narrow = sides[0] if sides else 0.0
-    if rise > 1.35 * eave:
-        return f"roof not believable: rises {rise:.1f} m over walls {eave:.1f} m high"
+    # the roof's pitch: of its slopes, by their area (the main roof's; a small hip or bump does not move it)
+    n, area = _normals(roofs)
+    order = np.argsort(n[:, 2])
+    cum = np.cumsum(area[order])
+    nz = float(n[order][np.searchsorted(cum, cum[-1] / 2), 2])
+    pitch = math.degrees(math.acos(min(max(nz, -1.0), 1.0)))
+    run = rise / max(math.tan(math.radians(pitch)), 1e-6)  # how far the slopes climb from the eave to the top
+    # A roof may rise well above its walls (a steep roof over an attic, 45 degrees over a house 11 m deep, stands
+    # higher than the walls do): taller than 1.35 times the walls is not believed when it is steep too, or when one
+    # roof spans a house wider than a gabled or hipped roof does (the ridge read across the house)
+    if rise > 1.35 * eave and pitch > _STEEP_DEG:
+        return f"roof not believable: rises {rise:.1f} m over walls {eave:.1f} m high, at {pitch:.0f} degrees"
+    if run > _RUN_M:
+        return f"roof not believable: rises {rise:.1f} m over walls {eave:.1f} m high, one roof {2 * run:.0f} m across"
+    if pitch > _STEEPEST_DEG:
+        return f"roof not believable: {pitch:.0f} degrees steep"
     if narrow > 0 and rise > 0.9 * narrow:
         return f"roof not believable: rises {rise:.1f} m over a house {narrow:.1f} m across"
     return None

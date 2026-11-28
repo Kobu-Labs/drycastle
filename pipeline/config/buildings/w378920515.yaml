@@ -1,0 +1,30 @@
+# P-0013: single-storey house with attached wing, white render, terracotta tiled roof, external metal stair to the attic. Measured by facade_pipeline from 2 Street View capture(s).
+# Wall top 3.68 m, roof top 5.90 m. Walls seen: edges [0, 3, 4, 5]. Not modelled: external metal staircase with a landing and a door at the attic, a low brown plinth, a small lean-to roof at the wing.
+id: w378920515
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.3
+frame_colour: '#f2f0ea'
+trim_colour: '#d8d2c4'
+ridge_caps: true
+plinth: {height_m: 0.6, colour: '#77726c'}
+apron: {width_m: 0.33, colour: '#b2afa2'}
+roof_tiles: true
+eaves: {colour: '#9fa0a2', fascia_m: 0.18, gutter: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 0, at_m: 5.35, colour: '#9fa0a2', bends: true}
+- {edge: 2, at_m: 8.88, colour: '#9fa0a2', bends: true}
+- {edge: 4, at_m: 8.89, colour: '#9fa0a2', bends: true}
+chimneys:
+- {x: 42.51, y: -45.36, top_m: 6.4, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 2.48, width_m: 0.64, height_m: 1.5, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w2, kind: window, edge: 1, at_m: 2.07, width_m: 0.64, height_m: 1.5, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 4.78, width_m: 0.64, height_m: 1.5, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 2, at_m: 1.8, width_m: 0.64, height_m: 1.5, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 4.25, width_m: 0.64, height_m: 1.5, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 2, at_m: 6.69, width_m: 0.64, height_m: 1.5, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 4, at_m: 1.88, width_m: 1.17, height_m: 1.29, sill_m: 1.61, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w8, kind: window, edge: 4, at_m: 6.75, width_m: 0.64, height_m: 1.29, sill_m: 1.61, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 5, at_m: 3.47, width_m: 1.02, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}

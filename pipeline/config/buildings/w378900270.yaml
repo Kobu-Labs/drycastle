@@ -1,0 +1,25 @@
+# P-0854: small bungalow with loft, white-grey render, dark tiled roof, gable end facing street. Measured by facade_pipeline from 1 Street View capture(s).
+# Wall top 3.93 m, roof top 6.79 m. Walls seen: edges [1, 2]. Not modelled: satellite dish on gable, wooden loft hatch with ladder, vine pergola.
+id: w378900270
+source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
+overhang_m: 0.25
+frame_colour: '#f2f0ea'
+surround_colour: '#6b4a3a'
+trim_colour: '#6b4a3a'
+ridge_caps: true
+plinth: {height_m: 0.21, colour: '#888481'}
+apron: {width_m: 0.2, colour: '#888481'}
+roof_tiles: true
+eaves: {colour: '#41424a', fascia_m: 0.18, gutter: true, rafters: true}
+bargeboard_colour: '#f2f0ea'
+downpipes:
+- {edge: 1, at_m: 7.97, colour: '#41424a', bends: true}
+- {edge: 3, at_m: 8.49, colour: '#41424a', bends: true}
+interior: true
+openings:
+  - {id: w1, kind: window, edge: 0, at_m: 2.09, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w2, kind: window, edge: 0, at_m: 2.19, width_m: 1.0, height_m: 1.0, sill_m: 4.33, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 2, at_m: 2.28, width_m: 1.01, height_m: 1.8, sill_m: 0.45, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.75], rails: [0.85], sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.21, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
+  - {id: w4, kind: window, edge: 3, at_m: 2.11, width_m: 1.2, height_m: 1.1, sill_m: 1.16, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 3, at_m: 5.43, width_m: 1.2, height_m: 1.1, sill_m: 1.16, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

@@ -57,8 +57,29 @@ Anomalies found by hand in photo-built houses (2026-11-27), the detection for ea
 | Huge gable | a gable read on a wall far longer than the house is deep is taken as an eave wall (`roof_fit.gable_believable`) |
 | Doorway flicker | a 3 cm threshold with a riser; no sill board at ground level |
 
+## Geometry pass (2026-11-28, second)
+
+`uv run python -m drycastle_pipeline.buildings.lint_geometry [ids]` over every house with a detail. What it found and the fix (general, in the builder or in `apply`; a house picks the apply-side ones up when re-applied):
+
+| Class | Cause | Fix |
+| --- | --- | --- |
+| Board, gutter or cap through a lower roof at a wing junction | at a step between parts of a fitted roof the rim's and the cap's end heights were the higher part's | `openings._run_ends`: heights taken just inside the run; a ridge cap stops where a higher roof covers its sides; its skirt is at most 13 cm deep |
+| Canopy, surround or lintel through the roof | a canopy under an eave at the door's head; a gable window's surround over the wall's top | no canopy under such an eave; surrounds and lintels end under the wall's top |
+| A part's roof up through another's | the largest rectangle went next even when it only crossed the corner of an L; a wing stood out of a hipped (or in-line) part and came up in its far half; a lower part far wider across its ridge than long | `roof_fit.choose`: the rectangle that roofs most of what is still bare goes next; `_stop_inside`: a part that stands out of a higher one on one side stops at its middle; a lower part's ridge runs along it when its gable would be over 8 m and 1.5 times its length |
+| Roof not believable | a ridge across a long house (an eave read on an end wall, a misread gable): one gable 16 to 38 m wide; a roof read steeper than any was built at 60 degrees | `roof_fit.fit` turns a main ridge whose gable is not believable (`gable_believable`), `apply` writes the turned ridge (also for a plain roof); a too-steep reading, or one over 50 degrees and 1.3 times the walls, is built at 45 degrees |
+| Dormer cheeks above the dormer roof; dormer roof through the house's | the cheek's back foot rose above its top; the dormer's eaves ran on under the house's roof | the cheek ends where the roof comes up to its top; the dormer's eave ends where it meets the roof |
+| Ground flicker | a door step's front in the plane of the apron's edge; a low window's sill board on the plinth's ledge | the step stands 3 cm past it; no ledge under a sill board |
+| Rafter tails up a step | a rafter under an eave next to a higher part took that part's roof height | a rafter whose ends differ more than a slope gives is left out |
+| A narrow wing beside the house with a single slope, the house's gable standing over it (w378920518) | a lean-to was given to a part that runs on past the house's gable end | such a part gets its own gabled roof, ridge along the house's |
+| Eave too high, two storeys on a one-storey house (w378900292) | the gable guard turned the gable wall into an eave wall, and the readings on the end wall (now across the ridge) were thrown away | when a named gable is not believed: an end wall the roof was seen coming down to keeps its reading, and the roof is hipped (the roof comes down to the end); the not-a-gable wall's own top reading is not used when another wall was read; with no wall along the ridge read and no gable verge read, a gable wall's top over the ground floor's openings and under 4.2 m is the eave |
+
+Lint changes (false positives, checked on the renders): a trim piece passes through a roof only when it is above and below one roof plane (under a higher part's overhang it passes through none); a part's roof piece that runs on from its own area across the other part's wall (5 cm away) is not "coming up"; a roof that rises more than 1.35 times its walls is not believed only when it is also steeper than 50 degrees (a 44 degree roof over an attic, w378920362, is real), and one roof climbing more than 8 m from its eave (a gable 16 m or more wide) or steeper than 62 degrees is never believed.
+
+`apply` refuses to write when the overrides entry exists and `--replace` was not given before anything is written (w378920491's detail was written for a gabled roof, its overrides entry stayed hipped).
+
 What is left, as the geometry lint reports it:
-- dormer side walls stand above the dormer roof (a few houses);
-- pipes or trim cross a lower roof at a wing junction;
-- w378920518: the main gable stands over the wing's lean-to; the wing really has its own gabled roof;
+- w378920323: an askew main part with four parts around it: one comes up 4.75 m2 inside it;
+- w378900386, w378900384: a small bump at a corner comes up under 1 m2 inside the house's roof;
+- w378920451: `apply` stops: a capture's photo is missing;
+- w378900271: `apply` stops: `house_rules` cuts a window under the eave to a negative height (eave read 2.82 m);
 - w378920522: its high window on edge 4 counts as a gable window, because its sill is at the eave.

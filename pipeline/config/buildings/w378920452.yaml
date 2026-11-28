@@ -22,4 +22,4 @@ openings:
   - {id: w2, kind: window, edge: 2, at_m: 5.75, width_m: 0.53, height_m: 0.9, sill_m: 1.12, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w3, kind: window, edge: 2, at_m: 8.89, width_m: 0.53, height_m: 0.9, sill_m: 1.12, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 3, at_m: 0.2, width_m: 0.53, height_m: 0.9, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
-  - {id: d1, kind: door, edge: 3, at_m: 2.5, width_m: 0.85, height_m: 2.24, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: d1, kind: door, edge: 3, at_m: 3.24, width_m: 0.5, height_m: 2.24, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}

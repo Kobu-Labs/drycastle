@@ -1,8 +1,7 @@
 # P-0110: small house, white rough render, brown brick plinth, dark metal roof. Measured by facade_pipeline from 1 Street View capture(s).
-# Wall top 3.77 m, roof top 9.89 m. Walls seen: edges [5]. Not modelled: drainpipe, roof pipe/mast, one end of roof looks gabled-ish.
+# Wall top 3.77 m, roof top 8.84 m. Walls seen: edges [5]. Not modelled: drainpipe, roof pipe/mast, one end of roof looks gabled-ish.
 id: w378920531
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.6
 frame_colour: '#3a3a3c'
 trim_colour: '#d8d2c4'
@@ -16,6 +15,7 @@ downpipes:
 - {edge: 6, at_m: 0.16, colour: '#676969', bends: true}
 - {edge: 3, at_m: 10.36, colour: '#676969', bends: true}
 - {edge: 3, at_m: 0.16, colour: '#676969', bends: true}
+interior: true
 openings:
   - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.6, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 4, canopy_m: 0.7}
   - {id: w1, kind: window, edge: 1, at_m: 2.01, width_m: 2.29, height_m: 1.35, sill_m: 1.19, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}

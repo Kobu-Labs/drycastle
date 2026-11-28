@@ -1,8 +1,7 @@
 # P-0265: low house, white render, red tiled hipped roof. Measured by facade_pipeline from 1 Street View capture(s).
-# Wall top 2.40 m, roof top 7.16 m. Walls seen: edges [4]. Not modelled: chimney, satellite dishes, attached neighbouring house.
+# Wall top 2.40 m, roof top 5.15 m. Walls seen: edges [4]. Not modelled: chimney, satellite dishes, attached neighbouring house.
 id: w378900345
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.25
 frame_colour: '#f2f0ea'
 trim_colour: '#d8d2c4'
@@ -16,7 +15,8 @@ downpipes:
 - {edge: 5, at_m: 12.78, colour: '#515047', bends: true}
 - {edge: 5, at_m: 0.16, colour: '#515047', bends: true}
 chimneys:
-- {x: -374.89, y: 396.3, top_m: 7.66, width_m: 0.5, depth_m: 0.5, cap: true}
+- {x: -374.89, y: 396.3, top_m: 5.65, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}
   - {id: w1, kind: window, edge: 0, at_m: 4.73, width_m: 1.01, height_m: 0.98, sill_m: 0.96, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, lintel_m: 0.18}

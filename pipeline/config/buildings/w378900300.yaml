@@ -14,11 +14,14 @@ roof_tiles: true
 eaves: {colour: '#7c7c73', fascia_m: 0.18, gutter: true}
 bargeboard_colour: '#f2f0ea'
 downpipes:
-- {edge: 2, at_m: 3.2, colour: '#7c7c73', bends: true}
+- {edge: 0, at_m: 3.96, colour: '#7c7c73', bends: true}
+- {edge: 1, at_m: 7.06, colour: '#7c7c73', bends: true}
 interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.42, width_m: 1.36, height_m: 1.16, sill_m: 1.4, posts: [0.34, 0.56], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: d1, kind: door, edge: 1, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
-  - {id: w2, kind: window, edge: 1, at_m: 4.42, width_m: 1.36, height_m: 1.16, sill_m: 1.4, posts: [0.34, 0.56], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w4, kind: window, edge: 5, at_m: 2.27, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.34, 0.56], sill: true, surround_m: 0.12}
-  - {id: w5, kind: window, edge: 5, at_m: 5.4, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.34, 0.56], surround_m: 0.12}
+  - {id: w2, kind: window, edge: 1, at_m: 4.42, width_m: 1.36, height_m: 1.16, sill_m: 0.89, posts: [0.34, 0.56], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 4, at_m: 2.7, width_m: 0.6, height_m: 0.6, sill_m: 1.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.38], surround_m: 0.12}
+  - {id: w4, kind: window, edge: 4, at_m: 4.38, width_m: 0.6, height_m: 0.6, sill_m: 1.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.38], surround_m: 0.12}
+  - {id: w6, kind: window, edge: 5, at_m: 2.86, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.34, 0.56], sill: true, surround_m: 0.12}
+  - {id: w7, kind: window, edge: 5, at_m: 5.99, width_m: 1.36, height_m: 1.16, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.34, 0.56], surround_m: 0.12}
