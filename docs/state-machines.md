@@ -301,18 +301,26 @@ stateDiagram-v2
 
 ## Cartel.JobDone
 
-The "Job done" banner of a succeeded Cartel Job (with its jingle and the camera's pull-back) for the party's players: up for about 4 s, then gone.
+The "Job done" cinematic of a succeeded Cartel Job for the party's players: the banner, the flashed camera moves out and back, their own music; about 10 s, or at once on a skip, damage or death.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Idle
-    Idle --> Showing
-    Showing --> Idle
-    Showing --> Showing
+    Idle --> Playing
+    Playing --> Playing
+    Playing --> Skipped
+    Playing --> Fading
+    Playing --> Idle
+    Skipped --> Idle
+    Skipped --> Playing
+    Fading --> Idle
+    Fading --> Playing
 ```
 
-- **Idle**: No banner; the camera is the player's own.
-- **Showing**: The banner shows the Respect (or why none); the clock runs the banner's seconds and sets how far the camera is pulled back (out, hold, back). A Job that succeeds while it shows replaces it.
+- **Idle**: Nothing plays; the camera and the controls are the player's own.
+- **Playing**: The banner shows the Respect (or why none); the clock runs the timeline: the camera's legs (flash and whoosh at each move), the music with its fade; the controls are off. A Job that succeeds while it plays starts it over.
+- **Skipped**: Ended at once by a skip key, damage or death: the camera is the player's again, a flash covers the cut, the music fades out over about 1.5 s, the controls come back after a moment.
+- **Fading**: The camera's part is over (the view is the player's own, the controls are theirs); the music still fades out for the last seconds of its fade.
 
 ## Cartel.Membership
 

@@ -10,7 +10,7 @@ public class JobDoneTests
         => new(id, state, JobFailReason.None, "harvest", 2, 1, 0, paid, flags);
 
     [Fact]
-    public void ASucceededJobShowsTheBannerWithTheRespectPaidForFourSecondsThenItIsGone()
+    public void ASucceededJobShowsTheBannerWithTheRespectPaidForFourSecondsWhileTheCinematicRunsTenAndTheMusicTwelve()
     {
         var b = new JobDone();
         Assert.False(b.Showing);
@@ -21,8 +21,18 @@ public class JobDoneTests
         b.Tick(3.9f);
         Assert.True(b.Showing);
         b.Tick(0.2f);
-        Assert.False(b.Showing);
-        Assert.Equal(0f, b.Pull);
+        Assert.False(b.Showing);   // the banner is gone ...
+        Assert.True(b.Playing);    // ... the cinematic is not
+        b.Tick(5.8f);              // 9.9 s
+        Assert.True(b.Playing);
+        b.Tick(0.2f);              // 10.1 s: the camera is back, the music still fades
+        Assert.False(b.Playing);
+        Assert.False(b.Camera);
+        Assert.True(b.MusicOn);
+        Assert.True(b.MusicGain > 0f);
+        b.Tick(2f);
+        Assert.False(b.MusicOn);
+        Assert.Equal(0f, b.MusicGain);
     }
 
     [Fact]
@@ -51,23 +61,6 @@ public class JobDoneTests
         Assert.True(nothing.Hidden);
         Assert.False(nothing.Earned);
         Assert.Equal(new JobDoneDetail(55, null), JobDone.DetailOf(End(1, paid: 55, flags: CartelJobFlags.Earns | CartelJobFlags.Leader)));
-    }
-
-    [Fact]
-    public void TheCameraEasesOutHoldsAndEasesBackOverTheBannersFourSeconds()
-    {
-        Assert.Equal(0f, JobDone.PullAt(0f));
-        Assert.Equal(0.5f, JobDone.PullAt(JobDone.EaseSeconds / 2), 0.001f);
-        Assert.Equal(1f, JobDone.PullAt(JobDone.EaseSeconds), 0.001f);
-        Assert.Equal(1f, JobDone.PullAt(JobDone.Seconds / 2), 0.001f);
-        Assert.Equal(0.5f, JobDone.PullAt(JobDone.Seconds - JobDone.EaseSeconds / 2), 0.001f);
-        Assert.Equal(0f, JobDone.PullAt(JobDone.Seconds));
-        var prev = 0f;
-        for (var t = 0f; t <= JobDone.EaseSeconds; t += 0.05f) { var p = JobDone.PullAt(t); Assert.True(p >= prev); prev = p; }
-        var b = new JobDone();
-        b.OnJob(End(1, paid: 5));
-        b.Tick(2f);
-        Assert.Equal(1f, b.Pull, 0.001f);
     }
 
     [Fact]
