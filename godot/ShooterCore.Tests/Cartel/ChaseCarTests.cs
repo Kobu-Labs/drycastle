@@ -34,9 +34,11 @@ public class ChaseCarTests
             Assert.Equal((d.SpawnAheadMinM, d.SpawnAheadMaxM), (section.SpawnAheadMinM, section.SpawnAheadMaxM));
             Assert.Equal((d.SpawnPlayerMinM, d.ShootRangeM, d.MovingAimErrorDeg, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds), (section.SpawnPlayerMinM, section.ShootRangeM, section.MovingAimErrorDeg, section.StopSpeedMps, section.StopWithinM, section.GiveUpM, section.GiveUpSeconds));
             Assert.Equal((d.FollowM, d.MaxSpeedMps, d.RemountM, d.UnstickAfterSeconds, d.WreckSeconds, d.SeatDropM), (section.FollowM, section.MaxSpeedMps, section.RemountM, section.UnstickAfterSeconds, section.WreckSeconds, section.SeatDropM));
+            Assert.Equal((d.AmbushSideM, d.WaitMaxSeconds, d.MeetM, d.FarM, d.FarSpeedMps), (section.AmbushSideM, section.WaitMaxSeconds, section.MeetM, section.FarM, section.FarSpeedMps));
         }
         Assert.Equal((150f, 40f, 5f, 30f, 250f, 20f, 3, 0f, 22f), (d.SpawnPlayerMinM, d.ShootRangeM, d.StopSpeedMps, d.StopWithinM, d.GiveUpM, d.GiveUpSeconds, d.MaxAlive, d.FirstAfterSeconds, d.IntervalSeconds)); // the user's numbers: the first the moment the van leaves, every 22 s, 3 alive
         Assert.Equal((150f, 400f), (d.SpawnAheadMinM, d.SpawnAheadMaxM)); // 150 to 400 m ahead along the way to the drop
+        Assert.Equal((4.5f, 40f, 70f, 100f, 33f), (d.AmbushSideM, d.WaitMaxSeconds, d.MeetM, d.FarM, d.FarSpeedMps));
     }
 
     [Fact]
@@ -100,7 +102,9 @@ public class ChaseCarTests
         var d = new ChaseData();
         Assert.Equal(20f, ChaseRules.FollowSpeed(d, d.FollowM, 20f)); // at the following distance: the van's speed
         Assert.True(ChaseRules.FollowSpeed(d, 100f, 20f) > 20f); // far: catches up
-        Assert.Equal(d.MaxSpeedMps, ChaseRules.FollowSpeed(d, 400f, 20f));
+        Assert.Equal(d.MaxSpeedMps, ChaseRules.FollowSpeed(d, d.FarM, 20f)); // up to far_m: 84 km/h at most
+        Assert.Equal(d.FarSpeedMps, ChaseRules.FollowSpeed(d, 400f, 20f)); // further behind: 120 km/h
+        Assert.Contains("far_speed_mps", Assert.Throws<DataFileException>(() => new ChaseData { FarSpeedMps = 20f }.Validate("jobs.harvest.chase", 5)).Message);
         Assert.True(ChaseRules.FollowSpeed(d, 5f, 20f) < 20f); // too close: slower than the van
         Assert.Equal(0f, ChaseRules.FollowSpeed(d, 1f, 5f));
     }
@@ -256,21 +260,30 @@ public class ChaseCarTests
     }
 
     [Fact]
-    public void ASpotAheadOnTheWayToTheDropMeetsTheVanHeadOnAndANearDropOrASightedWayFallsBackBehind()
+    public void ASpotAheadIsAnAmbushBesideTheWayFacingAlongItWithNoSightRuleAndANearDropFallsBackBehind()
     {
         var van = new Vector2(500, 0);
+        var d = new ChaseData();
         var toDrop = new RoadPath(new[] { van, new Vector2(1500, 0) }); // the van's way to a drop 1000 m on
+        var sides = new HashSet<float>();
         for (var seed = 1; seed <= 20; seed++)
         {
-            var spot = ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), _ => false, new Random(seed), ahead: toDrop)!.Value;
+            var spot = ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), d, _ => true, new Random(seed), open: _ => true, ahead: toDrop, aheadBlocked: _ => false)!.Value; // all in the party's sight: ahead does not care
             Assert.InRange(spot.BackM, -400f, -150f); // negative: that far ahead of the van
             Assert.InRange(spot.Ground.X, 650f, 900f); // on its way to the drop
-            Assert.Equal(RoadPath.Yaw(van - spot.Ground), spot.Yaw, 0.01f); // facing the van: head-on
+            Assert.Equal(d.AmbushSideM, MathF.Abs(spot.Ground.Y), 0.01f); // beside the way, not on it
+            Assert.Null(spot.Place); // never the road's centre
+            Assert.Equal(RoadPath.Yaw(new Vector2(1, 0)), spot.Yaw, 0.01f); // along the van's way, not towards the van
+            sides.Add(MathF.Sign(spot.Ground.Y));
         }
+        Assert.Equal(2, sides.Count); // both sides are tried
+        // a vehicle beside the way's spots rules them out; no open ground beside the way: dropped, the old rule behind the van
+        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), d, _ => false, new Random(1), open: _ => true, ahead: toDrop, aheadBlocked: p => p.X > 500f)!.Value.BackM > 0);
+        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), d, _ => false, new Random(1), open: p => p.Y == 0f, ahead: toDrop)!.Value.BackM > 0);
         var near = new RoadPath(new[] { van, new Vector2(600, 0) }); // the drop is 100 m on: nothing 150 m ahead
-        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), _ => false, new Random(1), ahead: near)!.Value.BackM > 0);
-        // all of the way ahead is in the party's sight: the old rule behind the van
-        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), new ChaseData(), p => p.X > 500f, new Random(1), ahead: toDrop)!.Value.BackM > 0);
+        Assert.True(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), d, _ => false, new Random(1), open: _ => true, ahead: near)!.Value.BackM > 0);
+        // a spot behind the van keeps the sight rule
+        Assert.Null(ChaseSpawn.Pick(Straight(), TrailTo(500), van, new[] { van }, Array.Empty<Vector2>(), d, _ => true, new Random(1), ahead: near));
     }
 
     [Fact]
@@ -336,8 +349,78 @@ public class ChaseCarTests
     // ---- the machine ----
 
     static ChaseFacts F(float gap = 100f, float vanSpeed = 20f, float carSpeed = 20f, bool driver = true, bool destroyed = false, bool route = true,
-        float crewGap = float.PositiveInfinity, int crew = 0, bool free = false, bool aboard = false) =>
-        new(gap, vanSpeed, carSpeed, driver, destroyed, route, crewGap, crew, free, aboard);
+        float crewGap = float.PositiveInfinity, int crew = 0, bool free = false, bool aboard = false, bool passed = false, bool headOn = false) =>
+        new(gap, vanSpeed, carSpeed, driver, destroyed, route, crewGap, crew, free, aboard, passed, headOn);
+
+    [Fact]
+    public void AnAmbushCarWaitsStandingWhileTheVanComesFromBehindAndFollowsOnceItHasPassed()
+    {
+        var d = new ChaseData();
+        var car = new ChaseCar(d, ambush: true);
+        car.Step(F(gap: 200f, carSpeed: 0f), Dt);
+        Assert.Equal(ChaseState.Waiting, car.State);
+        Assert.True(car.CrewInside);
+        for (var gap = 200f; gap > 20f; gap -= 1f) // the van drives up from behind: it stands, nothing forward
+        {
+            Assert.Equal(default, car.Step(F(gap: gap, carSpeed: 0f), Dt));
+            Assert.Equal(ChaseState.Waiting, car.State);
+            Assert.Equal(gap <= d.ShootRangeM, car.Shoots); // the Gunmen shoot from the windows once it is within range
+            var input = ChasePilot.Wait(0f);
+            Assert.True(input.Handbrake && input.Throttle <= 0f); // never a forward throttle
+        }
+        Assert.Equal(ChaseState.Waiting, car.State); // the van is alongside: still not past
+        car.Step(F(gap: 12f, carSpeed: 0f, passed: true), Dt);
+        Assert.Equal(ChaseState.Chasing, car.State); // the van is past its nose: it follows, no U-turn
+        // a slow van near stops it from Waiting as from Chasing; a van that never comes: wait_max_seconds
+        var stop = new ChaseCar(d, ambush: true); stop.Step(F(carSpeed: 0f), Dt);
+        stop.Step(F(gap: 20f, vanSpeed: 2f, carSpeed: 0f), Dt);
+        Assert.Equal(ChaseState.Stopping, stop.State);
+        var patient = new ChaseCar(d, ambush: true); patient.Step(F(gap: 120f, carSpeed: 0f), Dt);
+        for (var t = 0f; t < d.WaitMaxSeconds - 1f; t += Dt) patient.Step(F(gap: 120f, carSpeed: 0f), Dt);
+        Assert.Equal(ChaseState.Waiting, patient.State);
+        for (var t = 0f; t < 2f && patient.State == ChaseState.Waiting; t += Dt) patient.Step(F(gap: 120f, carSpeed: 0f), Dt);
+        Assert.Equal(ChaseState.Chasing, patient.State);
+    }
+
+    [Fact]
+    public void AChasingCarThatTheVanComesAtHeadOnPullsAsideAndWaitsForItToPass()
+    {
+        var d = new ChaseData();
+        var car = Chasing(d);
+        car.Step(F(gap: 60f, vanSpeed: 17f, headOn: true), Dt);
+        Assert.Equal(ChaseState.Waiting, car.State);
+        var aside = ChasePilot.Wait(20f); // still moving: brakes with the wheel to the right
+        Assert.True(aside.Throttle < 0f && aside.Steer > 0f);
+        car.Step(F(gap: 30f, vanSpeed: 17f), Dt);
+        Assert.Equal(ChaseState.Waiting, car.State); // not past yet
+        car.Step(F(gap: 15f, vanSpeed: 17f, passed: true), Dt);
+        Assert.Equal(ChaseState.Chasing, car.State);
+        // the rule itself: fast, within meet_m, ahead of the nose, the headings opposed
+        var van = new Vector2(0, -50); // 50 m ahead of a car facing -Z (yaw 0)
+        Assert.True(ChaseRules.HeadOn(d, Vector2.Zero, 0f, van, new Vector2(0, 1), 17f));
+        Assert.False(ChaseRules.HeadOn(d, Vector2.Zero, 0f, van, new Vector2(0, -1), 17f)); // driving away
+        Assert.False(ChaseRules.HeadOn(d, Vector2.Zero, 0f, van, new Vector2(0, 1), 3f)); // too slow
+        Assert.False(ChaseRules.HeadOn(d, Vector2.Zero, 0f, new Vector2(0, -90), new Vector2(0, 1), 17f)); // beyond meet_m
+        Assert.False(ChaseRules.HeadOn(d, Vector2.Zero, 0f, new Vector2(0, 50), new Vector2(0, 1), 17f)); // behind the nose
+        Assert.True(ChaseRules.Passed(Vector2.Zero, new Vector2(0, -10), new Vector2(0, -1))); // the van drives on away from the car
+        Assert.False(ChaseRules.Passed(Vector2.Zero, new Vector2(0, -10), new Vector2(0, 1))); // it comes towards it
+    }
+
+    [Fact]
+    public void ASlowCarWithTheWayBehindItBacksRoundAndDrivesOnOnceTheWayIsUnderSixtyDegrees()
+    {
+        var path = new RoadPath(new[] { new Vector2(0, 0), new Vector2(0, 200) }); // the way runs +Z
+        var d = ChaseRules.Forward(0f); // the car at the origin faces -Z: the way is dead behind it
+        Assert.True(d.Y < 0f);
+        var back = ChasePilot.Follow(path, new Vector2(0, 1), 0f, 1f, 10f, 20f);
+        Assert.Equal(-1f, back.Throttle); // backs up
+        Assert.NotEqual(0f, back.Steer); // while steering
+        Assert.True(ChasePilot.BackingRound(2.5f, 3f));
+        Assert.False(ChasePilot.BackingRound(2.5f, 6f)); // too fast: it turns forward as before
+        Assert.True(ChasePilot.BackingRound(1.3f, -3f)); // backing, 75 degrees off: goes on
+        Assert.False(ChasePilot.BackingRound(0.9f, -3f)); // under 60 degrees off: drives on
+        Assert.False(ChasePilot.BackingRound(1.3f, 1f)); // 75 degrees off and standing: forward (the start is over 110)
+    }
 
     static ChaseCar Chasing(ChaseData? d = null)
     {

@@ -50,15 +50,16 @@
   // the cab seats at z -0.586. Two rows (z 0.45 and 1.35), 0.5 either side of the middle. The figure sits with its hips seat_pelvis_m (0.42) above its feet, so the posts are on the floor (the seat's own point is lowered by chase seat_drop_m).
   // bay_exit_z_m 3.6: 1.07 behind the van's tail (2.53). WHERE: a road or open drivable ground point whose drivable way to the Cartel van (the length of the way it would drive: off_road's plan) lies in a band [min, max] of spawn_bands_m,
   // at least spawn_player_min_m from every player, spawn_apart_m from the other Rival vehicles, clear of vehicles; NO out-of-sight rule (the drive in is the warning). Road points every spawn_road_step_m, open ground points on rings
-  // spawn_ring_step_m apart every spawn_ring_step_deg round the van (where a van of spawn_half_width_m can stand); at most spawn_checks (12: each is a road and open ground plan) candidates of a band have their way worked out, in random order. The first band is the wanted
-  // 250 to 400 m; when no point fits it the next, wider band is tried (200-600, then 150-900, then 100-1500), so an Assault is sent rather than none; the log says which band and why a send failed. GIVE UP: give_up_m 600 for give_up_seconds
-  // (the chase car's 250 would fire at once from a 250-400 m spawn). STALLED: the newest Assault whose crew still rides in its vehicle and that got no stall_progress_m (10) closer to the van in stall_seconds (10) (within stall_near_m (40)
+  // spawn_ring_step_m apart every spawn_ring_step_deg round the van (where a van of spawn_half_width_m can stand); at most spawn_checks (12: each is a road and open ground route plan) candidates have their way worked out, in random order, ONE budget for all the bands together (a band that uses it up leaves none to the wider ones). The first band is the wanted
+  // 250 to 400 m; when no point fits it the next, wider band is tried (200-600, then 100-600), so an Assault is sent rather than none; the log says which band and why a send failed. GIVE UP: give_up_m 600 for give_up_seconds
+  // (the chase car's 250 would fire at once from a 250-400 m spawn); no band's max may be past give_up_m (checked), or a van put down there would give up at once. The Assault van drives on the chase numbers, far_m / far_speed_mps included
+  // (120 km/h more than 100 m behind the Cartel van; the Cartel van type's own top speed is 33, so it just reaches it). When its crew is on foot it heads for the objective's centre (snapped onto the navigation mesh) while the Heist is at the objective, else for the Cartel van (on the road, at the drop). STALLED: the newest Assault whose crew still rides in its vehicle and that got no stall_progress_m (10) closer to the van in stall_seconds (10) (within stall_near_m (40)
   // of it is close enough: it is on the van's tail) is stalled: the next Assault is sent right away (the interval starts over from it), it no longer counts towards max_assaults_alive, and it is removed with its crew once it is more than
   // remove_far_m (150) from every player and no player can see it (a line of sight, as a Gunman's; looked at every remove_check_seconds).
   "assault_car": {
     "vehicle_type": "cartel_van",
     "skin": 1,
-    "spawn_bands_m": [[250, 400], [200, 600], [150, 900], [100, 1500]],
+    "spawn_bands_m": [[250, 400], [200, 600], [100, 600]],
     "spawn_player_min_m": 150,
     "spawn_apart_m": 25,
     "spawn_road_step_m": 30,
@@ -294,17 +295,20 @@
       // (the ones out then fight on). A chase car is vehicle_type of vehicles.json in its skin number "skin" (an index of that type's skins: the car's are yellow, blue, green, red, grey; 3, the red one, is the darkest by the mean luminance of the
       // catalogue renders: 60 against blue 85, green 86, yellow 131, grey 137; an atlas swap, no new skin), driven by an NPC through the drive model, a Rival Enforcer at the wheel (the one melee member) and 3 Gunmen in the other seats: 4 in all
       // (gunmen per tier, plus gunmen_per_extra_member per party member beyond the first, at most max_gunmen). first_after_seconds: the first car comes this long after the van left (0: the moment it leaves); then one every interval_seconds (22) while fewer than max_alive (3) are
-      // in the fight (a car in the fight: its crew inside or walking back to it, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: AHEAD of the van first: a point spawn_ahead_min_m to spawn_ahead_max_m (150 to 400)
-      // along the van's way to the drop's Receiver (planned as a chase plans a way: roads where they bring it closer, open ground where that is shorter), so the car meets the van head-on and then turns and follows it; when nothing ahead fits (the drop is near, or all of it
-      // is in sight) the old rule: a point of the van's trail (its way since the objective, the objective first) that lies spawn_back_min_m to spawn_back_max_m behind it. Either way: the nearest road within spawn_road_m of the point, or open drivable ground (see off_road: nothing solid,
-      // no water) at the point itself or spawn_spread_m (and half of it) to either side of it, at least spawn_player_min_m from every player, out of the party's sight (a line of sight check, as a Gunman's), spawn_apart_m from the other chase cars, clear of vehicles and with a way from it to the van. FIGHT: the Gunmen shoot from the windows only while the car is within
+      // in the fight (a car in the fight: its crew inside or walking back to it, or a member alive); spawn_retry_seconds: a due car that found no spot asks again this soon. SPOT: AHEAD of the van first, an AMBUSH: a point spawn_ahead_min_m to spawn_ahead_max_m (150 to 400)
+      // along the van's way to the drop's Receiver (planned as a chase plans a way: roads where they bring it closer, open ground where that is shorter), then ambush_side_m (4.5: past a road's edge for a car) to either side of it (both tried), on open drivable ground (see off_road: nothing solid,
+      // no water; never the road's centre), facing ALONG the van's way there (not towards the van: it needs no U-turn), at least spawn_player_min_m from every player, spawn_apart_m from the other chase cars, clear of vehicles and with a way from it to the van; NO sight rule (the party may see it
+      // stand). It WAITS (state Waiting, standing, its Gunmen shooting from the windows within shoot_range_m) until the van has driven past it (it lies behind the van along the van's heading), then follows; at most wait_max_seconds (40), or the van more than give_up_m away for give_up_seconds, then
+      // it drives on anyway; the stop rule (below) applies while it waits. A car already chasing that the van comes at head-on (the van faster than stop_speed_mps, within meet_m (70), the headings more than 120 degrees apart, the van ahead of its nose: an Assault van driving in along the road
+      // the Cartel van leaves by) pulls aside (brake, wheel to the right while it moves) and waits the same way. When nothing ahead fits (the drop is near, or no open ground beside the way) the old rule: a point of the van's trail (its way since the objective, the objective first) that lies
+      // spawn_back_min_m to spawn_back_max_m behind it: the nearest road within spawn_road_m of the point, or open drivable ground at the point itself or spawn_spread_m (and half of it) to either side of it, out of the party's sight (a line of sight check, as a Gunman's), and the same distances, clearance and way. A chasing car whose way is behind it (more than 110 degrees off its nose) and that is slower than 4 m/s backs up while steering (a K-turn) until the way is under 60 degrees off, then drives on. FIGHT: the Gunmen shoot from the windows only while the car is within
       // shoot_range_m of the van; while it moves faster than moving_mps their rounds are turned off their line by up to moving_aim_error_deg (rival_crew.json's gun.aim_error_deg is the standing one). The car stops (brakes, the handbrake once it nearly
       // stands) and the crew gets out and fights on foot as a Rival crew when the van is slower than stop_speed_mps within stop_within_m, when its driver is dead (it rolls; stop_seconds at most), or when it made no 1 m/s for stalled_seconds while it wants on.
       // Before that, a car wedged (under 1 m/s with the van beyond follow_m) for unstick_after_seconds backs out for reverse_seconds and drives on, at most max_unsticks times in a row (the count is forgotten after 3 s at 3 m/s).
       // REMOUNT: a crew on foot whose van is more than remount_m from its nearest living member and pulling away (the gap grows faster than pull_mps, smoothed, for remount_confirm_seconds) walks back to its car over the navigation mesh and gets in (the
       // seats as when it spawned) when the car is not wrecked, no player sits in it and its driver lives; remount_seconds to do it, then it stays on foot and tries again after remount_retry_seconds. A wrecked or taken car: they stay on foot.
-      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps = 23.33, 84 km/h: 1.4 times the loaded Cartel van's 60 km/h; an NPC's input only,
-      // the car type's own top speed is 44.4 and a player's car is not limited by it); the way (roads where they bring it closer, open ground where that is shorter) is planned again every repath_seconds. A car or crew more
+      // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps = 23.33, 84 km/h: 1.4 times the loaded Cartel van's 60 km/h, or far_speed_mps = 33, 120 km/h while the gap is more than far_m = 100 (the rubber band: a car left far behind catches up; 84 km/h close, 120 km/h far); an NPC's input only,
+      // the car type's own top speed is 44.4 (the Cartel van type's 33) and a player's car is not limited by it); the way (roads where they bring it closer, open ground where that is shorter) is planned again every repath_seconds. A car or crew more
       // than give_up_m from the van for give_up_seconds gives up and is removed with its crew (an Assault van's own: assault_car give_up_m). The Assault vans drive on these numbers too. A destroyed car's crew inside dies with it; its wreck lies wreck_seconds (keep it under vehicles.json destroyed_return_time) then goes. seat_drop_m: the crew
       // sits (the seated pose, thieves.json van.view seat_pelvis_m = 0.42 above the feet): the feet this far below the seat's point so the hips are on it; exit_side_m: they step out this far beyond the door side. Killing them pays nothing (Rival crew rules).
       "chase": {
@@ -325,6 +329,9 @@
         "spawn_road_m": 30,
         "spawn_apart_m": 25,
         "spawn_spread_m": 40,
+        "ambush_side_m": 4.5,
+        "wait_max_seconds": 40,
+        "meet_m": 70,
         "shoot_range_m": 40,
         "moving_aim_error_deg": 9,
         "moving_mps": 2,
@@ -343,6 +350,8 @@
         "follow_m": 14,
         "catch_up_gain": 1,
         "max_speed_mps": 23.33,
+        "far_m": 100,
+        "far_speed_mps": 33,
         "repath_seconds": 1.5,
         "give_up_m": 250,
         "give_up_seconds": 20,
@@ -406,6 +415,9 @@
         "spawn_road_m": 30,
         "spawn_apart_m": 25,
         "spawn_spread_m": 40,
+        "ambush_side_m": 4.5,
+        "wait_max_seconds": 40,
+        "meet_m": 70,
         "shoot_range_m": 40,
         "moving_aim_error_deg": 9,
         "moving_mps": 2,
@@ -424,6 +436,8 @@
         "follow_m": 14,
         "catch_up_gain": 1,
         "max_speed_mps": 23.33,
+        "far_m": 100,
+        "far_speed_mps": 33,
         "repath_seconds": 1.5,
         "give_up_m": 250,
         "give_up_seconds": 20,
