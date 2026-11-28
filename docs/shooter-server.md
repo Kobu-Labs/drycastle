@@ -152,7 +152,7 @@ files below is missing.
 | `killstreaks.json` | streak table (kills, unlock level, duration, control), missile, helper, gunship and AC-130 tuning | `KillstreakData.cs`, `Aircraft` |
 | `turret.json` | sentry turret: hp, lifetime, placement, aim and fire numbers | `TurretEntity.cs` |
 | `camo.json` | camouflage presets, patterns, tuft (ghillie) settings and the concealment numbers | `CamoSpec.cs`, `CamoEditor.cs` |
-| `environment.json` | day/night clock start, day length and the minimum ambient light | `EnvironmentConfig.cs` |
+| `environment.json` | day/night clock start, day length, the minimum ambient light, lamps, sign plates and the thunderstorm (`storm`) | `EnvironmentConfig.cs` |
 | `vehicles.json` | vehicle types: speed, handling, hp, seats, gun, `lights` blocks, `glass` panes, `spawn_count` (dealt at random) and `fixed_spots` (always at `{x, z, yaw_deg?}`, facing along the nearest road without a yaw) | `VehicleData.cs` |
 | `glass.json` | glass panes: hit points, crack stages, blast damage, whether a shattered vehicle pane exposes the riders, the shatter animation (see `docs/glass.md`) | `GlassConfig.cs` |
 | `match.json` | round rules (see the match options table above) | `MatchData.cs` |

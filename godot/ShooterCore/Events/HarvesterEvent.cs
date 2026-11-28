@@ -2,6 +2,7 @@ using System.Numerics;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Wildlife;
 
 namespace Drycastle.ShooterCore.Events;
 
@@ -18,6 +19,16 @@ public static class HarvesterRules
     public const string VehicleId = "harvester";
 
     public static bool IsBale(ushort corpseOwner) => corpseOwner == BaleOwner;
+
+    /// <summary>The Mineral a harvester's burnt-out bale may leave.</summary>
+    public const string SeninId = "senin";
+
+    /// <summary>
+    /// A bale the harvester made just turned to ash at <paramref name="at"/>: with <see cref="HarvesterConfig.SeninChance"/> the Mineral senin lies there (the same <see cref="MineralDrop"/> a Phoenix leaves).
+    /// <paramref name="entity"/> is the bale's corpse id, 0 for a swath's bale. Null: nothing.
+    /// </summary>
+    public static MineralDrop? RollSenin(HarvesterConfig cfg, Random rng, Vector3 at, ushort entity = 0) =>
+        rng.NextDouble() < cfg.SeninChance ? new MineralDrop(SeninId, at, entity) : null;
 
     /// <summary>The chat line for a started harvester: the field and where it appeared, in map metres (x east, y up, z south).</summary>
     public static string SpawnedText(string fieldId, Vector3 at) =>

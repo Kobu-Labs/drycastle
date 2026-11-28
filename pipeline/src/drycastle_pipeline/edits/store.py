@@ -37,4 +37,6 @@ def edits_doc(edits: Edits) -> dict:
         doc["ground_types"] = edits.ground_types
     if edits.paths:
         doc["paths"] = edits.paths
+    if edits.mineral_nodes:
+        doc["mineral_nodes"] = edits.mineral_nodes
     return doc

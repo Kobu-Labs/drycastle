@@ -359,6 +359,14 @@ _Avoid_: time of day (alone), game time
 A value from the day clock that drives street lamp light, headlight and window glow.
 _Avoid_: darkness, night mode
 
+**Weather**:
+The sky's state, owned by the server (`WeatherMachine`, #230): clear or a Thunderstorm, changing by itself on the `storm` numbers of `environment.json`, and for an admin with `/weather storm` or `/weather clear`. Everyone gets the phase when it changes and at join (`WeatherState`). Nothing else changes with it yet (no rain, wind or damage).
+_Avoid_: climate, season
+
+**Thunderstorm**:
+The Weather's one bad phase. Clear sky lasts a random `every_minutes` (20 to 40), then a storm a random `lasting_minutes` (4 to 7). While it lasts, a lightning strike comes every `strike_seconds` (5 to 18) at a random bearing and a distance of `strike_distance_m` (150 to 1500) from the player, and is told to everyone (`Lightning`): the client flashes the sky and plays the thunder after distance / 343 s, quieter the farther it was. Nothing is hit. The client's sky darkens over `fade_seconds` (sun and moon dim, grey sky, more fog) and clears the same way; rain falls round the camera and its loop plays (quieter and muffled indoors), the thunder is a close crack under 400 m and a rumble beyond. It is what makes Thundernite active (`MineralWorld.Storm`), and the Thundernite crystal is there only while it lasts, holding its small cloud and rain up (`ThundernitFx.CloudForce`, `Present`); outside a storm it is not drawn.
+_Avoid_: rain, lightning storm
+
 **Aircraft**:
 A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle, but the Lock-on launcher locks it like one while it is flown (ADR 0031).
 _Avoid_: plane (for helicopters), drone, helicopter (alone)
@@ -568,12 +576,16 @@ The earth embankment north of the village, with a gravel track on top and thick 
 _Avoid_: levee, flood wall (that is the concrete wall)
 
 **Ladder**:
-How a player moves between the floors of a bunker, or up to the deck of a Hunter outpost: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
+How a player moves between the floors of a bunker, up to the deck of a Hunter outpost, or up the Radio tower: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
 
 **Hunter outpost**:
 A guard tower (`SM_Bld_GuardTower_01`) placed by hand on the hunting grounds, a vantage over the wilds. Its ladder, on the tower's own side, is climbed like a bunker's and leads to the deck. Every placed tower has one (`object_ladders.json`, laid out in the object's frame); nothing else is attached to it.
 _Avoid_: base, camp
+
+**Radio tower**:
+The 36 m lattice mast on an equipment cabin (`prim:radio_tower`, #99), placed by hand (the one on parcel P-0510 holds Thundernite). One ladder (`object_ladders.json`, every placed tower has it) climbs the cabin's south side (the model's -y) and the tower beside it, up through a hatch of the top deck. The cabin, the 4 x 6 m deck and the railing round it are solid (`solids` of the manifest entry); the lattice and the antennas are not. A hatch at the ladder's head is the only way up; the deck is the vantage and the place of the Thundernite node.
+_Avoid_: antenna, cell tower
 
 **Shelter**:
 What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
@@ -810,7 +822,7 @@ One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 f
 _Avoid_: gem, ore, crystal (that is the model in the world)
 
 **Mineral node**:
-A crystal in the world that holds one Mineral (#401). It never goes away or hides. Whether it can be taken now is its mineral's own rule (`MineralActivity`: Thundernite only in a storm, Pheonixite once a phoenix drops it; no rule: always). While active any number of players can take it. The player holds the interact key at it (`MineralRules.HoldSeconds`). The one node so far is a test node beside the first spawn; the places are #389 to #397. A dynamic node is the pickup of a Mineral a creature left (a dead Phoenix's pheonixite): active at once, any player who has not found it can take it, a pickup does not use it up: it lies `DropLifetimeSeconds` (60) after it appears and then burns away in a puff of fire (client), or goes when the round ends (never reserved for the killer).
+A crystal in the world that holds one Mineral (#401). It never goes away or hides. Whether it can be taken now is its mineral's own rule (`MineralActivity`: Thundernite only in a storm, Pheonixite once a phoenix drops it; Holystone for 60 min (`holystone_seconds`) from a Holy Mass completed with no pastor killed, cut short when the round ends or the next Mass gathers, `HolyMassEvent.Peaceful`; no rule: always). While active any number of players can take it. The player holds the interact key at it (`MineralRules.HoldSeconds`). A static node is set in `edits.json` (`mineral_nodes`: mineral, position, optional height), baked into `mineral_nodes.json` and built by the server at start (docs/pipeline.md); the places are #389 to #397. A dynamic node is the pickup of a Mineral a creature or an event left (a dead Phoenix's pheonixite; senin where a hay bale the harvester made burnt to ash, `HarvesterConfig.SeninChance` 0.25, never a field's own bale): active at once, any player who has not found it can take it, a pickup does not use it up: it lies `DropLifetimeSeconds` (60) after it appears and then burns away in a puff of fire (client), or goes when the round ends (never reserved for the killer).
 _Avoid_: crystal spawn, pickup
 
 **Find**:

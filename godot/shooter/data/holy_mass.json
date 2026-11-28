@@ -40,6 +40,8 @@
     "start_delay_seconds": 4,
     "mass_seconds": 120,
     "completed_seconds": 12,
+    // After a Mass completed with no pastor killed, Holystone (church gallery) can be taken for this long (60 min), unless a new Mass starts or the round ends first.
+    "holystone_seconds": 3600,
     "stagger_seconds": 25,
     "house_radius_m": 100,
     // The bells ring at the start; the first citizen leaves its house this many seconds later, and the gather's clock starts then.

@@ -52,6 +52,16 @@ public class MineralsTests
      InlineData(13, "13th"), InlineData(21, "21st"), InlineData(22, "22nd"), InlineData(103, "103rd"), InlineData(111, "111th")]
     public void OrdinalsReadAsEnglish(int n, string text) => Assert.Equal(text, MineralFormat.Ordinal(n));
 
+    [Fact]
+    public void HolystoneIsActiveOnlyAfterAPeacefulHolyMass()
+    {
+        Assert.False(MineralActivity.IsActive("holystone", default));
+        Assert.False(MineralActivity.IsActive("holystone", new MineralWorld(HolyMassPeaceful: false)));
+        Assert.True(MineralActivity.IsActive("holystone", new MineralWorld(HolyMassPeaceful: true)));
+        Assert.True(MineralActivity.IsActive("zombite", default)); // a mineral with no rule is always active
+        Assert.True(MineralActivity.IsActive("zombite", new MineralWorld(HolyMassPeaceful: false)));
+    }
+
     // ---- finding (#401) ----
 
     static readonly MineralNode Node = new(0, "zombite", new System.Numerics.Vector3(10, 0, 10));
@@ -101,6 +111,15 @@ public class MineralsTests
         book.Add(1, "zombite");
         Assert.Equal(MineralPickResult.AlreadyFound, book.Check(1, Node, true, Near)); // the node stays, the player cannot take it again
         Assert.Equal(MineralPickResult.Ok, book.Check(2, Node, true, Near)); // any number of players can take it while it is active
+    }
+
+    [Fact]
+    public void AGalleryNodeIsOutOfReachFromTheFloorBelowEvenStandingOnSomething()
+    {
+        var book = new MineralBook();
+        var gallery = new MineralNode(0, "holystone", new System.Numerics.Vector3(0, 192.3f, 0));
+        Assert.Equal(MineralPickResult.Ok, book.Check(1, gallery, true, new System.Numerics.Vector3(0.5f, 192.3f, 0)));
+        Assert.Equal(MineralPickResult.TooFar, book.Check(1, gallery, true, new System.Numerics.Vector3(0.5f, 188.95f + 1f, 0))); // on a 1 m font below
     }
 
     [Fact]

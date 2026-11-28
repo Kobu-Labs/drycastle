@@ -113,6 +113,8 @@ public sealed class MineralsClient
     /// <summary>Finds the node in reach that the player can take: active, near (flat) and not found yet.</summary>
     public void Render()
     {
+        // Thundernite is storm-glass: it is there only while a storm makes it active, and holds its small cloud up for as long
+        foreach (var v in _nodes.Values) if (v.Visual is ThundernitFx thundernite) { thundernite.Present = v.Active; thundernite.CloudForce = 1; }
         _near = null;
         if (_nodes.Count == 0 || _ctx.Me == null || _ctx.Dead || _ctx.Driving) return;
         var at = _ctx.Me.GlobalPosition;
@@ -121,7 +123,7 @@ public sealed class MineralsClient
         {
             if (!v.Active || _ranks.ContainsKey(v.Node.MineralId)) continue;
             var p = v.Visual.GlobalPosition;
-            if (Mathf.Abs(p.Y - at.Y) > 3f) continue;
+            if (Mathf.Abs(p.Y - at.Y) > MineralRules.ReachUpDownMetres) continue;
             var d = new Vector2(p.X - at.X, p.Z - at.Z).Length();
             if (d <= best) { _near = id; best = d; }
         }
