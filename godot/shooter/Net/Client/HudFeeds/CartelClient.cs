@@ -66,7 +66,7 @@ public sealed class CartelClient
     public string KindName(string kind) => _kindNames.GetValueOrDefault(kind, kind);
 
     /// <summary>The player would lead a Job they start: alone (ffa, or in no Squad), or as their Squad's leader. The server decides again.</summary>
-    public bool Leads => !_ctx.Match.IsTeamMode || _ctx.Match.SquadOf(_ctx.MyId) == 0 || _ctx.Match.IsSquadLeader(_ctx.MyId);
+    public bool Leads => !_ctx.Match.HasSquads || _ctx.Match.SquadOf(_ctx.MyId) == 0 || _ctx.Match.IsSquadLeader(_ctx.MyId);
 
     /// <summary>What the panel shows now.</summary>
     public ContactPanelModel Model() => ContactPanelModel.Build(_data, Status, _admin(), Leads, Tracker.Phase == TrackerPhase.Running, _ctx.Match.Phase == MatchPhase.Running);

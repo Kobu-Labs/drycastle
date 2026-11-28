@@ -60,6 +60,6 @@ internal sealed class TopBar
         var shown = HudLogic.CeilSeconds(left);
         if (shown == _shown) return;
         _shown = shown;
-        HudUi.Set(_timer, _state.Phase == MatchPhase.Waiting ? Strings.T("hud.timer.waiting") : HudLogic.TimeText(left));
+        HudUi.Set(_timer, _state.Phase == MatchPhase.Waiting ? Strings.T("hud.timer.waiting") : _state.OpenWorld && _state.Phase == MatchPhase.Running ? Strings.T("hud.timer.open") : HudLogic.TimeText(left));
     }
 }

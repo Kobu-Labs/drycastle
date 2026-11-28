@@ -59,14 +59,14 @@ internal sealed class AdminCommands
         _ctx.ChatTo(c, ChatLineKind.Info, speed > 0 ? $"A {size} m blast {distance} m in front of you, its wave at {speed} m/s." : $"A {size} m blast {distance} m in front of you.");
     }
 
-    /// <summary>"/restart [ffa|tdm]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
+    /// <summary>"/restart [ffa|tdm|ow]": a new round now, in the current mode or the named one. Everyone is told which.</summary>
     public void Restart(ServerClient c, IReadOnlyList<string> args)
     {
         var match = _ctx.Match;
-        var mode = args.Count > 0 ? (args[0] == "tdm" ? MatchMode.TeamDeathmatch : MatchMode.FreeForAll) : match.Mode;
+        var mode = args.Count > 0 ? args[0] switch { "tdm" => MatchMode.TeamDeathmatch, "ow" or "openworld" => MatchMode.OpenWorld, _ => MatchMode.FreeForAll } : match.Mode;
         var changed = mode != match.Mode;
         match.Restart(mode);
-        var name = mode == MatchMode.TeamDeathmatch ? "team deathmatch" : "free-for-all";
+        var name = mode switch { MatchMode.TeamDeathmatch => "team deathmatch", MatchMode.OpenWorld => "open world", _ => "free-for-all" };
         _ctx.ChatTo(c, ChatLineKind.Info, changed ? $"{c.Name} restarted the round in {name}." : $"{c.Name} restarted the round.");
         GD.Print($"server: round restarted by {c.Name} #{c.Id}, mode {name}");
     }

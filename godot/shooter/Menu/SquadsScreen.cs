@@ -13,14 +13,15 @@ public static class SquadsStrings
         ("squad.tag", "{0} [{1}]"), ("squad.tag.leader", "{0} [{1}, leader]"),
         ("squads.title", "Squads"),
         ("squads.hint", "A squad is a small group inside your team, up to 4 players. Whoever starts a squad leads it; when the leader leaves, the player in it longest takes over. Squad mates are blue on the minimap and the map, with their names, and their name tags show the squad. Join one or start your own; you can be in one squad. Esc goes back."),
-        ("squads.status.in", "Your squad: {0}  ({1}/{2})"), ("squads.status.none", "You are not in a squad."),
+        ("squads.hint.open", "A squad is a group of players who cannot hurt each other, any size. Whoever starts a squad leads it; when the leader leaves, the player in it longest takes over. Squad mates are blue on the minimap and the map, with their names, and their name tags show the squad. Join one or start your own; you can be in one squad. Esc goes back."),
+        ("squads.status.in", "Your squad: {0}  ({1}/{2})"), ("squads.status.in.open", "Your squad: {0}  ({1})"), ("squads.status.none", "You are not in a squad."),
         ("squads.leave", "Leave squad"), ("squads.leave.tip", "Leave your squad. It disappears when its last player leaves."),
         ("squads.name", "New squad name"), ("squads.name.tip", "Up to {0} characters. Empty: \"{1}\"."),
         ("squads.create", "Create squad"), ("squads.create.tip", "Start a squad with this name and join it. You leave your current squad."),
-        ("squads.taken", "Your team already has a squad with that name."),
-        ("squads.list", "Team {0} squads   {1}"),
-        ("squads.empty", "Your team has no squads yet. Create one above."),
-        ("squads.count", "{0}/{1}"), ("squads.full", "{0}/{1}  FULL"),
+        ("squads.taken", "Your team already has a squad with that name."), ("squads.taken.open", "A squad with that name already exists."),
+        ("squads.list", "Team {0} squads   {1}"), ("squads.list.open", "Squads   {1}"),
+        ("squads.empty", "Your team has no squads yet. Create one above."), ("squads.empty.open", "There are no squads yet. Create one above."),
+        ("squads.count", "{0}/{1}"), ("squads.count.open", "{0}"), ("squads.full", "{0}/{1}  FULL"),
         ("squads.join", "Join"), ("squads.join.tip", "Join this squad. You leave your current squad."),
         ("squads.join.full", "This squad is full."),
         ("squads.mine", "Your squad"),
@@ -30,7 +31,7 @@ public static class SquadsStrings
 }
 
 /// <summary>
-/// The Squads screen (#379, Pause, team deathmatch): the player's status, a name field with Create, Leave, and the own team's squads as cards (name, count out of 4, members with the leader first and named so, Join). Opt-in: nobody is put in a
+/// The Squads screen (#379, Pause, team deathmatch and open world): the player's status, a name field with Create, Leave, and the own team's squads as cards (name, count out of 4, members with the leader first and named so, Join). Opt-in: nobody is put in a
 /// squad. A request applies at once through the server and the cards follow the scoreboard, so joins, leaves and other players' squads show live. Refilled only when the squads change. Keyboard: Tab or Up and Down
 /// move between the controls, Enter presses (in the name field it creates), Esc goes back. A full squad and the own squad have no Join; both say so in words.
 /// </summary>
@@ -48,6 +49,9 @@ public sealed partial class SquadsScreen : MenuScreen
 
     public SquadsScreen(NetClient client) { _client = client; }
 
+    /// <summary>Open world has no teams and no size limit: its variant of a string (key + ".open").</summary>
+    string K(string key) => _client.Match.IsOpenWorld ? key + ".open" : key;
+
     protected override Control Build()
     {
         _client.Squads.Refused += Refused;
@@ -62,7 +66,7 @@ public sealed partial class SquadsScreen : MenuScreen
         title.AddChild(Ui.Fill());
         title.AddChild(Ui.Btn(Strings.T("dialog.back"), Back, null, 160));
         hv.AddChild(title);
-        hv.AddChild(Ui.Lbl(Strings.T("squads.hint"), "HudDim", 0, true));
+        hv.AddChild(Ui.Lbl(Strings.T(K("squads.hint")), "HudDim", 0, true));
 
         var me = _client.Match.Rows.FirstOrDefault(r => r.Id == _client.Ctx.MyId).Name ?? "";
         var maxLen = Squads.MaxNameLength;
@@ -103,7 +107,7 @@ public sealed partial class SquadsScreen : MenuScreen
         _list.AddThemeConstantOverride("separation", ShooterTheme.Space);
         scroll.AddChild(_list);
         tv.AddChild(scroll);
-        _empty = Ui.Lbl(Strings.T("squads.empty"), "HudDim", 0, true);
+        _empty = Ui.Lbl(Strings.T(K("squads.empty")), "HudDim", 0, true);
         tv.AddChild(_empty);
         table.AddChild(tv);
         root.AddChild(table);
@@ -157,7 +161,7 @@ public sealed partial class SquadsScreen : MenuScreen
         var wanted = WantedName();
         var taken = OwnSquads(rows).Any(g => _client.Match.SquadNameOf(g.Key).Equals(wanted, StringComparison.OrdinalIgnoreCase));
         _create.Disabled = taken;
-        _error.Text = taken ? Strings.T("squads.taken") : "";
+        _error.Text = taken ? Strings.T(K("squads.taken")) : "";
         _leave.Disabled = _client.Match.SquadOf(_client.Ctx.MyId) == 0;
     }
 
@@ -175,8 +179,8 @@ public sealed partial class SquadsScreen : MenuScreen
         var hadFocus = GetViewport()?.GuiGetFocusOwner() is { } owner && _list.IsAncestorOf(owner);
         foreach (var c in _list.GetChildren()) { _list.RemoveChild(c); c.QueueFree(); }
         _joins.Clear();
-        _status.Text = mySquad == 0 ? Strings.T("squads.status.none") : Strings.F("squads.status.in", _client.Match.SquadNameOf(mySquad), squads.First(g => g.Key == mySquad).Count(), Squads.MaxMembers);
-        _listHead.Text = Strings.F("squads.list", Teams.Tag(_client.Match.TeamOf(_client.Ctx.MyId)), squads.Count);
+        _status.Text = mySquad == 0 ? Strings.T("squads.status.none") : Strings.F(K("squads.status.in"), _client.Match.SquadNameOf(mySquad), squads.First(g => g.Key == mySquad).Count(), Squads.MaxMembers);
+        _listHead.Text = Strings.F(K("squads.list"), Teams.Tag(_client.Match.TeamOf(_client.Ctx.MyId)), squads.Count);
         _empty.Visible = squads.Count == 0;
         foreach (var g in squads) _list.AddChild(Card(g.Key, g.ToList(), mySquad));
         UpdateControls();
@@ -210,8 +214,8 @@ public sealed partial class SquadsScreen : MenuScreen
         }); // the leader is named in words, not by colour or place alone
         text.AddChild(Ui.Lbl(string.Join(", ", names), "HudDim", 0, true));
         h.AddChild(text);
-        var full = members.Count >= Squads.MaxMembers;
-        h.AddChild(Ui.Lbl(Strings.F(full ? "squads.full" : "squads.count", members.Count, Squads.MaxMembers), full ? "HudHead" : "HudDim", 120));
+        var full = members.Count >= Squads.MaxFor(_client.Match.Mode);
+        h.AddChild(Ui.Lbl(Strings.F(full ? "squads.full" : K("squads.count"), members.Count, Squads.MaxMembers), full ? "HudHead" : "HudDim", 120));
         if (mine) h.AddChild(Ui.Lbl(Strings.T("squads.mine"), "HudDim", 160));
         else
         {

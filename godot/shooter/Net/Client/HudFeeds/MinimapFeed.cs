@@ -45,7 +45,7 @@ internal sealed class MinimapFeed
         _ctx.Hud.Minimap.SetVehicleDots(_carDots);
         _friendDots.Clear();
         _squadDots.Clear();
-        if (_ctx.Match.IsTeamMode)
+        if (_ctx.Match.HasSquads) // open world: friends are squad mates, so all blue
             foreach (var (id, r) in _ctx.Remotes)
                 if (r.State != EntityState.Dead && _ctx.Match.AreFriends(_ctx.MyId, id) && GodotObject.IsInstanceValid(r.Node))
                 {

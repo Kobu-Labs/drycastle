@@ -17,8 +17,8 @@ public sealed class SquadsClient
     /// <summary>The server refused a squad request just sent (its error chat line, within <see cref="AnswerWindow"/>), for the Squads screen to show.</summary>
     public event Action<string>? Refused;
 
-    /// <summary>Team deathmatch, a human on a team: the Pause menu offers Squads. The server checks it again.</summary>
-    public bool CanUse => !_ctx.Bot && _ctx.Match.IsTeamMode && _ctx.Match.TeamOf(_ctx.MyId) != Teams.None;
+    /// <summary>A human on a team in team deathmatch, or not in sandbox in open world: the Pause menu offers Squads. The server checks it again.</summary>
+    public bool CanUse => !_ctx.Bot && _ctx.Match.HasSquads && (_ctx.Match.IsOpenWorld ? !_ctx.Match.Rows.FirstOrDefault(r => r.Id == _ctx.MyId).Sandbox : _ctx.Match.TeamOf(_ctx.MyId) != Teams.None);
 
     public void Assign(SquadAssign a)
     {

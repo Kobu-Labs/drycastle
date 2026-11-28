@@ -23,7 +23,7 @@ public static class Strings
         ("hud.health", "HEALTH"),
         ("hud.stance.stand", "Standing"), ("hud.stance.crouch", "Crouched"), ("hud.stance.prone", "Prone"),
         ("hud.reloading", "RELOADING"), ("hud.ammo.reserve", "/ {0}"), ("hud.ammo.none", "-"),
-        ("hud.timer.waiting", "--:--"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
+        ("hud.timer.waiting", "--:--"), ("hud.timer.open", "Open world"), ("hud.phase.waiting", "Waiting for players"), ("hud.phase.ending", "Round over"),
         ("hud.score.leading", "You lead: {0}"), ("hud.score.behind", "You {0}   Leader {1}: {2}"),
         ("hud.protection", "Spawn protection {0}"),
         ("hud.streak.title", "KILLSTREAK"), ("hud.streak.none", "Empty slot"), ("hud.streak.need", "{0} more kills"), ("hud.streak.ready", "READY  press {0}"),
