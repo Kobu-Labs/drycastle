@@ -14,7 +14,7 @@ namespace Drycastle.Shooter.Net.Client.OwnPlayer;
 
 /// <summary>
 /// The client half of the "Job done" cinematic (docs/cartel.md "Job done"; the timeline and its rules are <see cref="JobDone"/>, the numbers cartel.json <c>job_done_cinematic</c>): it only applies what
-/// <see cref="JobDone"/> says. The camera leaves the body in quick moves to the stages (behind and above the player, high over the party, high again and back down), the whoosh and the flash go with each move, the own
+/// <see cref="JobDone"/> says. The camera leaves the body in quick moves out to the stages (behind and above the player, high over the party, higher still), a flash with each move, then a flashed cut back into the eye; the own
 /// figure is drawn so the player sees themselves (<see cref="OwnFigure.Seen"/>; the weapon in the hand and the crosshair are hidden meanwhile), the player's own music (<c>job.done.music</c>) is driven by its level, and
 /// the body's inputs are held: it stands, a driver's become the brake, a passenger just watches (<see cref="FilterInput"/>; the view's heading is held too, so the mouse turns nothing). A press of jump, fire, interact or escape,
 /// damage or death ends the camera at once. The camera is the one composer's last word (<see cref="DeathView"/>) on foot, and put over the chase or seat camera in a road vehicle (<see cref="ApplyInVehicle"/>); it is kept out
@@ -22,7 +22,7 @@ namespace Drycastle.Shooter.Net.Client.OwnPlayer;
 /// </summary>
 internal sealed class JobDoneClient
 {
-    const string MusicId = "job.done.music", WhooshId = "job.done.whoosh";
+    const string MusicId = "job.done.music";
     /// <summary>How fast the party's centre is followed (1/s), how high above the camera the roof probe starts, how close a pulled-in camera may come to what it looks at, and its gap to the wall, metres.</summary>
     const float PartyFollow = 6f, ProbeUpM = 300f, MinPullM = 1.5f, WallM = 0.3f;
 
@@ -31,8 +31,8 @@ internal sealed class JobDoneClient
     readonly JobDoneCinematicData _data;
     readonly Func<bool> _flies;
     readonly List<NVec3> _mates = new();
-    /// <summary>The cinematic that started last seen, and the leg whose whoosh played last.</summary>
-    Change<int> _run, _leg;
+    /// <summary>The cinematic that started last seen.</summary>
+    Change<int> _run;
     Edge _escape;
     AudioStreamPlayer? _music;
     /// <summary>The view's heading when the cinematic began: every stage is placed by it, and the body is held to it.</summary>
@@ -59,7 +59,7 @@ internal sealed class JobDoneClient
         return mode.OnFoot || (mode.Resolve() == ClientMode.Seated && !_flies());
     }
 
-    /// <summary>Every frame: the skip keys and damage, the party's centre, the whoosh, the music, the flash and the crosshair.</summary>
+    /// <summary>Every frame: the skip keys and damage, the party's centre, the music, the flash and the crosshair.</summary>
     public void Frame(float dt)
     {
         if (Live) _done.ObserveHealth(_ctx.Me!.Health);
@@ -68,9 +68,7 @@ internal sealed class JobDoneClient
         {
             CheckSkip();
             FollowParty(dt);
-            if (_done.Frame is { } f && _leg.Update(f.Leg)) Sfx.Play2D(WhooshId);
         }
-        else _leg.Reset();
         TuneMusic();
         _ctx.Hud?.SetFlash(GameSettings.Current.ReduceMotion ? 0f : _done.Flash);
         _ctx.Hud?.SetCinematicHidesCrosshair(_done.Camera);
@@ -87,7 +85,6 @@ internal sealed class JobDoneClient
             _yaw = new Vector2(forward.X, forward.Z).Length() > 0.1f ? Mathf.Atan2(-forward.X, -forward.Z) : me.Yaw; // the view's heading, or the body's when it looks straight up or down
             _party = me.GlobalPosition;
         }
-        _leg.Reset();
         _escape.Reset(Input.IsKeyPressed(Key.Escape));
         _music ??= Sfx.OwnVoice(MusicId);
         if (_music == null) return;

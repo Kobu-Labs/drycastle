@@ -625,7 +625,7 @@ public partial class NetClient : Node
     {
         _water.Render();
         _held.ShowViewmodel();
-        _jobDone.Frame((float)delta); // the cinematic's skip keys, whoosh, music and flash
+        _jobDone.Frame((float)delta); // the cinematic's skip keys, music and flash
         if (_jobDone.Active) Ctx.Viewmodel.Visible = false; // the camera is out from the body: the weapon in the hand would hang in the air
         _ownFigure.Seen = _jobDone.Active; // ...and the body is drawn instead
         // the own body's shadow on foot (#319); seated, the rider's own figure is the body

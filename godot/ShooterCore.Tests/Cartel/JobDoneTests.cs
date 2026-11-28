@@ -10,7 +10,7 @@ public class JobDoneTests
         => new(id, state, JobFailReason.None, "harvest", 2, 1, 0, paid, flags);
 
     [Fact]
-    public void ASucceededJobShowsTheBannerWithTheRespectPaidForFourSecondsWhileTheCinematicRunsTenAndTheMusicTwelve()
+    public void ASucceededJobShowsTheBannerWithTheRespectPaidForFourSecondsWhileTheCinematicRunsAboutTenAndTheMusicTwelve()
     {
         var b = new JobDone();
         Assert.False(b.Showing);
@@ -23,14 +23,14 @@ public class JobDoneTests
         b.Tick(0.2f);
         Assert.False(b.Showing);   // the banner is gone ...
         Assert.True(b.Playing);    // ... the cinematic is not
-        b.Tick(5.8f);              // 9.9 s
+        b.Tick(5.4f);              // 9.5 s
         Assert.True(b.Playing);
-        b.Tick(0.2f);              // 10.1 s: the camera is back, the music still fades
+        b.Tick(0.2f);              // 9.7 s: the camera is back, the music still fades
         Assert.False(b.Playing);
         Assert.False(b.Camera);
         Assert.True(b.MusicOn);
         Assert.True(b.MusicGain > 0f);
-        b.Tick(2f);
+        b.Tick(2.5f);              // past 12 s (the step that ended the camera spent its rest of 0.1 s)
         Assert.False(b.MusicOn);
         Assert.Equal(0f, b.MusicGain);
     }

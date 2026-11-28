@@ -50,14 +50,14 @@
   },
 
   // job_done_cinematic (JobDoneCinematicData, ShooterCore/Cartel/JobDoneCinematic.cs; docs/cartel.md "Job done"): what a party player sees and hears when their Job succeeds, on their own client only. A short cinematic of
-  // about 10 s: the banner (banner_seconds), the camera leaving the body in quick eased moves to a high view and back (legs; each move starts a soft white flash and a whoosh, then the camera holds and drifts), the
+  // about 10 s: the banner (banner_seconds), the camera leaving the body in quick eased moves out to a high view (legs; each move starts a soft white flash, then the camera holds and drifts), then a flashed cut back into the player's view, the
   // player's own music under it. Nothing here was played: first guesses.
   // stages: where the camera stands. anchor: player (the body, or the vehicle it rides) or party (the centre of the party's living squad mates within party_radius_m of the player, the player alone with none).
   // back_m behind the view's heading (as it was when the cinematic began) and up_m above the anchor's feet; it looks at look_up_m above the anchor. During its hold it pushes in drift_push_m and turns drift_turn_deg
   // round the anchor (left positive). clamp: pull_in (a wall in the way brings the camera in along its line: the low view behind the player) or raise (the camera stays on its line: the high views). Either way
   // the camera is kept clearance_m above the ground and above any roof over it ("raise it, never through a roof").
-  // legs, in order: move to the stage (to, a stage id; "eye" is the player's own view) in move_seconds (fast at first, settling), then hold_seconds there. The last leg goes back to the eye. Together they set the length
-  // (here 10.0 s). A flash starts with each move, so a move and its hold together are at least a third of a second (at most 3 flashes a second); the check is made on load.
+  // legs, in order: move to the stage (to, a stage id; "eye" is the player's own view) in move_seconds (fast at first, settling), then hold_seconds there. The last leg cuts back to the eye (a 0.05 s move under its flash: the camera only ever zooms out). Together they set the length
+  // (here 9.6 s). A flash starts with each move, so a move and its hold together are at least a third of a second (at most 3 flashes a second); the check is made on load.
   // flash_peak: the flash's opacity at its peak (at most 0.6: soft); it rises over flash_rise_seconds and is gone at flash_seconds (at most 0.25). With reduce motion there is no flash at all (see reduced).
   // Music (assets/grove-after-dark, sounds.json job.done.music): up over music_in_seconds, full until music_fade_start_seconds, out over music_fade_seconds (so it ends 2 s after the camera is back). A skip (jump, fire, interact or
   // escape pressed) or damage taken ends the camera at once, with a flash back, and fades the music out over skip_fade_seconds; the controls stay off skip_lock_seconds more, so the key that skipped does nothing else.
@@ -75,11 +75,9 @@
     ],
     "legs": [
       { "to": "behind", "move_seconds": 0.35, "hold_seconds": 1.5 },
-      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 2.0 },
-      { "to": "high",   "move_seconds": 0.35, "hold_seconds": 2.5 },
-      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 0.6 },
-      { "to": "behind", "move_seconds": 0.35, "hold_seconds": 1.3 },
-      { "to": "eye",    "move_seconds": 0.35, "hold_seconds": 0 }
+      { "to": "above",  "move_seconds": 0.35, "hold_seconds": 2.5 },
+      { "to": "high",   "move_seconds": 0.35, "hold_seconds": 4.5 },
+      { "to": "eye",    "move_seconds": 0.05, "hold_seconds": 0 }
     ],
     "reduced": { "seconds": 4, "music_fade_start_seconds": 2.5, "music_fade_seconds": 1.5 }
   },

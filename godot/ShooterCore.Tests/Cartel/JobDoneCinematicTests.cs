@@ -23,11 +23,11 @@ public class JobDoneCinematicTests
     // ---- the timeline ----
 
     [Fact]
-    public void TheShippedFileGivesSixLegsOfAboutTenSeconds()
+    public void TheShippedFileGivesFourLegsOfAboutTenSecondsOutOnly()
     {
         var t = JobDoneTimeline.Full(Shipped);
-        Assert.Equal(6, t.LegCount);
-        Assert.Equal(10f, t.Seconds, 0.01f);
+        Assert.Equal(4, t.LegCount); // out in three moves, then the cut back
+        Assert.Equal(9.6f, t.Seconds, 0.01f);
         Assert.Equal(4f, t.BannerSeconds);
         Assert.Equal(12f, t.MusicEndSeconds, 0.001f); // the music outlasts the camera by two seconds
     }
@@ -53,18 +53,14 @@ public class JobDoneCinematicTests
         f = t.At(1.85f + 0.1f); // the second move: behind to above
         Assert.Equal((1, behind, above, true), (f.Leg, f.From, f.To, f.Moving));
 
-        f = t.At(4.2f + 0.35f + 1f); // the third leg's hold: the high view
+        f = t.At(4.7f + 0.35f + 1f); // the third leg's hold: the high view
         Assert.Equal((2, above, high, false), (f.Leg, f.From, f.To, f.Moving));
 
-        f = t.At(7.05f + 0.1f); // back down: high to above, then above to behind, then the eye
-        Assert.Equal((3, high, above), (f.Leg, f.From, f.To));
-        f = t.At(8.0f + 0.1f);
-        Assert.Equal((4, above, behind), (f.Leg, f.From, f.To));
-        f = t.At(9.65f + 0.1f);
-        Assert.Equal((5, behind, -1, true), (f.Leg, f.From, f.To, f.Moving));
+        f = t.At(9.55f + 0.02f); // no way back down: one quick cut from the high view into the eye
+        Assert.Equal((3, high, -1, true), (f.Leg, f.From, f.To, f.Moving));
 
         f = t.At(60f); // past the end: arrived at the eye
-        Assert.Equal((5, -1, false, 1f), (f.Leg, f.To, f.Moving, f.Move));
+        Assert.Equal((3, -1, false, 1f), (f.Leg, f.To, f.Moving, f.Move));
     }
 
     [Fact]
@@ -177,7 +173,7 @@ public class JobDoneCinematicTests
     public void ASkipEndsTheCameraAtOnceFlashesBackFadesTheMusicOverOneAndAHalfSecondsAndGivesTheControlsBackAfterAMoment()
     {
         var d = Started();
-        d.Tick(5f); // in the high view's hold
+        d.Tick(6f); // in the high view's hold
         var musicBefore = d.MusicGain;
         Assert.Equal(1f, musicBefore);
         Assert.True(d.Interrupt());
@@ -287,12 +283,12 @@ public class JobDoneCinematicTests
     }
 
     [Fact]
-    public void TheLegsMoveWhoosheOncePerLegSoTheFrameNamesTheLegAndAClearEndsEverything()
+    public void TheFrameNamesEachLegInTurnAndAClearEndsEverything()
     {
         var d = Started();
         var seen = new List<int>();
         for (var i = 0; i < 1100; i++) { if (d.Frame is { } f && (seen.Count == 0 || seen[^1] != f.Leg)) seen.Add(f.Leg); d.Tick(0.01f); }
-        Assert.Equal(new[] { 0, 1, 2, 3, 4, 5 }, seen);
+        Assert.Equal(new[] { 0, 1, 2, 3 }, seen);
         var e = Started(id: 9);
         e.Clear();
         Assert.False(e.Playing);

@@ -18,7 +18,7 @@ public readonly record struct JobDoneDetail(int Respect, NoRespectReason? Why)
 
 /// <summary>
 /// The "Job done" banner and the cinematic that goes with it (docs/cartel.md "Job done"), pure: the party's players are sent the Job's end (<see cref="CartelJobMsg"/>); when a Job they ran succeeds, the
-/// banner shows with the Respect that player was paid and the camera leaves the body in quick flashed moves out to a high view and back (<see cref="JobDoneTimeline"/>, numbers in cartel.json
+/// banner shows with the Respect that player was paid and the camera leaves the body in quick flashed moves out to a high view, then cuts back (<see cref="JobDoneTimeline"/>, numbers in cartel.json
 /// <c>job_done_cinematic</c>), about 10 s, while the player's own music plays under it and fades out. During it the controls are off (<see cref="InputLocked"/>: the body stands, a driver brakes); a press of jump, fire,
 /// interact or escape (<see cref="Interrupt"/>), damage (<see cref="ObserveHealth"/>) or death ends the camera at once with a flash back, and the music fades out faster. With reduce motion, or on a
 /// seat the camera cannot film, only the banner and the music run (no camera, no flashes, no lock). Each Job announces once, however often its end message is repeated. The client owns one; the HUD draws the banner
@@ -27,13 +27,13 @@ public readonly record struct JobDoneDetail(int Respect, NoRespectReason? Why)
 public sealed class JobDone
 {
     public static readonly StateMachineSpec<JobDoneState> Spec = StateMachineSpec<JobDoneState>
-        .Define("Cartel.JobDone", "The \"Job done\" cinematic of a succeeded Cartel Job for the party's players: the banner, the flashed camera moves out and back, their own music; about 10 s, or at once on a skip, damage or death.", JobDoneState.Idle)
+        .Define("Cartel.JobDone", "The \"Job done\" cinematic of a succeeded Cartel Job for the party's players: the banner, the flashed camera moves out and the cut back, their own music; about 10 s, or at once on a skip, damage or death.", JobDoneState.Idle)
         .Allow(JobDoneState.Idle, JobDoneState.Playing)
         .Allow(JobDoneState.Playing, JobDoneState.Playing, JobDoneState.Skipped, JobDoneState.Fading, JobDoneState.Idle)
         .Allow(JobDoneState.Skipped, JobDoneState.Idle, JobDoneState.Playing)
         .Allow(JobDoneState.Fading, JobDoneState.Idle, JobDoneState.Playing)
         .Note(JobDoneState.Idle, "Nothing plays; the camera and the controls are the player's own.")
-        .Note(JobDoneState.Playing, "The banner shows the Respect (or why none); the clock runs the timeline: the camera's legs (flash and whoosh at each move), the music with its fade; the controls are off. A Job that succeeds while it plays starts it over.")
+        .Note(JobDoneState.Playing, "The banner shows the Respect (or why none); the clock runs the timeline: the camera's legs (a flash at each move), the music with its fade; the controls are off. A Job that succeeds while it plays starts it over.")
         .Note(JobDoneState.Skipped, "Ended at once by a skip key, damage or death: the camera is the player's again, a flash covers the cut, the music fades out over about 1.5 s, the controls come back after a moment.")
         .Note(JobDoneState.Fading, "The camera's part is over (the view is the player's own, the controls are theirs); the music still fades out for the last seconds of its fade.")
         .Build();

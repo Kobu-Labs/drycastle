@@ -63,7 +63,7 @@ public sealed class CinematicLegData
 {
     /// <summary>The stage the camera moves to (its id), or <c>eye</c>: back into the player's own view.</summary>
     public string To { get; set; } = JobDoneTimeline.Eye;
-    /// <summary>How long the quick move takes, seconds. A flash and a whoosh go with it.</summary>
+    /// <summary>How long the quick move takes, seconds. A flash goes with it.</summary>
     public float MoveSeconds { get; set; } = 0.35f;
     /// <summary>How long the camera stays after arriving, drifting, seconds.</summary>
     public float HoldSeconds { get; set; }
@@ -112,11 +112,9 @@ public sealed class JobDoneCinematicData
     public List<CinematicLegData> Legs { get; set; } = new()
     {
         new() { To = "behind", MoveSeconds = 0.35f, HoldSeconds = 1.5f },
-        new() { To = "above", MoveSeconds = 0.35f, HoldSeconds = 2f },
-        new() { To = "high", MoveSeconds = 0.35f, HoldSeconds = 2.5f },
-        new() { To = "above", MoveSeconds = 0.35f, HoldSeconds = 0.6f },
-        new() { To = "behind", MoveSeconds = 0.35f, HoldSeconds = 1.3f },
-        new() { To = JobDoneTimeline.Eye, MoveSeconds = 0.35f, HoldSeconds = 0f },
+        new() { To = "above", MoveSeconds = 0.35f, HoldSeconds = 2.5f },
+        new() { To = "high", MoveSeconds = 0.35f, HoldSeconds = 4.5f },
+        new() { To = JobDoneTimeline.Eye, MoveSeconds = 0.05f, HoldSeconds = 0f },
     };
     public JobDoneReducedData Reduced { get; set; } = new();
 
@@ -157,7 +155,7 @@ public sealed class JobDoneCinematicData
 
 /// <summary>
 /// Where the cinematic camera is at one moment (see <see cref="JobDoneTimeline.At"/>): moving from stage <see cref="From"/> to stage <see cref="To"/> (indexes of <see cref="JobDoneCinematicData.Stages"/>, -1 the
-/// player's own eye), <see cref="Move"/> of the way (eased, 1 when arrived), and <see cref="Hold"/> of the way through the hold after it (0 while moving). <see cref="Leg"/> says which leg it is (a new one is a new whoosh).
+/// player's own eye), <see cref="Move"/> of the way (eased, 1 when arrived), and <see cref="Hold"/> of the way through the hold after it (0 while moving). <see cref="Leg"/> says which leg it is.
 /// </summary>
 public readonly record struct CinematicFrame(int Leg, int From, int To, float Move, float Hold, bool Moving);
 
@@ -244,7 +242,7 @@ public sealed class JobDoneTimeline
         return _d.FlashPeak * (1f - u * u * (3f - 2f * u));
     }
 
-    /// <summary>The flash at <paramref name="t"/>: each leg's move starts one (its whoosh goes with it).</summary>
+    /// <summary>The flash at <paramref name="t"/>: each leg's move starts one.</summary>
     public float FlashAt(float t) => HasCamera && SinceFlashStart(t) is var x && x < _d.FlashSeconds ? FlashAfter(x) : 0f;
 
     /// <summary>Seconds since the newest leg started at or before <paramref name="t"/> (a flash starts with it); infinity before the first or with no camera.</summary>
