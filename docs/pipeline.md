@@ -952,6 +952,12 @@ is not bumped. A kind of `NO_POINT_KINDS` (`player_spawn`, `plantation`) has no 
 (`plantation: {}`). The server reads it as `ShooterCore.ZonePolygons` (`MapLoader.ZonePolygonsJson`, `Net/Server/Highs/PlantationServer.cs`): `Contains(kind, x, z)`,
 2D even-odd point-in-polygon; no file or no zone: the feature is off, no error.
 
+**Static mineral nodes (`mineral_nodes.json`).** The `mineral_nodes` section of `edits.json` (`MN-0001`: `{"mineral": "<id of Minerals.All>", "position": [x, y] S-JTSK, "z"?}`) places a crystal at a fixed spot (GLOSSARY "Mineral node"); `z` is
+optional metres on the terrain's datum for a spot above the ground, else the (water-carved) terrain height. `export.docs.build_mineral_nodes` writes `{"version": 1, "axes": "...", "nodes": [{"id", "mineral", "x", "y", "z"}]}` (local metres as
+`zone_points.json`, sorted by id), listed under `files.mineral_nodes` and written **only when there is a node** (a stale file is deleted); the map version is not bumped. The server reads it as
+`ShooterCore.Mining.MineralNodeFile` (`MapLoader.MineralNodesJson`, `MapAreas.MineralNodes`) and `MineralsServer.BuildNodes` makes a static node of each (an unknown mineral is logged and skipped); the client draws every
+node the server sends with its mineral's crystal effects. No editor tool or MCP tool yet: edit `edits.json` (under its lock) and run `make export`.
+
 `parcels.json` also carries `zone_kinds`, `[{"name", "label", "group", "tint", "where_ground": [types] | null}]` in catalog
 order, for the editor's Zones tool; the drawn zones are not in it (the editor reads them from `edits.json`).
 

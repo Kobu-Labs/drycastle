@@ -104,6 +104,24 @@ def mound_entry() -> dict:
     }
 
 
+def radio_tower_entry() -> dict:
+    """The ``assets/manifest.json`` record of ``prim:radio_tower`` (solids from the default parameters)."""
+    prim = PRIMITIVES["radio_tower"]
+    return {
+        "id": "prim:radio_tower",
+        "category": "other",
+        "name": "Radio tower",
+        "file": None,
+        "size_m": list(prim.size_m),
+        "tags": ["lattice", "antenna", "ladder", "flat-colour", "primitive"],
+        "licence": "CC0",
+        "source": "https://github.com/Kobu-Labs/drycastle (pipeline primitive, pipeline/src/drycastle_pipeline/kits/primitives.py)",
+        "pack": None,
+        # cabin, deck and railing are solid; the lattice is not. The ladder is godot/shooter/data/object_ladders.json (radio_tower_layout)
+        "solids": radio_tower_solids(),
+    }
+
+
 def pot_mesh(params: dict | None = None) -> Mesh:
     """Flower pot: a tapered 8-sided cylinder with a rim, an inner wall and a coloured soil top."""
     p = {**PRIMITIVES["pot"].params, **(params or {})}
@@ -164,23 +182,92 @@ def _beam(p0, p1, width: float, colour: list[int]) -> tuple[list, list]:
     return tris, [colour] * len(tris)
 
 
+DECK_T = 0.12  # deck slab thickness
+LADDER_GAP = 0.25  # the ladder's centre line stands this far off the cabin wall
+LADDER_HALF_W = 0.2  # half the distance between the ladder's rails
+DECK_MARGIN = 0.45  # the deck goes this far past where a climber is put at the top
+HATCH_HALF = 0.45  # half side of the hatch round the ladder
+RAIL_H = 1.1  # railing height over the deck
+RAIL_T = 0.1  # railing thickness (and its collision wall)
+
+
+def radio_tower_layout(params: dict | None = None) -> dict:
+    """The numbers of ``prim:radio_tower`` that the mesh, its collision boxes and its ladder (``object_ladders.json``) share, in the
+    mesh frame (x, y plan, z up from the ground). The ladder climbs the cabin's -y side and the tower beside it, up through a hatch of
+    the top deck; ``step_off`` is where a climber is put at either end (``Ladders.StepOffTop``, 1 m on the open side)."""
+    p = {**PRIMITIVES["radio_tower"].params, **(params or {})}
+    cab_x, cab_y, cab_h = float(p["cabin_x_m"]), float(p["cabin_y_m"]), float(p["cabin_height_m"])
+    zt = float(p["height_m"]) - 2.2
+    deck_top = zt + DECK_T
+    rail_y = -(cab_y / 2 + LADDER_GAP)
+    step_off = rail_y - 1.0
+    hx = float(p["deck_half_m"])
+    return {
+        "cabin": ((-cab_x / 2, -cab_y / 2), (cab_x / 2, cab_y / 2), cab_h),
+        "deck_z": (zt, deck_top),
+        "deck": ((-hx, step_off - DECK_MARGIN), (hx, DECK_MARGIN - step_off)),  # (x0, y0), (x1, y1): reaches past the step-off, as far on the other side
+        "hatch": ((-HATCH_HALF, rail_y - HATCH_HALF), (HATCH_HALF, rail_y + HATCH_HALF)),
+        "ladder": {"x": 0.0, "y": rail_y, "facing": (0.0, -1.0), "bottom": 0.0, "top": deck_top, "step_off": (0.0, step_off)},
+        "rail_h": RAIL_H,
+    }
+
+
+def radio_tower_solids(params: dict | None = None) -> list[dict]:
+    """Collision boxes of ``prim:radio_tower`` (the ``solids`` of its manifest entry): the cabin, the top deck in four boxes round its
+    hatch (the ladder comes through the opening) and a wall of railing all round the deck. The lattice, the antennas and the ladder
+    are not solid: the player climbs beside them."""
+    g = radio_tower_layout(params)
+    (cx0, cy0), (cx1, cy1), ch = g["cabin"]
+    (x0, y0), (x1, y1) = g["deck"]
+    (hx0, hy0), (hx1, hy1) = g["hatch"]
+    z0, z1 = g["deck_z"]
+    rz = z1 + g["rail_h"]
+    t = RAIL_T
+
+    def box(lo: tuple[float, float, float], hi: tuple[float, float, float], surface: str) -> dict:
+        return {"min": [round(v, 3) for v in lo], "max": [round(v, 3) for v in hi], "surface": surface}
+
+    return [
+        box((cx0, cy0, 0.0), (cx1, cy1, ch), "wall"),
+        box((x0, y0, z0), (x1, hy0, z1), "metal"),  # deck: open side, beside the hatch (x2), the tower side
+        box((x0, hy0, z0), (hx0, hy1, z1), "metal"),
+        box((hx1, hy0, z0), (x1, hy1, z1), "metal"),
+        box((x0, hy1, z0), (x1, y1, z1), "metal"),
+        box((x0, y0, z1), (x1, y0 + t, rz), "metal"),  # railing: a wall on each edge of the deck
+        box((x0, y1 - t, z1), (x1, y1, rz), "metal"),
+        box((x0, y0 + t, z1), (x0 + t, y1 - t, rz), "metal"),
+        box((x1 - t, y0 + t, z1), (x1, y1 - t, rz), "metal"),
+    ]
+
+
 def radio_tower_mesh(params: dict | None = None) -> Mesh:
-    """Cell-phone lattice mast on an equipment cabin: square tapering tower with cross-bracing,
-    a top platform with a ring of panel antennas, a lower tier of panels and a mast pole.
-    Symmetric about the origin; 36 m high by default."""
+    """Cell-phone lattice mast on an equipment cabin: square tapering tower with cross-bracing, a walkable top deck (railing all
+    round, a hatch with an open lid, the ladder coming up through it from the ground beside the cabin's -y wall), panel antennas
+    hung outside the railing, a lower tier of panels and a mast pole. 36 m high by default; layout in :func:`radio_tower_layout`."""
     p = {**PRIMITIVES["radio_tower"].params, **(params or {})}
     H = float(p["height_m"])
     steel, cabin = hex_to_rgb(p["colour"]), hex_to_rgb(p["cabin_colour"])
     panel, deck = hex_to_rgb(p["panel_colour"]), hex_to_rgb(p["platform_colour"])
+    lid = hex_to_rgb(p["hatch_colour"])
     cab_x, cab_y, cab_h = float(p["cabin_x_m"]), float(p["cabin_y_m"]), float(p["cabin_height_m"])
     h0, h1 = float(p["base_half_m"]), float(p["top_half_m"])
     z0, zt = cab_h, H - 2.2  # tower from the cabin roof to the platform
+    g = radio_tower_layout(p)
+    (dx0, dy0), (dx1, dy1) = g["deck"]
+    (hx0, hy0), (hx1, hy1) = g["hatch"]
+    deck_top = g["deck_z"][1]
+    ly = g["ladder"]["y"]
     tris: list = []
     cols: list = []
 
     def add(t: list, colour: list[int]) -> None:
         tris.extend(t)
         cols.extend([colour] * len(t))
+
+    def bar(a: tuple, b: tuple, width: float, colour: list[int]) -> None:
+        t, c = _beam(a, b, width, colour)
+        tris.extend(t)
+        cols.extend(c)
 
     def half(z: float) -> float:
         return h0 + (h1 - h0) * (z - z0) / (zt - z0)
@@ -194,30 +281,68 @@ def radio_tower_mesh(params: dict | None = None) -> Mesh:
     zs = [z0 + (zt - z0) * i / n for i in range(n + 1)]
     for i in range(n):
         for k in range(4):
-            t, c = _beam(corner(k, zs[i]), corner(k, zs[i + 1]), 0.12, steel)
-            tris += t
-            cols += c
+            bar(corner(k, zs[i]), corner(k, zs[i + 1]), 0.12, steel)
             for a, b in ((k, k + 1), (k + 1, k)):  # X bracing on face k
-                t, c = _beam(corner(a, zs[i]), corner(b, zs[i + 1]), 0.05, steel)
-                tris += t
-                cols += c
+                bar(corner(a, zs[i]), corner(b, zs[i + 1]), 0.05, steel)
     for z in zs[1:]:  # horizontal rings
         for k in range(4):
-            t, c = _beam(corner(k, z), corner(k + 1, z), 0.06, steel)
-            tris += t
-            cols += c
-    add(box_tris((-1.0, 0.0), (1.0, 0.0), 2.0, zt, zt + 0.12), deck)  # platform
-    add(box_tris((0.0, -0.06), (0.0, 0.06), 0.12, zt + 0.12, H), steel)  # mast pole
-    for k in range(8):  # ring of panel antennas on the platform
-        a = math.pi * k / 4 + math.pi / 8
-        c = (1.0 * math.cos(a), 1.0 * math.sin(a))
-        d = (-math.sin(a) * 0.15, math.cos(a) * 0.15)
-        add(
-            box_tris(
-                (c[0] - d[0], c[1] - d[1]), (c[0] + d[0], c[1] + d[1]), 0.12, zt + 0.12, zt + 1.8
-            ),
-            panel,
-        )
+            bar(corner(k, z), corner(k + 1, z), 0.06, steel)
+
+    # the deck: four slabs round the hatch (what radio_tower_solids lets you stand on), struts under it from the tower's top
+    for lo, hi in (
+        ((dx0, dy0), (dx1, hy0)),
+        ((dx0, hy0), (hx0, hy1)),
+        ((hx1, hy0), (dx1, hy1)),
+        ((dx0, hy1), (dx1, dy1)),
+    ):
+        add(box_tris((lo[0], (lo[1] + hi[1]) / 2), (hi[0], (lo[1] + hi[1]) / 2), hi[1] - lo[1], zt, deck_top), deck)
+    zb = zt - 2.4
+    for sx in (-1, 1):
+        for sy, edge in ((-1, dy0), (1, dy1)):
+            bar((sx * half(zb), sy * half(zb), zb), (sx * (dx1 - 0.15), edge - sy * 0.15, zt), 0.06, steel)
+    bar((0.0, half(zb), zb), (0.0, dy1 - 0.15, zt), 0.06, steel)
+    bar((-half(zb), 0.0, zb), (dx0 + 0.15, 0.0, zt), 0.06, steel)
+    bar((half(zb), 0.0, zb), (dx1 - 0.15, 0.0, zt), 0.06, steel)
+
+    # railing: posts every ~1.2 m, a top and a middle rail, a toe board
+    rh = g["rail_h"]
+    inset = RAIL_T / 2
+    corners = [(dx0 + inset, dy0 + inset), (dx1 - inset, dy0 + inset), (dx1 - inset, dy1 - inset), (dx0 + inset, dy1 - inset)]
+    for a, b in zip(corners, corners[1:] + corners[:1], strict=True):
+        length = math.hypot(b[0] - a[0], b[1] - a[1])
+        m = max(1, math.ceil(length / 1.2))
+        for i in range(m + 1):
+            q = (a[0] + (b[0] - a[0]) * i / m, a[1] + (b[1] - a[1]) * i / m)
+            add(box_tris((q[0], q[1] - 0.04), (q[0], q[1] + 0.04), 0.08, deck_top, deck_top + rh), steel)
+        for z0r, z1r in ((rh - 0.06, rh), (rh * 0.5, rh * 0.5 + 0.04), (0.0, 0.12)):
+            add(box_tris(a, b, 0.05, deck_top + z0r, deck_top + z1r), steel)
+
+    # the hatch: a kerb on three sides, the lid flipped open flat on the deck beside it, the ladder's grab rails rising through it
+    for a, b in (((hx0, hy1), (hx1, hy1)), ((hx0, hy0), (hx0, hy1)), ((hx1, hy0), (hx1, hy1))):
+        add(box_tris(a, b, 0.06, deck_top, deck_top + 0.08), steel)
+    add(box_tris((hx1 + 0.05, (hy0 + hy1) / 2), (hx1 + 0.95, (hy0 + hy1) / 2), hy1 - hy0, deck_top, deck_top + 0.04), lid)
+
+    # the ladder: rails and rungs from the ground to the deck, held off the lattice by arms at every section
+    lw = LADDER_HALF_W
+    for sx in (-lw, lw):
+        add(box_tris((sx, ly - 0.025), (sx, ly + 0.025), 0.05, 0.0, deck_top + 1.0), steel)
+    z = 0.3
+    while z < deck_top - 0.2:
+        add(box_tris((-lw, ly), (lw, ly), 0.04, z, z + 0.04), steel)
+        z += 0.3
+    for zz in zs[:-1]:
+        for sx in (-1, 1):
+            bar((sx * lw, ly, zz), (sx * half(zz), -half(zz), zz), 0.05, steel)  # arm to the tower's -y corner
+
+    add(box_tris((0.0, -0.06), (0.0, 0.06), 0.12, deck_top, H), steel)  # mast pole
+    # panel antennas hung on the outside of the railing, two on each side (none over the hatch)
+    out = RAIL_T + 0.1
+    for px, py, along in (
+        (-1.3, dy0 - out, "x"), (1.3, dy0 - out, "x"), (-1.0, dy1 + out, "x"), (1.0, dy1 + out, "x"),
+        (dx0 - out, -1.2, "y"), (dx0 - out, 1.2, "y"), (dx1 + out, -1.2, "y"), (dx1 + out, 1.2, "y"),
+    ):
+        a, b = ((px - 0.15, py), (px + 0.15, py)) if along == "x" else ((px, py - 0.15), (px, py + 0.15))
+        add(box_tris(a, b, 0.12, deck_top + 0.35, deck_top + 1.85), panel)
     zl = zt - 5.0  # lower tier: two panels on each face
     for k, (nx, ny) in enumerate(((1, 0), (0, 1), (-1, 0), (0, -1))):
         r = half(zl) + 0.2
@@ -358,8 +483,10 @@ PRIMITIVES: dict[str, Primitive] = {
             "cabin_colour": "#e6e6e0",
             "platform_colour": "#8a8f95",
             "panel_colour": "#f0f0ee",
+            "hatch_colour": "#c9a227",
+            "deck_half_m": 2.0,
         },
-        (3.0, 36.0, 2.6),
+        (4.52, 36.0, 6.52),
         "#b9bdc2",
     ),
 }

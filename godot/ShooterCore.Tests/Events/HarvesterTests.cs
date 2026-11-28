@@ -764,4 +764,24 @@ public class HarvesterTests
         Assert.Contains("Hay.Bale", names);
         Assert.Contains("Harvester.Corpse", names);
     }
+
+    [Fact]
+    public void A_burnt_harvester_bale_leaves_senin_by_chance()
+    {
+        Assert.Equal(0.25f, Cfg.SeninChance);
+        var at = new Vector3(3, 1, -4);
+        var drop = HarvesterRules.RollSenin(new HarvesterConfig { SeninChance = 1 }, new Random(7), at, 42);
+        Assert.Equal(new Drycastle.ShooterCore.Wildlife.MineralDrop("senin", at, 42), drop);
+        Assert.Null(HarvesterRules.RollSenin(new HarvesterConfig { SeninChance = 0 }, new Random(7), at));
+        var rng = new Random(12345);
+        var hits = Enumerable.Range(0, 4000).Count(_ => HarvesterRules.RollSenin(Cfg, rng, at) != null);
+        Assert.InRange(hits / 4000.0, 0.22, 0.28);
+        // same seed, same rolls
+        var a = new Random(9); var b = new Random(9);
+        Assert.Equal(Enumerable.Range(0, 50).Select(_ => HarvesterRules.RollSenin(Cfg, a, at) != null), Enumerable.Range(0, 50).Select(_ => HarvesterRules.RollSenin(Cfg, b, at) != null));
+        // it becomes a dynamic node like a Phoenix drop
+        var node = new Drycastle.ShooterCore.Mining.MineralNodeSet().AddDrop(drop!.Value);
+        Assert.Equal("senin", node!.MineralId);
+        Assert.True(Drycastle.ShooterCore.Mining.MineralNodeSet.IsDynamic(node));
+    }
 }

@@ -91,6 +91,12 @@ public sealed class HolyMassEvent
     public bool Running => Phase != MassPhase.Idle;
     /// <summary>How often the pastor has been killed this event.</summary>
     public int PastorKills { get; private set; }
+    /// <summary>
+    /// The last Mass was completed with no pastor killed (not before the Completed phase, not after it): Holystone's rule (GLOSSARY "Mineral node"). It outlives the event's end (Idle) and holds for
+    /// <see cref="MassConfig.HolystoneSeconds"/> (60 min) or until the next Mass starts its Gather, a pastor is killed, the Mass is void, or <see cref="Forget"/> (the round is over).
+    /// </summary>
+    public bool Peaceful => _peaceful.Running;
+    Countdown _peaceful;
     /// <summary>Seconds of Mass progress so far.</summary>
     public float Progress { get; private set; }
     /// <summary>The pastor stands at his spot and the pause after a kill is over.</summary>
@@ -128,7 +134,7 @@ public sealed class HolyMassEvent
     {
         if (WhyNot() != null) return 0;
         _kept.Clear(); _seatOf.Clear(); _seatedFor.Clear(); _sinners.Clear();
-        PastorKills = 0; Progress = 0; _pastorFsm.Reset(PastorState.Off);
+        PastorKills = 0; Progress = 0; _peaceful.Cancel(); _pastorFsm.Reset(PastorState.Off);
         foreach (var id in KeepSeatsFor()) if (_crowd.Reserve(id)) _kept.Add(id);
         var sent = _crowd.Spawn(_crowd.FreeSeats.ToList(), _cfg.StaggerSeconds, _cfg.HouseRadiusM, _cfg.BellsLeadSeconds);
         _pastor = _crowd.SpawnRole(CitizenRole.Pastor, new[] { _church.Pastor!.Pos }, _church.Pastor.Yaw);
@@ -152,7 +158,9 @@ public sealed class HolyMassEvent
 
     public void Update(float dt)
     {
-        if (Phase == MassPhase.Idle || dt <= 0) return;
+        if (dt <= 0) return;
+        _peaceful.Tick(dt);
+        if (Phase == MassPhase.Idle) return;
         if (Phase is MassPhase.Gather or MassPhase.Mass) TickPastor(dt);
         switch (Phase)
         {
@@ -206,6 +214,7 @@ public sealed class HolyMassEvent
         if (k.Killer != 0) { _sinners.Add(k.Killer); Sinned?.Invoke(k); }
         if (k.Role != CitizenRole.Pastor) return;
         PastorKills++; // also in Completed and Void, where only the clients' count changes
+        _peaceful.Cancel();
         if (Phase is not (MassPhase.Gather or MassPhase.Mass)) { Changed?.Invoke(); return; } // the pastor is Off already
         if (PastorKills >= _cfg.PastorKillsToTurn)
         {
@@ -224,6 +233,7 @@ public sealed class HolyMassEvent
     {
         if (Phase == MassPhase.Void) return;
         PastorKills = Math.Max(PastorKills, _cfg.PastorKillsToTurn);
+        _peaceful.Cancel();
         _pastorFsm.Enter(PastorState.Off);
         Turn();
     }
@@ -289,6 +299,7 @@ public sealed class HolyMassEvent
         _crowd.Finish(_cfg.ClapShare);
         foreach (var p in _seatOf.Keys.ToList()) Stand(p);
         _pastorFsm.Enter(PastorState.Off);
+        if (PastorKills == 0) _peaceful.Start(_cfg.HolystoneSeconds); else _peaceful.Cancel();
         SetPhase(MassPhase.Completed, _cfg.CompletedSeconds);
         Completed?.Invoke(blessed);
     }
@@ -296,6 +307,9 @@ public sealed class HolyMassEvent
     /// <summary>The blessing rule: seated at the end, seated for the share of the Mass, not a sinner. No Mass time yet (ended early): the share is met.</summary>
     public static bool IsBlessed(bool seatedAtEnd, bool sinner, float seatedSeconds, float massSeconds, float share) =>
         seatedAtEnd && !sinner && (massSeconds <= 0 || seatedSeconds >= share * massSeconds - 1e-3f);
+
+    /// <summary>The round is over: the event ends and its <see cref="Peaceful"/> verdict is forgotten.</summary>
+    public void Forget() { End(); _peaceful.Cancel(); }
 
     /// <summary>Everyone is removed (citizens, pastor, monks) and the event is over.</summary>
     public void End()

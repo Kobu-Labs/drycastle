@@ -58,6 +58,8 @@ public sealed class HarvesterConfig
     /// <summary>A bale burns this long and ignites players within <see cref="BaleFireRadiusM"/> of it; the burn of such a player (<see cref="BaleBurn"/>) is credited to nobody.</summary>
     public float BaleBurnSeconds { get; set; } = 6;
     public float BaleFireRadiusM { get; set; } = 2.6f;
+    /// <summary>The chance (0 to 1) that a bale the harvester made (a swath's round bale or a victim's bale, never a field's own) leaves the mineral senin as a dynamic Mineral node where it turned to ash.</summary>
+    public float SeninChance { get; set; } = 0.25f;
     /// <summary>A shot ignites a bale it passes within this of its centre.</summary>
     public float BaleHitRadiusM { get; set; } = 0.9f;
     /// <summary>A corpse bale never expires (infinity): burnt to ash is the only way it goes, besides the round and the safety cap <see cref="CorpseBook.MaxBales"/>.</summary>

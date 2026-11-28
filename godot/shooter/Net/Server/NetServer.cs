@@ -207,7 +207,7 @@ public partial class NetServer : Node
         _garage = new GarageServer(_ctx, Config.ArenaMode, Config.MapDir, _fleet.Cars, () => Config.Vehicles);
         _houses = new HouseDoorServer(_ctx, Config.ArenaMode, _fleet.Cars);
         _trapHouses = new TrapHouseServer(_ctx, Config.ArenaMode, Config.Map); // the Trap houses' props (#496): dressed for a Job, stripped after
-        _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops);
+        _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops, () => _areas.MineralNodes, () => _mass?.Event?.Peaceful == true);
         _hunts = new HuntLogServer(_ctx, Config.Progression, Config.AnimalData, Config.Weapons, Config.Items, Config.CompanionData, _progress.Scores, _progress.WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _sentries = new SentryWorld(_ctx, _targets, _damage.Deal, () => _shot.Query);
@@ -397,7 +397,7 @@ public partial class NetServer : Node
     HarvesterServer BuildHarvester()
     {
         var cut = new CropCut(_ctx, Config.Harvester, Config.CropCrush, Config.Map, _fleet);
-        var bales = new BaleFire(_ctx, Config.Harvester, Config.Map, _corpses, _status, cut);
+        var bales = new BaleFire(_ctx, Config.Harvester, Config.Map, _corpses, _status, cut, _rng, _minerals.OnDropped);
         var reel = new ReelServer(_ctx, Config.Harvester, _fleet, _targets, _damage.Deal, _deathPush, _corpses, _gear, Config.Weapons, Config.Map, bales, CarPose.Velocity, RunOverServer.Cooldown);
         return new HarvesterServer(_ctx, Config.Harvester, () => Config.Vehicles, Config.Map, Config.World, Config.Water, () => _fleet.FlightBounds, _rng, _events, _fleet, _profiles, _ids, c => _roster.Join(c), c => _roster.Leave(c), CarPose.SeatPos, _seats.Leave, cut, bales, reel);
     }

@@ -442,7 +442,7 @@ public static class ObjectColliders
     /// Flowers and house connectors have none (walk and shoot through). Bushes stop shots only. Trees have a trunk (solid, lower third) and a crown
     /// box (shot-only). A pole (utility pole) is its column alone: a thin solid box at the origin, as high as the pole, so the
     /// lamp arm, the crossarm and a cabinet beside it (which make the size wide) stop nothing. Every other category (car, slab,
-    /// pot, wall, fence, radio tower, other) is one solid box.
+    /// pot, wall, fence, other) is one solid box. The radio tower lists its own solids (cabin, deck round the ladder hatch, railing).
     /// </summary>
     /// <summary>Half the side of a utility pole's solid column, metres.</summary>
     public const float PoleHalf = 0.2f;

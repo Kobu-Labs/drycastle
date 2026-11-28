@@ -568,12 +568,16 @@ The earth embankment north of the village, with a gravel track on top and thick 
 _Avoid_: levee, flood wall (that is the concrete wall)
 
 **Ladder**:
-How a player moves between the floors of a bunker, or up to the deck of a Hunter outpost: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
+How a player moves between the floors of a bunker, up to the deck of a Hunter outpost, or up the Radio tower: they get on with the interact key, climb with forward and back, and step off at either end onto the open side of the ladder, away from the wall. They cannot fire on it.
 _Avoid_: stairs, climbing (that is the verb)
 
 **Hunter outpost**:
 A guard tower (`SM_Bld_GuardTower_01`) placed by hand on the hunting grounds, a vantage over the wilds. Its ladder, on the tower's own side, is climbed like a bunker's and leads to the deck. Every placed tower has one (`object_ladders.json`, laid out in the object's frame); nothing else is attached to it.
 _Avoid_: base, camp
+
+**Radio tower**:
+The 36 m lattice mast on an equipment cabin (`prim:radio_tower`, #99), placed by hand (the one on parcel P-0510 holds Thundernite). One ladder (`object_ladders.json`, every placed tower has it) climbs the cabin's south side (the model's -y) and the tower beside it, up through a hatch of the top deck. The cabin, the 4 x 6 m deck and the railing round it are solid (`solids` of the manifest entry); the lattice and the antennas are not. A hatch at the ladder's head is the only way up; the deck is the vantage and the place of the Thundernite node.
+_Avoid_: antenna, cell tower
 
 **Shelter**:
 What a bunker's room, or the church, gives the players in it: a blast outside the room does not hurt them, and a blast inside it hurts nobody outside. The MOAB is not stopped.
@@ -810,7 +814,7 @@ One of the 28 stones of the Mineral Log (crystals.md): 8 real-life ones and 20 f
 _Avoid_: gem, ore, crystal (that is the model in the world)
 
 **Mineral node**:
-A crystal in the world that holds one Mineral (#401). It never goes away or hides. Whether it can be taken now is its mineral's own rule (`MineralActivity`: Thundernite only in a storm, Pheonixite once a phoenix drops it; no rule: always). While active any number of players can take it. The player holds the interact key at it (`MineralRules.HoldSeconds`). The one node so far is a test node beside the first spawn; the places are #389 to #397. A dynamic node is the pickup of a Mineral a creature left (a dead Phoenix's pheonixite): active at once, any player who has not found it can take it, a pickup does not use it up: it lies `DropLifetimeSeconds` (60) after it appears and then burns away in a puff of fire (client), or goes when the round ends (never reserved for the killer).
+A crystal in the world that holds one Mineral (#401). It never goes away or hides. Whether it can be taken now is its mineral's own rule (`MineralActivity`: Thundernite only in a storm, Pheonixite once a phoenix drops it; Holystone for 60 min (`holystone_seconds`) from a Holy Mass completed with no pastor killed, cut short when the round ends or the next Mass gathers, `HolyMassEvent.Peaceful`; no rule: always). While active any number of players can take it. The player holds the interact key at it (`MineralRules.HoldSeconds`). A static node is set in `edits.json` (`mineral_nodes`: mineral, position, optional height), baked into `mineral_nodes.json` and built by the server at start (docs/pipeline.md); the places are #389 to #397. A dynamic node is the pickup of a Mineral a creature or an event left (a dead Phoenix's pheonixite; senin where a hay bale the harvester made burnt to ash, `HarvesterConfig.SeninChance` 0.25, never a field's own bale): active at once, any player who has not found it can take it, a pickup does not use it up: it lies `DropLifetimeSeconds` (60) after it appears and then burns away in a puff of fire (client), or goes when the round ends (never reserved for the killer).
 _Avoid_: crystal spawn, pickup
 
 **Find**:

@@ -3,13 +3,15 @@ using Drycastle.ShooterCore.Corpses;
 using Drycastle.ShooterCore.Events;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Status;
+using Drycastle.ShooterCore.Wildlife;
 using NVec3 = System.Numerics.Vector3;
 
 namespace Drycastle.Shooter.Net.Server.Harvest;
 
 /// <summary>
 /// The hay bales and their fire (<see cref="HayBale"/>): the field's own (the map's), the ones a harvester's swath drops, and the ones the machine throws out with a victim inside (they are corpses, world entities). A shot sets any bale
-/// alight; a burning bale ignites players beside it, credited to nobody (<see cref="BurnSet.HazardSource"/>), and burns out to ash for everyone.
+/// alight; a burning bale ignites players beside it, credited to nobody (<see cref="BurnSet.HazardSource"/>), and burns out to ash for everyone. A bale the harvester made (not the field's own) may leave senin
+/// where it turned to ash (<see cref="HarvesterConfig.SeninChance"/>, via the drop callback: a dynamic Mineral node).
 /// </summary>
 internal sealed class BaleFire
 {
@@ -19,14 +21,16 @@ internal sealed class BaleFire
     readonly CorpseBook _corpses;
     readonly StatusServer _status;
     readonly CropCut _cut;
+    readonly Random _rng;
+    readonly Action<MineralDrop> _onDrop;
 
     HayBale[]? _staticBales;
     readonly Dictionary<ushort, HayBale> _madeBales = new();
     readonly List<(ushort Id, NVec3 Feet)> _folk = new();
 
-    public BaleFire(ServerContext ctx, HarvesterConfig cfg, Drycastle.MapLoader.MapLoader? map, CorpseBook corpses, StatusServer status, CropCut cut)
+    public BaleFire(ServerContext ctx, HarvesterConfig cfg, Drycastle.MapLoader.MapLoader? map, CorpseBook corpses, StatusServer status, CropCut cut, Random rng, Action<MineralDrop> onDrop)
     {
-        _ctx = ctx; _cfg = cfg; _map = map; _corpses = corpses; _status = status; _cut = cut;
+        _ctx = ctx; _cfg = cfg; _map = map; _corpses = corpses; _status = status; _cut = cut; _rng = rng; _onDrop = onDrop;
     }
 
     HayBale[] StaticBales => _staticBales ??= (_map?.CropBales ?? Array.Empty<Godot.Vector3>()).Select(p => new HayBale(new NVec3(p.X, p.Y, p.Z), _cfg)).ToArray();
@@ -80,14 +84,16 @@ internal sealed class BaleFire
         _folk.Clear();
         foreach (var o in _ctx.Players.Values)
             if (_ctx.IsAlive(o.Id)) _folk.Add((o.Id, new NVec3(o.Body.GlobalPosition.X, o.Body.GlobalPosition.Y, o.Body.GlobalPosition.Z)));
-        void Burn(HayBale b, ushort id)
+        void Burn(HayBale b, ushort id, bool harvesterMade)
         {
             foreach (var victim in b.Scorched(_folk)) _status.Burns.Ignite(victim, BurnSet.HazardSource, _cfg.BaleBurn);
-            if (b.Tick(dt)) Fx(HarvesterCodec.FxKind.BaleAsh, b.Position, id);
+            if (!b.Tick(dt)) return;
+            Fx(HarvesterCodec.FxKind.BaleAsh, b.Position, id);
+            if (harvesterMade && HarvesterRules.RollSenin(_cfg, _rng, b.Position, HarvesterCodec.IsWorldBale(id) ? (ushort)0 : id) is { } drop) _onDrop(drop);
         }
-        foreach (var kv in _madeBales) if (kv.Value.Burning) Burn(kv.Value, kv.Key);
-        if (_staticBales != null) for (var i = 0; i < _staticBales.Length; i++) if (_staticBales[i].Burning) Burn(_staticBales[i], HarvesterCodec.StaticBaleId(i));
-        foreach (var sf in _cut.Swaths) for (var i = 0; i < sf.Bales.Count; i++) if (sf.Bales[i].Burning) Burn(sf.Bales[i], HarvesterCodec.DroppedBaleId(i));
+        foreach (var kv in _madeBales) if (kv.Value.Burning) Burn(kv.Value, kv.Key, true);
+        if (_staticBales != null) for (var i = 0; i < _staticBales.Length; i++) if (_staticBales[i].Burning) Burn(_staticBales[i], HarvesterCodec.StaticBaleId(i), false);
+        foreach (var sf in _cut.Swaths) for (var i = 0; i < sf.Bales.Count; i++) if (sf.Bales[i].Burning) Burn(sf.Bales[i], HarvesterCodec.DroppedBaleId(i), true);
         PruneMade();
     }
 

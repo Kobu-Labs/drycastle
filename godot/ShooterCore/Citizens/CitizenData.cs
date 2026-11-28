@@ -66,6 +66,8 @@ public sealed class MassConfig
     public float MassSeconds { get; set; } = 120;
     /// <summary>After the Mass completes: citizens stand and clap, the pastor flexes; then everyone is removed and the event is over.</summary>
     public float CompletedSeconds { get; set; } = 12;
+    /// <summary>How long Holystone can be taken after a Mass completed with no pastor killed (GLOSSARY "Mineral node"): 60 min.</summary>
+    public float HolystoneSeconds { get; set; } = 3600;
     /// <summary>The time over which the citizens leave their houses, and the radius of the houses that send one (a house 100 m away is 70 s of walking).</summary>
     public float StaggerSeconds { get; set; } = 25;
     public float HouseRadiusM { get; set; } = 100;
@@ -119,8 +121,8 @@ public sealed class HolyMassFile : IVersioned
         if (!(c.StaggerSeconds >= 0) || !(c.HouseRadiusM > 0) || !(c.HouseMinM >= 0) || !(c.CorpseSeconds > 0) || !(c.SeatHeightM >= 0))
             throw new DataFileException($"{F}: citizens: stagger_seconds, house_min_m and seat_height_m are not negative; house_radius_m and corpse_seconds are positive");
         var mass = f.Mass;
-        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.StaggerSeconds >= 0) || !(mass.BellsLeadSeconds >= 0) || !(mass.StartDelaySeconds >= 0) || !(mass.HouseRadiusM > 0))
-            throw new DataFileException($"{F}: mass: gather_seconds, start_delay_seconds, completed_seconds, stagger_seconds and bells_lead_seconds are not negative; mass_seconds and house_radius_m are positive");
+        if (!(mass.GatherSeconds >= 0) || !(mass.MassSeconds > 0) || !(mass.CompletedSeconds >= 0) || !(mass.HolystoneSeconds > 0) || !(mass.StaggerSeconds >= 0) || !(mass.BellsLeadSeconds >= 0) || !(mass.StartDelaySeconds >= 0) || !(mass.HouseRadiusM > 0))
+            throw new DataFileException($"{F}: mass: gather_seconds, start_delay_seconds, completed_seconds, stagger_seconds and bells_lead_seconds are not negative; mass_seconds, holystone_seconds and house_radius_m are positive");
         if (mass.PlayerSeats < 0 || !(mass.SitReachM > 0) || !(mass.BlessedShare is >= 0 and <= 1) || !(mass.ClapShare is >= 0 and <= 1) || !(mass.MonkDabShare is >= 0 and <= 1))
             throw new DataFileException($"{F}: mass: player_seats is not negative, sit_reach_m positive, the shares 0..1");
         if (!(mass.PastorReplaceSeconds >= 0) || !(mass.ResumeSeconds >= 0) || mass.PastorKillsToTurn < 1 || !(mass.GestureMinSeconds > 0) || mass.GestureMaxSeconds < mass.GestureMinSeconds || !(mass.ChantRangeM > 0))

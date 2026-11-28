@@ -1,5 +1,6 @@
 using Godot;
 using Drycastle.Shooter.Vehicles;
+using Drycastle.ShooterCore.Citizens;
 using Drycastle.ShooterCore.Mining;
 using Drycastle.ShooterCore.Net;
 using Drycastle.ShooterCore.Wildlife;
@@ -22,6 +23,8 @@ internal sealed class MineralsServer
     readonly ServerContext _ctx;
     readonly IProgressionStore? _store;
     readonly Func<IReadOnlyList<MineralDrop>> _drops;
+    readonly Func<IReadOnlyList<MineralNodeSpec>> _statics;
+    readonly Func<bool> _holyMassPeaceful;
 
     MineralBook? _book;
     Task<IReadOnlyList<MineralFind>>? _load;
@@ -31,9 +34,11 @@ internal sealed class MineralsServer
     double _nextCheck;
 
     /// <param name="drops">The drops that already lie in the world (a drop cannot come before the nodes, but never lose one).</param>
-    public MineralsServer(ServerContext ctx, IProgressionStore? store, Func<IReadOnlyList<MineralDrop>> drops)
+    /// <param name="statics">The static nodes of the map (mineral_nodes.json, set in the editor's edits).</param>
+    /// <param name="holyMassPeaceful">A Holy Mass was completed with no pastor killed, within holystone_seconds (60 min), and this round has not ended nor a new Mass begun (Holystone's rule, <see cref="HolyMassEvent.Peaceful"/>).</param>
+    public MineralsServer(ServerContext ctx, IProgressionStore? store, Func<IReadOnlyList<MineralDrop>> drops, Func<IReadOnlyList<MineralNodeSpec>> statics, Func<bool> holyMassPeaceful)
     {
-        _ctx = ctx; _store = store; _drops = drops;
+        _ctx = ctx; _store = store; _drops = drops; _statics = statics; _holyMassPeaceful = holyMassPeaceful;
     }
 
     /// <summary>Once a tick: builds the nodes (once the spawns are known), loads the book, sends the finds to joiners and the nodes when an activity changed.</summary>
@@ -52,16 +57,20 @@ internal sealed class MineralsServer
         }
     }
 
-    /// <summary>No nodes yet: the places (#389 to #397) each bring theirs.</summary>
+    /// <summary>The static nodes the map names (mineral_nodes.json: the places #389 to #397 each bring theirs), then the drops that already lie in the world.</summary>
     void BuildNodes()
     {
         _nodes = new MineralNodeSet();
+        var added = MineralNodeFile.AddTo(_nodes, _statics(), m => GD.PrintErr($"server: mineral node skipped, {m}"));
         _active = ActiveNow();
-        GD.Print("server: 0 mineral node(s)");
+        GD.Print($"server: {added} mineral node(s)");
         foreach (var d in _drops()) _nodes.AddDrop(d);
     }
 
-    bool[] ActiveNow() => _nodes!.Nodes.Select(n => MineralActivity.IsActive(n.MineralId, default)).ToArray();
+    /// <summary>What the activity rules look at, read from the server's other parts.</summary>
+    MineralWorld World() => new(HolyMassPeaceful: _holyMassPeaceful());
+
+    bool[] ActiveNow() { var world = World(); return _nodes!.Nodes.Select(n => MineralActivity.IsActive(n.MineralId, world)).ToArray(); }
 
     byte[] NodesPayload() => MineralRules.EncodeNodes(_nodes!.Nodes.Select((n, i) => (n, _active[i])).ToList());
 
@@ -72,7 +81,7 @@ internal sealed class MineralsServer
         _ctx.Broadcast(EventKind.MineralNodes, NodesPayload());
     }
 
-    /// <summary>A dead Phoenix's mineral (<see cref="WildlifeKeeper.MineralDropped"/>) lies where it burned as a node anybody can take, for a minute (GLOSSARY "Mineral").</summary>
+    /// <summary>A dropped mineral (a dead Phoenix's, <see cref="WildlifeKeeper.MineralDropped"/>; senin from a burnt harvester bale) lies where it was left as a node anybody can take, for a minute (GLOSSARY "Mineral").</summary>
     public void OnDropped(MineralDrop drop)
     {
         if (_nodes == null) return;
@@ -125,7 +134,7 @@ internal sealed class MineralsServer
         if (!MineralRules.TryDecodePick(payload, out var id) || _book is not { } book || _nodes == null) return;
         if (c.IsBot || c.W == null || c.Car != null || !_ctx.IsAlive(c.Id) || c.Profile is not { Persist: true } p) return;
         var node = _nodes.Find(id);
-        var result = book.Check(p.DbId, node, node != null && MineralActivity.IsActive(node.MineralId, default), c.Body.GlobalPosition.ToNumerics());
+        var result = book.Check(p.DbId, node, node != null && MineralActivity.IsActive(node.MineralId, World()), c.Body.GlobalPosition.ToNumerics());
         if (result != MineralPickResult.Ok || node == null)
         {
             GD.Print($"server: {c.Name} mineral node {id} not taken: {result}");

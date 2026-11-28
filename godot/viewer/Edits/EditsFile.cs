@@ -114,7 +114,7 @@ public static class EditsFile
                 foreach (var kv in o)
                 {
                     // like dump_text: the ground_patches, zones, zone_cuts, cables and ground_types keys are only written when there are any, objects likewise
-                    if (depth == 0 && kv.Key is "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
+                    if (depth == 0 && kv.Key is "ground_patches" or "zones" or "zone_cuts" or "cables" or "ground_types" or "mineral_nodes" && kv.Value is SortedDictionary<string, object?> { Count: 0 }) continue;
                     if (depth == 0 && kv.Key == "objects" && kv.Value is List<object?> { Count: 0 }) continue;
                     var value = depth == 0 && kv.Key == "objects" && kv.Value is List<object?> objs ? SortedById(objs) : kv.Value;
                     if (!first) sb.Append(",\n");

@@ -12,6 +12,7 @@ formatting is fixed, so git diffs stay small. Version 1::
      "zones":   {"Z-0001": {"kind": "bigfoot", "polygon": [[x, y], ...]}},
      "zone_cuts": {"ZC-0001": {"kind": "deer", "polygon": [[x, y], ...]}},
      "cables":  {"C-0001": {"from": "o-0012", "to": "o-0015"}},
+     "mineral_nodes": {"MN-0001": {"mineral": "smetiskomite", "position": [x, y]}},
      "ground_types": {"meadow": {"attributes": {"colours": ["#7aa860"]}},
                       "my_dunes": {"attributes": {"colours": ["#d8c38a"], "recipe": "field"}}}}
 
@@ -121,6 +122,12 @@ or more digits; see edits/zones.py). The user never sees these as zones.
                         zone of that kind. It never touches drawn zones. Geometry, not ground area ids: those are not
                         stable across builds. The ``zone_cuts`` key is only written when there are cuts.
 
+``mineral_nodes`` (a static mineral node: a crystal the game places at a fixed spot, GLOSSARY "Mineral node"; by ID ``MN-`` and 4 digits; the key is only written when there are any)
+    mineral             lower_snake mineral id of the game (godot/ShooterCore/Mining/Minerals.cs, e.g. ``smetiskomite``); the game ignores one it does not know.
+    position            [x, y] absolute EPSG:5514 metres.
+    z                   optional metres on the terrain's datum (as an object's ``z``): a spot above the ground (a platform, a roof); omitted = the terrain height.
+    Exported to ``mineral_nodes.json`` (``export.docs.build_mineral_nodes``), read by the game server (``MineralNodeFile``). Needs the next make export.
+
 ``cables`` (the wires strung between two placed utility poles, or from a pole to a house connector;
 drawn by the game, see docs/utility-poles.md)
     from, to            ids of two different placed objects: utility poles (``prim:pole_*``) or
@@ -195,8 +202,9 @@ FENCE_TYPES: dict[str, dict[str, float | str]] = {
 # Columns a fence can be given instead of its type's own (fencestyles.COLUMN_STYLES).
 COLUMN_TYPES = ("none", "wood_post", "metal_post", "brick_red", "brick_white", "stone", "concrete")
 
-TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types", "paths")
+TOP_KEYS = ("version", "parcels", "objects", "groups", "ground_patches", "zones", "zone_cuts", "cables", "ground_types", "paths", "mineral_nodes")
 OUTLINE_OVERLAP_M2 = 0.01  # two edited parcel outlines may touch, or overlap by less than this
+MINERAL_NODE_KEYS = ("mineral", "position", "z")
 PATH_KEYS = ("points", "width_m", "closed")
 PATH_WIDTH_M = (0.3, 4.0)  # a footpath is this wide (metres); wider is a road
 PARCEL_KEYS = ("fence", "ground_type", "outline", "objects")  # "objects" only so a file of the old shape still validates; see parse()
@@ -223,6 +231,8 @@ _GROUP_ID = re.compile(r"G-\d{4,}")
 _PATCH_ID = re.compile(r"GP-\d{4,}")
 _ZONE_ID = re.compile(r"Z-\d{4,}")
 _PATH_ID = re.compile(r"PA-\d{4,}")
+_MINERAL_NODE_ID = re.compile(r"MN-\d{4,}")
+_MINERAL_ID = re.compile(r"[a-z][a-z0-9_]{0,31}")
 _ZONE_CUT_ID = re.compile(r"ZC-\d{4,}")
 _GROUND_TYPE = re.compile(r"[a-z][a-z0-9_]*")
 _GROUND_NAME = re.compile(r"[a-z][a-z0-9_]{0,%d}" % (GROUND_NAME_MAX - 1))
@@ -252,6 +262,7 @@ class Edits:
     paths: dict[str, dict] = field(default_factory=dict)  # worn footpaths (detail/footpaths.py)
     cables: dict[str, dict] = field(default_factory=dict)
     ground_types: dict[str, dict] = field(default_factory=dict)
+    mineral_nodes: dict[str, dict] = field(default_factory=dict)  # static mineral nodes (export.docs.build_mineral_nodes)
 
 
 @dataclass(frozen=True)
@@ -575,6 +586,25 @@ def _check_paths(paths: dict, errors: list[str]) -> None:
             errors.append(f"{path}.closed: a closed path needs at least 3 points")
 
 
+def _check_mineral_nodes(nodes: dict, errors: list[str]) -> None:
+    for nid, entry in nodes.items():
+        path = f"mineral_nodes.{nid}"
+        if not _MINERAL_NODE_ID.fullmatch(nid):
+            errors.append(f"{path}: mineral node IDs look like MN-0001")
+        if not _is_dict(entry, path, errors):
+            continue
+        _unknown_keys(entry, MINERAL_NODE_KEYS, path, errors)
+        for key in ("mineral", "position"):
+            if key not in entry:
+                errors.append(f"{path}.{key}: required")
+        if "mineral" in entry and not (isinstance(entry["mineral"], str) and _MINERAL_ID.fullmatch(entry["mineral"])):
+            errors.append(f"{path}.mineral: must be a mineral id (lower_snake)")
+        if "position" in entry:
+            _check_point(entry["position"], f"{path}.position", errors)
+        if "z" in entry and not _is_num(entry["z"]):
+            errors.append(f"{path}.z: must be a number")
+
+
 def cable_pair(entry: dict) -> tuple[str, str]:
     """The two pole ids of a cable, in a fixed order (a cable has no direction)."""
     a, b = str(entry["from"]), str(entry["to"])
@@ -754,6 +784,9 @@ def validate(doc: object) -> list[str]:
     paths = doc.get("paths", {})
     if _is_dict(paths, "paths", errors):
         _check_paths(paths, errors)
+    mineral_nodes = doc.get("mineral_nodes", {})
+    if _is_dict(mineral_nodes, "mineral_nodes", errors):
+        _check_mineral_nodes(mineral_nodes, errors)
     return errors
 
 
@@ -783,6 +816,7 @@ def parse(doc: object) -> Edits:
         paths=copy.deepcopy(doc.get("paths", {})),
         cables=copy.deepcopy(doc.get("cables", {})),
         ground_types=copy.deepcopy(doc.get("ground_types", {})),
+        mineral_nodes=copy.deepcopy(doc.get("mineral_nodes", {})),
     )
 
 
@@ -817,6 +851,8 @@ def dump_text(edits: Edits) -> str:
         doc["cables"] = edits.cables
     if edits.ground_types:  # likewise
         doc["ground_types"] = edits.ground_types
+    if edits.mineral_nodes:  # likewise
+        doc["mineral_nodes"] = edits.mineral_nodes
     errors = validate(doc)
     if errors:
         raise EditsError(errors)
