@@ -31,7 +31,7 @@ public readonly record struct ChaseStep(bool GetOut, bool Remove, bool Remount =
 public sealed class ChaseCar
 {
     public static readonly StateMachineSpec<ChaseState> Spec = StateMachineSpec<ChaseState>
-        .Define("Chase.Car", "One Rival chase car of a Heist: it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.", ChaseState.Spawned)
+        .Define("Chase.Car", "One Rival car of a Heist, a chase car or an Assault van (the same driver): it follows the Cartel van over the roads and open ground with its crew in the windows, backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.", ChaseState.Spawned)
         .Allow(ChaseState.Spawned, ChaseState.Chasing)
         .Allow(ChaseState.Chasing, ChaseState.Stopping, ChaseState.Reversing, ChaseState.GivingUp)
         .Allow(ChaseState.Reversing, ChaseState.Chasing, ChaseState.Stopping, ChaseState.GivingUp)
@@ -41,7 +41,7 @@ public sealed class ChaseCar
         .Allow(ChaseState.Out, ChaseState.Gone)
         .Allow(ChaseState.GivingUp, ChaseState.Gone)
         .FromAnywhere(ChaseState.Gone)
-        .Note(ChaseState.Spawned, "Just put down on open ground behind the van with its crew seated: nothing driven yet. The next step is Chasing.")
+        .Note(ChaseState.Spawned, "Just put down on open ground (a chase car ahead of or behind the van, an Assault van 250 to 400 m of way from it) with its crew seated: nothing driven yet. The next step is Chasing.")
         .Note(ChaseState.Chasing, "Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.")
         .Note(ChaseState.Reversing, "Backs out of where it is wedged (clock: reverse_seconds), steering to turn its nose to its way, then Chasing again; the tries are counted (max_unsticks). A dead driver stops it; gives up as Chasing does; a destroyed car is Gone.")
         .Note(ChaseState.Stopping, "Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.")

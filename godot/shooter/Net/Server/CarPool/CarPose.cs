@@ -38,6 +38,15 @@ internal static class CarPose
     {
         var offset = car.Def.Seats[seat].Offset;
         if (car.Def.Flak is { } flak && car.Def.Seats[seat].Role == "gunner") offset = FlakRules.TurretSeatOffset(flak, offset, pose.TurretYaw);
+        return PointAt(car, offset, pose);
+    }
+
+    /// <summary>World position of a point of the car's frame (x right, y up, z towards the rear: a seat, a post in a cargo bay), the car as it stands now.</summary>
+    public static Vector3 PointAt(ServerCar car, float[] offset) => PointAt(car, offset, Present(car));
+
+    /// <summary>World position of a point of the car's frame with the car at pose <paramref name="pose"/>.</summary>
+    public static Vector3 PointAt(ServerCar car, float[] offset, VehiclePose pose)
+    {
         var p = car.Flies || car.Drives // a helicopter's seats tilt with it; a driven vehicle's lie on the slope it stands on
             ? pose.Feet + FlightMath.Rotate(new NVec3(offset[0], offset[1], offset[2]), pose.Yaw, pose.Pitch, pose.Roll)
             : VehicleSeat.SeatPosition(pose.Feet, pose.Yaw, offset);

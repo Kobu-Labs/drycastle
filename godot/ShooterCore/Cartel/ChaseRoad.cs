@@ -49,23 +49,28 @@ public sealed class ChaseTrail
     }
 }
 
-/// <summary>A chase car's place: its ground point, which way it faces (a Godot yaw, towards the van), how far behind the van's way it is and the road place when it stands on a road (null: open ground).</summary>
+/// <summary>A chase car's place: its ground point, which way it faces (a Godot yaw, towards the van), how far behind the van's way it is (negative: that far AHEAD of it, on its way to the drop) and the road place when it stands on a road (null: open ground).</summary>
 public readonly record struct ChaseSpot(RoadPlace? Place, Vector2 Ground, float Yaw, float BackM);
 
 /// <summary>Where a chase car is put down, pure (docs/cartel.md "Chase cars"): the rules of the spot.</summary>
 public static class ChaseSpawn
 {
-    /// <summary>The open-ground candidates round a trail point: itself and this many spawn_spread_m either side of it, across the van's way.</summary>
+    /// <summary>The open-ground candidates round a way point: itself and this many spawn_spread_m either side of it, across the van's way.</summary>
     static readonly float[] Sides = { 0f, -1f, 1f, -0.5f, 0.5f };
 
+    /// <summary>The points of the van's way ahead that are looked at: one every this many metres.</summary>
+    public const float AheadStepM = 15f;
+
     /// <summary>
-    /// A spot for a new chase car, or null when none is fit now. A candidate lies spawn_back_min_m to spawn_back_max_m behind the van along its trail: the nearest road (within spawn_road_m) to a trail point, and,
-    /// when <paramref name="open"/> says so, the trail point itself and the ground spawn_spread_m (and half of it) to either side of it: any open drivable ground, a field or a meadow too. It is at least
-    /// spawn_player_min_m from every player (<paramref name="players"/>), at least spawn_apart_m from the other chase cars (<paramref name="cars"/>), not <paramref name="blocked"/> (the server's: in the sight of the
-    /// party, or beside a vehicle) and one that <paramref name="reach"/> finds a way from to the van. One of the candidates at random (the next when it has no way); it faces along the road, or straight, towards the van.
+    /// A spot for a new chase car, or null when none is fit now. AHEAD first, when <paramref name="ahead"/> (the van's way to the drop, planned the way a chase plans a way) is given: a candidate lies spawn_ahead_min_m
+    /// to spawn_ahead_max_m along it from the van, so the car meets the van head-on and then turns and follows. When nothing ahead fits (the drop is near, or everything ahead is in sight) it lies spawn_back_min_m to
+    /// spawn_back_max_m behind the van along its trail. A candidate is the nearest road (within spawn_road_m) to a point of that way, and, when <paramref name="open"/> says so, the point itself and the ground spawn_spread_m
+    /// (and half of it) to either side of it: any open drivable ground, a field or a meadow too. It is at least spawn_player_min_m from every player (<paramref name="players"/>), at least spawn_apart_m from the other
+    /// chase cars (<paramref name="cars"/>), not <paramref name="blocked"/> (the server's: in the sight of the party, or beside a vehicle) and one that <paramref name="reach"/> finds a way from to the van. One of the
+    /// candidates at random (the next when it has no way); it faces along the road, or straight, towards the van.
     /// </summary>
     public static ChaseSpot? Pick(RoadGraph roads, ChaseTrail trail, Vector2 van, IReadOnlyList<Vector2> players, IReadOnlyList<Vector2> cars, ChaseData d, Func<Vector2, bool> blocked, Random rng,
-        Func<Vector2, bool>? open = null, Func<Vector2, bool>? reach = null)
+        Func<Vector2, bool>? open = null, Func<Vector2, bool>? reach = null, RoadPath? ahead = null)
     {
         if (roads.IsEmpty && open == null) return null;
         var min2 = d.SpawnPlayerMinM * d.SpawnPlayerMinM; var apart2 = d.SpawnApartM * d.SpawnApartM;
@@ -75,11 +80,9 @@ public static class ChaseSpawn
             foreach (var c in cars) if (Vector2.DistanceSquared(c, ground) < apart2) return false;
             return !blocked(ground);
         }
-        var fit = new List<ChaseSpot>();
-        var behind = trail.Behind(van, d.SpawnBackMinM, d.SpawnBackMaxM).ToList();
-        for (var i = 0; i < behind.Count; i++)
+        // the candidates of one way point: the nearest road, and the open ground across the way
+        void Candidates(List<ChaseSpot> fit, Vector2 p, Vector2 along, float back)
         {
-            var (p, back) = behind[i];
             if (!roads.IsEmpty && roads.Nearest(p, d.SpawnRoadM) is { } near)
             {
                 var ground = roads.PointAt(near.Place);
@@ -90,8 +93,7 @@ public static class ChaseSpawn
                     fit.Add(new ChaseSpot(near.Place, ground, AngleBetween(fwd, toVan) <= AngleBetween(bwd, toVan) ? fwd : bwd, back));
                 }
             }
-            if (open == null) continue;
-            var along = i + 1 < behind.Count ? behind[i + 1].Point - p : p - (i > 0 ? behind[i - 1].Point : van);
+            if (open == null) return;
             var side = along.LengthSquared() > 1e-4f ? Vector2.Normalize(new Vector2(-along.Y, along.X)) : Vector2.UnitX;
             foreach (var k in Sides)
             {
@@ -99,15 +101,36 @@ public static class ChaseSpawn
                 if (open(ground) && Fits(ground)) fit.Add(new ChaseSpot(null, ground, RoadPath.Yaw(van - ground), back));
             }
         }
-        // one at random; the next when it has no way to the van
-        while (fit.Count > 0)
+        ChaseSpot? One(List<ChaseSpot> fit)
         {
-            var at = rng.Next(fit.Count);
-            var spot = fit[at];
-            if (reach == null || reach(spot.Ground)) return spot;
-            fit.RemoveAt(at);
+            // one at random; the next when it has no way to the van
+            while (fit.Count > 0)
+            {
+                var at = rng.Next(fit.Count);
+                var spot = fit[at];
+                if (reach == null || reach(spot.Ground)) return spot;
+                fit.RemoveAt(at);
+            }
+            return null;
         }
-        return null;
+
+        if (ahead is { IsEmpty: false })
+        {
+            var fitAhead = new List<ChaseSpot>();
+            for (var s = d.SpawnAheadMinM; s <= d.SpawnAheadMaxM && s <= ahead.Length; s += AheadStepM)
+                Candidates(fitAhead, ahead.At(s), ahead.At(MathF.Min(s + AheadStepM, ahead.Length)) - ahead.At(MathF.Max(0f, s - AheadStepM)), -s);
+            if (One(fitAhead) is { } found) return found;
+        }
+
+        var fit = new List<ChaseSpot>();
+        var behind = trail.Behind(van, d.SpawnBackMinM, d.SpawnBackMaxM).ToList();
+        for (var i = 0; i < behind.Count; i++)
+        {
+            var (p, back) = behind[i];
+            var along = i + 1 < behind.Count ? behind[i + 1].Point - p : p - (i > 0 ? behind[i - 1].Point : van);
+            Candidates(fit, p, along, back);
+        }
+        return One(fit);
     }
 
     static float AngleBetween(float a, float b) => MathF.Abs(FlightMath.Wrap(a - b));

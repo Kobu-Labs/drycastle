@@ -116,8 +116,8 @@ public partial class NetServer : Node
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
     RivalCrewServer _rivals = null!;
-    RaidServer _raidVans = null!; // the Thieves' Raid vans, also a Heist's Assaults
-    OpenGround _openGround = null!; // what is open ground for the Rival crew's vehicles (Assault vans' last stretch, chase cars)
+    RaidServer _raidVans = null!; // the Thieves' Raid vans
+    OpenGround _openGround = null!; // what is open ground for the Rival crew's vehicles (Assault vans, chase cars)
     HeistServer _heists = null!;
     ReceiverServer _receivers = null!;
     ThievesServer _thieves = null!; BigfootServer _bigfoot = null!; HarvesterServer _harvester = null!; ScudServer _scud = null!; ScudEventServer _scudEvent = null!;
@@ -394,7 +394,7 @@ public partial class NetServer : Node
         _rivals = new RivalCrewServer(_ctx, Config.ThievesData, gangs); // the cartel's Rival crew: Gang members on the same roster
         _openGround = new OpenGround(() => _shot.Query, Config.Water, (x, z) => Config.Map?.GroundHeight(x, z) ?? float.NaN, Config.Cartel.OffRoad);
         var raids = new RaidServer(_ctx, Config.ThievesData, phase, gangs, Config.Map, Config.World, _fleet, () => Config.Vehicles, () => _navMesh.Mesh, () => _fleet.FlightBounds,
-            () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash, _openGround);
+            () => _church.Shell is { } church ? new System.Numerics.Vector2(church.DoorwayPos.X, church.DoorwayPos.Z) : null, _rng, (sweep, spare) => _runOver.Sweep(sweep, spare), _carDamage.Crash);
         _raidVans = raids;
         var loot = new LootServer(_ctx, Config.ThievesData, raids.Roster, gangs.Roster, _fleet, _pets.Keeper, Config.Map, () => _navMesh.Mesh, Config.ArenaMode, Config.MapDir);
         var payout = new ThievesPayout(_ctx, Config.ThievesData, Config.Levels.Awards.EventWin, Config.Items, Config.Weapons, _corpses, _gear.BroadcastCorpseItems, _rng, _progress.Scores, _progress.Award, gangs.Roster, raids.Roster);
