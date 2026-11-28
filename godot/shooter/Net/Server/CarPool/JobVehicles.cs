@@ -48,6 +48,14 @@ internal sealed class JobVehicles
         return car;
     }
 
+    /// <summary>Moves <paramref name="car"/> to the ground point <paramref name="position"/> (on the ground under it, as <see cref="Spawn"/>) facing <paramref name="yaw"/>, at rest.</summary>
+    public void Place(ServerCar car, NVec3 position, float yaw)
+    {
+        var space = _world.GetWorld3D().DirectSpaceState;
+        var y = ServerCar.RestHeight(space, new Vector3(position.X, position.Y, position.Z), yaw, car.Def.HalfWidth, car.Def.HalfLength, position.Y) ?? position.Y;
+        car.PlaceAt(new Vector3(position.X, y + 0.02f, position.Z), yaw);
+    }
+
     /// <summary>No vehicle of the world stands within <paramref name="apartM"/> of the ground point <paramref name="at"/> (x, z): a Job vehicle put down there lands in no other. Destroyed and retired ones are not in the world.</summary>
     public bool Clear(NVec2 at, float apartM)
     {

@@ -436,6 +436,22 @@ public partial class ServerCar : CharacterBody3D
         LastImpact = 0;
     }
 
+    /// <summary>A driving vehicle moved to <paramref name="pos"/> facing <paramref name="yaw"/>, at rest (a Rival car relocated by the server).</summary>
+    public void PlaceAt(Vector3 pos, float yaw)
+    {
+        Thrown = null;
+        PlaceThrown(pos, yaw, 0);
+        if (Drives)
+        {
+            DriveModel.Settle(ref Drive, Def, DriveWorld!);
+            DriveTick = 0;
+            FollowDrive();
+        }
+        TickEndPos = GlobalPosition;
+        LastImpact = 0; DriveImpact = 0;
+        Wake();
+    }
+
     /// <summary>The throw is over: the vehicle stands where it landed, at rest, with the damage of the throw none (the crash rules read nothing from it).</summary>
     public void EndThrow(Vector3 landing)
     {

@@ -345,14 +345,22 @@ public sealed class RoadGraph
     public sealed class Distances
     {
         public float[] Dist = Array.Empty<float>();
+        /// <summary>The cost of a metre of an edge by its width (null: 1), as the distances were worked out.</summary>
+        public Func<float, float>? Factor;
         public int[] PrevEdge = Array.Empty<int>();
         public int[] PrevNode = Array.Empty<int>();
         public bool Reaches(int node) => float.IsFinite(Dist[node]);
     }
 
-    public Distances Dijkstra(IEnumerable<(int Node, float Cost)> starts, int bannedEdge = -1)
+    /// <summary>The cost of a metre of <paramref name="e"/> under <paramref name="factor"/> (a function of the edge's width; null: 1, the plain length).</summary>
+    static float Metre(Edge e, Func<float, float>? factor) => factor?.Invoke(e.Width) ?? 1f;
+
+    /// <summary>The width of the road at a place (roads.json).</summary>
+    public float WidthAt(RoadPlace place) => _edges[place.Edge].Width;
+
+    public Distances Dijkstra(IEnumerable<(int Node, float Cost)> starts, int bannedEdge = -1, Func<float, float>? factor = null)
     {
-        var d = new Distances { Dist = new float[_nodes.Count], PrevEdge = new int[_nodes.Count], PrevNode = new int[_nodes.Count] };
+        var d = new Distances { Factor = factor, Dist = new float[_nodes.Count], PrevEdge = new int[_nodes.Count], PrevNode = new int[_nodes.Count] };
         Array.Fill(d.Dist, float.PositiveInfinity); Array.Fill(d.PrevEdge, -1); Array.Fill(d.PrevNode, -1);
         var queue = new PriorityQueue<int, float>();
         foreach (var (node, cost) in starts)
@@ -363,7 +371,7 @@ public sealed class RoadGraph
             foreach (var (edge, v) in _adj[u])
             {
                 if (edge == bannedEdge) continue;
-                var nd = du + _edges[edge].Length;
+                var nd = du + _edges[edge].Length * Metre(_edges[edge], factor);
                 if (nd >= d.Dist[v]) continue;
                 d.Dist[v] = nd; d.PrevEdge[v] = edge; d.PrevNode[v] = u;
                 queue.Enqueue(v, nd);
@@ -404,30 +412,36 @@ public sealed class RoadGraph
     /// The distances from a place on a road to every node, for a van that stands there: <paramref name="forward"/> true heads towards the edge's To end, false towards From, null either way
     /// for free. Turning round costs <paramref name="uTurnPenaltyM"/> (infinity: never, and the edge it stands on is not driven again).
     /// </summary>
-    public Distances DijkstraFrom(RoadPlace from, bool? forward, float uTurnPenaltyM)
+    public Distances DijkstraFrom(RoadPlace from, bool? forward, float uTurnPenaltyM, Func<float, float>? factor = null)
     {
         var e = _edges[from.Edge];
-        var toCost = e.Length - from.At; var fromCost = from.At;
+        var m = Metre(e, factor);
+        var toCost = (e.Length - from.At) * m; var fromCost = from.At * m;
         if (forward == true) fromCost += uTurnPenaltyM;
         else if (forward == false) toCost += uTurnPenaltyM;
-        return Dijkstra(new[] { (e.To, toCost), (e.From, fromCost) }, forward != null && !float.IsFinite(uTurnPenaltyM) ? from.Edge : -1); // no turning back: the edge it stands on is not driven again
+        return Dijkstra(new[] { (e.To, toCost), (e.From, fromCost) }, forward != null && !float.IsFinite(uTurnPenaltyM) ? from.Edge : -1, factor); // no turning back: the edge it stands on is not driven again
     }
 
     /// <summary>The way from a place to another over the roads (a van at <paramref name="from"/> heading <paramref name="forward"/>, see <see cref="DijkstraFrom"/>) with whether it drives the last edge From to To; null when there is none. <paramref name="d"/> is <see cref="DijkstraFrom"/> of the same arguments.</summary>
-    public (RoadPath Path, bool Forward)? RouteBetween(RoadPlace from, bool? forward, float uTurnPenaltyM, RoadPlace to, Distances d)
+    public (RoadPath Path, bool Forward)? RouteBetween(RoadPlace from, bool? forward, float uTurnPenaltyM, RoadPlace to, Distances d) =>
+        RouteBetweenCosted(from, forward, uTurnPenaltyM, to, d) is { } r ? (r.Path, r.Forward) : null;
+
+    /// <summary>As <see cref="RouteBetween(RoadPlace, bool?, float, RoadPlace, Distances)"/>, with the route's cost under the distances' factor (its length when they have none).</summary>
+    public (RoadPath Path, bool Forward, float Cost)? RouteBetweenCosted(RoadPlace from, bool? forward, float uTurnPenaltyM, RoadPlace to, Distances d)
     {
         var fe = _edges[from.Edge]; var te = _edges[to.Edge];
-        var viaFrom = d.Dist[te.From] + to.At;
-        var viaTo = d.Dist[te.To] + (te.Length - to.At);
+        var mt = Metre(te, d.Factor);
+        var viaFrom = d.Dist[te.From] + to.At * mt;
+        var viaTo = d.Dist[te.To] + (te.Length - to.At) * mt;
         var direct = float.PositiveInfinity;
         if (from.Edge == to.Edge)
         {
             var back = (forward == true && to.At < from.At) || (forward == false && to.At > from.At);
             if (back && !float.IsFinite(uTurnPenaltyM)) return null; // a driver that may not turn back does not drive on and turn round at the node either
-            direct = MathF.Abs(to.At - from.At) + (back ? uTurnPenaltyM : 0f);
+            direct = MathF.Abs(to.At - from.At) * Metre(fe, d.Factor) + (back ? uTurnPenaltyM : 0f);
         }
         if (!float.IsFinite(direct) && !float.IsFinite(viaFrom) && !float.IsFinite(viaTo)) return null;
-        if (direct <= viaFrom && direct <= viaTo) return (new RoadPath(Sub(fe, from.At, to.At)), to.At >= from.At);
+        if (direct <= viaFrom && direct <= viaTo) return (new RoadPath(Sub(fe, from.At, to.At)), to.At >= from.At, direct);
         var fwd = viaFrom <= viaTo;
         var end = fwd ? te.From : te.To;
         var pts = new List<Vector2>();
@@ -435,7 +449,7 @@ public sealed class RoadGraph
         var lead = Sub(fe, from.At, start == fe.From ? 0 : fe.Length);
         pts.InsertRange(0, lead);
         pts.AddRange(fwd ? Sub(te, 0, to.At) : Sub(te, te.Length, to.At));
-        return (new RoadPath(pts), fwd);
+        return (new RoadPath(pts), fwd, fwd ? viaFrom : viaTo);
     }
 
     /// <summary>The shortest way between two places, either direction free; null when they are not connected.</summary>

@@ -20,7 +20,7 @@ public class AssaultCarTests
     public void TheShippedAssaultCarIsTheDefaultsAndFitsTheCartelVanAndBothHeistsCrews()
     {
         var shipped = Game.Cartel.AssaultCar;
-        Assert.Equal((A.VehicleType, A.Skin, A.GiveUpM, A.StallProgressM, A.StallSeconds, A.RemoveFarM), (shipped.VehicleType, shipped.Skin, shipped.GiveUpM, shipped.StallProgressM, shipped.StallSeconds, shipped.RemoveFarM));
+        Assert.Equal((A.VehicleType, A.Skin, A.GiveUpM, A.StallProgressM, A.StallSeconds), (shipped.VehicleType, shipped.Skin, shipped.GiveUpM, shipped.StallProgressM, shipped.StallSeconds));
         Assert.Equal(A.SpawnBandsM, shipped.SpawnBandsM);
         Assert.Equal(A.BayPosts, shipped.BayPosts);
         Assert.Equal(new[] { 250f, 400f }, shipped.SpawnBandsM[0]);

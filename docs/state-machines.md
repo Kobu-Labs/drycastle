@@ -111,7 +111,7 @@ stateDiagram-v2
 
 ## Assault.Stall
 
-Whether an Assault van makes headway to the Cartel van: only the newest Assault whose crew still rides is watched; no stall_progress_m closer in stall_seconds is stalled (the next Assault is sent right away, this one no longer counts towards the cap and goes once it is far from every player and unseen).
+Whether a Rival vehicle (Assault van or chase car) makes headway to the Cartel van: one whose crew rides and that is farther than out_within_m is watched; no stall_progress_m closer in stall_seconds is stalled (it is relocated to a fresh spot when unseen and far from every player; an Assault that cannot be relocated stops counting towards the cap and the next is sent right away).
 
 ```mermaid
 stateDiagram-v2
@@ -122,9 +122,9 @@ stateDiagram-v2
     Stalled --> Idle
 ```
 
-- **Idle**: Not watched: a newer Assault whose crew rides exists, or the crew is out (on foot), or it just spawned.
-- **Watching**: The newest riding Assault: the window (clock: stall_seconds) starts over each time it gets stall_progress_m closer to the van, or is within stall_near_m of it. Out of time: Stalled.
-- **Stalled**: Made no headway: counts no more towards max_assaults_alive (the next was sent at once); removed with its crew when more than remove_far_m from every player and out of every player's sight. Ends when the crew gets out.
+- **Idle**: Not watched: the crew is out (on foot), the vehicle is within out_within_m of the van, it waits or stops, or it just spawned or was relocated.
+- **Watching**: A riding vehicle far from the van: the window (clock: stall_seconds) starts over each time it gets stall_progress_m closer to the van, or is within stall_near_m of it. Out of time: Stalled.
+- **Stalled**: Made no headway: relocated (a fresh spot by its kind's spawn rules) when no human sees it and every player is spawn_player_min_m away, which ends it (Idle, counts again); an Assault that cannot be relocated counts no more towards max_assaults_alive (the next was sent at once). Ends when the crew gets out.
 
 ## Bigfoot.Act
 
@@ -394,7 +394,7 @@ stateDiagram-v2
 
 ## Chase.Car
 
-One Rival car of a Heist, a chase car or an Assault van (the same driver): it follows the Cartel van over the roads and open ground with its crew in the windows, stands aside and waits while the van drives up to it (a car put down ahead of the van, or a van coming head-on), backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
+One Rival car of a Heist, a chase car or an Assault van (the same driver): it follows the Cartel van over the roads and open ground with its crew in the windows, stands aside and waits while the van drives up to it (a car put down ahead of the van, or a van coming head-on), backs out when it is wedged, stops and lets the crew out when the van is slow and near (or its driver died, or it is stuck for good near the van), holds as Lost with the crew seated when it is stuck far from the van (until it has a way again, or it is relocated), calls the crew back to the car when the van pulls away, or gives up when it stays far behind.
 
 ```mermaid
 stateDiagram-v2
@@ -405,6 +405,11 @@ stateDiagram-v2
     Chasing --> Reversing
     Chasing --> GivingUp
     Chasing --> Waiting
+    Chasing --> Lost
+    Lost --> Chasing
+    Lost --> Waiting
+    Lost --> Stopping
+    Lost --> GivingUp
     Waiting --> Chasing
     Waiting --> Stopping
     Reversing --> Chasing
@@ -425,14 +430,15 @@ stateDiagram-v2
 From any state: Gone
 
 - **Spawned**: Just put down on open ground (a chase car ahead of or behind the van, an Assault van 250 to 400 m of way from it) with its crew seated: nothing driven yet. The next step is Chasing, or Waiting for a car put down ahead of the van (an ambush).
-- **Chasing**: Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. When the way is behind it and it is slow it backs round (a K-turn: the pilot). The van coming at it head-on (faster than stop_speed_mps, within meet_m, the headings more than 120 degrees apart, ahead of its nose): Waiting. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds. Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
+- **Chasing**: Drives after the van, over the roads where they bring it closer and across open ground where that is shorter (never over buildings, trees, fences or water), keeping follow_m from it; the Gunmen shoot from the windows while it is within shoot_range_m of the van, with a worse aim while it moves. When the way is behind it and it is slow it backs round (a K-turn: the pilot). The van coming at it head-on (faster than stop_speed_mps, within meet_m, the headings more than 120 degrees apart, ahead of its nose): Waiting. Wedged (under 1 m/s for unstick_after_seconds with the van beyond follow_m): Reversing. Ends when the van is slower than stop_speed_mps within stop_within_m, the driver is dead, or the car stays stuck for stalled_seconds: within out_within_m of the van Stopping (the crew gets out), farther Lost (the crew stays seated). Gives up (clock: give_up_seconds) when it stays more than give_up_m from the van; a destroyed car is Gone.
 - **Stopping**: Brakes to a stop (a dead driver: it rolls) (clock: stop_seconds at most), the Gunmen still shooting while near. Standing, the crew gets out. Gives up as Chasing does; a destroyed car is Gone.
-- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away (confirmed for remount_confirm_seconds) and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.
+- **Out**: The crew is out on foot and fights as a Rival crew (the Job's party on sight); the car stands, free to take. When the van is more than remount_m from the crew and pulling away, or the nearest member is more than remount_far_m from it (confirmed for remount_confirm_seconds), and the car is whole, free and its driver lives: Remounting. Gives up when the crew stays more than give_up_m from the van for give_up_seconds. Gone once the crew is gone.
 - **GivingUp**: Stayed more than give_up_m from the van for give_up_seconds: the server removes the car and its crew at once, then it is Gone.
 - **Gone**: Removed from the world (given up, spent, destroyed and its wreck gone, or its Heist ended). Never left.
 - **Reversing**: Backs out of where it is wedged (clock: reverse_seconds), steering to turn its nose to its way, then Chasing again; the tries are counted (max_unsticks). A dead driver stops it; gives up as Chasing does; a destroyed car is Gone.
 - **Remounting**: The crew walks back to the car's doors over the navigation mesh and sits down in its seats (clock: remount_seconds). Every living member aboard: Chasing. The car wrecked or taken, the driver dead, nobody left, or the clock out: Out (the crew on foot; it tries again after remount_retry_seconds). Gives up as Out does.
 - **Waiting**: Stands beside the van's way (an ambush: put down ahead of the van, facing along its way, ambush_side_m off it) or pulls aside with the brake on and the wheel to the right (a head-on meeting) and waits for the van to drive past; the Gunmen shoot from the windows within shoot_range_m of the van (a standing aim). The van passed it (it lies behind the van along the van's heading), wait_max_seconds out, or the van more than give_up_m away for give_up_seconds: Chasing. The van slow and near (or its driver dead): Stopping, as from Chasing.
+- **Lost**: Stuck (no way to the van, or no 1 m/s for stalled_seconds) farther than out_within_m from the van: the crew stays seated, the car brakes and keeps planning its way (repath_seconds). It is relocated to a fresh spot by its kind's spawn rules when no human sees it and every player is spawn_player_min_m away (the server: the same Relocate rule as a stalled one). Chasing again once it has a way to the van itself, or moves (over 3 m/s); the van slow within stop_within_m (or its driver dead), or within out_within_m with no way to it: Stopping (the crew gets out). Gives up as Chasing does; a destroyed car is Gone.
 
 ## Church.Door
 
