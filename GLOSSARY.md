@@ -359,6 +359,14 @@ _Avoid_: time of day (alone), game time
 A value from the day clock that drives street lamp light, headlight and window glow.
 _Avoid_: darkness, night mode
 
+**Weather**:
+The sky's state, owned by the server (`WeatherMachine`, #230): clear or a Thunderstorm, changing by itself on the `storm` numbers of `environment.json`, and for an admin with `/weather storm` or `/weather clear`. Everyone gets the phase when it changes and at join (`WeatherState`). Nothing else changes with it yet (no rain, wind or damage).
+_Avoid_: climate, season
+
+**Thunderstorm**:
+The Weather's one bad phase. Clear sky lasts a random `every_minutes` (20 to 40), then a storm a random `lasting_minutes` (4 to 7). While it lasts, a lightning strike comes every `strike_seconds` (5 to 18) at a random bearing and a distance of `strike_distance_m` (150 to 1500) from the player, and is told to everyone (`Lightning`): the client flashes the sky and plays the thunder after distance / 343 s, quieter the farther it was. Nothing is hit. The client's sky darkens over `fade_seconds` (sun and moon dim, grey sky, more fog) and clears the same way; rain falls round the camera and its loop plays (quieter and muffled indoors), the thunder is a close crack under 400 m and a rumble beyond. It is what makes Thundernite active (`MineralWorld.Storm`), and the Thundernite crystal is there only while it lasts, holding its small cloud and rain up (`ThundernitFx.CloudForce`, `Present`); outside a storm it is not drawn.
+_Avoid_: rain, lightning storm
+
 **Aircraft**:
 A killstreak's flying entity that circles the map at a set altitude and radius: the attack helicopter, the helicopter helper, the AC-130 gunship and the UAV. Nobody boards or flies it; its owner only works its guns (the UAV has none). It is replicated as one world entity type. It has hit points (600 for the helicopter, 1500 for the gunship, 200 for the UAV) and can be shot down by flak, the Lock-on launcher and any other anti-aircraft (ADR 0005, ADR 0031): its streak then ends and the owner is released from the gun. The utility helicopter is not an aircraft: it is a vehicle, but the Lock-on launcher locks it like one while it is flown (ADR 0031).
 _Avoid_: plane (for helicopters), drone, helicopter (alone)

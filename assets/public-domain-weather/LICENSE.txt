@@ -1,0 +1,27 @@
+Weather sounds of the thunderstorm (Weather, #230): rain loops, thunder, an electric crackle.
+All cut from free recordings by scripts/sounds/make_weather_recordings.py (trimmed, filtered, faded, level-matched, converted to Ogg Vorbis). Downloaded 2026-11-28 with plain curl.
+Every source is CC0 or public domain: no attribution is required (the authors are named anyway).
+
+rain_heavy.ogg, rain_heavy_mono.ogg
+  30 s seamless loop (cross-faded) of the steadiest stretch (652 s on) of "AMB Rain Loop 2" by Kresiek The Furry
+  https://opengameart.org/content/amb-rain-loop-2  (file amb_rain2.ogg)
+  Licence: CC0 1.0 (http://creativecommons.org/publicdomain/zero/1.0/)
+
+rain_light.ogg, rain_light_mono.ogg
+  30 s seamless loop (cross-faded) of the steadiest stretch (15 s on) of "AMB Rain Loop 1" by Kresiek The Furry
+  https://opengameart.org/content/amb-rain-loop-1  (file amb_rain_loop_1.ogg)
+  Licence: CC0 1.0
+
+thunder_far_1..5.ogg  (distant rumbles, low-passed at 900 Hz, 7 to 13 s)
+thunder_near_1..4.ogg (close cracks with their roll, 8.5 s)
+  Events cut from "Thunderstorm after hot Summer Day, 17 minutes" parts 01 to 04 of 04 by "stephan" (a Public Domain Sounds recording, mirrored on Wikimedia Commons)
+  https://commons.wikimedia.org/wiki/File:Thunderstorm_after_hot_summer_day_17_minutes_01_of_04.ogg  (parts 02, 03, 04 likewise)
+  https://www.pdsounds.org/sounds/thunderstorm_after_hot_summer_day_17_minutes_01_of_04
+  Licence: Public domain (as stated on both pages; Commons: "Public domain", attribution not required)
+  Cuts: far 1 = part 01 at 33.5 s, far 2 = part 02 at 103.8 s, far 3 = part 03 at 184.7 s, far 4 = part 04 at 148.4 s, far 5 = part 04 at 218.3 s;
+        near 1 = part 02 at 22.2 s, near 2 = part 02 at 228.1 s, near 3 = part 03 at 194.0 s, near 4 = part 04 at 5.6 s.
+
+electric_crackle.ogg
+  "crackleelectricityloop.wav" of the "Electricity Game Sound Pack" by faxcorp (0.5 s of sparse crackles; high-passed at 200 Hz, normalised)
+  https://opengameart.org/content/electricity-game-sound-pack
+  Licence: CC0 1.0

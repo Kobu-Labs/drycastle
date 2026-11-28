@@ -13,8 +13,8 @@ public sealed record MineralFind(long PlayerId, string MineralId, DateTime AtUtc
 /// </summary>
 public sealed record MineralNode(byte Id, string MineralId, Vector3 Position);
 
-/// <summary>What the world is like for the rules of <see cref="MineralActivity"/>. Grows with the minerals that need it (a storm for Thundernite, a living phoenix for Pheonixite). <paramref name="HolyMassPeaceful"/>: a Holy Mass was completed with no pastor killed (<see cref="Citizens.HolyMassEvent.Peaceful"/>), for Holystone.</summary>
-public readonly record struct MineralWorld(bool HolyMassPeaceful = false);
+/// <summary>What the world is like for the rules of <see cref="MineralActivity"/>. Grows with the minerals that need it (a living phoenix for Pheonixite). <paramref name="HolyMassPeaceful"/>: a Holy Mass was completed with no pastor killed (<see cref="Citizens.HolyMassEvent.Peaceful"/>), for Holystone. <paramref name="Storm"/>: a thunderstorm is on (<see cref="Scenery.WeatherMachine.Storm"/>), for Thundernite.</summary>
+public readonly record struct MineralWorld(bool HolyMassPeaceful = false, bool Storm = false);
 
 /// <summary>
 /// When a mineral can be taken: every mineral brings its own criteria (Thundernite only in a storm, Pheonixite once a phoenix drops it), so there is no global respawn rule.
@@ -25,6 +25,7 @@ public static class MineralActivity
     static readonly Dictionary<string, Func<MineralWorld, bool>> Rules = new()
     {
         ["holystone"] = w => w.HolyMassPeaceful,
+        ["thundernite"] = w => w.Storm,
     };
 
     /// <summary>Whether a node of this mineral can be taken now.</summary>

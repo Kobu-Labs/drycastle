@@ -39,6 +39,7 @@ using Drycastle.Shooter.Net.Server.Streaks;
 using Drycastle.Shooter.Net.Server.Terrain;
 using Drycastle.Shooter.Net.Server.Thieves;
 using Drycastle.Shooter.Net.Server.VillageRadio;
+using Drycastle.Shooter.Net.Server.Weather;
 using Drycastle.ShooterCore.Buildings.Destruction;
 using Drycastle.ShooterCore.CarePackages;
 using Drycastle.ShooterCore.Cartel;
@@ -109,7 +110,7 @@ public partial class NetServer : Node
     DuffelServer _duffels = null!;
     DrillServer _drills = null!;
     // the village and its animals
-    SceneryServer _scenery = null!; MineralsServer _minerals = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; FenceDestructionServer _fences = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
+    SceneryServer _scenery = null!; MineralsServer _minerals = null!; WeatherServer _weather = null!; RozhlasServer _rozhlas = null!; GarageServer _garage = null!; HouseDoorServer _houses = null!; HouseDestructionServer _houseDestruction = null!; TrapHouseServer _trapHouses = null!; FenceDestructionServer _fences = null!; WorldBlasts _blasts = null!; IntelServer _intel = null!; CrateServer _crates = null!;
     SentryWorld _sentries = null!; PetServer _pets = null!; WildlifeServer _wildlife = null!; ChurchServer _church = null!; CitizenServer _citizens = null!;
     MassServer _mass = null!; PounceServer _pounce = null!; DemonServer _demon = null!;
     // events and killstreaks
@@ -207,7 +208,8 @@ public partial class NetServer : Node
         _garage = new GarageServer(_ctx, Config.ArenaMode, Config.MapDir, _fleet.Cars, () => Config.Vehicles);
         _houses = new HouseDoorServer(_ctx, Config.ArenaMode, _fleet.Cars);
         _trapHouses = new TrapHouseServer(_ctx, Config.ArenaMode, Config.Map); // the Trap houses' props (#496): dressed for a Job, stripped after
-        _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops, () => _areas.MineralNodes, () => _mass?.Event?.Peaceful == true);
+        _weather = new WeatherServer(_ctx, Config.WeatherData, _rng);
+        _minerals = new MineralsServer(_ctx, Config.Progression, () => _wildlife.Keeper.Drops, () => _areas.MineralNodes, () => _mass?.Event?.Peaceful == true, () => _weather.Storm);
         _hunts = new HuntLogServer(_ctx, Config.Progression, Config.AnimalData, Config.Weapons, Config.Items, Config.CompanionData, _progress.Scores, _progress.WeaponKey,
             c => { _profiles.Send(c); _companions.FromProfile(c); if (c.Joined) _companions.SendRoster(c); });
         _sentries = new SentryWorld(_ctx, _targets, _damage.Deal, () => _shot.Query);
@@ -426,6 +428,7 @@ public partial class NetServer : Node
             _mass.SendOnJoin, // the Holy Mass, when one runs
             _thieves.SendOnJoin, // the Thieves event, when one runs
             _minerals.SendOnJoin, // the mineral nodes
+            _weather.SendOnJoin, // the thunderstorm, when one is on
             _rozhlas.SendOnJoin, // the village loudspeaker, when a detour broadcast is on, who is on the mic, and the Urad door when it is open
             _garage.SendOnJoin, // and the garage doors, when they are open
             _houses.SendOnJoin, // and the houses' open doors
@@ -556,6 +559,7 @@ public partial class NetServer : Node
         _thieves.Tick(dt); // the Thieves event: its phase clock
         audit?.Lap(7);
         _rozhlas.Tick(dt); // the village loudspeaker: the schedule and the hijack clock
+        _weather.Tick(dt); // the weather: the storm's clock and its lightning
         audit?.Lap(8);
         _cartel.Tick(dt); // the Jobs: objectives, timers, rewards
         Prof.End(Prof.S.Events, pt);
@@ -690,6 +694,6 @@ public partial class NetServer : Node
     void RegisterChatCommands()
     {
         var admin = new AdminCommands(_ctx, () => Config.Clock, clock => Config.Clock = clock, () => _shot.Query, Config.Weapons, _rocketIds, _rozhlas, _intel, _demon, (kind, c) => _eventServer.Start(kind, c), (c, action) => _eventServer.Current(c, action));
-        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _fences, _cartel, _trapHouses, _rivals, _duffels, _drills);
+        ChatCommandTable.Register(_chat, admin, _bots, _spawner, _wildlife, _sandbox, _gear, _companions, _citizens, _church, _rozhlas, _status, _scud, _teams, _houseDestruction, _fences, _cartel, _trapHouses, _rivals, _duffels, _drills, _weather);
     }
 }

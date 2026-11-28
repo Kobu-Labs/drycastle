@@ -20,6 +20,8 @@ public sealed class EnvironmentConfig : IVersioned
     public LampLook Lamp { get; set; } = new();
     /// <summary>The shootable plate of a road sign (ADR 0039).</summary>
     public SignPlateLook SignPlate { get; set; } = new();
+    /// <summary>The thunderstorm that comes by itself (Weather, #230).</summary>
+    public StormLook Storm { get; set; } = new();
 
     public static EnvironmentConfig Parse(string json)
     {
@@ -47,6 +49,7 @@ public sealed class EnvironmentConfig : IVersioned
             throw new DataFileException("environment.json: lamp needs hit_radius_m, respawn_seconds and flicker_seconds above 0");
         if (!(SignPlate.HitRadiusM > 0) || !(SignPlate.RespawnSeconds > 0))
             throw new DataFileException("environment.json: sign_plate needs hit_radius_m and respawn_seconds above 0");
+        Storm.Validate();
     }
 
     /// <summary>"HH:MM" to minute of the day (0..1439). Throws <see cref="DataFileException"/> naming the field on bad input.</summary>
@@ -108,4 +111,37 @@ public sealed class SignPlateLook
 {
     public double HitRadiusM { get; set; } = 0.3;
     public float RespawnSeconds { get; set; } = 120;
+}
+
+/// <summary>
+/// The thunderstorm (environment.json <c>storm</c>, GLOSSARY "Thunderstorm"): clear for a random <see cref="EveryMinutes"/>, then a storm for a random <see cref="LastingMinutes"/>; during it a strike every
+/// <see cref="StrikeSeconds"/> lands <see cref="StrikeDistanceM"/> away at a random bearing. The client's sky takes <see cref="FadeSeconds"/> to follow the phase. Each range is [min, max]. Tuned by eye: nothing here was seen in the game.
+/// </summary>
+public sealed class StormLook
+{
+    public double[] EveryMinutes { get; set; } = { 20, 40 };
+    public double[] LastingMinutes { get; set; } = { 4, 7 };
+    public double[] StrikeSeconds { get; set; } = { 5, 18 };
+    public double[] StrikeDistanceM { get; set; } = { 150, 1500 };
+    public float FadeSeconds { get; set; } = 20;
+    /// <summary>Rain drops falling in the box round the camera at the height of a storm (0 turns the rain off).</summary>
+    public int RainAmount { get; set; } = 4000;
+    /// <summary>The rain loop's level offset at the height of a storm, on top of sounds.json <c>weather.rain</c>.</summary>
+    public float RainDb { get; set; }
+    /// <summary>How much further the rain drops, and the more it is muffled, in a bunker or the garage (a vehicle counts half).</summary>
+    public float RainIndoorDb { get; set; } = -14;
+
+    internal void Validate()
+    {
+        Range(EveryMinutes, "every_minutes"); Range(LastingMinutes, "lasting_minutes"); Range(StrikeSeconds, "strike_seconds"); Range(StrikeDistanceM, "strike_distance_m");
+        if (!(FadeSeconds > 0)) throw new DataFileException("environment.json: storm.fade_seconds must be above 0");
+        if (RainAmount is < 0 or > 20000) throw new DataFileException("environment.json: storm.rain_amount must be 0..20000");
+        if (!(RainDb is >= -40 and <= 12) || !(RainIndoorDb is >= -60 and <= 0)) throw new DataFileException("environment.json: storm.rain_db must be -40..12 and rain_indoor_db -60..0");
+    }
+
+    static void Range(double[]? r, string name)
+    {
+        if (r is not { Length: 2 } || !(r[0] > 0) || r[0] > r[1])
+            throw new DataFileException($"environment.json: storm.{name} must be [min, max] with 0 < min <= max");
+    }
 }
