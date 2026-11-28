@@ -13,9 +13,9 @@ namespace Drycastle.Shooter.Net.Server.Cartel;
 /// <summary>
 /// What kind of Rival vehicle a <see cref="ChaseUnit"/> is: a chase car (<see cref="ChaseFleet"/>) or an Assault van (<see cref="AssaultFleet"/>). <see cref="Drive"/> are the numbers it drives, stops, remounts and gives up on
 /// (the chase's own, the Assault's with its vehicle, skin and give-up distance: <see cref="AssaultCarData.Drive"/>); <see cref="Crew"/> the kinds that sit in it, in slot order: the driver first, then the car's other seats, then
-/// (an Assault van) the posts of <see cref="Bay"/>.
+/// (an Assault van) the posts of <see cref="Bay"/>. <see cref="Post"/> says where the crew on foot heads for, given the Cartel van's feet (null: the Cartel van; an Assault van's: the objective while the Heist is at it).
 /// </summary>
-internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList<GangMemberKind> Crew, AssaultCarData? Bay = null);
+internal sealed record RivalProfile(string Label, ChaseData Drive, IReadOnlyList<GangMemberKind> Crew, AssaultCarData? Bay = null, Func<NVec3, NVec3>? Post = null);
 
 /// <summary>
 /// One Rival vehicle on the server, a chase car or an Assault van (GLOSSARY "Chase car", "Assault"; docs/cartel.md "Chase cars", "Assaults"): a real vehicle of vehicles.json (a <see cref="ServerCar"/> on the drive model, in a dark skin) that an NPC drives, and its
@@ -46,9 +46,9 @@ internal sealed class ChaseUnit
     Countdown _repath;
     readonly ChaseCleanup _cleanup;
 
-    ChaseUnit(ChaseServer s, HeistRun run, RivalProfile p, ServerCar car, NVec3 van)
+    ChaseUnit(ChaseServer s, HeistRun run, RivalProfile p, ServerCar car, NVec3 van, bool ambush)
     {
-        _s = s; _run = run; _p = p; _d = p.Drive; _car = car; _machine = new ChaseCar(_d); _cleanup = new ChaseCleanup(_d);
+        _s = s; _run = run; _p = p; _d = p.Drive; _car = car; _machine = new ChaseCar(_d, ambush); _cleanup = new ChaseCleanup(_d);
         if (p.Bay != null) Stall = new AssaultStall(p.Bay);
         _crew = s.Rivals.NewCrew(van, id => _machine.Shoots && run.Party.Contains(id)); // it attacks the Job's party, only while the machine lets it shoot
         _crew.Mounted += OnMounted;
@@ -62,7 +62,7 @@ internal sealed class ChaseUnit
         var d = p.Drive;
         var at = new NVec3(spot.Ground.X, s.Ground(spot.Ground.X, spot.Ground.Y), spot.Ground.Y);
         if (s.Vehicles.Spawn(d.VehicleType, at, spot.Yaw, Array.Empty<ushort>(), (byte)Math.Clamp(d.Skin, 0, 255)) is not { } car) return null;
-        var unit = new ChaseUnit(s, run, p, car, run.VanFeet);
+        var unit = new ChaseUnit(s, run, p, car, run.VanFeet, spot.BackM < 0f); // a spot ahead of the van is an ambush: it waits for the van
         var capacity = car.Def.Seats.Count + (p.Bay?.BayPosts.Length ?? 0);
         var n = Math.Min(p.Crew.Count, capacity);
         if (n < p.Crew.Count) GD.PrintErr($"server: {run.Job}: {p.Label} {car.Id}: {p.Crew.Count} in the crew, room for {capacity}: {p.Crew.Count - n} left out");
@@ -148,10 +148,13 @@ internal sealed class ChaseUnit
         var pos = car != null ? new NVec2(car.GlobalPosition.X, car.GlobalPosition.Z) : van2;
         var speed = car?.State.Speed ?? 0f;
         _repath.Tick(dt);
-        if (car != null && _repath.Ready && _machine.State is ChaseState.Chasing or ChaseState.Reversing or ChaseState.Spawned) { Replan(car, pos, van2); _repath.Start(_d.RepathSeconds); }
+        if (car != null && _repath.Ready && _machine.State is ChaseState.Chasing or ChaseState.Reversing or ChaseState.Spawned or ChaseState.Waiting) { Replan(car, pos, van2); _repath.Start(_d.RepathSeconds); }
         var crewAlive = _crew?.AliveCount ?? 0;
+        var vanDir = _run.VanDir;
+        var meeting = car != null && !car.Destroyed;
         var facts = new ChaseFacts(car != null ? NVec2.Distance(pos, van2) : float.PositiveInfinity, vanSpeed, MathF.Abs(speed), DriverAlive, car == null || car.Destroyed, !_path.IsEmpty,
-            CrewGap(van2), crewAlive, car is { Destroyed: false } && !car.Seat.Occupied, _machine.Remounting && AllAboard(crewAlive));
+            CrewGap(van2), crewAlive, car is { Destroyed: false } && !car.Seat.Occupied, _machine.Remounting && AllAboard(crewAlive),
+            Passed: meeting && ChaseRules.Passed(pos, van2, vanDir), HeadOn: meeting && ChaseRules.HeadOn(_d, pos, car!.State.Yaw, van2, vanDir, vanSpeed));
         var step = _machine.Step(facts, dt);
         if (step.Remove) { Apply(ChaseCleanup.Due(ChaseState.GivingUp, Left())); _machine.End(); return; }
         if (car != null)
@@ -166,6 +169,9 @@ internal sealed class ChaseUnit
             case ChaseState.Chasing when car != null:
                 var want = ChaseRules.FollowSpeed(_d, facts.GapM, vanSpeed);
                 car.NpcInput = ChasePilot.Follow(_path, pos, car.State.Yaw, speed, DriveModel.TurnRadiusAt(car.Def, MathF.Abs(speed)), want);
+                break;
+            case ChaseState.Waiting when car != null:
+                car.NpcInput = ChasePilot.Wait(speed); // aside, and standing while the van drives up and past
                 break;
             case ChaseState.Reversing when car != null:
                 car.NpcInput = ChasePilot.Reverse(_path, pos, car.State.Yaw, van2);
@@ -199,9 +205,12 @@ internal sealed class ChaseUnit
     void TickOut(NVec3 van)
     {
         if (_crew is not { } crew) { _machine.End(); return; }
-        crew.Post = van;
+        crew.Post = FootPost(van);
         if (crew.Count == 0) _machine.End();
     }
+
+    /// <summary>Where the crew on foot heads for: the profile's post (an Assault crew: the objective while the Heist is at it), else the Cartel van.</summary>
+    NVec3 FootPost(NVec3 van) => _p.Post?.Invoke(van) ?? van;
 
     /// <summary>Distance from the nearest living member of the crew to the van (infinite when none lives).</summary>
     float CrewGap(NVec2 van)
@@ -296,7 +305,7 @@ internal sealed class ChaseUnit
         car.NpcInput = null;
         JobVehicles.SetRiders(car, null);
         SitOut(car);
-        if (_crew != null) _crew.Post = van;
+        if (_crew != null) _crew.Post = FootPost(van);
     }
 
     /// <summary>The ones who sit in the car step out (standing beside it, no longer posted).</summary>
@@ -339,7 +348,7 @@ internal sealed class ChaseUnit
         SitOut(car);
         foreach (var (m, _) in _seats) m.GiveUpRemount();
         JobVehicles.SetRiders(car, null);
-        if (_crew != null) _crew.Post = van;
+        if (_crew != null) _crew.Post = FootPost(van);
     }
 
     /// <summary>The car blew up: whoever still rides it dies with it (as the riders of any destroyed vehicle), and its wreck is given its time.</summary>

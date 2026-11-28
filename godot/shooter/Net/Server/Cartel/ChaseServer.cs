@@ -178,8 +178,8 @@ internal sealed class ChaseFleet
     }
 
     /// <summary>
-    /// Puts one car down with its crew seated: on open drivable ground AHEAD of the van on its way to the drop (<c>spawn_ahead_min_m</c> to <c>spawn_ahead_max_m</c> along the way, planned as a chase plans a way) so it meets
-    /// the van head-on and then turns and follows, else (the drop is near) behind it on its trail. Null when it was; else why not.
+    /// Puts one car down with its crew seated: on open drivable ground AHEAD of the van, an ambush (<c>ambush_side_m</c> beside the van's way to the drop, <c>spawn_ahead_min_m</c> to <c>spawn_ahead_max_m</c> along it, planned
+    /// as a chase plans a way, facing along it; no sight rule, only no vehicle beside it) that waits for the van to pass and then follows, else (the drop is near) behind it on its trail, out of the party's sight. Null when it was; else why not.
     /// </summary>
     string? TrySpawn()
     {
@@ -194,7 +194,7 @@ internal sealed class ChaseFleet
         var spot = ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng,
             open: p => _s.Open.Spot(p, off.CarHalfWidthM),
             reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null,
-            ahead: ahead);
+            ahead: ahead, aheadBlocked: p => _s.VehicleNear(p));
         if (spot is not { } fit)
             return $"no open ground ahead of or behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
         var gunmen = ChaseRules.Gunmen(_d, _run.Job.Tier, _run.Party.Count);
@@ -202,7 +202,7 @@ internal sealed class ChaseFleet
         for (var i = 0; i < gunmen; i++) crew.Add(GangMemberKind.Gunman);
         if (ChaseUnit.Spawn(_s, _run, new RivalProfile("chase car", _d, crew), fit) is not { } unit) return "the car could not be put down";
         _units.Add(unit);
-        GD.Print($"server: {_run.Job}: chase car {(fit.BackM < 0 ? $"{-fit.BackM:F0} m ahead of the van on its way to the drop" : $"{fit.BackM:F0} m behind the van")}");
+        GD.Print($"server: {_run.Job}: chase car {(fit.BackM < 0 ? $"{-fit.BackM:F0} m ahead of the van on its way to the drop, beside the way (an ambush)" : $"{fit.BackM:F0} m behind the van")}");
         _run.Tell("A Rival car is after the van!");
         return null;
     }

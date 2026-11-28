@@ -499,9 +499,14 @@ public class ChaseOffRoadTests
         {
             var chase = DataFile.Section<HeistData>(Shipped.JobSection(kind), $"jobs.{kind}").Chase;
             Assert.Equal(VanKmh * 1.4f, chase.MaxSpeedMps * 3.6f, 0.1f);
-            Assert.Equal(chase.MaxSpeedMps, ChaseRules.FollowSpeed(chase, 1000f, 16.7f)); // far behind: the full speed, no more
+            Assert.Equal(chase.FarSpeedMps, ChaseRules.FollowSpeed(chase, 1000f, 16.7f)); // far behind: 120 km/h, no more
+            Assert.Equal(chase.MaxSpeedMps, ChaseRules.FollowSpeed(chase, 60f, 16.7f)); // closer than far_m: 84 km/h
+            Assert.Equal(120f, chase.FarSpeedMps * 3.6f, 1.5f); // 33 m/s is 118.8 km/h
             Assert.True(ChaseRules.FollowSpeed(chase, chase.FollowM, VanKmh / 3.6f) < chase.MaxSpeedMps); // at its gap it keeps the van's own
             var car = Game.Vehicles.Vehicles.Single(v => v.Id == chase.VehicleType);
+            Assert.True(car.TopSpeed >= chase.FarSpeedMps, "the car type reaches the far speed");
+            var cartelVan = Game.Vehicles.Vehicles.Single(v => v.Id == Game.Cartel.AssaultCar.VehicleType);
+            Assert.True(cartelVan.TopSpeed >= chase.FarSpeedMps, "the Assault van's type reaches the far speed");
             Assert.True(car.TopSpeed > chase.MaxSpeedMps, $"the car type's own top speed {car.TopSpeed * 3.6f:F0} km/h is above the NPC's: no allowance on the drive model is needed"); // the players' car is not limited by it
         }
     }

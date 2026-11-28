@@ -2,6 +2,7 @@ using System.Numerics;
 using Drycastle.ShooterCore.Data;
 using Drycastle.ShooterCore.Fsm;
 using Drycastle.ShooterCore.Thieves;
+using Drycastle.ShooterCore.Vehicles;
 
 namespace Drycastle.ShooterCore.Cartel;
 
@@ -18,16 +19,16 @@ public sealed class AssaultCarData
     /// <summary>
     /// Where it is put down: a road or open drivable ground point whose drivable way to the Cartel van is in the first band [min, max] (the length of the way the vehicle would drive), at least
     /// <see cref="SpawnPlayerMinM"/> from every player, clear of vehicles and <see cref="SpawnApartM"/> from the other Rival vehicles. No out-of-sight rule: the drive in is the warning. When no point fits the first band the
-    /// next, wider one is tried (and so on): an Assault is sent rather than none.
+    /// next, wider one is tried (and so on): an Assault is sent rather than none. No band reaches past <see cref="GiveUpM"/> (a van put down there would give up at once).
     /// </summary>
-    public float[][] SpawnBandsM { get; set; } = { new[] { 250f, 400f }, new[] { 200f, 600f }, new[] { 150f, 900f }, new[] { 100f, 1500f } };
+    public float[][] SpawnBandsM { get; set; } = { new[] { 250f, 400f }, new[] { 200f, 600f }, new[] { 100f, 600f } };
     public float SpawnPlayerMinM { get; set; } = 150;
     public float SpawnApartM { get; set; } = 25;
     /// <summary>The road points looked at: one every this many metres; the open ground ones: one every <see cref="SpawnRingStepDeg"/> degrees on rings <see cref="SpawnRingStepM"/> apart round the van.</summary>
     public float SpawnRoadStepM { get; set; } = 30;
     public float SpawnRingStepDeg { get; set; } = 20;
     public float SpawnRingStepM { get; set; } = 50;
-    /// <summary>At most this many candidates of a band have their way worked out (the rest are not looked at).</summary>
+    /// <summary>At most this many candidates have their way worked out (a route plan each), ONE budget for all the bands together (the rest are not looked at).</summary>
     public int SpawnChecks { get; set; } = 12;
     /// <summary>The half width a spot and the way from it are checked for (the van's, vehicles.json half_width 1.32, and a margin).</summary>
     public float SpawnHalfWidthM { get; set; } = 1.45f;
@@ -77,6 +78,7 @@ public sealed class AssaultCarData
         {
             var b = SpawnBandsM[i];
             if (b.Length != 2 || !float.IsFinite(b[0]) || !float.IsFinite(b[1]) || b[0] <= 0 || b[1] < b[0]) throw Bad($"spawn_bands_m[{i}] must be [min, max] with 0 < min <= max");
+            if (b[1] > GiveUpM) throw Bad($"spawn_bands_m[{i}] reaches {b[1]:F0} m, past give_up_m {GiveUpM:F0}: an Assault put down there would give up at once");
             if (i > 0 && (b[0] > SpawnBandsM[i - 1][0] || b[1] < SpawnBandsM[i - 1][1])) throw Bad($"spawn_bands_m[{i}] must contain the band before it (a wider band)");
         }
         foreach (var (v, name) in new[] { (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (RemoveFarM, "remove_far_m"), (StallNearM, "stall_near_m") })
@@ -168,7 +170,7 @@ public static class AssaultSpawn
     /// A spot for a new Assault, or null (with <paramref name="why"/>) when none fits. Band by band (the first is the wanted one, the others widen it): a road point (every spawn_road_step_m) or an open ground point
     /// (on rings round <paramref name="target"/>, where <paramref name="open"/> says a van can stand) that is at least spawn_player_min_m from every player, spawn_apart_m from the other Rival vehicles
     /// (<paramref name="rivals"/>), not <paramref name="blocked"/> (a vehicle beside it) and whose drivable way to <paramref name="target"/> (<paramref name="wayM"/>: its length, null when none) is in the band. Candidates are
-    /// looked at in random order, at most spawn_checks of them per band; the first that fits is the spot (it faces along the road, or straight, towards the target).
+    /// looked at in random order, at most spawn_checks route plans in all the bands together (one budget: a band that uses it up leaves none to the wider ones); the first that fits is the spot (it faces along the road, or straight, towards the target).
     /// </summary>
     public static AssaultSpot? Pick(RoadGraph roads, Vector2 target, IReadOnlyList<Vector2> players, IReadOnlyList<Vector2> rivals, AssaultCarData d, Func<Vector2, bool> blocked,
         Func<Vector2, bool>? open, Func<Vector2, float?> wayM, Random rng, out string why)
@@ -181,13 +183,20 @@ public static class AssaultSpawn
             return !blocked(ground);
         }
         var ways = new Dictionary<(int, int), float?>();
-        float? Way(Vector2 p)
+        var plans = 0; // the route plans made, over all the bands: the budget is spawn_checks
+        // the way from p (a plan is paid from the budget; a point planned before is free); false when the budget is spent
+        bool TryWay(Vector2 p, out float? way)
         {
             var key = ((int)MathF.Round(p.X), (int)MathF.Round(p.Y));
-            if (!ways.TryGetValue(key, out var w)) ways[key] = w = wayM(p);
-            return w;
+            if (!ways.TryGetValue(key, out way))
+            {
+                if (plans >= d.SpawnChecks) return false;
+                plans++;
+                ways[key] = way = wayM(p);
+            }
+            return true;
         }
-        var seen = 0; var checkedWays = 0;
+        var seen = 0;
         for (var b = 0; b < d.SpawnBandsM.Length; b++)
         {
             var (lo, hi) = (d.SpawnBandsM[b][0], d.SpawnBandsM[b][1]);
@@ -205,17 +214,17 @@ public static class AssaultSpawn
                     }
             seen += cands.Count;
             for (var i = cands.Count - 1; i > 0; i--) { var j = rng.Next(i + 1); (cands[i], cands[j]) = (cands[j], cands[i]); }
-            for (var i = 0; i < cands.Count && i < d.SpawnChecks; i++)
+            for (var i = 0; i < cands.Count; i++)
             {
-                checkedWays++;
-                if (Way(cands[i].Ground) is not { } way || way < lo || way > hi) continue;
+                if (!TryWay(cands[i].Ground, out var found)) break;
+                if (found is not { } way || way < lo || way > hi) continue;
                 var (place, ground) = cands[i];
                 var toTarget = RoadPath.Yaw(target - ground);
                 var yaw = toTarget;
                 if (place is { } rpl)
                 {
                     var fwd = roads.YawAt(rpl, true); var bwd = roads.YawAt(rpl, false);
-                    yaw = MathF.Abs(Wrap(fwd - toTarget)) <= MathF.Abs(Wrap(bwd - toTarget)) ? fwd : bwd;
+                    yaw = MathF.Abs(FlightMath.Wrap(fwd - toTarget)) <= MathF.Abs(FlightMath.Wrap(bwd - toTarget)) ? fwd : bwd;
                 }
                 why = "";
                 return new AssaultSpot(place, ground, yaw, way, b);
@@ -223,14 +232,7 @@ public static class AssaultSpawn
         }
         why = seen == 0
             ? $"no road or open ground point is {d.SpawnPlayerMinM:F0} m from every player and clear of vehicles in any band up to {d.SpawnBandsM[^1][1]:F0} m"
-            : $"{seen} candidate point(s) in the bands, {checkedWays} way(s) looked at, none within {d.SpawnBandsM[^1][0]:F0} to {d.SpawnBandsM[^1][1]:F0} m of drivable way from the van";
+            : $"{seen} candidate point(s) in the bands, {plans} way(s) looked at, none within {d.SpawnBandsM[^1][0]:F0} to {d.SpawnBandsM[^1][1]:F0} m of drivable way from the van";
         return null;
-    }
-
-    static float Wrap(float a)
-    {
-        while (a > MathF.PI) a -= MathF.Tau;
-        while (a < -MathF.PI) a += MathF.Tau;
-        return a;
     }
 }

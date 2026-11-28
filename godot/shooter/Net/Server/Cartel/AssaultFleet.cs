@@ -22,6 +22,7 @@ internal sealed class AssaultFleet
     readonly ChaseData _drive;
     readonly List<ChaseUnit> _units = new();
     Countdown _look;   // the next look at the stalled ones, for removal
+    NVec3? _objectivePost; // the objective's centre snapped onto the navigation mesh (looked up once)
 
     public AssaultFleet(ChaseServer s, HeistRun run, AssaultCarData a)
     {
@@ -75,7 +76,7 @@ internal sealed class AssaultFleet
             return $"no spot for an Assault van: {why}";
         }
         var (gunmen, enforcers) = HeistRules.AssaultCrew(_run.Data, _run.Job.Tier, _run.Party.Count);
-        var profile = new RivalProfile("Assault van", _drive, AssaultRules.SeatOrder(gunmen, enforcers), _a);
+        var profile = new RivalProfile("Assault van", _drive, AssaultRules.SeatOrder(gunmen, enforcers), _a, Post: CrewPost);
         if (ChaseUnit.Spawn(_s, _run, profile, new ChaseSpot(fit.Place, fit.Ground, fit.Yaw, 0)) is not { } unit) return "the Assault van could not be put down";
         _units.Add(unit);
         Sent++;
@@ -83,6 +84,9 @@ internal sealed class AssaultFleet
         _run.Tell($"A Rival crew van is coming to {_run.AssaultPlace}!");
         return null;
     }
+
+    /// <summary>Where an Assault crew on foot heads for: the objective's centre (snapped onto the navigation mesh) while the Heist is at the objective, else the Cartel van (on the road, at the drop).</summary>
+    NVec3 CrewPost(NVec3 van) => _run.Heist.Phase == HeistPhase.AtObjective ? _objectivePost ??= _s.Rivals.Snap(_run.Goal.Centre) : van;
 
     /// <summary>One tick of the Heist: the vans, the stall watch, then the removal of stalled ones that are far and unseen.</summary>
     public void Tick(float dt)

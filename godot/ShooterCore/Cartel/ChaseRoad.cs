@@ -49,7 +49,7 @@ public sealed class ChaseTrail
     }
 }
 
-/// <summary>A chase car's place: its ground point, which way it faces (a Godot yaw, towards the van), how far behind the van's way it is (negative: that far AHEAD of it, on its way to the drop) and the road place when it stands on a road (null: open ground).</summary>
+/// <summary>A chase car's place: its ground point, which way it faces (a Godot yaw: towards the van, or for an ambush along the van's way), how far behind the van's way it is (negative: that far AHEAD of it, on its way to the drop) and the road place when it stands on a road (null: open ground).</summary>
 public readonly record struct ChaseSpot(RoadPlace? Place, Vector2 Ground, float Yaw, float BackM);
 
 /// <summary>Where a chase car is put down, pure (docs/cartel.md "Chase cars"): the rules of the spot.</summary>
@@ -58,27 +58,32 @@ public static class ChaseSpawn
     /// <summary>The open-ground candidates round a way point: itself and this many spawn_spread_m either side of it, across the van's way.</summary>
     static readonly float[] Sides = { 0f, -1f, 1f, -0.5f, 0.5f };
 
+    /// <summary>An ambush car's sides of the van's way: both are tried.</summary>
+    static readonly float[] AmbushSides = { 1f, -1f };
+
     /// <summary>The points of the van's way ahead that are looked at: one every this many metres.</summary>
     public const float AheadStepM = 15f;
 
     /// <summary>
-    /// A spot for a new chase car, or null when none is fit now. AHEAD first, when <paramref name="ahead"/> (the van's way to the drop, planned the way a chase plans a way) is given: a candidate lies spawn_ahead_min_m
-    /// to spawn_ahead_max_m along it from the van, so the car meets the van head-on and then turns and follows. When nothing ahead fits (the drop is near, or everything ahead is in sight) it lies spawn_back_min_m to
+    /// A spot for a new chase car, or null when none is fit now. AHEAD first, when <paramref name="ahead"/> (the van's way to the drop, planned the way a chase plans a way) is given and open ground can be told
+    /// (<paramref name="open"/>): an AMBUSH, a candidate on open ground ambush_side_m to either side of a point spawn_ahead_min_m to spawn_ahead_max_m along that way from the van (past a road's edge; never the
+    /// road's centre), facing ALONG the way there (the van's travel: it needs no U-turn once the van has passed). Only <paramref name="aheadBlocked"/> (the server's: a vehicle beside it; <paramref name="blocked"/> when
+    /// none is given), the player and car distances and a way to the van count: no sight rule. When nothing ahead fits (the drop is near, or no open ground beside it) it lies spawn_back_min_m to
     /// spawn_back_max_m behind the van along its trail. A candidate is the nearest road (within spawn_road_m) to a point of that way, and, when <paramref name="open"/> says so, the point itself and the ground spawn_spread_m
     /// (and half of it) to either side of it: any open drivable ground, a field or a meadow too. It is at least spawn_player_min_m from every player (<paramref name="players"/>), at least spawn_apart_m from the other
     /// chase cars (<paramref name="cars"/>), not <paramref name="blocked"/> (the server's: in the sight of the party, or beside a vehicle) and one that <paramref name="reach"/> finds a way from to the van. One of the
     /// candidates at random (the next when it has no way); it faces along the road, or straight, towards the van.
     /// </summary>
     public static ChaseSpot? Pick(RoadGraph roads, ChaseTrail trail, Vector2 van, IReadOnlyList<Vector2> players, IReadOnlyList<Vector2> cars, ChaseData d, Func<Vector2, bool> blocked, Random rng,
-        Func<Vector2, bool>? open = null, Func<Vector2, bool>? reach = null, RoadPath? ahead = null)
+        Func<Vector2, bool>? open = null, Func<Vector2, bool>? reach = null, RoadPath? ahead = null, Func<Vector2, bool>? aheadBlocked = null)
     {
         if (roads.IsEmpty && open == null) return null;
         var min2 = d.SpawnPlayerMinM * d.SpawnPlayerMinM; var apart2 = d.SpawnApartM * d.SpawnApartM;
-        bool Fits(Vector2 ground)
+        bool Fits(Vector2 ground, Func<Vector2, bool> block)
         {
             foreach (var pl in players) if (Vector2.DistanceSquared(pl, ground) < min2) return false;
             foreach (var c in cars) if (Vector2.DistanceSquared(c, ground) < apart2) return false;
-            return !blocked(ground);
+            return !block(ground);
         }
         // the candidates of one way point: the nearest road, and the open ground across the way
         void Candidates(List<ChaseSpot> fit, Vector2 p, Vector2 along, float back)
@@ -86,7 +91,7 @@ public static class ChaseSpawn
             if (!roads.IsEmpty && roads.Nearest(p, d.SpawnRoadM) is { } near)
             {
                 var ground = roads.PointAt(near.Place);
-                if (Fits(ground))
+                if (Fits(ground, blocked))
                 {
                     var toVan = RoadPath.Yaw(van - ground);
                     var fwd = roads.YawAt(near.Place, true); var bwd = roads.YawAt(near.Place, false);
@@ -98,7 +103,7 @@ public static class ChaseSpawn
             foreach (var k in Sides)
             {
                 var ground = p + side * (k * d.SpawnSpreadM);
-                if (open(ground) && Fits(ground)) fit.Add(new ChaseSpot(null, ground, RoadPath.Yaw(van - ground), back));
+                if (open(ground) && Fits(ground, blocked)) fit.Add(new ChaseSpot(null, ground, RoadPath.Yaw(van - ground), back));
             }
         }
         ChaseSpot? One(List<ChaseSpot> fit)
@@ -114,11 +119,23 @@ public static class ChaseSpawn
             return null;
         }
 
-        if (ahead is { IsEmpty: false })
+        if (ahead is { IsEmpty: false } && open != null)
         {
+            var seenOnly = aheadBlocked ?? blocked;
             var fitAhead = new List<ChaseSpot>();
             for (var s = d.SpawnAheadMinM; s <= d.SpawnAheadMaxM && s <= ahead.Length; s += AheadStepM)
-                Candidates(fitAhead, ahead.At(s), ahead.At(MathF.Min(s + AheadStepM, ahead.Length)) - ahead.At(MathF.Max(0f, s - AheadStepM)), -s);
+            {
+                var along = ahead.At(MathF.Min(s + AheadStepM, ahead.Length)) - ahead.At(MathF.Max(0f, s - AheadStepM));
+                if (along.LengthSquared() < 1e-4f) continue;
+                var dir = Vector2.Normalize(along);
+                var side = new Vector2(-dir.Y, dir.X);
+                var yaw = RoadPath.Yaw(dir); // along the van's way: the van comes up behind it and drives past
+                foreach (var k in AmbushSides)
+                {
+                    var ground = ahead.At(s) + side * (k * d.AmbushSideM);
+                    if (open(ground) && Fits(ground, seenOnly)) fitAhead.Add(new ChaseSpot(null, ground, yaw, -s));
+                }
+            }
             if (One(fitAhead) is { } found) return found;
         }
 
@@ -158,10 +175,29 @@ public static class ChasePilot
         var dist = d.Length();
         if (dist < 0.5f) return Stop(speed);
         var err = FlightMath.Wrap(RoadPath.Yaw(d) - yaw); // positive: the point ahead is to the left
+        if (BackingRound(err, speed)) return new DriveInput { Throttle = -1f, Steer = MathF.Sign(err) }; // a K-turn: the nose turns to the way while the car backs
         var steer = MathF.Abs(err) > MathF.PI / 2f ? -MathF.Sign(err) : Math.Clamp(-2f * MathF.Sin(err) / dist * turnRadiusM, -1f, 1f);
         var bend = MathF.Abs(FlightMath.Wrap(path.YawAt(s + 2f * ld) - path.YawAt(s)));
         var want = wantSpeed * Math.Clamp(1.1f - bend / 1.2f, 0.35f, 1f) * Math.Clamp(1.2f - MathF.Abs(err) / 1.3f, 0.3f, 1f);
         return new DriveInput { Throttle = Math.Clamp((want - speed) * 0.9f, -1f, 1f), Steer = steer };
+    }
+
+    /// <summary>A K-turn starts when the way is more than this far off the nose (110 degrees) and the car is slower than <see cref="KTurnSpeedMps"/>...</summary>
+    public const float KTurnStartRad = 110f * MathF.PI / 180f;
+    /// <summary>...and goes on, while the car backs, until the way is under this far off the nose (60 degrees), then the car drives on.</summary>
+    public const float KTurnEndRad = 60f * MathF.PI / 180f;
+    public const float KTurnSpeedMps = 4f;
+    /// <summary>Backing faster than this (m/s) is a K-turn in progress.</summary>
+    const float BackingMps = 0.5f;
+
+    /// <summary>
+    /// The pilot's own decision to back round (docs/cartel.md "Chase cars"), from the heading error (<paramref name="err"/>, radians, the way's point against the nose) and the signed speed alone: a car that is slower than
+    /// 4 m/s with the way behind it (more than 110 degrees off) backs up while steering, and, once it is backing, goes on until the way is under 60 degrees off; then it drives forward. No state: the car's own motion is the memory.
+    /// </summary>
+    public static bool BackingRound(float err, float speed)
+    {
+        var off = MathF.Abs(err);
+        return speed < -BackingMps ? off > KTurnEndRad : off > KTurnStartRad && speed < KTurnSpeedMps;
     }
 
     /// <summary>
@@ -186,6 +222,16 @@ public static class ChasePilot
         var to = path.IsEmpty ? van : path.At(path.Project(pos) + 15f);
         var err = FlightMath.Wrap(RoadPath.Yaw(to - pos) - yaw); // positive: the point is to the left
         return new DriveInput { Throttle = -1f, Steer = Math.Abs(err) < 0.05f ? 0f : MathF.Sign(err) };
+    }
+
+    /// <summary>
+    /// Stands aside for a van that is about to pass: brakes to a stop as <see cref="Stop"/> does, the wheel to the right while it still moves (so a car that pulled aside from the road's middle ends on its right edge), the handbrake once it stands.
+    /// </summary>
+    public static DriveInput Wait(float speed)
+    {
+        var stop = Stop(speed);
+        if (MathF.Abs(speed) > 1f) stop.Steer = 1f;
+        return stop;
     }
 
     /// <summary>Brakes to a stop: the key against the travel while it moves, the handbrake once it nearly stands (so it never reverses).</summary>

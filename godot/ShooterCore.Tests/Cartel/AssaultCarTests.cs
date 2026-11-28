@@ -49,6 +49,9 @@ public class AssaultCarTests
                 }
         }
         Assert.True(shipped.GiveUpM > shipped.SpawnBandsM[0][1], "the give-up distance is past the wanted spawn band (the chase car's 250 would fire at once)");
+        Assert.All(shipped.SpawnBandsM, b => Assert.True(b[1] <= shipped.GiveUpM, "no band reaches past the give-up distance"));
+        Assert.Equal(new[] { new[] { 250f, 400f }, new[] { 200f, 600f }, new[] { 100f, 600f } }, shipped.SpawnBandsM);
+        Assert.Contains("give_up_m", Assert.Throws<DataFileException>(() => new AssaultCarData { SpawnBandsM = new[] { new[] { 250f, 700f } } }.Validate("assault_car")).Message);
         Assert.Throws<DataFileException>(() => new AssaultCarData { SpawnBandsM = new[] { new[] { 250f, 400f }, new[] { 300f, 500f } } }.Validate("assault_car")); // a later band must be wider
         Assert.Throws<DataFileException>(() => new AssaultCarData { BayPosts = new[] { new[] { 0f, 1f } } }.Validate("assault_car"));
     }
@@ -153,6 +156,17 @@ public class AssaultCarTests
         Assert.Contains("clear of vehicles", why);
         Assert.Null(AssaultSpawn.Pick(Road(), van, nearPlayers, Array.Empty<Vector2>(), A, _ => false, null, _ => null, new Random(1), out why)); // no way from any
         Assert.Contains("none within", why);
+    }
+
+    [Fact]
+    public void TheSpawnChecksAreOneBudgetForAllTheBandsTogether()
+    {
+        var van = new Vector2(1500, 0);
+        var plans = 0;
+        // every way is too long for every band: all the bands are looked at, but only spawn_checks plans are made in all
+        var none = AssaultSpawn.Pick(Road(), van, new[] { van }, Array.Empty<Vector2>(), A, _ => false, null, p => { plans++; return 5000f; }, new Random(1), out _);
+        Assert.Null(none);
+        Assert.Equal(A.SpawnChecks, plans);
     }
 
     [Fact]

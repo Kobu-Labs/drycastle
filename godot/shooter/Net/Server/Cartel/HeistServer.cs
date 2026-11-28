@@ -173,6 +173,8 @@ internal sealed class HeistRun : IJobObjective
     public NVec3 VanFeet => CarPose.Present(_van).Feet;
     /// <summary>The van's speed, metres a second.</summary>
     public float VanSpeed => MathF.Abs(_van.State.Speed);
+    /// <summary>The van's heading on the ground (x, z), a unit vector: where it faces, or the opposite while it backs.</summary>
+    public System.Numerics.Vector2 VanDir { get { var s = _van.State; var fwd = ChaseRules.Forward(s.Yaw); return s.Speed < 0f ? -fwd : fwd; } }
     /// <summary>The Rival crew vans after the van (docs/cartel.md "Assaults"): the clock (<see cref="Heist.Assaults"/>) says when one is due, this fleet puts it down.</summary>
     public AssaultFleet Assaults { get; }
     /// <summary>The Rival chase cars after the van (docs/cartel.md "Chase cars"): they start at <see cref="LeftObjective"/> and no new one comes after <see cref="ReachedDrop"/>.</summary>

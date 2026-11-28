@@ -1,3 +1,4 @@
+using System.Numerics;
 using Drycastle.ShooterCore.Data;
 
 namespace Drycastle.ShooterCore.Cartel;
@@ -26,9 +27,10 @@ public sealed class ChaseData
 
     /// <summary>
     /// A car is put down on open drivable ground (a road, a field, a meadow: nothing solid, no water) at least <see cref="SpawnPlayerMinM"/> from every player, out of the party's sight, apart from the other chase cars
-    /// (<see cref="SpawnApartM"/>), AHEAD of the van first: <see cref="SpawnAheadMinM"/> to <see cref="SpawnAheadMaxM"/> along the van's way to the drop (it meets the van head-on, then turns and follows), and when nothing
-    /// ahead fits (the drop is near) behind it: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind it. Either way on the nearest road within <see cref="SpawnRoadM"/> of a point of that way or
-    /// on open ground at the point itself or <see cref="SpawnSpreadM"/> to either side of it.
+    /// (<see cref="SpawnApartM"/>), AHEAD of the van first: <see cref="SpawnAheadMinM"/> to <see cref="SpawnAheadMaxM"/> along the van's way to the drop, an AMBUSH: <see cref="AmbushSideM"/> to either side of the way
+    /// (past a road's edge) on open ground, facing along the way, in no sight rule (only no vehicle beside it); it waits there until the van has passed it (<see cref="WaitMaxSeconds"/> at most) and follows. When nothing
+    /// ahead fits (the drop is near) behind it: <see cref="SpawnBackMinM"/> to <see cref="SpawnBackMaxM"/> of its trail behind it, out of the party's sight, on the nearest road within <see cref="SpawnRoadM"/> of a point of that
+    /// way or on open ground at the point itself or <see cref="SpawnSpreadM"/> to either side of it.
     /// </summary>
     public float SpawnPlayerMinM { get; set; } = 150;
     public float SpawnAheadMinM { get; set; } = 150;
@@ -38,6 +40,12 @@ public sealed class ChaseData
     public float SpawnRoadM { get; set; } = 30;
     public float SpawnApartM { get; set; } = 25;
     public float SpawnSpreadM { get; set; } = 40;
+    /// <summary>An ambush car stands this far to the side of the van's way (past the road's edge for a car), facing along the way.</summary>
+    public float AmbushSideM { get; set; } = 4.5f;
+    /// <summary>A car that waits (an ambush, or one that pulled aside for a head-on van) drives on after this long when the van has not passed (a safety).</summary>
+    public float WaitMaxSeconds { get; set; } = 40;
+    /// <summary>A van that comes at a chasing car head-on (faster than <see cref="StopSpeedMps"/>, the headings more than 120 degrees apart, ahead of its nose) within this far makes it pull aside and wait.</summary>
+    public float MeetM { get; set; } = 70;
 
     /// <summary>The Gunmen shoot from the windows only while the car is within <see cref="ShootRangeM"/> of the van; while it moves faster than <see cref="MovingMps"/> every round is turned off its line by up to <see cref="MovingAimErrorDeg"/> instead of the gun's own aim error.</summary>
     public float ShootRangeM { get; set; } = 40;
@@ -68,11 +76,14 @@ public sealed class ChaseData
     /// <summary>
     /// How it drives: it keeps <see cref="FollowM"/> from the van (it slows below that and never aims at the van's body), speeds up by <see cref="CatchUpGain"/> per metre of gap, at most <see cref="MaxSpeedMps"/>; the way
     /// (the roads where they bring it closer, open ground where that is shorter: <see cref="OffRoadData"/>) is planned again every <see cref="RepathSeconds"/>. The speed is an NPC's input only: 84 km/h, 1.4 times the loaded Cartel van's
-    /// 60 km/h; the car type's own top speed (44.4 m/s) is above it, so it is no allowance on the drive model; the car a player drives is not limited by it.
+    /// 60 km/h; further than <see cref="FarM"/> behind it speeds up to <see cref="FarSpeedMps"/> (33 m/s, 120 km/h: the car's 44.4 and the Cartel van's 33 reach it) to catch up. The car type's own top speed is above or at it,
+    /// so it is no allowance on the drive model; the car a player drives is not limited by it.
     /// </summary>
     public float FollowM { get; set; } = 14;
     public float CatchUpGain { get; set; } = 1;
     public float MaxSpeedMps { get; set; } = 23.33f; // 84 km/h
+    public float FarM { get; set; } = 100;
+    public float FarSpeedMps { get; set; } = 33; // 120 km/h
     public float RepathSeconds { get; set; } = 1.5f;
 
     /// <summary>A car more than <see cref="GiveUpM"/> from the van for <see cref="GiveUpSeconds"/> gives up and is removed with its crew.</summary>
@@ -108,12 +119,13 @@ public sealed class ChaseData
         foreach (var (v, name) in new[]
         {
             (IntervalSeconds, "interval_seconds"), (SpawnAheadMaxM, "spawn_ahead_max_m"), (SpawnBackMaxM, "spawn_back_max_m"), (SpawnRoadM, "spawn_road_m"), (ShootRangeM, "shoot_range_m"), (StopSpeedMps, "stop_speed_mps"), (StopWithinM, "stop_within_m"),
-            (StopSeconds, "stop_seconds"), (UnstickAfterSeconds, "unstick_after_seconds"), (ReverseSeconds, "reverse_seconds"), (RemountM, "remount_m"), (PullMps, "pull_mps"), (RemountConfirmSeconds, "remount_confirm_seconds"), (RemountSeconds, "remount_seconds"), (RemountRetrySeconds, "remount_retry_seconds"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"),
+            (StopSeconds, "stop_seconds"), (UnstickAfterSeconds, "unstick_after_seconds"), (ReverseSeconds, "reverse_seconds"), (RemountM, "remount_m"), (PullMps, "pull_mps"), (RemountConfirmSeconds, "remount_confirm_seconds"), (RemountSeconds, "remount_seconds"), (RemountRetrySeconds, "remount_retry_seconds"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"), (AmbushSideM, "ambush_side_m"), (WaitMaxSeconds, "wait_max_seconds"), (MeetM, "meet_m"), (FarM, "far_m"), (FarSpeedMps, "far_speed_mps"),
             (GiveUpM, "give_up_m"), (GiveUpSeconds, "give_up_seconds"), (WreckSeconds, "wreck_seconds"),
         })
             if (!float.IsFinite(v) || v <= 0) throw Bad($"{name} must be more than 0");
         if (SpawnBackMaxM < SpawnBackMinM) throw Bad("spawn_back_max_m is below spawn_back_min_m");
         if (SpawnAheadMaxM < SpawnAheadMinM) throw Bad("spawn_ahead_max_m is below spawn_ahead_min_m");
+        if (FarSpeedMps < MaxSpeedMps) throw Bad("far_speed_mps must be at least max_speed_mps");
         if (MaxUnsticks < 0) throw Bad("max_unsticks must be 0 or more");
         if (GiveUpM <= StopWithinM) throw Bad("give_up_m must be more than stop_within_m");
         if (RemountM >= GiveUpM) throw Bad("remount_m must be less than give_up_m (the crew walks back before it is given up)");
@@ -131,11 +143,32 @@ public static class ChaseRules
         Math.Clamp(CartelTiers.Of(d.Gunmen, tier) + d.GunmenPerExtraMember * Math.Max(0, size - 1), 1, d.MaxGunmen);
 
     /// <summary>
-    /// The speed the car wants while it follows a van on the road: the van's, plus catch_up_gain for each metre the gap is past follow_m (minus for each short of it), between standing and max_speed_mps.
-    /// A car closer than follow_m slows below the van's speed and falls back; it never closes on the van's body.
+    /// The speed the car wants while it follows a van on the road: the van's, plus catch_up_gain for each metre the gap is past follow_m (minus for each short of it), between standing and max_speed_mps (84 km/h),
+    /// or far_speed_mps (120 km/h) while the gap is more than far_m (the rubber band: a car left far behind catches up). A car closer than follow_m slows below the van's speed and falls back; it never closes on the van's body.
     /// </summary>
     public static float FollowSpeed(ChaseData d, float gapM, float vanSpeed) =>
-        Math.Clamp(vanSpeed + (gapM - d.FollowM) * d.CatchUpGain, 0f, d.MaxSpeedMps);
+        Math.Clamp(vanSpeed + (gapM - d.FollowM) * d.CatchUpGain, 0f, gapM > d.FarM ? d.FarSpeedMps : d.MaxSpeedMps);
+
+    /// <summary>The unit vector of a Godot yaw on the ground (x, z): the way a vehicle with that yaw faces.</summary>
+    public static Vector2 Forward(float yaw) => new(-MathF.Sin(yaw), -MathF.Cos(yaw));
+
+    /// <summary>The van has passed the car: the car lies behind the van along the van's heading (<paramref name="vanDir"/>, a unit vector; none, a van that stands, is not passed).</summary>
+    public static bool Passed(Vector2 car, Vector2 van, Vector2 vanDir) => Vector2.Dot(car - van, vanDir) < 0f;
+
+    /// <summary>The headings of a head-on meeting are more than this far apart (degrees).</summary>
+    public const float HeadOnDeg = 120f;
+
+    /// <summary>
+    /// The van comes at the car head-on: it moves faster than stop_speed_mps, is within meet_m, ahead of the car's nose (along its forward axis) and the two headings are more than 120 degrees apart.
+    /// </summary>
+    public static bool HeadOn(ChaseData d, Vector2 car, float carYaw, Vector2 van, Vector2 vanDir, float vanSpeed)
+    {
+        if (vanSpeed <= d.StopSpeedMps) return false;
+        var to = van - car;
+        if (to.Length() > d.MeetM) return false;
+        var fwd = Forward(carYaw);
+        return Vector2.Dot(to, fwd) > 0f && Vector2.Dot(fwd, vanDir) < MathF.Cos(HeadOnDeg * MathF.PI / 180f);
+    }
 
     /// <summary>The aim error of a Gunman's round now: moving_aim_error_deg while the car moves faster than moving_mps, else null (the gun's own).</summary>
     public static float? AimErrorDeg(ChaseData d, float carSpeed) => MathF.Abs(carSpeed) > d.MovingMps ? d.MovingAimErrorDeg : null;
