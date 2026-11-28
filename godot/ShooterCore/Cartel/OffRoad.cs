@@ -19,6 +19,9 @@ public sealed class OffRoadData
     public float OpenCost { get; set; } = 1.3f;
     /// <summary>Within this of its end a leg over open ground is not looked at (the goal itself stands on something).</summary>
     public float CloseM { get; set; } = 6;
+    /// <summary>A road edge narrower than this (roads.json width: tracks 3.0, service 3.5) is a narrow way: a metre of it costs <see cref="TrackCost"/> (wide roads win when they are not much longer), and a car on it keeps to the chase's track_speed_mps.</summary>
+    public float TrackWidthM { get; set; } = 4;
+    public float TrackCost { get; set; } = 1.5f;
     /// <summary>The most road points whose way is worked out for one plan (the nearest by a lower bound first).</summary>
     public int MaxChecks { get; set; } = 10;
     /// <summary>The open check (the server's): a line is looked at every <see cref="SampleM"/> along it, in three lanes (the vehicle's width), with rays <see cref="RayUpM"/> over the ground, and refused where the ground climbs more than <see cref="MaxGrade"/> between two samples.</summary>
@@ -31,8 +34,9 @@ public sealed class OffRoadData
 
     public void Validate(string what)
     {
-        foreach (var (v, name) in new[] { (EnterM, "enter_m"), (LeaveM, "leave_m"), (StepM, "step_m"), (OpenCost, "open_cost"), (CloseM, "close_m"), (SampleM, "sample_m"), (RayUpM, "ray_up_m"), (MaxGrade, "max_grade"), (MarginM, "margin_m"), (CarHalfWidthM, "car_half_width_m") })
+        foreach (var (v, name) in new[] { (EnterM, "enter_m"), (LeaveM, "leave_m"), (StepM, "step_m"), (OpenCost, "open_cost"), (CloseM, "close_m"), (TrackWidthM, "track_width_m"), (SampleM, "sample_m"), (RayUpM, "ray_up_m"), (MaxGrade, "max_grade"), (MarginM, "margin_m"), (CarHalfWidthM, "car_half_width_m") })
             if (!float.IsFinite(v) || v <= 0) throw new DataFileException($"{what}: {name} must be more than 0");
+        if (TrackCost < 1) throw new DataFileException($"{what}: track_cost must be at least 1");
         if (OpenCost < 1) throw new DataFileException($"{what}: open_cost must be at least 1 (open ground is never cheaper than road)");
         if (MaxChecks < 1) throw new DataFileException($"{what}: max_checks must be at least 1");
     }
@@ -83,7 +87,8 @@ public static class OffRoadRoute
             place = near.Place; join = roads.PointAt(place); enterM = Vector2.Distance(from, join);
             if (enterM > d.CloseM && !open(from, join)) return best;
         }
-        var dist = roads.DijkstraFrom(place, forward, uTurnM);
+        Func<float, float>? narrow = d.TrackCost > 1f ? w => w < d.TrackWidthM ? d.TrackCost : 1f : null; // a metre of a narrow edge costs track_cost
+        var dist = roads.DijkstraFrom(place, forward, uTurnM, narrow);
 
         // leave it near the goal: the road points within leave_m, the goal's nearest road point too (the road may reach it)
         var min = goal - new Vector2(d.LeaveM, d.LeaveM); var max = goal + new Vector2(d.LeaveM, d.LeaveM);
@@ -100,10 +105,10 @@ public static class OffRoadRoute
         foreach (var (cp, at, lower) in cands)
         {
             if (checks >= d.MaxChecks || enterM * oc + lower >= bestCost) break;
-            if (roads.RouteBetween(place, forward, uTurnM, cp, dist) is not { } route) continue;
+            if (roads.RouteBetweenCosted(place, forward, uTurnM, cp, dist) is not { } route) continue;
             checks++;
             var leave = Vector2.Distance(at, goal);
-            var cost = enterM * oc + route.Path.Length + leave * oc;
+            var cost = enterM * oc + route.Cost + leave * oc;
             if (cost >= bestCost) continue;
             if (leave > d.CloseM && !open(at, goal)) continue;
             var pts = new List<Vector2> { from };

@@ -225,7 +225,7 @@ public class ChaseOffRoadTests
         for (var t = 0f; t < 5.8f; t += Dt) car.Step(F(gap: 90f, carSpeed: 0.2f), Dt);
         Assert.Equal(ChaseState.Chasing, car.State); // no tries left: only the stuck clock
         for (var t = 0f; t < 0.5f && car.State == ChaseState.Chasing; t += Dt) car.Step(F(gap: 90f, carSpeed: 0.2f), Dt);
-        Assert.Equal(ChaseState.Stopping, car.State);
+        Assert.Equal(ChaseState.Lost, car.State); // 90 m from the van: lost, the crew stays seated (see RivalLostTests)
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public class ChaseOffRoadTests
         var still = Out();
         for (var t = 0f; t < 20f; t += Dt) Assert.Equal(default, still.Step(F(gap: 5f, crewGap: 120f, crew: 3, free: true), Dt)); // far, but not pulling away
         var closing = Out();
-        var gap = 200f;
+        var gap = 145f;
         for (var t = 0f; t < 20f; t += Dt) { gap -= 6f * Dt; Assert.Equal(default, closing.Step(F(gap: 5f, crewGap: gap, crew: 3, free: true), Dt)); } // the van comes back
         Assert.Equal(ChaseState.Out, closing.State);
     }

@@ -72,6 +72,21 @@ public sealed class ChaseData
     public float RemountConfirmSeconds { get; set; } = 1;
     public float RemountSeconds { get; set; } = 30;
     public float RemountRetrySeconds { get; set; } = 10;
+    /// <summary>A crew on foot whose nearest living member is more than this from the van for <see cref="RemountConfirmSeconds"/> walks back to its car (no "pulling away" needed) when the car is whole, free and its driver lives.</summary>
+    public float RemountFarM { get; set; } = 150;
+
+    /// <summary>
+    /// A stuck car lets its crew out only within this of the van (they walk the rest). Farther away it is LOST (<see cref="ChaseState.Lost"/>): the crew stays seated, the car brakes and keeps planning; it is relocated
+    /// (a fresh spot by its kind's spawn rules) when no human can see it and every player is at least <see cref="SpawnPlayerMinM"/> from it. A car with no <see cref="StallProgressM"/> closer to the van in
+    /// <see cref="StallSeconds"/> while it is farther than this and its crew rides is stalled and relocated the same way (within <see cref="StallNearM"/> of the van is close enough). No fresh spot: again after
+    /// <see cref="RelocateRetrySeconds"/>; <see cref="RelocateMaxTries"/> failures in a row remove it with its crew.
+    /// </summary>
+    public float OutWithinM { get; set; } = 60;
+    public float RelocateRetrySeconds { get; set; } = 3;
+    public int RelocateMaxTries { get; set; } = 5;
+    public float StallProgressM { get; set; } = 10;
+    public float StallSeconds { get; set; } = 10;
+    public float StallNearM { get; set; } = 40;
 
     /// <summary>
     /// How it drives: it keeps <see cref="FollowM"/> from the van (it slows below that and never aims at the van's body), speeds up by <see cref="CatchUpGain"/> per metre of gap, at most <see cref="MaxSpeedMps"/>; the way
@@ -85,6 +100,14 @@ public sealed class ChaseData
     public float FarM { get; set; } = 100;
     public float FarSpeedMps { get; set; } = 33; // 120 km/h
     public float RepathSeconds { get; set; } = 1.5f;
+    /// <summary>
+    /// The pilot's speed through bends: it may be as fast as sqrt(<see cref="CornerGrip"/> x the car type's max_lateral_accel x the bend's radius) at every bend ahead and brakes before it (<see cref="ChasePilot.CurveSpeed"/>).
+    /// On a narrow road edge (under off_road track_width_m: a track, a service road) it keeps to <see cref="TrackSpeedMps"/>, on open ground (no road edge within track_width_m of it) to <see cref="OpenSpeedMps"/>;
+    /// the max_speed_mps / far_speed_mps cap holds on wide roads.
+    /// </summary>
+    public float CornerGrip { get; set; } = 0.7f;
+    public float TrackSpeedMps { get; set; } = 13;
+    public float OpenSpeedMps { get; set; } = 12;
 
     /// <summary>A car more than <see cref="GiveUpM"/> from the van for <see cref="GiveUpSeconds"/> gives up and is removed with its crew.</summary>
     public float GiveUpM { get; set; } = 250;
@@ -121,6 +144,7 @@ public sealed class ChaseData
             (IntervalSeconds, "interval_seconds"), (SpawnAheadMaxM, "spawn_ahead_max_m"), (SpawnBackMaxM, "spawn_back_max_m"), (SpawnRoadM, "spawn_road_m"), (ShootRangeM, "shoot_range_m"), (StopSpeedMps, "stop_speed_mps"), (StopWithinM, "stop_within_m"),
             (StopSeconds, "stop_seconds"), (UnstickAfterSeconds, "unstick_after_seconds"), (ReverseSeconds, "reverse_seconds"), (RemountM, "remount_m"), (PullMps, "pull_mps"), (RemountConfirmSeconds, "remount_confirm_seconds"), (RemountSeconds, "remount_seconds"), (RemountRetrySeconds, "remount_retry_seconds"), (FollowM, "follow_m"), (CatchUpGain, "catch_up_gain"), (MaxSpeedMps, "max_speed_mps"), (RepathSeconds, "repath_seconds"), (AmbushSideM, "ambush_side_m"), (WaitMaxSeconds, "wait_max_seconds"), (MeetM, "meet_m"), (FarM, "far_m"), (FarSpeedMps, "far_speed_mps"),
             (GiveUpM, "give_up_m"), (GiveUpSeconds, "give_up_seconds"), (WreckSeconds, "wreck_seconds"),
+            (RemountFarM, "remount_far_m"), (CornerGrip, "corner_grip"), (TrackSpeedMps, "track_speed_mps"), (OpenSpeedMps, "open_speed_mps"), (OutWithinM, "out_within_m"), (RelocateRetrySeconds, "relocate_retry_seconds"), (StallProgressM, "stall_progress_m"), (StallSeconds, "stall_seconds"), (StallNearM, "stall_near_m"),
         })
             if (!float.IsFinite(v) || v <= 0) throw Bad($"{name} must be more than 0");
         if (SpawnBackMaxM < SpawnBackMinM) throw Bad("spawn_back_max_m is below spawn_back_min_m");
@@ -128,6 +152,8 @@ public sealed class ChaseData
         if (FarSpeedMps < MaxSpeedMps) throw Bad("far_speed_mps must be at least max_speed_mps");
         if (MaxUnsticks < 0) throw Bad("max_unsticks must be 0 or more");
         if (GiveUpM <= StopWithinM) throw Bad("give_up_m must be more than stop_within_m");
+        if (RelocateMaxTries < 1) throw Bad("relocate_max_tries must be at least 1");
+        if (RemountFarM >= GiveUpM) throw Bad("remount_far_m must be less than give_up_m (the crew walks back before it is given up)");
         if (RemountM >= GiveUpM) throw Bad("remount_m must be less than give_up_m (the crew walks back before it is given up)");
     }
 }

@@ -26,6 +26,9 @@ public sealed class ChaseTrail
 
     public int Count => _pts.Count;
 
+    /// <summary>The points kept, the oldest (the objective) first.</summary>
+    public IReadOnlyList<Vector2> Points => _pts;
+
     /// <summary>The van is at <paramref name="p"/> now: it joins the trail when it is a step from the last point.</summary>
     public void Note(Vector2 p)
     {
@@ -160,13 +163,53 @@ public static class ChaseSpawn
 public static class ChasePilot
 {
     /// <summary>The way ahead is looked at this far along the path, by speed: 0.6 s of road plus 5 m, between 6 and 25 m.</summary>
-    public static float LookAheadM(float speed) => Math.Clamp(MathF.Abs(speed) * 0.6f + 5f, 6f, 25f);
+    public static float LookAheadM(float speed) => Math.Clamp(MathF.Abs(speed) * 0.35f + 4f, 5f, 14f);
+
+    /// <summary>The spacing of the path points a bend's radius is read from, and of the points looked at along the path.</summary>
+    public const float CurveStepM = 5f;
 
     /// <summary>
-    /// The inputs to follow <paramref name="path"/> from <paramref name="pos"/> facing <paramref name="yaw"/> at <paramref name="speed"/>, aiming at <paramref name="wantSpeed"/> (eased for a bend ahead and for a
-    /// target far off the car's heading). <paramref name="turnRadiusM"/> is the circle the car steers at this speed (<see cref="DriveModel.TurnRadiusAt"/>). An empty path stops the car.
+    /// What a car's speed through a bend comes from: the car type's max_lateral_accel (vehicles.json) times <paramref name="Grip"/> (corner_grip, 0.7), and its brake deceleration (vehicles.json brake) of which
+    /// <paramref name="BrakeUse"/> (0.8) is planned on.
     /// </summary>
-    public static DriveInput Follow(RoadPath path, Vector2 pos, float yaw, float speed, float turnRadiusM, float wantSpeed)
+    public readonly record struct CornerNumbers(float MaxLateralAccel, float Brake, float Grip = 0.7f, float BrakeUse = 0.8f);
+
+    /// <summary>The radius of the circle through three points (infinity when they lie on a line).</summary>
+    public static float TurnRadius(Vector2 a, Vector2 b, Vector2 c)
+    {
+        var ab = Vector2.Distance(a, b); var bc = Vector2.Distance(b, c); var ca = Vector2.Distance(c, a);
+        var cross = MathF.Abs((b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X)); // twice the triangle's area
+        return cross < 1e-4f ? float.PositiveInfinity : ab * bc * ca / (2f * cross);
+    }
+
+    /// <summary>
+    /// The speed the car may carry now so that it is slow enough at every bend ahead (docs/cartel.md "Chase cars"): along the path from <paramref name="s"/> to the braking distance (v squared over twice the brake) plus the
+    /// look-ahead, at every <see cref="CurveStepM"/> the bend's radius is read from the three points a step apart, the speed it allows there is sqrt(grip x max_lateral_accel x radius), and the car may be as fast
+    /// as sqrt(that squared + 2 x brake_use x brake x the distance to it): the least over those points. A straight way is no limit (infinity).
+    /// </summary>
+    public static float CurveSpeed(RoadPath path, float s, float speed, in CornerNumbers c)
+    {
+        if (path.IsEmpty) return float.PositiveInfinity;
+        var v = MathF.Abs(speed);
+        var reach = v * v / (2f * c.Brake) + LookAheadM(v);
+        var limit = float.PositiveInfinity;
+        for (var k = CurveStepM; k <= reach + CurveStepM; k += CurveStepM)
+        {
+            var at = s + k;
+            if (at - CurveStepM >= path.Length) break; // past the end the way goes straight on
+            var r = TurnRadius(path.At(at - CurveStepM), path.At(at), path.At(at + CurveStepM));
+            if (!float.IsFinite(r)) continue;
+            var allowed = c.Grip * c.MaxLateralAccel * r;
+            limit = MathF.Min(limit, MathF.Sqrt(allowed + 2f * c.BrakeUse * c.Brake * k));
+        }
+        return limit;
+    }
+
+    /// <summary>
+    /// The inputs to follow <paramref name="path"/> from <paramref name="pos"/> facing <paramref name="yaw"/> at <paramref name="speed"/>, aiming at <paramref name="wantSpeed"/> (at most <paramref name="capMps"/>, the narrow way's cap;
+    /// slowed for the bends ahead by <see cref="CurveSpeed"/> when <paramref name="corner"/> is given, and for a target far off the car's heading). <paramref name="turnRadiusM"/> is the circle the car steers at this speed (<see cref="DriveModel.TurnRadiusAt"/>). An empty path stops the car.
+    /// </summary>
+    public static DriveInput Follow(RoadPath path, Vector2 pos, float yaw, float speed, float turnRadiusM, float wantSpeed, CornerNumbers? corner = null, float capMps = float.PositiveInfinity)
     {
         if (path.IsEmpty) return Stop(speed);
         var s = path.Project(pos);
@@ -177,8 +220,9 @@ public static class ChasePilot
         var err = FlightMath.Wrap(RoadPath.Yaw(d) - yaw); // positive: the point ahead is to the left
         if (BackingRound(err, speed)) return new DriveInput { Throttle = -1f, Steer = MathF.Sign(err) }; // a K-turn: the nose turns to the way while the car backs
         var steer = MathF.Abs(err) > MathF.PI / 2f ? -MathF.Sign(err) : Math.Clamp(-2f * MathF.Sin(err) / dist * turnRadiusM, -1f, 1f);
-        var bend = MathF.Abs(FlightMath.Wrap(path.YawAt(s + 2f * ld) - path.YawAt(s)));
-        var want = wantSpeed * Math.Clamp(1.1f - bend / 1.2f, 0.35f, 1f) * Math.Clamp(1.2f - MathF.Abs(err) / 1.3f, 0.3f, 1f);
+        var cap = MathF.Min(wantSpeed, capMps);
+        if (corner is { } c) cap = MathF.Min(cap, CurveSpeed(path, s, speed, c)); // brakes before a bend, the radius read from the path
+        var want = cap * Math.Clamp(1.2f - MathF.Abs(err) / 1.3f, 0.3f, 1f);
         return new DriveInput { Throttle = Math.Clamp((want - speed) * 0.9f, -1f, 1f), Steer = steer };
     }
 

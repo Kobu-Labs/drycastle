@@ -177,34 +177,46 @@ internal sealed class ChaseFleet
         foreach (var u in _units) if (u.Where is { } p) yield return p;
     }
 
+    /// <summary>The van's trail since the objective (x, z), the oldest first.</summary>
+    public IReadOnlyList<NVec2> TrailPoints => Trail().Points;
+
     /// <summary>
     /// Puts one car down with its crew seated: on open drivable ground AHEAD of the van, an ambush (<c>ambush_side_m</c> beside the van's way to the drop, <c>spawn_ahead_min_m</c> to <c>spawn_ahead_max_m</c> along it, planned
     /// as a chase plans a way, facing along it; no sight rule, only no vehicle beside it) that waits for the van to pass and then follows, else (the drop is near) behind it on its trail, out of the party's sight. Null when it was; else why not.
     /// </summary>
     string? TrySpawn()
     {
-        var roads = _s.Roads;
-        var van = Flat(_run.VanFeet);
-        var off = _s.Open.Numbers;
-        var cars = new List<NVec2>(CarPositions());
-        var party = _run.Party;
-        // the van's way to the drop: roads where they bring it closer, open ground where that is shorter
-        var ahead = OffRoadRoute.Plan(roads, van, Flat(_run.Receiver.Position), (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off)?.Path;
-        // any open drivable ground (not only a road), with a way from it to the van
-        var spot = ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng,
-            open: p => _s.Open.Spot(p, off.CarHalfWidthM),
-            reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null,
-            ahead: ahead, aheadBlocked: p => _s.VehicleNear(p));
+        var spot = PickSpot(null);
         if (spot is not { } fit)
             return $"no open ground ahead of or behind the van is {_d.SpawnPlayerMinM:F0} m from every player and out of the party's sight yet";
         var gunmen = ChaseRules.Gunmen(_d, _run.Job.Tier, _run.Party.Count);
         var crew = new List<GangMemberKind> { GangMemberKind.Enforcer };
         for (var i = 0; i < gunmen; i++) crew.Add(GangMemberKind.Gunman);
-        if (ChaseUnit.Spawn(_s, _run, new RivalProfile("chase car", _d, crew), fit) is not { } unit) return "the car could not be put down";
+        if (ChaseUnit.Spawn(_s, _run, new RivalProfile("chase car", _d, crew, Fresh: Fresh, Trail: () => TrailPoints), fit) is not { } unit) return "the car could not be put down";
         _units.Add(unit);
         GD.Print($"server: {_run.Job}: chase car {(fit.BackM < 0 ? $"{-fit.BackM:F0} m ahead of the van on its way to the drop, beside the way (an ambush)" : $"{fit.BackM:F0} m behind the van")}");
         _run.Tell("A Rival car is after the van!");
         return null;
+    }
+
+    /// <summary>The fresh spot of a car that is lost or stalled: the spawn rules again (ahead first, else behind), the car itself not counted as another.</summary>
+    ChaseSpot? Fresh(ChaseUnit self) => PickSpot(self);
+
+    ChaseSpot? PickSpot(ChaseUnit? self)
+    {
+        var roads = _s.Roads;
+        var van = Flat(_run.VanFeet);
+        var off = _s.Open.Numbers;
+        var cars = new List<NVec2>();
+        foreach (var u in _units) if (u != self && u.Where is { } w) cars.Add(w);
+        var party = _run.Party;
+        // the van's way to the drop: roads where they bring it closer, open ground where that is shorter
+        var ahead = OffRoadRoute.Plan(roads, van, Flat(_run.Receiver.Position), (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off)?.Path;
+        // any open drivable ground (not only a road), with a way from it to the van
+        return ChaseSpawn.Pick(roads, Trail(), van, _s.PlayerPositions(), cars, _d, p => _s.Blocked(p, party), _s.Rng,
+            open: p => _s.Open.Spot(p, off.CarHalfWidthM),
+            reach: p => OffRoadRoute.Plan(roads, p, van, (a, b) => _s.Open.Line(a, b, off.CarHalfWidthM), off) != null,
+            ahead: ahead, aheadBlocked: p => _s.VehicleNear(p));
     }
 
     public void AfterVehicles()

@@ -38,16 +38,13 @@ public sealed class AssaultCarData
     public float GiveUpSeconds { get; set; } = 20;
 
     /// <summary>
-    /// Stalled: the newest Assault whose crew still rides in its vehicle and that got no <see cref="StallProgressM"/> closer to the van in <see cref="StallSeconds"/> (within <see cref="StallNearM"/> of it counts
-    /// as close enough: it is on the van's tail). It stops counting towards max_assaults_alive, the next Assault is sent right away, and it is removed with its crew once it is more than
-    /// <see cref="RemoveFarM"/> from every player and no player can see it.
+    /// Stalled: an Assault whose crew still rides in its vehicle, farther than the chase's out_within_m, and that got no <see cref="StallProgressM"/> closer to the van in <see cref="StallSeconds"/> (within <see cref="StallNearM"/> of it counts
+    /// as close enough: it is on the van's tail). It is relocated (moved to a fresh spot by the spawn rules) when no player can see it and all are far; only when it cannot be does it stop counting towards
+    /// max_assaults_alive and the next Assault go right away. A chase car's own numbers are the chase section's (the same machine).
     /// </summary>
     public float StallProgressM { get; set; } = 10;
     public float StallSeconds { get; set; } = 10;
     public float StallNearM { get; set; } = 40;
-    public float RemoveFarM { get; set; } = 150;
-    /// <summary>How often a stalled Assault is looked at for removal (the sight check is a ray from every player).</summary>
-    public float RemoveCheckSeconds { get; set; } = 1;
 
     /// <summary>
     /// The crew posts in the cargo bay, in the vehicle's frame (x right, y up, z towards the REAR; the van's game frame, converted from scripts/vehicles/specs/cartel_van.json's source frame as the standardizer does it: z_game = 0.074 - z_src, x mirrored; the bulkhead at src z 0.271 is game z -0.197, the rear doors' hinge at src -2.295 is 2.369, the bay floor y 0.73):
@@ -65,6 +62,7 @@ public sealed class AssaultCarData
     {
         var d = chase.Copy();
         d.VehicleType = VehicleType; d.Skin = Skin; d.GiveUpM = GiveUpM; d.GiveUpSeconds = GiveUpSeconds;
+        d.StallProgressM = StallProgressM; d.StallSeconds = StallSeconds; d.StallNearM = StallNearM;
         return d;
     }
 
@@ -81,10 +79,10 @@ public sealed class AssaultCarData
             if (b[1] > GiveUpM) throw Bad($"spawn_bands_m[{i}] reaches {b[1]:F0} m, past give_up_m {GiveUpM:F0}: an Assault put down there would give up at once");
             if (i > 0 && (b[0] > SpawnBandsM[i - 1][0] || b[1] < SpawnBandsM[i - 1][1])) throw Bad($"spawn_bands_m[{i}] must contain the band before it (a wider band)");
         }
-        foreach (var (v, name) in new[] { (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (RemoveFarM, "remove_far_m"), (StallNearM, "stall_near_m") })
+        foreach (var (v, name) in new[] { (SpawnPlayerMinM, "spawn_player_min_m"), (SpawnApartM, "spawn_apart_m"), (StallNearM, "stall_near_m") })
             if (!float.IsFinite(v) || v < 0) throw Bad($"{name} must be 0 or more");
         foreach (var (v, name) in new[] { (SpawnRoadStepM, "spawn_road_step_m"), (SpawnRingStepDeg, "spawn_ring_step_deg"), (SpawnRingStepM, "spawn_ring_step_m"), (SpawnHalfWidthM, "spawn_half_width_m"), (GiveUpM, "give_up_m"), (GiveUpSeconds, "give_up_seconds"),
-                     (StallProgressM, "stall_progress_m"), (StallSeconds, "stall_seconds"), (RemoveCheckSeconds, "remove_check_seconds") })
+                     (StallProgressM, "stall_progress_m"), (StallSeconds, "stall_seconds") })
             if (!float.IsFinite(v) || v <= 0) throw Bad($"{name} must be more than 0");
         if (SpawnChecks < 1) throw Bad("spawn_checks must be at least 1");
         if (!float.IsFinite(BayExitZ)) throw Bad("bay_exit_z_m must be a number");
@@ -96,6 +94,12 @@ public sealed class AssaultCarData
 /// <summary>The rules of an Assault van's crew that are plain numbers (docs/cartel.md "Assaults").</summary>
 public static class AssaultRules
 {
+    /// <summary>
+    /// A due Assault may be sent: fewer than max_assaults_alive count towards the cap (a stalled one that could not be relocated does not), and never more than max_assaults_alive + 1 of the heist's vans exist at once
+    /// (<paramref name="existing"/>: every van in the fight, stalled or not).
+    /// </summary>
+    public static bool MaySend(int counting, int existing, int maxAlive) => counting < maxAlive && existing < maxAlive + 1;
+
     /// <summary>
     /// The kinds of the crew in the order they take their slots (a seat of the vehicle first, then the bay's posts): the driver (slot 0) is an Enforcer when the crew has one, the Gunmen follow (the cab's other seat
     /// is a window: that Gunman shoots; the bay's riders do not), any Enforcer after the first last. The server cuts it to the room the vehicle has.
@@ -114,26 +118,32 @@ public static class AssaultRules
 public enum AssaultStallState : byte { Idle, Watching, Stalled }
 
 /// <summary>
-/// Whether an Assault makes headway (docs/cartel.md "Assaults"), pure: only the NEWEST Assault whose crew still rides is watched. It gets stall_progress_m closer to the Cartel van in stall_seconds, or it is
-/// Stalled (the fleet then sends the next Assault right away and stops counting this one). Within stall_near_m of the van is close enough (on its tail). A stalled Assault stays so until its crew is out.
+/// Whether a Rival vehicle (an Assault van or a chase car: one machine) makes headway (docs/cartel.md "Assaults", "Chase cars"), pure: only a vehicle whose crew rides, farther from the van than out_within_m, is watched (the
+/// caller says so in <c>riding</c>; <c>newest</c> is the caller's choice too, the server watches every one). It gets stall_progress_m closer to the Cartel van in stall_seconds, or it is
+/// Stalled (the server then relocates it; an Assault that cannot be relocated stops counting and the next is sent right away). Within stall_near_m of the van is close enough (on its tail). A stalled vehicle stays so until its crew is out, or it is relocated (<see cref="Relocated"/>).
 /// </summary>
 public sealed class AssaultStall
 {
     public static readonly StateMachineSpec<AssaultStallState> Spec = StateMachineSpec<AssaultStallState>
-        .Define("Assault.Stall", "Whether an Assault van makes headway to the Cartel van: only the newest Assault whose crew still rides is watched; no stall_progress_m closer in stall_seconds is stalled (the next Assault is sent right away, this one no longer counts towards the cap and goes once it is far from every player and unseen).", AssaultStallState.Idle)
+        .Define("Assault.Stall", "Whether a Rival vehicle (Assault van or chase car) makes headway to the Cartel van: one whose crew rides and that is farther than out_within_m is watched; no stall_progress_m closer in stall_seconds is stalled (it is relocated to a fresh spot when unseen and far from every player; an Assault that cannot be relocated stops counting towards the cap and the next is sent right away).", AssaultStallState.Idle)
         .Allow(AssaultStallState.Idle, AssaultStallState.Watching)
         .Allow(AssaultStallState.Watching, AssaultStallState.Idle, AssaultStallState.Stalled)
         .Allow(AssaultStallState.Stalled, AssaultStallState.Idle)
-        .Note(AssaultStallState.Idle, "Not watched: a newer Assault whose crew rides exists, or the crew is out (on foot), or it just spawned.")
-        .Note(AssaultStallState.Watching, "The newest riding Assault: the window (clock: stall_seconds) starts over each time it gets stall_progress_m closer to the van, or is within stall_near_m of it. Out of time: Stalled.")
-        .Note(AssaultStallState.Stalled, "Made no headway: counts no more towards max_assaults_alive (the next was sent at once); removed with its crew when more than remove_far_m from every player and out of every player's sight. Ends when the crew gets out.")
+        .Note(AssaultStallState.Idle, "Not watched: the crew is out (on foot), the vehicle is within out_within_m of the van, it waits or stops, or it just spawned or was relocated.")
+        .Note(AssaultStallState.Watching, "A riding vehicle far from the van: the window (clock: stall_seconds) starts over each time it gets stall_progress_m closer to the van, or is within stall_near_m of it. Out of time: Stalled.")
+        .Note(AssaultStallState.Stalled, "Made no headway: relocated (a fresh spot by its kind's spawn rules) when no human sees it and every player is spawn_player_min_m away, which ends it (Idle, counts again); an Assault that cannot be relocated counts no more towards max_assaults_alive (the next was sent at once). Ends when the crew gets out.")
         .Build();
 
     readonly StateMachine<AssaultStallState> _fsm = new(Spec);
-    readonly AssaultCarData _d;
+    readonly float _progressM, _seconds, _nearM;
     float _ref;
 
-    public AssaultStall(AssaultCarData d) { _d = d; }
+    public AssaultStall(AssaultCarData d) : this(d.StallProgressM, d.StallSeconds, d.StallNearM) { }
+
+    public AssaultStall(float progressM, float seconds, float nearM) { _progressM = progressM; _seconds = seconds; _nearM = nearM; }
+
+    /// <summary>It was moved to a fresh spot: a new one, watched afresh.</summary>
+    public void Relocated() { if (!_fsm.Is(AssaultStallState.Idle)) _fsm.Enter(AssaultStallState.Idle); }
 
     public AssaultStallState State => _fsm.Current;
     /// <summary>It counts towards max_assaults_alive (while in the fight): every state but Stalled.</summary>
@@ -145,11 +155,11 @@ public sealed class AssaultStall
         switch (_fsm.Current)
         {
             case AssaultStallState.Idle:
-                if (riding && newest) { _ref = distM; _fsm.Enter(AssaultStallState.Watching, _d.StallSeconds); }
+                if (riding && newest) { _ref = distM; _fsm.Enter(AssaultStallState.Watching, _seconds); }
                 return false;
             case AssaultStallState.Watching:
                 if (!riding || !newest) { _fsm.Enter(AssaultStallState.Idle); return false; }
-                if (distM <= _d.StallNearM || distM <= _ref - _d.StallProgressM) { _ref = distM; _fsm.Restart(_d.StallSeconds); return false; }
+                if (distM <= _nearM || distM <= _ref - _progressM) { _ref = distM; _fsm.Restart(_seconds); return false; }
                 if (!_fsm.Tick(dt)) return false;
                 _fsm.Enter(AssaultStallState.Stalled);
                 return true;
@@ -166,11 +176,13 @@ public readonly record struct AssaultSpot(RoadPlace? Place, Vector2 Ground, floa
 /// <summary>Where an Assault van is put down, pure (docs/cartel.md "Assaults"): the rules of the spot.</summary>
 public static class AssaultSpawn
 {
+    /// <summary>Candidates are shuffled within buckets of this many metres of straight distance from the van, the nearer bucket first.</summary>
+    public const float NearBucketM = 50f;
+
     /// <summary>
     /// A spot for a new Assault, or null (with <paramref name="why"/>) when none fits. Band by band (the first is the wanted one, the others widen it): a road point (every spawn_road_step_m) or an open ground point
     /// (on rings round <paramref name="target"/>, where <paramref name="open"/> says a van can stand) that is at least spawn_player_min_m from every player, spawn_apart_m from the other Rival vehicles
-    /// (<paramref name="rivals"/>), not <paramref name="blocked"/> (a vehicle beside it) and whose drivable way to <paramref name="target"/> (<paramref name="wayM"/>: its length, null when none) is in the band. Candidates are
-    /// looked at in random order, at most spawn_checks route plans in all the bands together (one budget: a band that uses it up leaves none to the wider ones); the first that fits is the spot (it faces along the road, or straight, towards the target).
+    /// (<paramref name="rivals"/>), not <paramref name="blocked"/> (a vehicle beside it) and whose drivable way to <paramref name="target"/> (<paramref name="wayM"/>: its length, null when none) is in the band. Candidates under 0.6 x the band's minimum of straight distance are dropped, the others are looked at nearest first, from the band's minimum up (shuffled only within 50 m buckets of straight distance from the target), at most spawn_checks route plans in all the bands together (one budget: a band that uses it up leaves none to the wider ones); the first that fits is the spot (it faces along the road, or straight, towards the target).
     /// </summary>
     public static AssaultSpot? Pick(RoadGraph roads, Vector2 target, IReadOnlyList<Vector2> players, IReadOnlyList<Vector2> rivals, AssaultCarData d, Func<Vector2, bool> blocked,
         Func<Vector2, bool>? open, Func<Vector2, float?> wayM, Random rng, out string why)
@@ -213,7 +225,12 @@ public static class AssaultSpawn
                         if (Fits(p) && open(p)) cands.Add((null, p));
                     }
             seen += cands.Count;
+            // nearest first: the way is never shorter than the straight line, so one under 0.6 x the band's minimum is skipped; shuffled only within 50 m buckets of the straight distance,
+            // and the route budget is spent in that order (a spot on a nearby track wins over a village a kilometre off)
+            // (from the band's minimum up first; the ones between 0.6 x and 1 x of it only after those, a winding way may still be in the band)
+            cands.RemoveAll(c => Vector2.Distance(c.Ground, target) < 0.6f * lo);
             for (var i = cands.Count - 1; i > 0; i--) { var j = rng.Next(i + 1); (cands[i], cands[j]) = (cands[j], cands[i]); }
+            cands = cands.OrderBy(c => { var dd = Vector2.Distance(c.Ground, target); return (dd >= lo ? 0 : 1000000) + (int)(dd / NearBucketM); }).ToList(); // stable: the shuffle holds within a bucket
             for (var i = 0; i < cands.Count; i++)
             {
                 if (!TryWay(cands[i].Ground, out var found)) break;

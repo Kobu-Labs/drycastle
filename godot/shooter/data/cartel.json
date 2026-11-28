@@ -50,12 +50,12 @@
   // the cab seats at z -0.586. Two rows (z 0.45 and 1.35), 0.5 either side of the middle. The figure sits with its hips seat_pelvis_m (0.42) above its feet, so the posts are on the floor (the seat's own point is lowered by chase seat_drop_m).
   // bay_exit_z_m 3.6: 1.07 behind the van's tail (2.53). WHERE: a road or open drivable ground point whose drivable way to the Cartel van (the length of the way it would drive: off_road's plan) lies in a band [min, max] of spawn_bands_m,
   // at least spawn_player_min_m from every player, spawn_apart_m from the other Rival vehicles, clear of vehicles; NO out-of-sight rule (the drive in is the warning). Road points every spawn_road_step_m, open ground points on rings
-  // spawn_ring_step_m apart every spawn_ring_step_deg round the van (where a van of spawn_half_width_m can stand); at most spawn_checks (12: each is a road and open ground route plan) candidates have their way worked out, in random order, ONE budget for all the bands together (a band that uses it up leaves none to the wider ones). The first band is the wanted
+  // spawn_ring_step_m apart every spawn_ring_step_deg round the van (where a van of spawn_half_width_m can stand); at most spawn_checks (12: each is a road and open ground route plan) candidates have their way worked out, in nearest-first order, ONE budget for all the bands together (a band that uses it up leaves none to the wider ones). The first band is the wanted
   // 250 to 400 m; when no point fits it the next, wider band is tried (200-600, then 100-600), so an Assault is sent rather than none; the log says which band and why a send failed. GIVE UP: give_up_m 600 for give_up_seconds
   // (the chase car's 250 would fire at once from a 250-400 m spawn); no band's max may be past give_up_m (checked), or a van put down there would give up at once. The Assault van drives on the chase numbers, far_m / far_speed_mps included
-  // (120 km/h more than 100 m behind the Cartel van; the Cartel van type's own top speed is 33, so it just reaches it). When its crew is on foot it heads for the objective's centre (snapped onto the navigation mesh) while the Heist is at the objective, else for the Cartel van (on the road, at the drop). STALLED: the newest Assault whose crew still rides in its vehicle and that got no stall_progress_m (10) closer to the van in stall_seconds (10) (within stall_near_m (40)
-  // of it is close enough: it is on the van's tail) is stalled: the next Assault is sent right away (the interval starts over from it), it no longer counts towards max_assaults_alive, and it is removed with its crew once it is more than
-  // remove_far_m (150) from every player and no player can see it (a line of sight, as a Gunman's; looked at every remove_check_seconds).
+  // (120 km/h more than 100 m behind the Cartel van; the Cartel van type's own top speed is 33, so it just reaches it). When its crew is on foot it heads for the objective's centre (snapped onto the navigation mesh) while the Heist is at the objective, else for the Cartel van (on the road, at the drop). STALLED: an Assault whose crew rides in its vehicle, farther than the chase's out_within_m, and that got no stall_progress_m (10) closer to the van in stall_seconds (10) (within stall_near_m (40)
+  // of it is close enough: it is on the van's tail) is stalled and RELOCATED to a fresh spot by the band rules when no player can see it and every player is spawn_player_min_m away; only when it cannot be does it stop counting towards max_assaults_alive and the next Assault go
+  // right away (the interval starts over from it). Never more than max_assaults_alive + 1 Assault vans exist at once. Candidates are looked at nearest first (straight distance from the band's minimum up, shuffled within 50 m buckets; none under 0.6 x the minimum).
   "assault_car": {
     "vehicle_type": "cartel_van",
     "skin": 1,
@@ -72,8 +72,6 @@
     "stall_progress_m": 10,
     "stall_seconds": 10,
     "stall_near_m": 40,
-    "remove_far_m": 150,
-    "remove_check_seconds": 1,
     "bay_posts": [[-0.5, 0.73, 0.45], [0.5, 0.73, 0.45], [-0.5, 0.73, 1.35], [0.5, 0.73, 1.35]],
     "bay_exit_z_m": 3.6
   },
@@ -81,10 +79,10 @@
   // off_road (OffRoadData, ShooterCore/Cartel/OffRoad.cs; docs/cartel.md "Assaults", "Chase cars"): how the Rival crew's vehicles (Assault vans, chase cars) leave the roads. They use the roads while the roads bring them closer
   // and cross open ground (fields, meadows) when that is shorter, never over a building, a tree trunk, a fence, water or a slope steeper than max_grade. A plan is the cheapest of: straight (cost open_cost per metre; a metre of road
   // costs 1, so roads win unless the field is clearly shorter), or join the nearest road within enter_m (the line to it open) and leave it at the road point within leave_m of the goal (one every step_m, at most max_checks tried) whose
-  // line to the goal is open. close_m: within this of its end a line is not looked at. The open check (the server's
+  // line to the goal is open. track_width_m (4) / track_cost (1.5): a metre of a road edge narrower than track_width_m costs track_cost (wide roads win when they are not much longer). close_m: within this of its end a line is not looked at. The open check (the server's
   // OpenGround) looks at a line every sample_m in three lanes the vehicle's width wide (its half width plus margin_m) with rays ray_up_m over the ground; car_half_width_m is the car's, for a spot to stand on.
   "off_road": {
-    "enter_m": 80, "leave_m": 300, "step_m": 15, "open_cost": 1.3, "close_m": 6, "max_checks": 10,
+    "enter_m": 80, "leave_m": 300, "step_m": 15, "open_cost": 1.3, "close_m": 6, "max_checks": 10, "track_width_m": 4, "track_cost": 1.5,
     "sample_m": 4, "ray_up_m": 0.9, "max_grade": 0.45, "margin_m": 0.3, "car_half_width_m": 1.1
   },
 
@@ -307,6 +305,10 @@
       // Before that, a car wedged (under 1 m/s with the van beyond follow_m) for unstick_after_seconds backs out for reverse_seconds and drives on, at most max_unsticks times in a row (the count is forgotten after 3 s at 3 m/s).
       // REMOUNT: a crew on foot whose van is more than remount_m from its nearest living member and pulling away (the gap grows faster than pull_mps, smoothed, for remount_confirm_seconds) walks back to its car over the navigation mesh and gets in (the
       // seats as when it spawned) when the car is not wrecked, no player sits in it and its driver lives; remount_seconds to do it, then it stays on foot and tries again after remount_retry_seconds. A wrecked or taken car: they stay on foot.
+      // LOST (Chase.Car state Lost): a car stuck (no way, or no 1 m/s for stalled_seconds) farther than out_within_m (60) from the van keeps its crew seated, brakes and plans again; within out_within_m the crew gets out and walks the rest. Lost, or no stall_progress_m (10)
+      // closer in stall_seconds (10; within stall_near_m (40) is close enough) while riding farther than out_within_m: RELOCATED, with the crew seated, to a fresh spot by its kind's spawn rules when no human sees it and every player is spawn_player_min_m away; else again after
+      // relocate_retry_seconds (3); relocate_max_tries (5) failures to find a spot in a row remove it. No way to the van: it drives to the nearest point it can reach (a road point near the van, else the van's trail). A crew on foot more than remount_far_m (150)
+      // from the van walks back to its car (no pulling away needed). BENDS: speed through a bend is sqrt(corner_grip x the car type's max_lateral_accel x radius), planned with 0.8 x the car's brake; track_speed_mps (13) on a road edge narrower than off_road track_width_m, open_speed_mps (12) on open ground.
       // follow_m: the gap it keeps (it slows below the van's speed when closer, speeds up by catch_up_gain per metre of gap beyond it, at most max_speed_mps = 23.33, 84 km/h: 1.4 times the loaded Cartel van's 60 km/h, or far_speed_mps = 33, 120 km/h while the gap is more than far_m = 100 (the rubber band: a car left far behind catches up; 84 km/h close, 120 km/h far); an NPC's input only,
       // the car type's own top speed is 44.4 (the Cartel van type's 33) and a player's car is not limited by it); the way (roads where they bring it closer, open ground where that is shorter) is planned again every repath_seconds. A car or crew more
       // than give_up_m from the van for give_up_seconds gives up and is removed with its crew (an Assault van's own: assault_car give_up_m). The Assault vans drive on these numbers too. A destroyed car's crew inside dies with it; its wreck lies wreck_seconds (keep it under vehicles.json destroyed_return_time) then goes. seat_drop_m: the crew
@@ -347,6 +349,16 @@
         "remount_confirm_seconds": 1,
         "remount_seconds": 30,
         "remount_retry_seconds": 10,
+        "remount_far_m": 150,
+        "out_within_m": 60,
+        "relocate_retry_seconds": 3,
+        "relocate_max_tries": 5,
+        "stall_progress_m": 10,
+        "stall_seconds": 10,
+        "stall_near_m": 40,
+        "corner_grip": 0.7,
+        "track_speed_mps": 13,
+        "open_speed_mps": 12,
         "follow_m": 14,
         "catch_up_gain": 1,
         "max_speed_mps": 23.33,
@@ -433,6 +445,16 @@
         "remount_confirm_seconds": 1,
         "remount_seconds": 30,
         "remount_retry_seconds": 10,
+        "remount_far_m": 150,
+        "out_within_m": 60,
+        "relocate_retry_seconds": 3,
+        "relocate_max_tries": 5,
+        "stall_progress_m": 10,
+        "stall_seconds": 10,
+        "stall_near_m": 40,
+        "corner_grip": 0.7,
+        "track_speed_mps": 13,
+        "open_speed_mps": 12,
         "follow_m": 14,
         "catch_up_gain": 1,
         "max_speed_mps": 23.33,
