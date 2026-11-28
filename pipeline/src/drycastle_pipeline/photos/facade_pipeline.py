@@ -43,6 +43,9 @@ MAX_OFF_SQUARE_DEG = 78.0
 ROOFS = ("gabled", "hipped", "flat")
 OPENING_KINDS = ("window", "door", "glass_door", "garage_door")  # glass_door: a glazed door to the floor, built as a window from the ground
 ROOF_EDGES = ("eave", "gable")
+STEEP_DEG = 45.0  # a roof read steeper than any roof is is built this steep
+TALL_ROOF, TALL_STEEP_DEG = 1.3, 50.0  # nor one taller than 1.3 times the walls and steeper than 50 degrees
+EAVE_MAX_M = 4.2  # a line on a gable wall higher than one storey is more likely one in the gable (a balcony, a band) than its eave
 LINE_MERGE_PX = 10
 # A photo's colours are the light of that hour, not the paint: a cream wall in shade is grey-brown in pixels. What a
 # model can say reliably is the kind of colour; the photo then only gives the hue. Lightness is OpenCV's L (0..255).
@@ -1218,6 +1221,9 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
     for cap in state["captures"]:  # the newest capture's word on the whole house
         names.update({k: v for k, v in (by_cap[cap["n"]].get("house") or {}).items() if v})
     bid = state["building"]
+    if not dry and not replace and f"  {bid}:" in (PIPELINE_DIR / "config" / "overrides.yaml").read_text().splitlines():
+        # (checked before anything is written: the detail file and the overrides entry go together)
+        raise SystemExit(f"{bid} already has an entry in overrides.yaml: look at it, then pass --replace to overwrite it")
     all_b = json.loads((WORK / "buildings.json").read_text())["buildings"]
     b0 = next(x for x in all_b if x["id"] == bid)
     ring = b0["footprint"]["exterior"]
@@ -1492,13 +1498,15 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         # gable wall: a garage's front, a porch) is a door's head or a lower roof's edge, not the house's eave
         _, kind0, i0 = min(roof_edges)
         e0 = next(x for x in edges if x["i"] == i0)
+        unbelieved = None  # the wall named a gable that is not believed one
         from drycastle_pipeline.buildings.roof_fit import gable_believable
 
         across0 = [p[0] * e0["normal"][0] + p[1] * e0["normal"][1] for p in ring]
         if kind0 == "gable" and not gable_believable(e0["length"], max(across0) - min(across0)):
             problems.append(f"edge {i0} was named a gable wall, but it is {e0['length']:.1f} m long on a house {max(across0) - min(across0):.1f} m deep: taken as an eave wall")
             roof_edges = [(s, "eave" if i == i0 else k, i) for s, k, i in roof_edges]
-            kind0 = "eave"
+            kind0, unbelieved = "eave", i0
+            gable_eaves = [g for g in gable_eaves if not g[3].endswith(f"_e{i0}")]  # (its "verges" were no gable's)
         way0 = math.atan2(e0["q"][1] - e0["p"][1], e0["q"][0] - e0["p"][0]) + (0.0 if kind0 == "eave" else math.pi / 2)
         if kind0 == "gable":
             lead = [[round(float(v), 2) for v in e0["p"]], [round(float(v), 2) for v in e0["q"]]]
@@ -1507,9 +1515,33 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             e = next(x for x in edges if x["i"] == int(key.rsplit("_e", 1)[1]))
             return abs(math.cos(math.atan2(e["q"][1] - e["p"][1], e["q"][0] - e["p"][0]) - way0)) < 0.5
 
-        for t in [t for t in eaves if across(t[2])]:
+        # (when the gable named was not believed, a wall named an eave across the new ridge keeps its reading: the roof was
+        # seen coming down to it, as it does to a hipped end, and the top of the wall there is the eave)
+        named_eave = {i for _, k, i in roof_edges if k == "eave" and i != unbelieved} if unbelieved is not None else set()
+        ends_seen = sorted(i for i in named_eave if across(f"_e{i}"))
+        if ends_seen:  # the roof comes down to an end wall too: a hipped roof along the long wall, not a gable at its end
+            roof, hip_along = "hipped", unbelieved
+            invented.append(f"the roof taken as hipped along edge {unbelieved}: the roof was seen coming down to the end wall(s) {ends_seen}, and no gable that wide is believed")
+        dropped = [t for t in eaves if across(t[2]) and int(t[2].rsplit("_e", 1)[1]) not in named_eave]
+        for t in dropped:
             eaves.remove(t)
             problems.append(f"{t[2]}: the line named as the wall's top ({t[1]:.2f} m) is not the house's eave (this wall runs across the ridge): not used")
+        if unbelieved is not None and any(not t[2].endswith(f"_e{unbelieved}") for t in eaves):
+            # its top was read as a gable wall's, on a wall misread as a gable: the walls the roof was seen coming down to
+            # say more
+            for t in [t for t in eaves if t[2].endswith(f"_e{unbelieved}")]:
+                eaves.remove(t)
+                problems.append(f"{t[2]}: the line named as the wall's top ({t[1]:.2f} m) was read on a wall taken for a gable: not used")
+        if dropped and not eaves and not gable_eaves:  # (a gable wall's verges, read where they pass its ends, say more)
+            # no wall along the ridge was read: a wall across it is a gable wall, and the top of its upright part, where
+            # the gable starts at the corners, is the eave. Believed when it stands clear above the ground floor's
+            # openings (a door's head or a porch roof read as the wall's top does not)
+            heads_g = [o["sill_m"] + o["height_m"] for o in kept if o["sill_m"] < 1.2]
+            floor_g = max([2.6, *(h + 0.3 for h in heads_g)])
+            kept_g = [t for t in dropped if floor_g <= t[1] <= EAVE_MAX_M]
+            if kept_g:
+                eaves.extend(kept_g)
+                problems.append("no eave wall's top was read: the top of the gable wall(s) " + ", ".join(t[2] for t in kept_g) + " is taken as the eave")
     if eaves:
         eave = min(eaves)[1]  # the wall seen most square-on
         vals = [e for _, e, _ in eaves]
@@ -1544,6 +1576,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         ridge_dir = round(math.atan2(e["q"][1] - e["p"][1], e["q"][0] - e["p"][0]) % math.pi, 4)
     top = eave
     fitted = None
+    turned = False  # the ridge turned to run along the house: the gable wall read is not one
     if roof != "flat":
         middle, half = roof_middle(ring)
         if part is not None:
@@ -1562,6 +1595,17 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             fitted = roof_fit.fit(fit_poly, roof, ridge_dir, 1.0, eave, lead=lead)
             if fitted is not None:
                 middle, half = fitted.middle, fitted.half
+                if roof == "gabled" and ridge_dir is not None and abs(math.sin(fitted.angle - ridge_dir)) > 0.5:
+                    problems.append("the ridge was read across the house, under gables far wider than the house is long: it is turned to run along the house")
+                    ridge_dir, turned = round(fitted.angle % math.pi, 4), True
+        elif roof == "gabled" and ridge_dir is not None:  # one plain roof: the same, over the footprint's own extent
+            from drycastle_pipeline.buildings.roof_fit import gable_believable
+
+            along_r = [p[0] * math.cos(ridge_dir) + p[1] * math.sin(ridge_dir) for p in ring]
+            across_r = [-p[0] * math.sin(ridge_dir) + p[1] * math.cos(ridge_dir) for p in ring]
+            if not gable_believable(max(across_r) - min(across_r), max(along_r) - min(along_r)):
+                problems.append(f"the ridge was read across the house, under gables {max(across_r) - min(across_r):.1f} m wide: it is turned to run along the house")
+                ridge_dir, turned = round((ridge_dir + math.pi / 2) % math.pi, 4), True
         found, marked_ridges = [], []
         for cap in state["captures"]:
             mark = by_cap[cap["n"]].get("ridge")
@@ -1572,7 +1616,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
                 # a gable wall facing the camera: the roof's top shows where its front end is, over that wall (a little
                 # in front of it: the verge), not over the middle of the house
                 at = middle
-                if lead is not None:
+                if lead is not None and not turned:
                     e0n = next(x for x in edges if x["p"][0] == e0["p"][0] and x["p"][1] == e0["p"][1])["normal"]
                     at = ((lead[0][0] + lead[1][0]) / 2 + e0n[0] * 0.4, (lead[0][1] + lead[1][1]) / 2 + e0n[1] * 0.4)
                 h = ridge_height(cv2.imread(cap["photo"]), cap["camera_final"], at, eave)
@@ -1582,7 +1626,7 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
             found = marked_ridges
         elif not found and gable_eaves and not eaves:  # the sky's outline gave none: where the gable's two roof edges meet
             found = [min(gable_eaves)[2]]
-        if found and not eaves and lead is not None:
+        if found and not eaves and lead is not None and not turned:
             # no eave was seen, the gable wall was: its upper windows stand under the roof, so the roof's slopes pass
             # over their corners and meet the wall's ends no lower than that
             ridge_z, mid_s = float(np.median(found)), e0["length"] / 2
@@ -1596,10 +1640,18 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         rise = (float(np.median(found)) - eave) if found else None
         steepest = math.tan(math.radians(60 if roof == "gabled" else 52)) * half
         if rise is not None and steepest < rise <= 1.5 * steepest:
-            # a little too steep to be true (the outline took in a dormer's top or a chimney), yet it does say the roof
-            # is steep: the steepest roof that is believed, not the 30 degrees of a roof nothing is known about
-            problems.append(f"the roof's outline gives a rise of {rise:.2f} m over a half-width of {half:.1f} m, steeper than a roof is: built as steep as is believed ({steepest:.2f} m rise)")
-            rise = steepest
+            # a little too steep to be true (the outline took in a dormer's top, a chimney or a roof behind), yet it does
+            # say the roof is steep: a steep roof (45 degrees, as steep roofs mostly are), not the 30 degrees of a roof
+            # nothing is known about. (Not the steepest that is believed: the reading is off, and by how much is not known)
+            steep = math.tan(math.radians(STEEP_DEG)) * half
+            problems.append(f"the roof's outline gives a rise of {rise:.2f} m over a half-width of {half:.1f} m, steeper than a roof is: built as a steep roof ({steep:.2f} m rise)")
+            rise = steep
+        if rise is not None and rise > TALL_ROOF * eave and rise > math.tan(math.radians(TALL_STEEP_DEG)) * half:
+            # steep and much taller than the walls (the lint's limit, buildings/lint_geometry.py): the outline took in
+            # something behind; a steep roof is built
+            steep = math.tan(math.radians(STEEP_DEG)) * half
+            problems.append(f"the roof's outline gives a rise of {rise:.2f} m over walls {eave:.2f} m high, steeper than {TALL_STEEP_DEG:.0f} degrees: built as a steep roof ({steep:.2f} m rise)")
+            rise = steep
         if rise is None or not (math.tan(math.radians(25)) * half <= rise <= math.tan(math.radians(60 if roof == "gabled" else 52)) * half):
             guess_rise = math.tan(math.radians(30)) * half
             problems.append(("NO RIDGE MEASURED" if rise is None else f"the roof's outline gives a rise of {rise:.2f} m over a half-width of {half:.1f} m, not a believable roof")
@@ -1708,7 +1760,8 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         invented.append("measured walls: openings centred on their wall, doors at least " + f"{hr.DOOR_MIN_W_M} m wide")
     kept = tidied
     if guess:  # as a builder sets them: one opening per floor, rows on one line, a lone window mirrored (docs/house-anomalies.md)
-        kept, evened = hr.regularise(kept, {e["i"]: e["length"] for e in edges}, eave, set(seen))
+        gables = {i for i, r in roles.items() if r["roof_edge"] == "gable"} if front is not None else None
+        kept, evened = hr.regularise(kept, {e["i"]: e["length"] for e in edges}, eave, set(seen), gables)
         invented += evened
     openings = sorted(kept, key=lambda o: (o["edge"], o["at_m"]))
     counts: dict[str, int] = {}
@@ -1865,6 +1918,12 @@ def stage_apply(out: Path, dry: bool, replace: bool, guess: bool = True) -> None
         if lights:
             detail["skylights"] = lights
             invented.append(f"{len(lights)} roof window(s) on the slopes no capture saw")
+    if guess:  # once more on the openings as they are now (doors dressed, the balcony's door): what the rules set holds
+        again, evened = hr.regularise(openings, {e["i"]: e["length"] for e in edges}, eave, set(seen), gables)
+        if evened:
+            hr.give_ids(again)
+            openings[:] = sorted(again, key=lambda o: (o["edge"], o["at_m"]))
+            invented += evened
     b = _derived(bid, ov)
     while True:  # an opening the generated shell cannot hold is left out and reported
         try:

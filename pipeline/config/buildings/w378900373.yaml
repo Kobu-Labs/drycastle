@@ -2,13 +2,11 @@
 # Wall top 4.68 m, roof top 8.64 m. Walls seen: edges [6]. Not modelled: chimney, three roof windows, downpipe, plinth, electric meter box.
 id: w378900373
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.22
 frame_colour: '#5a4030'
 surround_colour: '#5e9a5a'
 trim_colour: '#5e9a5a'
 ridge_caps: true
-plinth: {height_m: 0.38, colour: '#627161'}
 apron: {width_m: 0.44, colour: '#bab0a1'}
 roof_tiles: true
 eaves: {colour: '#41424a', fascia_m: 0.18, gutter: true, rafters: true}
@@ -20,9 +18,10 @@ chimneys:
 - {x: -111.52, y: 154.61, top_m: 9.14, width_m: 0.5, depth_m: 0.5, cap: true}
 skylights:
 - {edge: 0, at_m: 3.96, up_m: 1.22}
+interior: true
 openings:
-  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.38, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 0, at_m: 4.71, width_m: 1.71, height_m: 1.7, sill_m: 1.26, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 4.71, width_m: 1.71, height_m: 1.7, sill_m: 0.35, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 1, at_m: 0.99, width_m: 1.71, height_m: 1.7, sill_m: 1.26, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w3, kind: window, edge: 1, at_m: 2.69, width_m: 1.0, height_m: 1.0, sill_m: 5.08, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w4, kind: window, edge: 1, at_m: 3.69, width_m: 1.71, height_m: 1.7, sill_m: 1.26, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

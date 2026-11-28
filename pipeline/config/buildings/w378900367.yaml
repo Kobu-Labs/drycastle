@@ -2,7 +2,6 @@
 # Wall top 2.99 m, roof top 6.71 m. Walls seen: edges [6]. Not modelled: decorative plaster pilasters, white eave band, downpipes.
 id: w378900367
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.25
 frame_colour: '#5a4030'
 trim_colour: '#f2f0ea'
@@ -23,10 +22,11 @@ downpipes:
 skylights:
 - {edge: 2, at_m: 3.12, up_m: 1.18}
 - {edge: 4, at_m: 3.6, up_m: 1.18}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 3, at_m: 1.29, width_m: 0.99, height_m: 1.29, sill_m: 1.15, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.43, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w2, kind: window, edge: 4, at_m: 4.46, width_m: 0.99, height_m: 1.29, sill_m: 1.15, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 4, at_m: 4.46, width_m: 0.99, height_m: 0.9, sill_m: 1.58, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w3, kind: window, edge: 5, at_m: 1.8, width_m: 0.99, height_m: 1.29, sill_m: 1.15, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 5, at_m: 3.2, width_m: 0.99, height_m: 1.0, sill_m: 3.39, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 5, at_m: 4.59, width_m: 0.99, height_m: 1.29, sill_m: 1.15, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

@@ -854,19 +854,26 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                 )
             if o.frame_m:
                 _add_frame(out, to3, o, r, max(r - FRAME_PROUD_M, base), frame)
+            # (what stands on the wall round the opening ends under the wall's top: a gable window near the verge has
+            # the roof right over it, and a band or lintel above the wall's top would come up through the roof)
+            def under_top(s0_: float, s1_: float, z_: float) -> float:
+                return min(z_, *(top(*to3(s_, 0.0)[:2]) - 0.03 for s_ in (s0_, (s0_ + s1_) / 2, s1_)))
+
             if o.surround_m:  # a flat band on the wall round the opening (under a sill: on three sides)
                 sc, m, dd = hex_to_rgb(d.surround_colour), o.surround_m, (base - SURROUND_PROUD_M, base)
                 zlo = z0 if (o.sill or z0 <= 0.0) else z0 - m
                 for ss, zz in (((x0 - m, x0), (max(zlo, 0.0), z1 + m)), ((x1, x1 + m), (max(zlo, 0.0), z1 + m)), ((x0, x1), (z1, z1 + m)),
                                *([((x0, x1), (zlo, z0))] if zlo < z0 else [])):  # fmt: skip
-                    out.cuboid(to3, ss, zz, dd, sc, ("d0", "s0", "s1", "z0", "z1"))
+                    zz = (zz[0], under_top(*ss, zz[1]))
+                    if zz[1] - zz[0] > 0.02:
+                        out.cuboid(to3, ss, zz, dd, sc, ("d0", "s0", "s1", "z0", "z1"))
             if o.sill and z0 > THRESHOLD_M:  # (none on the ground: it would lie flat in the terrain)
                 out.cuboid(
                     to3, (x0 - SILL_EXTRA_M, x1 + SILL_EXTRA_M), (max(z0 - SILL_THICK_M, 0.0), z0), (base - SILL_PROUD_M, base),
                     frame, ("d0", "s0", "s1", "z0", "z1"),
                 )
-            if o.lintel_m:  # a box over the head
-                out.cuboid(to3, (x0 - 0.04, x1 + 0.04), (z1, z1 + o.lintel_m), (base - LINTEL_PROUD_M, base), frame, ("d0", "s0", "s1", "z0", "z1"))
+            if o.lintel_m and under_top(x0 - 0.04, x1 + 0.04, z1 + o.lintel_m) - z1 > 0.02:  # a box over the head
+                out.cuboid(to3, (x0 - 0.04, x1 + 0.04), (z1, under_top(x0 - 0.04, x1 + 0.04, z1 + o.lintel_m)), (base - LINTEL_PROUD_M, base), frame, ("d0", "s0", "s1", "z0", "z1"))
             if o.panels and not thru:  # raised panels on the leaf: two beside each other on a door, one across on a garage door
                 leaf = tuple(int(c * 0.82) for c in hex_to_rgb(o.colour or DEFAULT_PANEL[o.kind]))
                 m, gap, cols_n = o.frame_m + 0.07, 0.07, 2 if o.kind == "door" else 1
@@ -881,8 +888,13 @@ def build_detail(b: dict, d: Detail) -> tuple[Mesh, list[WindowTag]]:
                 count = o.steps if z0 > 0.02 else 1
                 rise_ = (z0 if z0 > 0.02 else DOORSTEP_M) / count
                 for k_ in range(count):  # the top step lies against the wall, each lower one further out
-                    out.cuboid(to3, (x0 - STEP_SIDE_M, x1 + STEP_SIDE_M), (0.0, rise_ * (count - k_)), (-(k_ + 1) * STEP_TREAD_M - (0.12 if k_ == 0 else 0.0), -k_ * STEP_TREAD_M - (0.12 if k_ else 0.0)), step_c, ("d0", "s0", "s1", "z1"))  # fmt: skip
-            if o.canopy_m and base == 0.0:
+                    front_ = (k_ + 1) * STEP_TREAD_M + 0.12
+                    if d.apron is not None and abs(front_ - d.apron[0]) < 0.015:  # (not in the plane of the apron's edge: the two flicker)
+                        front_ = d.apron[0] + 0.03
+                    out.cuboid(to3, (x0 - STEP_SIDE_M, x1 + STEP_SIDE_M), (0.0, rise_ * (count - k_)), (-front_, -k_ * STEP_TREAD_M - (0.12 if k_ else 0.0)), step_c, ("d0", "s0", "s1", "z1"))  # fmt: skip
+            # (none under an eave that comes down to the door's head: the roof itself shelters it, and a canopy would come up
+            # through it)
+            if o.canopy_m and base == 0.0 and z1 + 0.45 <= min(top(*to3(s_, 0.0)[:2]) for s_ in (x0 - 0.25, x1 + 0.25)):
                 zc, drop, cs0, cs1 = z1 + 0.3, 0.2, x0 - 0.25, x1 + 0.25
 
                 def c3(s: float, z: float, dep: float, to3=to3, zc=zc, drop=drop, reach=o.canopy_m):
@@ -1111,6 +1123,7 @@ def _add_plinth(out: _Tris, to3, pl: Plinth, lo: float, hi: float, length: float
     cut through it, with their reveals continued through its thickness."""
     h, t, colour = pl.height_m, PLINTH_PROUD_M, hex_to_rgb(pl.colour)
     cuts = [(o.at_m, o.at_m + o.width_m, o.sill_m, o.sill_m + o.height_m) for o in ops if o.sill_m < h]
+    boarded = {(o.at_m, o.at_m + o.width_m, o.sill_m) for o in ops if o.sill_m < h and o.sill and o.sill_m > THRESHOLD_M}  # (a sill board lies on their ledge)
     face = box(lo, 0.0, hi, h)
     if cuts:
         face = face.difference(unary_union([box(x0, z0, x1, min(z1, h)) for x0, x1, z0, z1 in cuts]))
@@ -1124,7 +1137,7 @@ def _add_plinth(out: _Tris, to3, pl: Plinth, lo: float, hi: float, length: float
         zt = min(z1, h)
         mid = to3((x0 + x1) / 2, (z0 + zt) / 2, -t / 2)
         sides = [((x0, z0), (x0, zt)), ((x1, z0), (x1, zt))]
-        if z0 > 0:
+        if z0 > 0 and (x0, x1, z0) not in boarded:  # (under a sill board the ledge would lie in the board's top: they flicker)
             sides.append(((x0, z0), (x1, z0)))  # the ledge under a window cut into the band
         if z1 < h:
             sides.append(((x0, zt), (x1, zt)))
@@ -1222,7 +1235,7 @@ def _add_eaves(out: _Tris, e: Eaves, grown: Polygon, roof_z, boundary, flat: boo
             mx, my = (c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2
             if cut is not None and not cut.is_empty and cut.distance(Point(mx, my)) < 0.05:
                 continue
-            z0, z1 = roof_z(*c0), roof_z(*c1)
+            z0, z1 = _run_ends(c0, c1, roof_z)
             sloped = barge is not None and abs(z0 - z1) > GUTTER_LEVEL_M  # a gable's edge: its bargeboard
             deep = max(e.fascia_m, BARGE_M) if sloped else e.fascia_m
             board = [(*c0, z0), (*c1, z1), (*c1, z1 - deep), (*c0, z0 - deep)]
@@ -1251,7 +1264,23 @@ def _add_eaves(out: _Tris, e: Eaves, grown: Polygon, roof_z, boundary, flat: boo
                     count = max(2, round((run - 2 * overhang) / RAFTER_STEP_M) + 1)
                     for k in range(count):
                         s = overhang + 0.1 + (run - 2 * overhang - 0.2) * k / (count - 1)
+                        za_, zb_ = (under(s, 0.0, dep)[2] for dep in (-overhang, -0.01))
+                        if abs(za_ - zb_) > 1.5 * overhang + 0.05:  # (it would run in under a higher part's roof: a step, not this eave's slope)
+                            continue
                         out.cuboid(under, (s - RAFTER_W_M / 2, s + RAFTER_W_M / 2), (0.0, RAFTER_H_M), (-overhang, -0.01), colour, ("s0", "s1", "z0"))
+
+
+def _run_ends(c0, c1, roof_z) -> tuple[float, float]:
+    """The roof's height at the two ends of a run along which it lies in one plane. Taken a little inside the run and
+    carried on to its ends: at an end where a higher part of a fitted roof begins (a step), the roof's height is that
+    part's, and a board laid up to it would climb through the lower roof."""
+    run = math.dist(c0, c1)
+    if run < 0.12:
+        return roof_z(*c0), roof_z(*c1)
+    ux, uy = (c1[0] - c0[0]) / run, (c1[1] - c0[1]) / run
+    za, zb = roof_z(c0[0] + ux * 0.03, c0[1] + uy * 0.03), roof_z(c1[0] - ux * 0.03, c1[1] - uy * 0.03)
+    k = 0.03 / (run - 0.06)
+    return za - (zb - za) * k, zb + (zb - za) * k
 
 
 def _add_downpipe(out: _Tris, d: Detail, dp: Downpipe, ring: list, top, roof_z) -> None:
@@ -1353,12 +1382,29 @@ def _add_ridge_caps(out: _Tris, boundary, grown: Polygon, roof_z, colour) -> Non
             # (heights taken just inside the run: at its very end another part of a fitted roof may stand higher)
             za, zb = roof_z(c0[0] + ux * 0.03, c0[1] + uy * 0.03), roof_z(c1[0] - ux * 0.03, c1[1] - uy * 0.03)
             z0, z1 = za - (zb - za) * 0.03 / max(run - 0.06, 0.01), zb + (zb - za) * 0.03 / max(run - 0.06, 0.01)
+            # an end where the cap runs in under a higher roof (a wing's ridge dying into the house's slope) stops where
+            # its sides would go into that roof: there a roof stands higher beside the line than the line itself
+            def covered(s: float, c0=c0, ux=ux, uy=uy, nx=nx, ny=ny, z0=z0, z1=z1, run=run) -> bool:
+                z = z0 + (z1 - z0) * s / run + RIDGE_CAP_H_M
+                return any(roof_z(c0[0] + ux * s + k * nx * RIDGE_CAP_W_M / 2, c0[1] + uy * s + k * ny * RIDGE_CAP_W_M / 2) > z - 0.02 for k in (-1, 0, 1))
+
+            s0, s1 = 0.0, run
+            while s0 < run / 2 and covered(s0):
+                s0 += 0.04
+            while s1 > s0 and covered(s1):
+                s1 -= 0.04
+            if s1 - s0 < 0.3:
+                continue
+            c0, c1, z0, z1 = (c0[0] + ux * s0, c0[1] + uy * s0), (c0[0] + ux * s1, c0[1] + uy * s1), z0 + (z1 - z0) * s0 / run, z0 + (z1 - z0) * s1 / run
+            run = s1 - s0
+            mx, my = (c0[0] + c1[0]) / 2, (c0[1] + c1[1]) / 2
 
             def to3(s: float, z: float, dep: float, c0=c0, ux=ux, uy=uy, nx=nx, ny=ny, z0=z0, z1=z1, run=run):
                 return (c0[0] + ux * s + nx * dep, c0[1] + uy * s + ny * dep, z0 + (z1 - z0) * s / run + z)
 
             # its sides reach down to the slopes, so no daylight shows between the cap and the roof
-            fall = roof_z(mx, my) - min(roof_z(mx + k * nx * RIDGE_CAP_W_M / 2, my + k * ny * RIDGE_CAP_W_M / 2) for k in (-1, 1))
+            # (no deeper than the steepest slope gives: where one side drops away as a step, the cap's side is no curtain)
+            fall = min(roof_z(mx, my) - min(roof_z(mx + k * nx * RIDGE_CAP_W_M / 2, my + k * ny * RIDGE_CAP_W_M / 2) for k in (-1, 1)), 0.13)
             out.cuboid(to3, (0.0, run), (-max(0.03, fall + 0.02), RIDGE_CAP_H_M), (-RIDGE_CAP_W_M / 2, RIDGE_CAP_W_M / 2), colour, ("s0", "s1", "d0", "d1", "z1"))
 
 
@@ -1415,7 +1461,7 @@ def _add_dormer(out: _Tris, windows: list, d: Detail, dm: Dormer, ring: list, ro
         raise DetailError(f"{d.id} dormer {dm.id}: does not fit edge {dm.edge}")
     z_top = dm.bottom_m + dm.height_m
     z_ridge = z_top + dm.rise_m
-    front, back = depth_at(dm.bottom_m), depth_at(z_ridge) + 0.2
+    front, back = depth_at(dm.bottom_m), depth_at(z_ridge) + 0.05  # (its roof runs into the house's a hand deep: no further)
     wood, roof = hex_to_rgb(dm.colour), roof_c
     frame = hex_to_rgb(d.frame_colour)
 
@@ -1448,17 +1494,39 @@ def _add_dormer(out: _Tris, windows: list, d: Detail, dm: Dormer, ring: list, ro
         "breakable": True, "confidence": "medium", "width_m": ww, "height_m": wh,
         "centre": [round(c, 3) for c in centre], "normal": [round(nx, 4), round(ny, 4)],
     }))
-    # cheeks (vertical sides), foot sunk into the roof
+    # cheeks (vertical sides), foot sunk into the roof: from the front back to where the roof comes up to their top (no
+    # further: past that the cheek would stand above the roof, beside the dormer's own roof)
     for s_, zf in ((s0, zf0), (s1, zf1)):
-        zb = foot(s_, back)
-        out.quad([to3(s_, zf, front), to3(s_, z_top, front), to3(s_, z_top, back), to3(s_, zb, back)], wood, to3(s_ + (-1 if s_ == s0 else 1), z_top, (front + back) / 2))
+        lo, hi = front, back
+        if foot(s_, hi) <= z_top:
+            pts = [to3(s_, zf, front), to3(s_, z_top, front), to3(s_, z_top, back), to3(s_, foot(s_, back), back)]
+        else:
+            for _ in range(30):
+                mid = (lo + hi) / 2
+                lo, hi = (mid, hi) if foot(s_, mid) < z_top else (lo, mid)
+            pts = [to3(s_, zf, front), to3(s_, z_top, front), to3(s_, z_top, hi)]
+        toward = to3(s_ + (-1 if s_ == s0 else 1), z_top, (front + back) / 2)
+        if len(pts) == 4:
+            out.quad(pts, wood, toward)
+        elif zf < z_top - 0.01:
+            out.add(_wound(pts, toward), wood)
     # front gable triangle and the dormer roof (two slopes + overhang along the front)
     ov = 0.15
     out.add(_wound([to3(s0, z_top, front), to3(s1, z_top, front), to3(dm.at_m, z_ridge, front)], outside), wood)
+    def reach(s_: float, z_: float) -> float:  # how far in the house's roof at s_ comes up to z_ (where the dormer's eave meets it)
+        lo_, hi_ = front - ov, back
+        if roof_z(*xy(s_, hi_)) < z_:
+            return hi_
+        for _ in range(30):
+            mid_ = (lo_ + hi_) / 2
+            lo_, hi_ = (mid_, hi_) if roof_z(*xy(s_, mid_)) < z_ else (lo_, mid_)
+        return hi_
+
     for sgn, se in ((-1, s0), (1, s1)):
         sx = se + sgn * ov
+        # its eave runs back only to where it meets the house's roof: the valley runs from there up to the ridge's end
         out.quad(
-            [to3(sx, z_top - 0.08, front - ov), to3(sx, z_top - 0.08, back), to3(dm.at_m, z_ridge, back), to3(dm.at_m, z_ridge, front - ov)],
+            [to3(sx, z_top - 0.08, front - ov), to3(sx, z_top - 0.08, reach(sx, z_top - 0.08)), to3(dm.at_m, z_ridge, back), to3(dm.at_m, z_ridge, front - ov)],
             roof, to3(dm.at_m + sgn * 0.0, z_ridge + 2.0, (front + back) / 2),
         )
     out.add(_wound([to3(s0 - ov, z_top - 0.08, back), to3(s1 + ov, z_top - 0.08, back), to3(dm.at_m, z_ridge, back)], to3(dm.at_m, z_top, back + 2.0)), wood)

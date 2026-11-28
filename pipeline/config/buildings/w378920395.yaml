@@ -24,10 +24,10 @@ skylights:
 interior: true
 openings:
   - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1}
-  - {id: w1, kind: window, edge: 0, at_m: 2.44, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w2, kind: window, edge: 0, at_m: 5.71, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 0, at_m: 8.98, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w4, kind: window, edge: 0, at_m: 12.25, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 0, at_m: 15.52, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w1, kind: window, edge: 0, at_m: 2.44, width_m: 0.83, height_m: 1.05, sill_m: 1.0, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 5.71, width_m: 0.83, height_m: 1.05, sill_m: 1.0, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 8.98, width_m: 0.83, height_m: 1.05, sill_m: 1.0, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 0, at_m: 12.25, width_m: 0.83, height_m: 1.05, sill_m: 1.0, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 0, at_m: 15.52, width_m: 0.83, height_m: 1.05, sill_m: 1.0, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 1.35, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: w7, kind: window, edge: 1, at_m: 3.21, width_m: 0.83, height_m: 1.05, sill_m: 0.87, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}

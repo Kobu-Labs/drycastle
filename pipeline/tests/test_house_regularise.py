@@ -91,3 +91,25 @@ def test_two_storey_balcony_on_a_flat_roof():
     ops = [win(3, 1.0, sill=0.9, h=1.2), win(3, 1.0, sill=3.4, h=1.2), win(3, 7.0, sill=3.4, h=1.2)]
     bal = hr.invent_balcony("yes", 3, role, 5.07, 5.07, ops)
     assert bal is not None and 2.0 <= bal["floor_m"] <= 3.4 and bal["at_m"] <= 1.0 and bal["at_m"] + bal["width_m"] >= 8.2
+
+
+def test_a_second_pass_changes_nothing():
+    cases = [
+        ([win(1, 2.26, w=0.96, sill=2.41, h=1.86), {"kind": "door", "edge": 1, "at_m": 2.3, "width_m": 1.0, "sill_m": 0.0, "height_m": 2.09},
+          win(1, 4.53, w=0.96, sill=2.9, h=1.37)], {1: 7.74}, 4.32),
+        ([{"kind": "garage_door", "edge": 0, "at_m": 0.62, "width_m": 4.59, "sill_m": 0.0, "height_m": 2.96}, win(0, 0.86, w=1.69, sill=4.92, h=0.96),
+          {"kind": "door", "edge": 0, "at_m": 7.67, "width_m": 1.06, "sill_m": 0.0, "height_m": 2.1}, win(0, 8.88, w=1.69, sill=1.4, h=1.53),
+          win(0, 10.45, w=0.64, sill=2.17, h=0.76)], {0: 12.75}, 5.85),
+        ([{"kind": "window", "edge": 1, "at_m": 3.94, "width_m": 1.74, "sill_m": 0.0, "height_m": 3.68}], {1: 9.62}, 3.98),
+    ]
+    for ops, lengths, eave in cases:
+        once, _ = hr.regularise(ops, lengths, eave)
+        _, again = hr.regularise(once, lengths, eave)
+        assert again == []
+
+
+def test_a_window_over_the_eave_of_an_eave_wall_comes_down():
+    out, _ = hr.regularise([win(4, 7.8, w=0.72, sill=4.57, h=0.88)], {4: 12.0}, 4.33, gables={0, 2})
+    assert out[0]["sill_m"] + out[0]["height_m"] <= 4.33 - 0.25
+    out, _ = hr.regularise([win(4, 7.8, w=0.72, sill=4.57, h=0.88)], {4: 12.0}, 4.33, gables={4})
+    assert out[0]["sill_m"] == 4.57

@@ -20,12 +20,18 @@ downpipes:
 interior: true
 openings:
   - {id: g1, kind: garage_door, edge: 0, at_m: 0.79, width_m: 2.4, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 4}
+  - {id: w1, kind: window, edge: 1, at_m: 1.55, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 5.11, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 8.66, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 1, at_m: 12.22, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 15.77, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 1, at_m: 19.33, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.3, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 4, at_m: 3.71, width_m: 2.0, height_m: 1.59, sill_m: 0.46, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w2, kind: window, edge: 5, at_m: 1.12, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 5, at_m: 4.23, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w4, kind: window, edge: 5, at_m: 7.35, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 5, at_m: 10.47, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w6, kind: window, edge: 5, at_m: 13.59, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w7, kind: window, edge: 5, at_m: 16.7, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w8, kind: window, edge: 6, at_m: 0.79, width_m: 2.0, height_m: 1.59, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w7, kind: window, edge: 4, at_m: 3.71, width_m: 2.0, height_m: 1.59, sill_m: 0.46, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 5, at_m: 1.12, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w9, kind: window, edge: 5, at_m: 4.23, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w10, kind: window, edge: 5, at_m: 7.35, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 5, at_m: 10.47, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 5, at_m: 13.59, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 5, at_m: 16.7, width_m: 2.0, height_m: 1.59, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 6, at_m: 0.79, width_m: 2.0, height_m: 1.59, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}

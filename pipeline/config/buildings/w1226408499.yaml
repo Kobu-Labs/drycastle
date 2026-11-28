@@ -9,6 +9,7 @@ apron: {width_m: 0.93, colour: '#aba399', joints_m: 0.5}
 interior: true
 openings:
   - {id: d1, kind: door, edge: 0, at_m: 2.08, width_m: 0.91, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
+  - {id: w2, kind: window, edge: 0, at_m: 6.26, width_m: 1.46, height_m: 1.52, sill_m: 0.73, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.25, 0.36, 0.87], rails: [0.15, 0.81], sill: true}
   - {id: w3, kind: window, edge: 1, at_m: 1.99, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 1, at_m: 5.17, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 1, at_m: 8.36, width_m: 1.2, height_m: 1.3, sill_m: 0.95, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

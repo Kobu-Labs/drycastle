@@ -5,8 +5,9 @@ source: Street View captures, measured by facade_pipeline; walls no capture saw,
 overhang_m: 0.25
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
+bands:
+- {top_m: 3.85, height_m: 0.1}
 ridge_caps: true
-plinth: {height_m: 0.4, colour: '#82827c'}
 apron: {width_m: 0.34, colour: '#b1a89d'}
 roof_tiles: true
 eaves: {colour: '#6a6b69', fascia_m: 0.18, gutter: true, rafters: true}
@@ -21,10 +22,10 @@ skylights:
 - {edge: 0, at_m: 8.6, up_m: 1.52}
 interior: true
 openings:
-  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.4, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w1, kind: window, edge: 0, at_m: 4.15, width_m: 1.69, height_m: 1.58, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w2, kind: window, edge: 0, at_m: 7.06, width_m: 1.69, height_m: 1.58, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 0, at_m: 9.98, width_m: 1.69, height_m: 1.58, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: d1, kind: door, edge: 0, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
+  - {id: w1, kind: window, edge: 0, at_m: 4.15, width_m: 1.69, height_m: 1.58, sill_m: 0.47, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 7.06, width_m: 1.69, height_m: 1.58, sill_m: 0.47, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 9.98, width_m: 1.69, height_m: 1.58, sill_m: 0.47, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 1, at_m: 1.63, width_m: 1.69, height_m: 1.58, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 1, at_m: 2.4, width_m: 1.0, height_m: 1.0, sill_m: 4.25, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 4.88, width_m: 1.0, height_m: 1.0, sill_m: 4.25, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

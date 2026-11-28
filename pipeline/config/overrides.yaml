@@ -248,9 +248,9 @@ buildings:
   # P-0110: small house, white rough render, brown brick plinth, dark metal roof, from Street View captures; openings in config/buildings/.
   w378920531:
     roof: hipped
-    height_m: 9.89
+    height_m: 8.84
     levels: 1
-    roof_height_m: 5.31
+    roof_height_m: 4.37
     roof_fit: True
     wall_colour: "#f3efe2"
     roof_colour: "#3c3d43"
@@ -283,7 +283,7 @@ buildings:
     height_m: 6.5
     levels: 1
     roof_height_m: 2.85
-    ridge_dir: 2.5635
+    ridge_dir: 0.9927
     wall_colour: "#f3ebe0"
     roof_colour: "#363c46"
 
@@ -310,9 +310,9 @@ buildings:
   # P-1122: small bungalow, white render, red tiled hipped roof, from Street View captures; openings in config/buildings/.
   w378900384:
     roof: hipped
-    height_m: 7.05
+    height_m: 6.1
     levels: 1
-    roof_height_m: 3.53
+    roof_height_m: 2.73
     roof_fit: True
     wall_colour: "#f3ebe0"
     roof_colour: "#b56531"
@@ -341,9 +341,9 @@ buildings:
   # P-0049: two-storey peach render house with garage doors, terracotta tiled roof, from Street View captures; openings in config/buildings/.
   w378920383:
     roof: hipped
-    height_m: 4.55
+    height_m: 5.72
     levels: 1
-    roof_height_m: 1.34
+    roof_height_m: 2.11
     roof_fit: True
     wall_colour: "#e7b28a"
     roof_colour: "#c8713f"
@@ -394,10 +394,10 @@ buildings:
   # P-0083: small house, beige render, red tiled roof, from Street View captures; openings in config/buildings/.
   w378920544:
     roof: gabled
-    height_m: 9.83
+    height_m: 7.37
     levels: 2
-    roof_height_m: 4.97
-    ridge_dir: 2.0749
+    roof_height_m: 2.45
+    ridge_dir: 0.5784
     roof_fit: True
     wall_colour: "#d7b591"
     roof_colour: "#a23f2d"
@@ -435,9 +435,9 @@ buildings:
   # P-0141: two-storey house, pink render, terracotta tiled roof with three dormers, from Street View captures; openings in config/buildings/.
   w378920323:
     roof: hipped
-    height_m: 7.52
+    height_m: 6.72
     levels: 1
-    roof_height_m: 2.86
+    roof_height_m: 2.21
     roof_fit: True
     wall_colour: "#e5b68a"
     roof_colour: "#bc6537"
@@ -541,9 +541,9 @@ buildings:
   # P-0337: bungalow, cream render, dark tiled hipped roof, from Street View captures; openings in config/buildings/.
   w378900331:
     roof: hipped
-    height_m: 4.58
+    height_m: 5.87
     levels: 1
-    roof_height_m: 1.33
+    roof_height_m: 2.41
     ridge_dir: 1.1733
     roof_fit: True
     wall_colour: "#e0ddb1"
@@ -576,8 +576,8 @@ buildings:
   w378900286:
     roof: gabled
     height_m: 7.3
-    levels: 2
-    roof_height_m: 2.7
+    levels: 1
+    roof_height_m: 4.08
     ridge_dir: 2.8641
     wall_colour: "#f7efe5"
     roof_colour: "#444149"
@@ -585,9 +585,9 @@ buildings:
   # P-0373: house with front gable and attached garage, cream render, dark tiled roof, from Street View captures; openings in config/buildings/.
   w378900188:
     roof: gabled
-    height_m: 8.41
-    levels: 2
-    roof_height_m: 1.07
+    height_m: 5.14
+    levels: 1
+    roof_height_m: 1.56
     ridge_dir: 1.3913
     roof_fit: True
     roof_lead: [[-301.85, 339.95], [-306.66, 340.82]]
@@ -652,9 +652,9 @@ buildings:
   # P-0265: low house, white render, red tiled hipped roof, from Street View captures; openings in config/buildings/.
   w378900345:
     roof: gabled
-    height_m: 7.16
+    height_m: 5.15
     levels: 1
-    roof_height_m: 4.2
+    roof_height_m: 2.35
     ridge_dir: 2.8277
     roof_fit: True
     wall_colour: "#f3ece0"
@@ -684,10 +684,10 @@ buildings:
   # P-0492: single-storey terraced house, pale green render, dark tiled roof with skylights, from Street View captures; openings in config/buildings/.
   w378900198:
     roof: gabled
-    height_m: 14.71
+    height_m: 6.71
     levels: 1
-    roof_height_m: 10.61
-    ridge_dir: 2.7598
+    roof_height_m: 2.45
+    ridge_dir: 1.2415
     roof_fit: True
     wall_colour: "#b5c896"
     roof_colour: "#414047"
@@ -704,13 +704,12 @@ buildings:
 
   # P-0520: single-storey house, cream render, brown tiled gabled roof, from Street View captures; openings in config/buildings/.
   w378900340:
-    roof: gabled
-    height_m: 12.12
+    roof: hipped
+    height_m: 6.33
     levels: 1
-    roof_height_m: 7.77
-    ridge_dir: 2.7769
+    roof_height_m: 1.94
+    ridge_dir: 1.2061
     roof_fit: True
-    roof_lead: [[-406.7, 376.98], [-417.08, 349.78]]
     wall_colour: "#e1deb2"
     roof_colour: "#6c4635"
 
@@ -1028,7 +1027,7 @@ buildings:
     roof: gabled
     height_m: 5.34
     levels: 1
-    roof_height_m: 2.15
+    roof_height_m: 2.01
     ridge_dir: 1.0659
     roof_fit: True
     roof_lead: [[-176.21, 168.72], [-180.72, 171.22]]
@@ -1038,10 +1037,10 @@ buildings:
   # P-0236: single-storey house, white render, red tiled hipped roof with solar panels, from Street View captures; openings in config/buildings/.
   w1226408460:
     roof: gabled
-    height_m: 13.4
+    height_m: 6.22
     levels: 1
-    roof_height_m: 10.45
-    ridge_dir: 2.8212
+    roof_height_m: 3.24
+    ridge_dir: 1.2457
     roof_fit: True
     wall_colour: "#f5efe2"
     roof_colour: "#b86836"
@@ -1160,7 +1159,7 @@ buildings:
   # P-0650: bungalow, cream render, dark tiled gabled roof with brown timber bargeboards, from Street View captures; openings in config/buildings/.
   w378900276:
     roof: gabled
-    height_m: 6.1
+    height_m: 5.12
     levels: 1
     roof_height_m: 2.16
     ridge_dir: 1.4202
@@ -1173,7 +1172,7 @@ buildings:
     height_m: 9.75
     levels: 2
     roof_height_m: 4.17
-    ridge_dir: 1.4196
+    ridge_dir: 2.9904
     wall_colour: "#a8cd9f"
     roof_colour: "#454951"
 
@@ -1225,7 +1224,7 @@ buildings:
     height_m: 4.62
     levels: 1
     roof_height_m: 2.54
-    ridge_dir: 2.6386
+    ridge_dir: 1.0678
     wall_colour: "#f0d7b1"
     roof_colour: "#3c3c44"
 
@@ -1235,7 +1234,7 @@ buildings:
     height_m: 5.38
     levels: 1
     roof_height_m: 1.44
-    ridge_dir: 3.0125
+    ridge_dir: 1.4417
     wall_colour: "#f1e9de"
     roof_colour: "#6c4132"
 
@@ -1284,9 +1283,9 @@ buildings:
   # P-0219: small cottage, white rendered walls, red tiled gabled roof, brown metal gate in front, from Street View captures; openings in config/buildings/.
   w378900347:
     roof: gabled
-    height_m: 6.9
+    height_m: 6.89
     levels: 1
-    roof_height_m: 3.7
+    roof_height_m: 3.53
     ridge_dir: 2.948
     roof_fit: True
     roof_lead: [[-233.41, 352.95], [-231.16, 364.44]]
@@ -1392,10 +1391,10 @@ buildings:
   # P-0004: bungalow, green rendered walls, red tiled hipped roof, behind a fence, from Street View captures; openings in config/buildings/.
   w378920327:
     roof: gabled
-    height_m: 8.85
+    height_m: 7.77
     levels: 1
-    roof_height_m: 4.86
-    ridge_dir: 2.9183
+    roof_height_m: 3.54
+    ridge_dir: 1.341
     roof_fit: True
     wall_colour: "#b0cc90"
     roof_colour: "#a23f2d"
@@ -1417,7 +1416,7 @@ buildings:
     height_m: 5.97
     levels: 1
     roof_height_m: 2.74
-    ridge_dir: 0.0698
+    ridge_dir: 1.6406
     wall_colour: "#edefe2"
     roof_colour: "#414249"
 
@@ -1466,9 +1465,9 @@ buildings:
   # P-0928: single-storey village house, orange-yellow render with brick-tile plinth, tiled roof, partly hidden by spruce trees, from Street View captures; openings in config/buildings/.
   w378920351:
     roof: gabled
-    height_m: 10.67
+    height_m: 8.22
     levels: 2
-    roof_height_m: 5.23
+    roof_height_m: 2.95
     ridge_dir: 3.0159
     wall_colour: "#e4c975"
     roof_colour: "#9e4128"
@@ -1496,9 +1495,9 @@ buildings:
   # P-0446: two-storey house, white render, hipped red-tile roof, fenced garden, from Street View captures; openings in config/buildings/.
   w378920365:
     roof: gabled
-    height_m: 10.45
+    height_m: 9.39
     levels: 1
-    roof_height_m: 5.0
+    roof_height_m: 4.12
     ridge_dir: 2.4345
     wall_colour: "#efebdd"
     roof_colour: "#c46e3c"
@@ -1705,10 +1704,10 @@ buildings:
   # P-0469: single-storey house, white render, red-brown tiled gabled roof, wooden picket fence in front, from Street View captures; openings in config/buildings/.
   w378920456:
     roof: gabled
-    height_m: 9.63
+    height_m: 6.36
     levels: 1
-    roof_height_m: 6.54
-    ridge_dir: 3.141
+    roof_height_m: 3.21
+    ridge_dir: 1.5977
     roof_fit: True
     wall_colour: "#efebdd"
     roof_colour: "#b96933"
@@ -1907,9 +1906,9 @@ buildings:
   # P-0314: single-storey house, cream render, red tiled hipped roof, behind a fence and gate, from Street View captures; openings in config/buildings/.
   w378920532:
     roof: gabled
-    height_m: 10.64
+    height_m: 7.84
     levels: 1
-    roof_height_m: 6.04
+    roof_height_m: 3.42
     ridge_dir: 2.5949
     roof_fit: True
     wall_colour: "#e3dfb3"
@@ -1971,9 +1970,9 @@ buildings:
   # P-0187: two-storey family house with lower wing, white render, red tiled roof, walled yard, from Street View captures; openings in config/buildings/.
   w378920545:
     roof: gabled
-    height_m: 7.99
+    height_m: 5.83
     levels: 1
-    roof_height_m: 3.86
+    roof_height_m: 2.11
     ridge_dir: 1.5427
     roof_fit: True
     wall_colour: "#f3ece0"
@@ -1999,10 +1998,10 @@ buildings:
 
   # P-0951: small single-storey house, turquoise render, dark gabled roof, from Street View captures; openings in config/buildings/.
   w378900292:
-    roof: gabled
-    height_m: 8.15
-    levels: 2
-    roof_height_m: 3.38
+    roof: hipped
+    height_m: 6.88
+    levels: 1
+    roof_height_m: 2.75
     ridge_dir: 2.7691
     roof_fit: True
     wall_colour: "#b6c997"
@@ -2032,7 +2031,7 @@ buildings:
 
   # P-0172: bungalow, peach render, dark tiled hipped roof, attached garage on left, from Street View captures; openings in config/buildings/.
   w378920491:
-    roof: hipped
+    roof: gabled
     height_m: 6.92
     levels: 1
     roof_height_m: 3.11
@@ -2043,9 +2042,9 @@ buildings:
   # P-0787: single-storey house, yellow-peach render with white gable end, dark tiled roof, brown wooden fence in front, from Street View captures; openings in config/buildings/.
   w378920425:
     roof: gabled
-    height_m: 7.57
+    height_m: 6.45
     levels: 1
-    roof_height_m: 3.76
+    roof_height_m: 2.83
     ridge_dir: 1.1691
     roof_fit: True
     wall_colour: "#deb686"
@@ -2076,10 +2075,10 @@ buildings:
   # P-0586: single-storey house under construction, white aerated concrete block walls, tiled roof, old rendered building attached on the left, from Street View captures; openings in config/buildings/.
   w378900218:
     roof: gabled
-    height_m: 16.47
-    levels: 2
-    roof_height_m: 7.69
-    ridge_dir: 2.9943
+    height_m: 7.49
+    levels: 1
+    roof_height_m: 3.56
+    ridge_dir: 1.4382
     roof_fit: True
     roof_lead: [[-474.1, 283.08], [-470.09, 310.08]]
     wall_colour: "#f1eadd"

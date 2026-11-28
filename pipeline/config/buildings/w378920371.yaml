@@ -20,8 +20,9 @@ chimneys:
 - {x: -5.57, y: 435.89, top_m: 5.37, width_m: 0.5, depth_m: 0.5, cap: true}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 2, at_m: 3.25, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w1, kind: window, edge: 2, at_m: 1.34, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w2, kind: window, edge: 2, at_m: 3.25, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.6, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 4}
-  - {id: w2, kind: window, edge: 3, at_m: 4.68, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 3, at_m: 7.64, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w4, kind: window, edge: 3, at_m: 10.6, width_m: 1.23, height_m: 0.9, sill_m: 1.31, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 3, at_m: 4.68, width_m: 1.23, height_m: 0.9, sill_m: 1.15, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w4, kind: window, edge: 3, at_m: 7.64, width_m: 1.23, height_m: 0.9, sill_m: 1.15, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 3, at_m: 10.6, width_m: 1.23, height_m: 0.9, sill_m: 1.15, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

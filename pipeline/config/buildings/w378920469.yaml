@@ -2,7 +2,6 @@
 # Wall top 3.01 m, roof top 5.65 m. Walls seen: edges [1]. Not modelled: two dormers, chimney, downpipe.
 id: w378920469
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.12
 frame_colour: '#5a4030'
 surround_colour: '#e9dcc0'
@@ -22,6 +21,7 @@ downpipes:
 - {edge: 4, at_m: 7.14, colour: '#7d7d72', bends: true}
 chimneys:
 - {x: -43.99, y: 84.55, top_m: 6.15, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 2.14, width_m: 0.76, height_m: 1.2, sill_m: 1.22, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 0, at_m: 5.04, width_m: 0.76, height_m: 1.2, sill_m: 1.22, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

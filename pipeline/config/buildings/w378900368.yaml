@@ -2,7 +2,6 @@
 # Wall top 3.38 m, roof top 5.84 m. Walls seen: edges [0]. Not modelled: chimney, electric meter box on wall.
 id: w378900368
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.22
 frame_colour: '#f2f0ea'
 trim_colour: '#f2f0ea'
@@ -19,6 +18,7 @@ chimneys:
 - {x: -123.22, y: 177.76, top_m: 6.34, width_m: 0.5, depth_m: 0.5, cap: true}
 skylights:
 - {edge: 4, at_m: 3.43, up_m: 1.07}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.38, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 3.13, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
@@ -27,7 +27,7 @@ openings:
   - {id: w5, kind: window, edge: 1, at_m: 2.0, width_m: 0.6, height_m: 1.0, sill_m: 3.77, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 3, at_m: 1.04, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.43, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 3, canopy_m: 0.7}
-  - {id: w7, kind: window, edge: 4, at_m: 4.37, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 4, at_m: 4.37, width_m: 0.6, height_m: 0.91, sill_m: 1.57, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w8, kind: window, edge: 5, at_m: 1.97, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w9, kind: window, edge: 5, at_m: 3.25, width_m: 0.6, height_m: 1.0, sill_m: 3.77, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w10, kind: window, edge: 5, at_m: 4.53, width_m: 0.6, height_m: 1.23, sill_m: 1.14, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

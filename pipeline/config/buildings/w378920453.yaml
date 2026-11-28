@@ -2,7 +2,6 @@
 # Wall top 3.06 m, roof top 6.26 m. Walls seen: edges [1, 3]. Not modelled: dark brown plinth band, attached garage/gate on left.
 id: w378920453
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.14
 frame_colour: '#f2f0ea'
 surround_colour: '#6b4a3a'
@@ -19,6 +18,7 @@ downpipes:
 skylights:
 - {edge: 4, at_m: 2.79, up_m: 1.22}
 - {edge: 4, at_m: 5.57, up_m: 1.22}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.85, width_m: 1.14, height_m: 1.08, sill_m: 1.39, rails: [0.15], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 0, at_m: 3.42, width_m: 1.0, height_m: 1.0, sill_m: 3.46, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
@@ -29,4 +29,4 @@ openings:
   - {id: w7, kind: window, edge: 2, at_m: 2.55, width_m: 1.0, height_m: 1.0, sill_m: 3.46, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w8, kind: window, edge: 2, at_m: 3.69, width_m: 1.14, height_m: 1.08, sill_m: 1.39, rails: [0.15], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: d1, kind: door, edge: 4, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.6, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 4}
-  - {id: w9, kind: window, edge: 4, at_m: 5.19, width_m: 1.14, height_m: 1.08, sill_m: 1.39, rails: [0.15], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w9, kind: window, edge: 4, at_m: 5.19, width_m: 1.14, height_m: 1.08, sill_m: 0.97, rails: [0.15], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

@@ -21,19 +21,20 @@ skylights:
 - {edge: 3, at_m: 5.67, up_m: 1.28}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 0, at_m: 1.76, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w1, kind: window, edge: 0, at_m: 1.77, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 3.21, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w3, kind: window, edge: 0, at_m: 4.71, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 4.71, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 0, at_m: 6.39, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 0, at_m: 7.65, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w6, kind: window, edge: 1, at_m: 1.8, width_m: 1.18, height_m: 1.62, sill_m: 1.32, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
-  - {id: w7, kind: window, edge: 1, at_m: 5.48, width_m: 1.18, height_m: 1.62, sill_m: 1.32, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: w8, kind: window, edge: 1, at_m: 5.48, width_m: 1.18, height_m: 1.62, sill_m: 4.45, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
-  - {id: w9, kind: window, edge: 2, at_m: 1.74, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w10, kind: window, edge: 2, at_m: 3.17, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w11, kind: window, edge: 2, at_m: 4.65, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w12, kind: window, edge: 2, at_m: 6.32, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w13, kind: window, edge: 2, at_m: 7.57, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 0, at_m: 7.66, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 1, at_m: 1.81, width_m: 1.17, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w7, kind: window, edge: 1, at_m: 1.85, width_m: 1.17, height_m: 1.45, sill_m: 4.62, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w8, kind: window, edge: 1, at_m: 5.43, width_m: 1.17, height_m: 1.45, sill_m: 4.62, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w9, kind: window, edge: 1, at_m: 5.48, width_m: 1.17, height_m: 1.54, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w10, kind: window, edge: 2, at_m: 1.74, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w11, kind: window, edge: 2, at_m: 3.17, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w12, kind: window, edge: 2, at_m: 4.66, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w13, kind: window, edge: 2, at_m: 6.32, width_m: 1.0, height_m: 1.0, sill_m: 6.65, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w14, kind: window, edge: 2, at_m: 7.57, width_m: 1.17, height_m: 1.54, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: d1, kind: door, edge: 3, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.56, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 4, canopy_m: 0.7}
-  - {id: w14, kind: window, edge: 3, at_m: 2.05, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w15, kind: window, edge: 3, at_m: 5.28, width_m: 1.18, height_m: 1.62, sill_m: 1.32, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w15, kind: window, edge: 3, at_m: 2.06, width_m: 1.17, height_m: 1.54, sill_m: 0.51, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w16, kind: window, edge: 3, at_m: 5.28, width_m: 1.17, height_m: 1.54, sill_m: 0.51, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

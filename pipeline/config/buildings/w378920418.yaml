@@ -5,6 +5,9 @@ source: Street View captures, measured by facade_pipeline; walls no capture saw,
 overhang_m: 0.25
 frame_colour: '#5a4030'
 trim_colour: '#d8d2c4'
+bands:
+- {top_m: 4.81, height_m: 0.18}
+- {top_m: 2.87, height_m: 0.12}
 ridge_caps: true
 plinth: {height_m: 0.44, colour: '#7e7a77'}
 apron: {width_m: 0.64, colour: '#938e89'}
@@ -27,7 +30,7 @@ openings:
   - {id: w2, kind: window, edge: 0, at_m: 5.62, width_m: 0.94, height_m: 1.45, sill_m: 1.12, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w3, kind: window, edge: 0, at_m: 8.91, width_m: 0.94, height_m: 1.45, sill_m: 1.12, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 1, at_m: 1.38, width_m: 0.94, height_m: 1.45, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: w5, kind: window, edge: 1, at_m: 2.26, width_m: 0.94, height_m: 1.45, sill_m: 3.97, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w5, kind: window, edge: 1, at_m: 2.26, width_m: 0.94, height_m: 1.45, sill_m: 3.06, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 3.14, width_m: 0.94, height_m: 1.45, sill_m: 1.12, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
   - {id: w7, kind: window, edge: 2, at_m: 2.3, width_m: 0.94, height_m: 1.45, sill_m: 1.12, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w8, kind: window, edge: 2, at_m: 5.54, width_m: 0.94, height_m: 1.45, sill_m: 1.12, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

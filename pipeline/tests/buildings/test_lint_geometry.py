@@ -95,6 +95,7 @@ def test_a_wing_running_into_a_house_at_an_angle_stops_at_its_ridge():
 
 def test_without_the_stop_the_wing_comes_up_through_the_far_slope(monkeypatch):
     monkeypatch.setattr(rf, "_stop_at_ridges", lambda parts: None)
+    monkeypatch.setattr(rf, "_stop_inside", lambda parts: None)
     rf._FITS.clear()
     b = _house(T_RING, roof="gabled", ridge_dir=math.radians(40.0), roof_height_m=1.4, eave_height_m=3.5, height_m=4.9, roof_fit=True)
     try:

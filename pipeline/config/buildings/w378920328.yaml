@@ -2,7 +2,6 @@
 # Wall top 4.33 m, roof top 6.67 m. Walls seen: edges [2, 4, 9]. Not modelled: porch canopy with tiled roof, skylights, wooden gate/carport, wooden upper bay, satellite dish, chimney.
 id: w378920328
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.4
 frame_colour: '#5a4030'
 surround_colour: '#e9dcc0'
@@ -23,6 +22,7 @@ chimneys:
 skylights:
 - {edge: 8, at_m: 2.22, up_m: 1.21}
 - {edge: 13, at_m: 2.51, up_m: 1.21}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 2.44, width_m: 0.78, height_m: 1.21, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 0, at_m: 5.65, width_m: 0.78, height_m: 1.21, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
@@ -33,4 +33,4 @@ openings:
   - {id: w7, kind: window, edge: 8, at_m: 1.83, width_m: 0.78, height_m: 1.21, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w8, kind: window, edge: 9, at_m: 0.93, width_m: 0.78, height_m: 1.21, sill_m: 1.21, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: d1, kind: door, edge: 13, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.0, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
-  - {id: w9, kind: window, edge: 13, at_m: 2.12, width_m: 0.78, height_m: 1.21, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w9, kind: window, edge: 13, at_m: 2.12, width_m: 0.78, height_m: 0.84, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}

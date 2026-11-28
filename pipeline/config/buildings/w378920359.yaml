@@ -23,7 +23,8 @@ openings:
   - {id: w2, kind: window, edge: 0, at_m: 3.6, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w3, kind: window, edge: 1, at_m: 2.03, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w4, kind: window, edge: 1, at_m: 4.75, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w5, kind: window, edge: 2, at_m: 2.44, width_m: 0.69, height_m: 1.04, sill_m: 3.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
-  - {id: w6, kind: window, edge: 2, at_m: 3.59, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
-  - {id: w7, kind: window, edge: 3, at_m: 2.05, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
-  - {id: w8, kind: window, edge: 3, at_m: 4.8, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w5, kind: window, edge: 2, at_m: 1.29, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w6, kind: window, edge: 2, at_m: 2.44, width_m: 0.69, height_m: 1.04, sill_m: 3.6, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w7, kind: window, edge: 2, at_m: 3.59, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true}
+  - {id: w8, kind: window, edge: 3, at_m: 2.05, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
+  - {id: w9, kind: window, edge: 3, at_m: 4.8, width_m: 0.69, height_m: 1.04, sill_m: 1.21, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

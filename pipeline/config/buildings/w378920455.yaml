@@ -30,11 +30,11 @@ skylights:
 - {edge: 4, at_m: 6.34, up_m: 0.88}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 0, at_m: 3.3, width_m: 0.74, height_m: 0.56, sill_m: 2.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.23, 0.65]}
-  - {id: w2, kind: window, edge: 0, at_m: 4.94, width_m: 0.74, height_m: 0.56, sill_m: 2.25, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.23, 0.65], sill: true}
+  - {id: w1, kind: window, edge: 0, at_m: 3.3, width_m: 0.74, height_m: 0.56, sill_m: 1.54, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.23, 0.65]}
+  - {id: w2, kind: window, edge: 0, at_m: 4.94, width_m: 0.74, height_m: 0.56, sill_m: 1.54, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.23, 0.65], sill: true}
   - {id: d1, kind: door, edge: 0, at_m: 6.81, width_m: 0.85, height_m: 2.1, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
-  - {id: w3, kind: window, edge: 0, at_m: 8.98, width_m: 0.96, height_m: 1.42, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
-  - {id: w4, kind: window, edge: 0, at_m: 11.1, width_m: 0.96, height_m: 1.42, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w3, kind: window, edge: 0, at_m: 8.98, width_m: 0.96, height_m: 1.42, sill_m: 0.68, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w4, kind: window, edge: 0, at_m: 11.1, width_m: 0.96, height_m: 1.42, sill_m: 0.68, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
   - {id: w5, kind: window, edge: 1, at_m: 2.09, width_m: 0.96, height_m: 1.42, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 1, at_m: 5.13, width_m: 0.96, height_m: 1.42, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w7, kind: window, edge: 1, at_m: 8.18, width_m: 0.96, height_m: 1.42, sill_m: 1.4, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

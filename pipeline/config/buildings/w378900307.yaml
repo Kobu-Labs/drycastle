@@ -2,7 +2,6 @@
 # Wall top 2.59 m, roof top 4.85 m. Walls seen: edges [0, 3]. Not modelled: brick fence wall and gate in front, small chimney on the roof.
 id: w378900307
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.35
 frame_colour: '#f2f0ea'
 surround_colour: '#5e9a5a'
@@ -20,12 +19,13 @@ downpipes:
 - {edge: 2, at_m: 0.16, colour: '#704533', bends: true}
 chimneys:
 - {x: -293.54, y: 308.55, top_m: 5.35, width_m: 0.5, depth_m: 0.5, cap: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 1, at_m: 1.4, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w2, kind: window, edge: 1, at_m: 3.58, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: d1, kind: door, edge: 2, at_m: 0.7, width_m: 0.95, height_m: 2.05, sill_m: 0.24, recess_m: 0.12, confidence: low, frame_m: 0.06, panels: 3, steps: 2}
-  - {id: w3, kind: window, edge: 2, at_m: 4.72, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w4, kind: window, edge: 2, at_m: 7.48, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
-  - {id: w5, kind: window, edge: 2, at_m: 10.23, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w3, kind: window, edge: 2, at_m: 4.72, width_m: 0.78, height_m: 0.96, sill_m: 1.33, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w4, kind: window, edge: 2, at_m: 7.48, width_m: 0.78, height_m: 0.96, sill_m: 1.33, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
+  - {id: w5, kind: window, edge: 2, at_m: 10.23, width_m: 0.78, height_m: 0.96, sill_m: 1.33, recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w6, kind: window, edge: 3, at_m: 1.58, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}
   - {id: w7, kind: window, edge: 3, at_m: 3.56, width_m: 0.78, height_m: 0.96, sill_m: 1.26, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, surround_m: 0.12}

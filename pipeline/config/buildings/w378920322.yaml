@@ -2,7 +2,6 @@
 # Wall top 4.28 m, roof top 6.34 m. Walls seen: edges [4, 10]. Not modelled: brick plinth, garage door, bare blockwork band below eave, mailboxes.
 id: w378920322
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
-interior: true
 overhang_m: 0.14
 frame_colour: '#3a3a3c'
 trim_colour: '#f2f0ea'
@@ -15,12 +14,14 @@ roof_tiles: true
 eaves: {colour: '#5f6062', fascia_m: 0.18, gutter: true}
 bargeboard_colour: '#3a3a3c'
 downpipes:
-- {edge: 1, at_m: 6.08, colour: '#5f6062', bends: true}
+- {edge: 0, at_m: 12.84, colour: '#5f6062', bends: true}
+- {edge: 0, at_m: 0.16, colour: '#5f6062', bends: true}
 - {edge: 4, at_m: 7.04, colour: '#5f6062', bends: true}
 - {edge: 5, at_m: 7.91, colour: '#5f6062', bends: true}
 - {edge: 7, at_m: 3.09, colour: '#5f6062', bends: true}
 - {edge: 10, at_m: 18.46, colour: '#5f6062', bends: true}
 - {edge: 10, at_m: 0.16, colour: '#5f6062', bends: true}
+interior: true
 openings:
   - {id: w1, kind: window, edge: 0, at_m: 1.31, width_m: 1.63, height_m: 1.35, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w2, kind: window, edge: 0, at_m: 4.26, width_m: 1.63, height_m: 1.35, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
@@ -32,5 +33,5 @@ openings:
   - {id: w8, kind: window, edge: 5, at_m: 4.9, width_m: 1.63, height_m: 1.35, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: g1, kind: garage_door, edge: 10, at_m: 0.63, width_m: 2.6, height_m: 2.17, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 4}
   - {id: d1, kind: door, edge: 10, at_m: 5.44, width_m: 1.0, height_m: 2.14, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1, canopy_m: 0.7}
-  - {id: w9, kind: window, edge: 10, at_m: 7.96, width_m: 1.63, height_m: 1.35, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: w10, kind: window, edge: 10, at_m: 11.86, width_m: 1.63, height_m: 1.35, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}
+  - {id: w9, kind: window, edge: 10, at_m: 7.96, width_m: 1.63, height_m: 1.0, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w10, kind: window, edge: 10, at_m: 11.86, width_m: 1.63, height_m: 1.0, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, sill: true, posts: [0.5]}

@@ -21,10 +21,10 @@ skylights:
 - {edge: 3, at_m: 7.83, up_m: 1.6}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 1, at_m: 1.86, width_m: 1.06, height_m: 1.38, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w1, kind: window, edge: 1, at_m: 1.86, width_m: 1.06, height_m: 1.02, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
   - {id: d1, kind: door, edge: 1, at_m: 3.74, width_m: 0.88, height_m: 2.16, sill_m: 0.0, recess_m: 0.12, confidence: medium, frame_m: 0.06, panels: 3, steps: 1}
-  - {id: w2, kind: window, edge: 1, at_m: 5.53, width_m: 1.06, height_m: 1.38, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
-  - {id: w3, kind: window, edge: 1, at_m: 8.35, width_m: 1.06, height_m: 1.38, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w2, kind: window, edge: 1, at_m: 5.53, width_m: 1.06, height_m: 1.02, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
+  - {id: w3, kind: window, edge: 1, at_m: 8.35, width_m: 1.06, height_m: 1.02, sill_m: 1.14, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], sill: true}
   - {id: w4, kind: window, edge: 3, at_m: 2.14, width_m: 1.06, height_m: 1.38, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w5, kind: window, edge: 3, at_m: 5.34, width_m: 1.06, height_m: 1.38, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}
   - {id: w6, kind: window, edge: 3, at_m: 8.55, width_m: 1.06, height_m: 1.38, sill_m: 1.14, posts: [0.5], recess_m: 0.12, confidence: low, frame_m: 0.06, sill: true}

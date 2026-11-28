@@ -15,4 +15,5 @@ downpipes:
 - {edge: 0, at_m: 4.97, colour: '#a6968b', bends: true}
 interior: true
 openings:
-  - {id: w1, kind: window, edge: 0, at_m: 3.89, width_m: 0.62, height_m: 1.0, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.21], sill: true}
+  - {id: w1, kind: window, edge: 0, at_m: 0.71, width_m: 0.62, height_m: 1.0, sill_m: 1.4, recess_m: 0.12, confidence: low, frame_m: 0.06, posts: [0.5], rails: [0.21], sill: true}
+  - {id: w2, kind: window, edge: 0, at_m: 3.89, width_m: 0.62, height_m: 1.0, sill_m: 1.4, recess_m: 0.12, confidence: medium, frame_m: 0.06, posts: [0.5], rails: [0.21], sill: true}

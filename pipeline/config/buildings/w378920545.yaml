@@ -1,5 +1,5 @@
 # P-0187: two-storey family house with lower wing, white render, red tiled roof, walled yard. Measured by facade_pipeline from 1 Street View capture(s).
-# Wall top 2.89 m, roof top 7.99 m. Walls seen: edges [2, 4]. Not modelled: porch with timber posts and tiled canopy roof, roof skylight window, tiled wall coping, attached garage on left.
+# Wall top 2.89 m, roof top 5.83 m. Walls seen: edges [2, 4]. Not modelled: porch with timber posts and tiled canopy roof, roof skylight window, tiled wall coping, attached garage on left.
 id: w378920545
 source: Street View captures, measured by facade_pipeline; walls no capture saw, pipes, eaves and chimney by rule
 overhang_m: 0.7
