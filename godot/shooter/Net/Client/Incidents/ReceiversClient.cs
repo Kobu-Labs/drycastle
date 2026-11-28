@@ -90,7 +90,7 @@ public sealed class ReceiversClient
         if (def.Model.Length > 0)
         {
             if (def.Atlas.Length > 0) model = SyntyLib.Instance(def.Model, def.Atlas);
-            else if (_ctx.Map?.InstantiateAsset(def.Model) is { } asset)
+            else if (ModelLib.Instance(def.Model) is { } asset) // a generated glb under assets/ (the helicopter): the map's library knows only pack: and prim: ids
             {
                 foreach (var co in asset.FindChildren("*", "CollisionObject3D", true, false).OfType<CollisionObject3D>()) { co.CollisionLayer = 0; co.CollisionMask = 0; }
                 model = asset;

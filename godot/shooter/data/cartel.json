@@ -137,7 +137,7 @@
     // face the way it flies, turn_deg_per_s), then flies off over the nearest map edge at fly_mps, nose down pitch_deg, and is removed exit_margin_m past the edge. A boat sails the placed route of its mooring at sail_mps and
     // is removed at the route's last point. The first ramp_seconds ease in (the speed rises from nothing).
     "leave": { "climb_m": 60, "climb_mps": 9, "fly_mps": 35, "exit_margin_m": 150, "pitch_deg": 10, "turn_deg_per_s": 45, "sail_mps": 12, "ramp_seconds": 4 },
-    // Per kind. model + atlas: the model under assets-private/synty/glb (no .glb) wearing the atlas under synty/ (private pack: a box of size_m, in colour, without it); no atlas: an asset the map library knows (the
+    // Per kind. model + atlas: the model under assets-private/synty/glb (no .glb) wearing the atlas under synty/ (private pack: a box of size_m, in colour, without it); no atlas: a glb under assets/ (the
     // helicopter's generated glb). model_yaw_deg: the turn of the model in the frame (the Synty pack faces +Z, the frame's forward is -Z: 180). area_m: the van is "at the drop" within this many ground metres of the
     // Receiver (the unloading begins and the Assaults come to the drop). figure: where the Cartel man stands (feet, in the frame) and how he looks (a Gang Warfare character as the Contact is, contact.json view; yaw_deg 90
     // faces -X). cargo_volume: the box the bags go into and 15 slots they lie on (vehicles.json cargo_volume's schema: [x, y, z, yaw_deg] of a bag's base centre; no doors, no access point: nothing is taken out); a run uses
